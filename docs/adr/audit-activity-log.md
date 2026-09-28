@@ -1,6 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-07-20 (D3 amended by D3.1 — `activity` writes synchronously)
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-09-28 (D3 reviewed — request-boundary
+> `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
 > its own epic and is not mixed with the code of the feature that surfaced it.
@@ -122,6 +123,25 @@ satisfacer: o no hay transacción de negocio abierta al registrar la denegación
 conexión DBAL o semántica `REQUIRES_NEW`). El mecanismo concreto se decide en Epic 2; aquí se fija
 que «escribir-antes-de-responder» sólo es durable si la escritura no comparte la transacción de
 negocio que puede revertirse.
+
+**Revisión (2026-09-28): el invariante se hace cumplir, no se afirma.** Aplica sólo a las filas
+`security` que registran un rehúso **en la frontera de la request** —`ACCESS_DENIED`,
+`INVALID_CURRENT_PASSWORD`, `AUDIT_TRAIL_READ`—. Los productores `security` de caso de uso
+(`ChangeUserRoles`, `InviteUser`, `UnlockUserAccount`, `FulfilIdentityErasure`…) escriben **dentro**
+de su transacción a propósito: su fila debe revertirse con el cambio que describe, y siguen llamando a
+`AuditLogger` directamente. Los tres listeners de frontera pasan por un seam único,
+`Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit`, que antes de escribir pregunta
+`isTransactionActive()` a la **misma** `Connection` por defecto que usa `DbalAuditLogWriter`: sin
+transacción, escribe en autocommit y la fila está commiteada cuando el listener vuelve (antes de que el
+responder fije la respuesta); con una abierta —que sólo puede ser una fuga, porque `wrapInTransaction`
+revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir, y un fallo de persistencia se
+propaga intacto. Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la
+de «commitear aparte» (segunda conexión DBAL o `REQUIRES_NEW`): una segunda conexión duplica el pool y
+el sellado para un caso que no debería ocurrir, y ocultaría la fuga en vez de hacerla visible; hacer
+rollback de la transacción ajena destruiría trabajo que no es del listener. D3 prefiere un 5xx a una
+pérdida silenciosa, y eso es lo que produce el rehúso. Lo prueban `RequestBoundarySecurityAuditTest`
+(unitario) y `RequestBoundarySecurityAuditFunctionalTest` (contra Postgres, visibilidad desde una
+segunda conexión).
 
 El sistema es, por diseño, **observabilidad operativa con pérdida parcial tolerada en `activity`**,
 **no** logging forense uniforme: `security` es traza *compliance-grade* (durable), `activity` es
@@ -727,10 +747,9 @@ actor `anonymous` + correlación + `ip`/`user_agent` reales, no un acto de `syst
 (`AccessDeniedAuditListener` sobre `kernel.exception`, prioridad > `ExceptionResponder`, puramente aditivo)
 registra `ACCESS_DENIED` síncrono sellando la ruta objetivo en `metadata` para el análisis forense por
 recurso (la `action` permanece de cardinalidad 1 —indexable y agregable—; la ruta es la dimensión, no el
-nombre del evento); satisface el invariante de D3 porque en `kernel.exception` cualquier
-transacción de negocio ya hizo rollback en su handler, de modo que la escritura `security` commitea
-independiente — una conexión DBAL dedicada queda como *trigger de revisita* si algún flujo registrara una
-denegación con una transacción de negocio aún abierta. El contrato de `ip` de D4 se cumple con
+nombre del evento); satisface el invariante de D3 escribiendo a través de `RequestBoundarySecurityAudit`,
+que comprueba que no queda transacción abierta en la conexión compartida y, si la hay, rehúsa en lugar de
+escribir una fila que un rollback posterior se llevaría (ver la revisión en D3). El contrato de `ip` de D4 se cumple con
 `Request::getClientIp()` (misma decisión de *trusted proxies* que el rate-limiter), sellado en
 `SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `^/api` que
 acota ambos listeners se declara una sola vez, en `ApiRequestMatcher::PATH_PATTERN`: la misma regex que nombra

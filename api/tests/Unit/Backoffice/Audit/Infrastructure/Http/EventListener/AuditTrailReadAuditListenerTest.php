@@ -9,6 +9,8 @@ use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditTimelineSearchControl
 use Erpify\Backoffice\Audit\Infrastructure\Http\EventListener\AuditTrailReadAuditListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAuditDoubles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,6 +24,8 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 #[CoversClass(AuditTrailReadAuditListener::class)]
 final class AuditTrailReadAuditListenerTest extends TestCase
 {
+    use RequestBoundarySecurityAuditDoubles;
+
     private const string EVENT_ID = '0190e5e7-7ab0-7cde-8f01-aaaabbbbcccc';
 
     public function testRecordsASecurityEntryForAnAuthorizedTimelineRead(): void
@@ -65,7 +69,7 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onResponse(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onResponse(
             $this->event('backoffice_bank_search', path: '/api/v1/backoffice/banks'),
         );
     }
@@ -77,7 +81,7 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onResponse($this->event(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onResponse($this->event(
             AuditTimelineSearchController::ROUTE_NAME,
             status: Response::HTTP_FORBIDDEN,
             path: '/api/v1/backoffice/audit/timeline',
@@ -89,16 +93,32 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onResponse($this->event(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onResponse($this->event(
             AuditTimelineSearchController::ROUTE_NAME,
             path: '/api/v1/backoffice/audit/timeline',
             requestType: HttpKernelInterface::SUB_REQUEST,
         ));
     }
 
-    private function listener(AuditLogger $logger): AuditTrailReadAuditListener
+    public function testRefusesToRecordAReadInsideALeakedTransaction(): void
     {
-        return new AuditTrailReadAuditListener($logger);
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->never())->method('log');
+
+        $this->expectRefusal();
+
+        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onResponse(
+            $this->event(AuditTimelineSearchController::ROUTE_NAME, path: '/api/v1/backoffice/audit/timeline'),
+        );
+    }
+
+    private function listener(
+        AuditLogger $logger,
+        ?RequestBoundarySecurityAudit $audit = null,
+    ): AuditTrailReadAuditListener {
+        return new AuditTrailReadAuditListener(
+            $audit ?? $this->boundaryAudit($logger),
+        );
     }
 
     private function event(
