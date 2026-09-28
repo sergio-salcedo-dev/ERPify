@@ -118,7 +118,7 @@ describe("CopyButton", () => {
 
     expect(onCopyResult).not.toHaveBeenCalled();
     expect(setTimeoutSpy.mock.calls.length).toBe(timersBefore);
-    expect(document.querySelector("[data-live-announcer]")).toBeNull();
+    expect(document.querySelector("[data-live-announcer]")?.textContent ?? "").toBe("");
   });
 
   it("announces its own result label through the shared announcer, keeping its name stable", async () => {
@@ -147,6 +147,36 @@ describe("CopyButton", () => {
     await waitFor(() => {
       expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("IBAN not copied");
     });
+  });
+
+  it("falls back to the generic announcement when its label is not text", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" copiedLabel={<strong>Done</strong>} />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("Copied");
+    });
+  });
+
+  it("keeps a visible-text button's name as the action while it shows the outcome", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" label="Copy message" copiedLabel="Message copied" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button")).toHaveTextContent("Message copied");
+    });
+    expect(screen.getByRole("button")).toHaveAccessibleName("Copy message");
+  });
+
+  it("creates the announcer when it mounts, before any copy", () => {
+    render(<CopyButton value="x" />);
+    expect(document.querySelector("[data-live-announcer]")).not.toBeNull();
   });
 
   it("uses sr-only text in icon-only mode and still announces the label", () => {

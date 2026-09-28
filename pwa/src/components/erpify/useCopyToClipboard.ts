@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { announce } from "./liveAnnouncer";
+import { announce, ensureAnnouncer } from "./liveAnnouncer";
 
 export type CopyStatus = "idle" | "copied" | "error";
 
@@ -49,6 +49,7 @@ export function useCopyToClipboard(
 
   useEffect(() => {
     mountedRef.current = true;
+    ensureAnnouncer();
     return () => {
       mountedRef.current = false;
       if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
@@ -67,11 +68,11 @@ export function useCopyToClipboard(
     // left to run, so arming a timer here would leave one nothing ever clears.
     if (!mountedRef.current) return;
     setStatus(next);
-    announce(announcements[next]);
-    // Armed before the caller is told, so a callback that throws cannot strand the control in its
-    // copied/error state.
+    // Armed before anything else runs, so an announcement or a callback that throws cannot strand
+    // the control in its copied/error state.
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setStatus("idle"), feedbackTimeoutMs);
+    announce(announcements[next]);
     onCopyResult?.(next);
   }
 

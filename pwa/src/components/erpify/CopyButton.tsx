@@ -89,7 +89,7 @@ export function CopyButton({
       className={cn("copy-button", className)}
     >
       <Icon className="size-3.5" aria-hidden="true" />
-      {iconOnly ? <span className="sr-only">{textFor(status)}</span> : <span>{currentLabel}</span>}
+      {iconOnly ? <span className="sr-only">{ariaLabel}</span> : <span>{currentLabel}</span>}
     </Button>
   );
 }
