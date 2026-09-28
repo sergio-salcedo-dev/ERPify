@@ -7,5 +7,14 @@
     "key": "1",
     "label": "Informative: retire the promise",
     "resolution": ""
+  },
+  "DW-22": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Distinguish a 503 store-unavailable /me response in the identity adapter and AuthProvider and route it to the existing /maintenance page rather than to /login, keeping network/malformed-body failures on the current path; update Decision F/AC9's record.",
+    "key": "1",
+    "label": "Route 503 to /maintenance",
+    "resolution": ""
   }
 }
