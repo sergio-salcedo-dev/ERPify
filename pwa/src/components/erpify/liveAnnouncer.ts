@@ -62,3 +62,17 @@ export function announce(message: string): void {
     }, CLEAR_AFTER_MS);
   }, SETTLE_MS);
 }
+
+/**
+ * Forget every announcement still in flight and remove the region. Its timers outlive the caller that
+ * armed them, so a document that is about to go away — or a test that hands its document to the next —
+ * cancels them here rather than letting them write into whatever document exists when they fire.
+ */
+export function resetAnnouncer(): void {
+  if (pendingWrite !== null) clearTimeout(pendingWrite);
+  if (pendingClear !== null) clearTimeout(pendingClear);
+  pendingWrite = null;
+  pendingClear = null;
+  if (typeof document === "undefined") return;
+  document.body.querySelector(`[${REGION_ATTRIBUTE}]`)?.remove();
+}
