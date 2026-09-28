@@ -117,7 +117,7 @@ describe("CopyButton", () => {
     await Promise.resolve();
 
     expect(onCopyResult).not.toHaveBeenCalled();
-    expect(setTimeoutSpy.mock.calls.length).toBe(timersBefore);
+    expect(setTimeoutSpy.mock.calls).toHaveLength(timersBefore);
     expect(document.querySelector("[data-live-announcer]")?.textContent ?? "").toBe("");
   });
 
