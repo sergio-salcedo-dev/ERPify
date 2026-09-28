@@ -371,6 +371,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of landing-logi
 location: pwa/src/app/_components/Navbar.tsx:54-69
 reason: Neither CTA consults the session, so 'Sign in' is meaningless for a logged-in user. Out of the landing slice's scope; making the access cluster session-aware (useSession()) is a product + UX decision (consult the access spine).
 status: open
+decision: 2026-09-28 Make the access cluster session-aware — Use useSession() in the public Navbar to hide 'Sign in' and show a backoffice entry for authenticated users, with unit tests for both states.
 
 **(pwa/frontoffice · UX · low) El `<Navbar>` público no es auth-aware: un usuario ya autenticado que visita `/` o `/status` sigue viendo el CTA «Sign in» (y «Backoffice»).** El nuevo enlace «Sign in» → `/login` se renderiza incondicionalmente, igual que el botón «Backoffice» preexistente — ninguno de los dos consulta la sesión. Para un usuario logueado, «Sign in» es un CTA sin sentido (aterriza en el formulario de login en vez de entrar al ERP). Fuera de alcance de este slice (que solo añade el punto de entrada de acceso); el redirect/consciencia de sesión ya estaba listado como follow-up. Follow-up: hacer el cluster de acceso del navbar consciente de la sesión (ocultar «Sign in» y/o mostrar «Entrar»/menú de usuario cuando `useSession()` está autenticado), decisión de producto + UX (consultar espina de acceso de Sally). Ref: `pwa/src/app/_components/Navbar.tsx:54-69`.
 
