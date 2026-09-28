@@ -17,7 +17,7 @@ use Symfony\Component\Security\Http\AccessMapInterface;
  * compiled container — the matchers the security bundle actually built, not the YAML it was built from —
  * and asked, probe by probe, whether any rule applies; the answer must be exactly {@see ApiRequestMatcher}'s.
  * A path the firewall authenticates but the matcher misses is a request that skips the session admission
- * gate, which is how a percent-encoded `/%61pi/…` admitted a revoked session.
+ * gate: a percent-encoded `/%61pi/…` in that gap admits a revoked session.
  *
  * @internal
  */

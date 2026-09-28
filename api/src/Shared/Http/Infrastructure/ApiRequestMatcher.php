@@ -16,9 +16,9 @@ use Symfony\Component\HttpFoundation\RequestMatcher\PathRequestMatcher;
  *
  * The pattern is evaluated by the same {@see PathRequestMatcher} the security bundle builds for that rule,
  * and the reuse is the point: it matches against the `rawurldecode()`d path, as the router does when it
- * dispatches. A prefix check on the raw path info let `/%61pi/v1/me` — authenticated by the firewall and
- * served by the router — past every listener here, the session gate included, so a revoked session with a
- * still-valid cookie was admitted. It also covers `/api` and `/apiX`, which the firewall already guards.
+ * dispatches. A prefix check on the raw path info would let `/%61pi/v1/me` — authenticated by the firewall
+ * and served by the router — past every listener here, the session gate included, admitting a revoked
+ * session with a still-valid cookie. It also covers `/api` and `/apiX`, which the firewall already guards.
  *
  * Nelmio CORS is not one of those listeners: it keys its own `^/api/` on the raw path, and on the spellings
  * it misses it fails closed — it adds no CORS headers, so a cross-origin browser cannot read the response.

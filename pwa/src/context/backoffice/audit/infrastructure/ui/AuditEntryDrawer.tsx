@@ -211,6 +211,9 @@ function AuditEntryDrawerBody({
       ) : null}
 
       <Section title="Metadata">
+        {entry.level !== AuditLevel.Change && detail?.changesUnreadable ? (
+          <UnreadableChanges />
+        ) : null}
         {detail ? <MetadataBlock value={nonDiffMetadata(detail)} /> : <DormantDetail />}
       </Section>
     </div>
@@ -218,27 +221,40 @@ function AuditEntryDrawerBody({
 }
 
 /**
- * A diff the client could not read is said to be unreadable, never rendered as an empty diff: "No changes
- * recorded" would claim the write changed nothing, which is not known for a corrupt stored record.
+ * A diff the client could not read, or one the entry never stored, is said to be so — never rendered as an
+ * empty diff: "No changes recorded" would claim the write changed nothing, which neither case shows.
  */
 function ChangesBody({ detail }: Readonly<{ detail: AuditEventDetail }>) {
   if (detail.changesUnreadable) {
+    return <UnreadableChanges />;
+  }
+
+  if (detail.metadata.changes === undefined) {
     return (
-      <p
-        className="text-muted-foreground text-xs"
-        data-testid="audit-entry-drawer__diff--unreadable"
-      >
-        {"Diff unavailable — the stored change record is not a field-by-field diff."}
+      <p className="text-muted-foreground text-xs" data-testid="audit-entry-drawer__diff--absent">
+        {"No change record was stored with this entry."}
       </p>
     );
   }
 
   return (
     <AuditChangeDiff
-      changes={detail.metadata.changes ?? {}}
+      changes={detail.metadata.changes}
       operation={detail.metadata.operation}
       testId="audit-entry-drawer__diff"
     />
+  );
+}
+
+/**
+ * Shown wherever an unreadable `changes` would otherwise vanish: the client drops the value from the typed
+ * metadata, so on any level the only trace of it is this notice.
+ */
+function UnreadableChanges() {
+  return (
+    <p className="text-muted-foreground text-xs" data-testid="audit-entry-drawer__diff--unreadable">
+      {"Diff unavailable — the stored change record is not a field-by-field diff."}
+    </p>
   );
 }
 

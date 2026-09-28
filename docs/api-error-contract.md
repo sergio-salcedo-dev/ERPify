@@ -1,6 +1,6 @@
 # API Error Contract — RFC 9457 Problem Details
 
-> Authoritative one-pager for the uniform error contract every `/api/*` non-2xx response is expected to honour. Single mapping site: [`api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php).
+> Authoritative one-pager for the uniform error contract every non-2xx response inside the `^/api` boundary (`ApiRequestMatcher`, evaluated over the decoded path as the router dispatches) is expected to honour. Single mapping site: [`api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php). Single listener: [`api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php`](../api/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php).
 
 ## Body shape
 
@@ -36,7 +36,7 @@ The wire body is a JSON object owned by [`ProblemDetails`](../api/src/Shared/Err
 - `Content-Type: application/problem+json` (RFC 9457 §3 — no `charset` parameter; the media type mandates UTF-8).
 - `Cache-Control: no-store` (NFR — error responses MUST NOT be cached by proxies / CDNs).
 - `X-Correlation-Id: <uuidv7>` — per-request UUIDv7, mirrors body `correlation-id`. Written on **every** main response (not just errors) by `CorrelationIdListener::onResponse` (`kernel.response`, priority `-1024`), and it overwrites any pre-existing value, so an inbound header is never reflected back.
-- `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (IETF `draft-ietf-httpapi-ratelimit-headers`) and the legacy de-facto `X-RateLimit-*` aliases — written on **every** main `/api/*` response by `RateLimitListener::onResponse` (`kernel.response`, priority `-128`). `Retry-After` is ALSO written on the rejected (429) path (RFC 9110 §10.2.3). Values are derived from the per-request snapshot stamped on `kernel.request` and use delta-seconds (not epoch).
+- `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` (IETF `draft-ietf-httpapi-ratelimit-headers`) and the legacy de-facto `X-RateLimit-*` aliases — written on **every** main response inside the `^/api` boundary (`ApiRequestMatcher`, over the decoded path — so `/api`, `/apiX` and `/%61pi/…` too) by `RateLimitListener::onResponse` (`kernel.response`, priority `-128`). `Retry-After` is ALSO written on the rejected (429) path (RFC 9110 §10.2.3). Values are derived from the per-request snapshot stamped on `kernel.request` and use delta-seconds (not epoch).
 
 Encoding: `\json_encode($problemDetails->toArray(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)`. Symfony `Response` (not `JsonResponse`) is used so `Content-Type` and the encoding pipeline stay under `ProblemDetailsResponder` control.
 
@@ -541,9 +541,9 @@ The drop keys on the [`ClientError`](../api/src/Shared/ErrorContract/Domain/Exce
 | Listener                            | Event              | Priority | Path scope         |
 |-------------------------------------|--------------------|----------|--------------------|
 | `CorrelationIdListener::__invoke`   | `kernel.request`   | 1024     | all main requests  |
-| `RateLimitListener::onRequest`      | `kernel.request`   | 512      | `/api/*` only      |
-| `ExceptionResponder::__invoke`      | `kernel.exception` | 16       | `/api/*` only      |
-| `RateLimitListener::onResponse`     | `kernel.response`  | -128     | `/api/*` only      |
+| `RateLimitListener::onRequest`      | `kernel.request`   | 512      | `^/api` (decoded)  |
+| `ExceptionResponder::__invoke`      | `kernel.exception` | 16       | `^/api` (decoded)  |
+| `RateLimitListener::onResponse`     | `kernel.response`  | -128     | `^/api` (decoded)  |
 | `CorrelationIdListener::onResponse` | `kernel.response`  | -1024    | all main responses |
 | `SearchExceptionListener` (legacy)  | `kernel.exception` | 32       | search routes      |
 | `SentryBundle\…\ErrorListener`      | `kernel.exception` | 128      | dev + prod         |
@@ -554,7 +554,7 @@ The Sentry `ErrorListener` (dev + prod, not test) runs first at `128` but only *
 
 ## Rate limiting
 
-`RateLimitListener` enforces the `anonymous_api` policy declared in [`api/config/packages/rate_limiter.yaml`](../api/config/packages/rate_limiter.yaml) on every `/api/*` main request, keyed by `Request::getClientIp()`. The listener is intentionally **pre-router** (priority 512 > Symfony's `RouterListener` 32) so endpoint enumeration through 404 paths still consumes the budget. On rejection it throws [`RateLimitExceeded`](../api/src/Shared/ErrorContract/Domain/Exception/RateLimitExceeded.php) — a concrete `DomainException` implementing the `RateLimited` marker — so the standard `ExceptionResponder` pipeline emits the conforming RFC 9457 429 envelope (`type=rate-limited`). **No `JsonResponse` shortcut on the rate-limit path** (NFR26).
+`RateLimitListener` enforces the `anonymous_api` policy declared in [`api/config/packages/rate_limiter.yaml`](../api/config/packages/rate_limiter.yaml) on every main request inside the `^/api` boundary (`ApiRequestMatcher`, over the decoded path — so `/api`, `/apiX` and `/%61pi/…` too), keyed by `Request::getClientIp()`. The listener is intentionally **pre-router** (priority 512 > Symfony's `RouterListener` 32) so endpoint enumeration through 404 paths still consumes the budget. On rejection it throws [`RateLimitExceeded`](../api/src/Shared/ErrorContract/Domain/Exception/RateLimitExceeded.php) — a concrete `DomainException` implementing the `RateLimited` marker — so the standard `ExceptionResponder` pipeline emits the conforming RFC 9457 429 envelope (`type=rate-limited`). **No `JsonResponse` shortcut on the rate-limit path** (NFR26).
 
 **Per-target budgets are spent at the controller edge, and only one of them answers 429.** `password_recovery_per_email` and `token_action_per_selector` are silent by contract — their surfaces are pre-identity, so a per-target 429 would be an existence oracle, and exhaustion folds into the endpoint's own uniform outcome (the 202 of forgot, the opaque `invalid-token` wall of a completion). `password_change_per_identity` is the exception and refuses out loud, because its caller already holds the identity the budget is keyed on.
 

@@ -273,8 +273,8 @@ decision: 2026-09-28 Keep the scalar and close — Scalar email plus boundary va
 origin: migrated from legacy ledger ("Deferred from: code review of stories 1.3 & 1.4 (2026-06-24)"), 2026-09-24
 location: api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php (writeSecurity), DbalAuditLogWriter.php
 reason: The synchronous security INSERT uses the shared DBAL connection without its own transaction, so a caller's rollback would revert the denial row, weakening ADR-D3. Low probability; fix the assumption (no business transaction, or a separately committed write). Extends the 're-review the security failure contract' item.
-status: done 2026-09-29
-resolution: fixed in the round-2 sweep PR — bundle 3 (d864f3b8) routed every request-boundary security write through RequestBoundarySecurityAudit, and its review findings were applied by hand after the dev session hit the usage limit (see the next commit)
+status: done 2026-09-28
+resolution: fixed in #1026: every request-boundary security write goes through RequestBoundarySecurityAudit, which refuses inside a leaked transaction; the eight findings of the bundle's own review are triaged in spec-dw-29-34-audit-security-branch-contract.md
 
 **(Epic 2 / Story 2.3) Durabilidad de la rama `security` (write-before-send) frente a una transacción del llamador.** El `INSERT` síncrono de `security` va por la `Connection` DBAL compartida sin transacción propia; si el llamador de Epic 2 abre una transacción de negocio que luego hace rollback, la fila de la denegación se revierte con ella, debilitando "una denegación nunca se pierde" (ADR-D3). Baja probabilidad (un `AccessDeniedException` rara vez tiene transacción de negocio abierta), pero al cablear 2.3 fijar la asunción: o no hay transacción de negocio al escribir la denegación, o la escritura `security` usa una conexión/transacción que commitea aparte. Extiende el item "re-revisar el contrato de fallo de `security` en 2.3". Ref: `api/src/Shared/Audit/Infrastructure/SymfonyAuditLogger.php` (writeSecurity), `DbalAuditLogWriter.php`.
 
@@ -324,8 +324,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
 location: api/src/Shared/Audit/Infrastructure/Http/EventListener/AccessDeniedAuditListener.php:64
 reason: The awaited condition is met — AccessDeniedAuditListener emits ACCESS_DENIED at AuditLevel::SECURITY on real /api requests — but D1's 'propagate on persistence failure' contract was never checked against that live use case.
-status: done 2026-09-29
-resolution: fixed in the round-2 sweep PR — bundle 3 (d864f3b8) routed every request-boundary security write through RequestBoundarySecurityAudit, and its review findings were applied by hand after the dev session hit the usage limit (see the next commit)
+status: done 2026-09-28
+resolution: fixed in #1026: every request-boundary security write goes through RequestBoundarySecurityAudit, which refuses inside a leaked transaction; the eight findings of the bundle's own review are triaged in spec-dw-29-34-audit-security-branch-contract.md
 
 **(Epic 2) El contrato de fallo de la rama `security` sigue sin re-revisarse, y su disparador ya saltó.** La condición que este item esperaba —un productor real en vez de fixtures sintéticos— se cumple: `AccessDeniedAuditListener:64` emite `ACCESS_DENIED` con `AuditLevel::SECURITY` sobre peticiones `/api` reales. Lo que queda pendiente es la revisión que eso habilitaba: el contrato de fallo decidido en D1 (propagar cuando falle la persistencia) nunca se ha contrastado contra ese caso de uso vivo. Ref: `api/src/Shared/Audit/Infrastructure/Http/EventListener/AccessDeniedAuditListener.php:64`.
 
@@ -551,19 +551,21 @@ source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
 severity: medium
 archived: 2026-09-28
 
-### DW-59: Registrar en docs/rules/security.md (y, si aplica, PRODUCTION_SECURITY_CHECKLIST.md) el patrón «un límite por path se evalúa como el router: PathRequestMatcher sobre el path decodificado, nunca
+### DW-59: Registrar en docs/rules/security.md el patrón «un límite por path se evalúa como el router: PathRequestMatcher sobre el path decodificado, nunca str_starts_with(getPathInfo())».
 origin: spec-deferred ea65b7a10c18
 location: docs/rules/security.md
 source_spec: `spec-dw-26-api-boundary-single-definition.md`
 severity: low
 reason: Blind Hunter: el bypass /%61pi/v1/me existía porque un listener comparaba el path crudo mientras firewall y router decodifican. Hoy no queda ningún '/api/' literal en api/src (git grep), pero ninguna regla escrita ni gate impide reintroducir un chequeo crudo. Diferido porque el arreglo edita ficheros de reglas para agentes (docs/rules).
-status: open
+status: done 2026-09-28
+resolution: fixed in #1026 (review pass): docs/rules/security.md gains «A path boundary is evaluated the way the router dispatches», and PRODUCTION_SECURITY_CHECKLIST.md states the session gate matches the decoded path
 
 ### DW-60: Las filas de audit_log persistidas antes de este cambio con un User-Agent igual a [REDACTED] no se reescriben.
 origin: spec-deferred ee2d683b793e
 location: api/src/Shared/Audit/Domain/AuditRedaction.php
 source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
-reason: La neutralización es sólo en captura (E1); no hay backfill. Un backfill sería un UPDATE nuevo sobre audit_log, que exige línea en SANCTIONED de SanctionedLogMutationGateTest y decisión en el ADR D4. Sólo importa si existe un despliegue con datos reales dentro de la ventana de retención; la documentación ya acota la garantía a filas capturadas tras el despliegue.
+severity: low
+reason: La neutralización es sólo en captura; no hay backfill, que sería un UPDATE nuevo sobre audit_log (línea en SANCTIONED de SanctionedLogMutationGateTest y decisión en el ADR D4). La atribución NO depende de él: el predicado de flags (actor_erased, o resource_erased con actor_type = 'anonymous') atribuye bien el centinela también en filas anteriores, así que lo único que queda es que esas filas guarden el literal de un cliente. Sólo importa con datos reales dentro de la ventana de retención.
 status: open
 
 ### DW-61: docs/rules/security.md y docs/rules/database.md describen el centinela [REDACTED] y sus dos escritores sin mencionar su reserva ni la reescritura [client-supplied].
@@ -572,7 +574,8 @@ location: docs/rules/security.md:298
 source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
 severity: low
 reason: security.md:298 y database.md:75-79 no se tocaron en este cambio; el ADR y PRODUCTION_SECURITY_CHECKLIST.md sí. No afirman nada falso (no dicen que user_agent sea forjable), sólo omiten el patrón nuevo. Diferido porque el arreglo edita ficheros de reglas para agentes (docs/rules).
-status: open
+status: done 2026-09-28
+resolution: fixed in #1026 (review pass): docs/rules/security.md and docs/rules/database.md state the [REDACTED] reservation and the [client-supplied] rewrite at capture
 
 ### DW-62: Una fila de nivel change SIN clave changes sigue pintando «No changes recorded», afirmación igual de desconocida que la del diff ilegible.
 origin: spec-deferred 3f20d89e3077
@@ -580,7 +583,8 @@ location: pwa/src/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer.ts
 source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
 reason: AuditEntryDrawer pasa `detail.metadata.changes ?? {}` a AuditChangeDiff cuando no hay flag; comportamiento previo a este cambio, y el capturador siempre escribe `changes` en filas change, así que sólo aparece con otra vía de escritura.
-status: open
+status: done 2026-09-28
+resolution: fixed in #1026 (review pass): a change entry with no stored changes says so (audit-entry-drawer__diff--absent) instead of «No changes recorded»
 
 ### DW-63: Un changes escalar corrupto nunca pasó por el sellado por campo, así que podría llevar PII sin cifrar servida tal cual por la ruta de detalle.
 origin: spec-deferred fb38058ee328

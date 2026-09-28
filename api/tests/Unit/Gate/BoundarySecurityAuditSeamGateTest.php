@@ -68,6 +68,36 @@ final class BoundarySecurityAuditSeamGateTest extends TestCase
     }
 
     #[Test]
+    public function noExceptionListenerCallsThePlainRecord(): void
+    {
+        // HttpKernel::handleThrowable() wraps no try around its listeners, so a throw from record() inside a
+        // kernel.exception listener escapes the kernel with no Problem Details; recordOnException() hands it to
+        // the event instead. A file that takes an ExceptionEvent is such a listener.
+        $root = ApiSourceFiles::root();
+        $seam = (string) (new ReflectionClass(RequestBoundarySecurityAudit::class))->getFileName();
+        $offenders = [];
+
+        foreach (ApiSourceFiles::phpFiles($root) as $file) {
+            $path = $file->getPathname();
+            $source = (string) \file_get_contents($path);
+
+            if ($path !== $seam && \str_contains($source, 'ExceptionEvent') && $this->callsPlainRecord($source)) {
+                $offenders[] = \substr($path, \strlen($root) + 1);
+            }
+        }
+
+        $this->assertSame([], $offenders, 'A kernel.exception listener must call recordOnException(), not record().');
+    }
+
+    #[Test]
+    public function thePlainRecordCallIsSeenAndTheExceptionVariantIsNot(): void
+    {
+        $this->assertTrue($this->callsPlainRecord('<?php $this->securityAudit->record(self::A, []);'));
+        $this->assertFalse($this->callsPlainRecord('<?php $this->securityAudit->recordOnException($e, self::A, []);'));
+        $this->assertFalse($this->callsPlainRecord('<?php /** calls ->record( here */ $x = 1;'));
+    }
+
+    #[Test]
     public function aMentionInACommentOrDocblockIsNoWrite(): void
     {
         $this->assertFalse($this->namesSecurityLevelInCode(<<<'PHP'
@@ -140,5 +170,21 @@ final class BoundarySecurityAuditSeamGateTest extends TestCase
         $name = \ltrim($class[1], '\\');
 
         return 'AuditLevel' === $name || \str_ends_with($name, '\AuditLevel');
+    }
+
+    private function callsPlainRecord(string $source): bool
+    {
+        $significant = \array_values(\array_filter(
+            \token_get_all($source),
+            static fn (array|string $token): bool => !\is_array($token)
+                || !\in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true),
+        ));
+
+        return \array_any(
+            $significant,
+            static fn (array|string $token, int $index): bool => \is_array($token) && T_OBJECT_OPERATOR === $token[0]
+                && \is_array($significant[$index + 1] ?? null) && 'record' === $significant[$index + 1][1]
+                && '(' === ($significant[$index + 2] ?? null),
+        );
     }
 }

@@ -22,9 +22,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * `ip`, `userAgent` and `metadata` are attacker-controlled: treat them as tainted
  * downstream — never render them as HTML without escaping, never use them in a trust or
  * authorization decision. A captured `ip`/`userAgent` equal to {@see AuditRedaction::SENTINEL} is
- * rewritten on the way in, so in a row captured once that rule was deployed the literal means an erasure
- * wrote it; older rows may still hold a client-sent literal, and on any row the erasure flags are what
- * attribute it (see {@see AuditRedaction}).
+ * rewritten on the way in, so the literal is written by an erasure alone; a row stored without that rewrite
+ * may still hold a client-sent literal, and on any row the erasure flags are what attribute it (see
+ * {@see AuditRedaction}).
  */
 final readonly class AuditLogEntry
 {

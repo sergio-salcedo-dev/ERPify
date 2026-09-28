@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use LogicException;
+use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Throwable;
 
 /**
@@ -32,10 +33,12 @@ use Throwable;
  * Only for rows recording something at the request boundary. A use case writing `security` inside its own
  * transaction must keep calling {@see AuditLogger} directly; routed through here it would be refused.
  *
- * A caller on `kernel.exception` must not let what this throws escape: `HttpKernel::handleThrowable()` has no
- * `try` around its listeners, so a throwable leaving one bypasses the Problem Details pipeline entirely. It
- * hands the failure to the event instead, where the responder renders it as the 5xx it is and logs it. The
- * refusal chains the request's own throwable as `$cause`, so the log line still names what was being recorded.
+ * A caller on `kernel.exception` uses {@see recordOnException()}, never {@see record()}:
+ * `HttpKernel::handleThrowable()` has no `try` around its listeners, so a throwable leaving one bypasses the
+ * Problem Details pipeline entirely. That method hands the failure to the event instead, where the responder
+ * renders it as the 5xx it is and logs it, and chains the request's own throwable into a refusal so the log
+ * line still names what was being recorded. `BoundarySecurityAuditSeamGateTest` refuses a `kernel.exception`
+ * listener calling {@see record()}.
  */
 final readonly class RequestBoundarySecurityAudit
 {
@@ -63,5 +66,20 @@ final readonly class RequestBoundarySecurityAudit
         }
 
         $this->auditLogger->log($action, AuditLevel::SECURITY, metadata: $metadata);
+    }
+
+    /**
+     * {@see record()} for a `kernel.exception` listener: a failed or refused write replaces the event's throwable
+     * rather than escaping the kernel, and the refusal chains the throwable the entry was recording.
+     *
+     * @param array<string, mixed> $metadata
+     */
+    public function recordOnException(ExceptionEvent $event, string $action, array $metadata): void
+    {
+        try {
+            $this->record($action, $metadata, $event->getThrowable());
+        } catch (Throwable $throwable) {
+            $event->setThrowable($throwable);
+        }
     }
 }

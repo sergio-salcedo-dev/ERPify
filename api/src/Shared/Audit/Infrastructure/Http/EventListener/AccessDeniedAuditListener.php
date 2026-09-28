@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Infrastructure\Http\EventListener;
 
-use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -18,7 +17,7 @@ use Throwable;
  * Records a permission denial as a `security` audit entry by hooking the existing RFC 9457 exception
  * pipeline, rather than scattering audit calls through the handlers. On `kernel.exception` it looks for
  * a Security-Core {@see AccessDeniedException} anywhere in the throwable chain (a firewall may wrap it)
- * and, when an `/api` main request raised one, emits `ACCESS_DENIED` at {@see AuditLevel::SECURITY}
+ * and, when an `/api` main request raised one, emits `ACCESS_DENIED` at the `security` level
  * through {@see RequestBoundarySecurityAudit} — a synchronous write-before-send in autocommit, so the denial
  * is committed before the 403 is built and survives even if the process dies after the response. That seam
  * refuses when a transaction is still open on the audit connection, since a later rollback would take the
@@ -64,13 +63,7 @@ final readonly class AccessDeniedAuditListener
         // cardinality-1 `ACCESS_DENIED` (so "all denials" remains an indexed equality, and dashboards
         // and alerts aggregate over it), while the route lives in `metadata` for the per-resource
         // drill-down an investigation actually runs.
-        try {
-            $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)], $event->getThrowable());
-        } catch (Throwable $throwable) {
-            // Handed to the event, never thrown: a throwable leaving a `kernel.exception` listener escapes
-            // HttpKernel with no Problem Details at all. The responder renders this one as the 5xx it is.
-            $event->setThrowable($throwable);
-        }
+        $this->securityAudit->recordOnException($event, self::ACTION, ['route' => $this->routeOf($request)]);
     }
 
     private function routeOf(Request $request): ?string

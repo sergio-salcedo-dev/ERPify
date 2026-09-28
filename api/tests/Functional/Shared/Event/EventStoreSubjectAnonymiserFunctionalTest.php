@@ -12,6 +12,7 @@ use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Event\Infrastructure\Persistence\DbalEventStoreSubjectAnonymiser;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -185,6 +186,19 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
             // same guard as the pattern, and for a different reason.
             (new DbalEventStoreSubjectAnonymiser($connection))
                 ->anonymise($this->unvalidatedPair(self::SUBJECT_ID, '\1'))
+            ;
+        });
+    }
+
+    #[Test]
+    public function itRefusesAPairWhoseSubjectIsItsOwnPseudonymBeforeReachingTheDriver(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $this->expectException(InvalidArgumentException::class);
+
+            // Case-insensitive, as the rewrite itself is: an upper-cased copy is still the same identifier.
+            (new DbalEventStoreSubjectAnonymiser($connection))
+                ->anonymise($this->unvalidatedPair(self::SUBJECT_ID, \strtoupper(self::SUBJECT_ID)))
             ;
         });
     }

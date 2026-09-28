@@ -76,7 +76,9 @@
   never row deletion. The third is the resource axis, which pseudonymises `resource_id` and — only where
   `actor_type = anonymous`, the one case where the row records no discriminant for whose address it holds —
   writes the same `[REDACTED]` sentinel over `ip`/`user_agent`. Two mutation paths sharing one normative
-  sentinel, not two redaction policies.
+  sentinel, not two redaction policies. The sentinel is reserved to them: capture rewrites a client-sent value
+  equal to it as `[client-supplied] <value>` (`AuditRedaction::neutraliseCaptured()`), so a row that still
+  holds the bare literal from a client predates that rewrite, and the erasure flags are what attribute it.
 
 ## Identifiers (UUID v7, app-assigned)
 - **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Uuid/Domain`)

@@ -137,17 +137,19 @@ responder fije la respuesta); con una abierta —que sólo puede ser una fuga, p
 revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir. Ese rehúso, y un fallo de
 persistencia, **no se lanzan desde un listener de `kernel.exception`**: `HttpKernel::handleThrowable()` no
 envuelve a sus listeners en ningún `try`, así que un throwable que saliera de ahí escaparía del kernel sin
-Problem Details y perdería la excepción original. Esos dos listeners se lo entregan al evento
-(`setThrowable()`), el rehúso encadena la excepción de la request como `previous`, y el responder contesta
-el 5xx como RFC 9457 y lo registra; el de `kernel.response` sí lanza, porque desde ahí el kernel lo reconduce
-por su propio manejo de excepciones. Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la
-de «commitear aparte» (segunda conexión DBAL o `REQUIRES_NEW`): una segunda conexión duplica el pool y
-el sellado para un caso que no debería ocurrir, y ocultaría la fuga en vez de hacerla visible; hacer
-rollback de la transacción ajena destruiría trabajo que no es del listener. D3 prefiere un 5xx a una
-pérdida silenciosa, y eso es lo que produce el rehúso. Lo prueban `RequestBoundarySecurityAuditTest`
-(unitario) y `RequestBoundarySecurityAuditFunctionalTest` (contra Postgres, visibilidad desde una
-segunda conexión), y `BoundarySecurityAuditSeamGateTest` impide que un fichero de `Infrastructure/Http/`
-distinto del seam escriba `AuditLevel::SECURITY` por su cuenta.
+Problem Details y perdería la excepción original. Esos dos listeners se lo entregan al evento a través de
+`RequestBoundarySecurityAudit::recordOnException()` (`setThrowable()`), el rehúso encadena la excepción
+de la request como `previous`, y el responder contesta el 5xx como RFC 9457 y lo registra; el de
+`kernel.response` sí lanza, porque desde ahí el kernel lo reconduce por su propio manejo de excepciones.
+Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la de «commitear
+aparte» (segunda conexión DBAL o `REQUIRES_NEW`): una segunda conexión duplica el pool y el sellado para
+un caso que no debería ocurrir, y ocultaría la fuga en vez de hacerla visible; hacer rollback de la
+transacción ajena destruiría trabajo que no es del listener. D3 prefiere un 5xx a una pérdida silenciosa,
+y eso es lo que produce el rehúso. Lo prueban `RequestBoundarySecurityAuditTest` (unitario) y
+`RequestBoundarySecurityAuditFunctionalTest` (contra Postgres, visibilidad desde una segunda conexión), y
+`BoundarySecurityAuditSeamGateTest` impide que un fichero de `Infrastructure/Http/` distinto del seam
+escriba `AuditLevel::SECURITY` por su cuenta, y que un listener de
+`kernel.exception` llame a `record()` en lugar de `recordOnException()`.
 
 **Coste en el worker, medido en el código y no supuesto.** DoctrineBundle sólo reinicia entre peticiones el
 registro `doctrine` (los entity managers) y su recolector de depuración, **no la conexión**: en el worker
