@@ -193,7 +193,8 @@ test.describe("BackOffice - Banks CRUD", () => {
       await expect(copyBtn).toHaveAttribute("data-copy-status", "idle");
       await copyBtn.click();
       await expect(copyBtn).toHaveAttribute("data-copy-status", "copied");
-      await expect(copyBtn).toContainText("ID copied");
+      // The outcome is spoken by the document's single announcer; the button keeps its name.
+      await expect(page.locator("[data-live-announcer]")).toHaveText("ID copied");
 
       const clipboardValue = await page.evaluate(() => navigator.clipboard.readText());
       expect(clipboardValue).toBe(SAMPLE_BANK_A.id);

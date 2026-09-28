@@ -47,7 +47,7 @@ Measured against `_bmad-output/implementation-artifacts/sprint-status.yaml` at t
 to.** The correlation is exact, and the regexes above are why.
 
 Everything the repository has planned since epic 3 is therefore invisible to the orchestrator —
-including `gh-925-repository-root-marker`, the one story currently `ready-for-dev`. That is what
+including `gh-925-repository-root-marker`, the one story `ready-for-dev` when this was written (since shipped in #988). That is what
 `0 actionable` means: not an empty backlog, an unreadable one.
 
 ## The conflict this story has to settle

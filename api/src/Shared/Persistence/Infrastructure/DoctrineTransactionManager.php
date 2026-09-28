@@ -21,13 +21,12 @@ use Throwable;
  * EntityManager here keeps orchestration (Application) free of the ORM and is the deptrac-clean seam that
  * pre-existing `wrapInTransaction`-in-Application usages are being ratcheted towards.
  *
- * It is also where a retryable database failure becomes an HTTP contract answer, and this is the only place
- * in the app that can be: a deadlock is by definition transaction-scoped, so the transaction boundary is
- * exactly its extent, and {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory} lives in
- * Application, where a Doctrine import would be a new inner-layer framework dependency deptrac ratchets
- * against. **A caller still holding the EntityManager and calling `wrapInTransaction` itself is not
- * covered** — that is the grandfathered debt this seam exists to absorb, and paying it down closes this gap
- * with it.
+ * It is also where a retryable database failure becomes an HTTP contract answer: a deadlock is by definition
+ * transaction-scoped, so the transaction boundary is exactly its extent, and translating it here keeps
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory} free of any persistence
+ * vendor — the error contract maps markers, it does not know which store raised them. **A caller still
+ * holding the EntityManager and calling `wrapInTransaction` itself is not covered** — that is the
+ * grandfathered debt this seam exists to absorb, and paying it down closes this gap with it.
  */
 #[AsAlias(TransactionManager::class)]
 final readonly class DoctrineTransactionManager implements TransactionManager

@@ -64,6 +64,121 @@ describe("CopyButton", () => {
     expect(screen.getByRole("button")).toHaveTextContent("Copy failed");
   });
 
+  it.each([
+    ["no clipboard at all", undefined],
+    ["a clipboard without writeText", {}],
+  ])(
+    "reports an error rather than copying through the deprecated execCommand with %s",
+    async (_case, clipboard) => {
+      const originalClipboard = navigator.clipboard;
+      const originalExecCommand = document.execCommand;
+      const execCommand = vi.fn().mockReturnValue(true);
+      Object.assign(navigator, { clipboard });
+      Object.assign(document, { execCommand });
+      const onCopyResult = vi.fn();
+
+      try {
+        render(<CopyButton value="x" onCopyResult={onCopyResult} feedbackTimeoutMs={5000} />);
+        fireEvent.click(screen.getByRole("button"));
+
+        await waitFor(() => {
+          expect(screen.getByRole("button")).toHaveAttribute("data-copy-status", "error");
+        });
+        expect(onCopyResult).toHaveBeenCalledWith("error");
+        expect(execCommand).not.toHaveBeenCalled();
+      } finally {
+        Object.assign(navigator, { clipboard: originalClipboard });
+        Object.assign(document, { execCommand: originalExecCommand });
+      }
+    },
+  );
+
+  it("reports nothing and arms no timer when it unmounts before the write settles", async () => {
+    let settle: () => void = () => undefined;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    Object.assign(navigator, { clipboard: { writeText } });
+    const onCopyResult = vi.fn();
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+    const { unmount } = render(<CopyButton value="x" onCopyResult={onCopyResult} />);
+    fireEvent.click(screen.getByRole("button"));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled();
+    });
+    unmount();
+    const timersBefore = setTimeoutSpy.mock.calls.length;
+    settle();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onCopyResult).not.toHaveBeenCalled();
+    expect(setTimeoutSpy.mock.calls).toHaveLength(timersBefore);
+    expect(document.querySelector("[data-live-announcer]")?.textContent ?? "").toBe("");
+  });
+
+  it("announces its own result label through the shared announcer, keeping its name stable", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" iconOnly label="Copy bank ID" copiedLabel="ID copied" />);
+    const button = screen.getByRole("button");
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("ID copied");
+    });
+    expect(button).toHaveAttribute("data-copy-status", "copied");
+    expect(button).toHaveAccessibleName("Copy bank ID");
+    expect(button.querySelector("[role='status']")).toBeNull();
+  });
+
+  it("announces its own failure label", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" errorLabel="IBAN not copied" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("IBAN not copied");
+    });
+  });
+
+  it("falls back to the generic announcement when its label is not text", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" copiedLabel={<strong>Done</strong>} />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("Copied");
+    });
+  });
+
+  it("keeps a visible-text button's name as the action while it shows the outcome", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" label="Copy message" copiedLabel="Message copied" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button")).toHaveTextContent("Message copied");
+    });
+    expect(screen.getByRole("button")).toHaveAccessibleName("Copy message");
+  });
+
+  it("creates the announcer when it mounts, before any copy", () => {
+    render(<CopyButton value="x" />);
+    expect(document.querySelector("[data-live-announcer]")).not.toBeNull();
+  });
+
   it("uses sr-only text in icon-only mode and still announces the label", () => {
     render(<CopyButton value="x" iconOnly label="Copy bank ID" testId="banks-detail__copy-id" />);
     const btn = screen.getByTestId("banks-detail__copy-id");

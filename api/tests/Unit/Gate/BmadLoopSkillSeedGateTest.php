@@ -59,13 +59,10 @@ final class BmadLoopSkillSeedGateTest extends TestCase
         $run = $this->seed();
 
         $this->assertSame(0, $run->getExitCode(), $this->explain($run));
-        $this->assertStringEqualsFile(
-            $this->fixture . '/worktree/.claude/skills/bmad-loop-sweep/SKILL.md',
-            "sweep from the primary\n",
-        );
-        $this->assertStringEqualsFile(
-            $this->fixture . '/worktree/.claude/skills/bmad-loop-resolve/SKILL.md',
+        $this->assertSame("sweep from the primary\n", $this->read('worktree/.claude/skills/bmad-loop-sweep/SKILL.md'));
+        $this->assertSame(
             "the worktree's own copy\n",
+            $this->read('worktree/.claude/skills/bmad-loop-resolve/SKILL.md'),
         );
     }
 
@@ -118,6 +115,17 @@ final class BmadLoopSkillSeedGateTest extends TestCase
         }
 
         \file_put_contents($path, $contents);
+    }
+
+    private function read(string $relative): string
+    {
+        $path = $this->fixture . '/' . $relative;
+        $this->assertFileIsReadable($path);
+
+        $contents = \file_get_contents($path);
+        $this->assertIsString($contents, \sprintf('%s could not be read.', $relative));
+
+        return $contents;
     }
 
     private function explain(Process $run): string

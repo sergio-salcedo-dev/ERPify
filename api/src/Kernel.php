@@ -54,14 +54,13 @@ class Kernel extends BaseKernel
     }
 
     /**
-     * @SuppressWarnings("PHPMD.UnusedPrivateMethod")
-     *
-     * This method is called indirectly, invoked by MicroKernelTrait::registerContainerConfiguration
-     * via the trait alias — PHPStan can't see that call site through the alias either.
-     *
-     * @phpstan-ignore method.unused (invoked via the trait alias)
+     * Reached only by reflection: `KernelTrait::registerContainerConfiguration()` looks the method up by name
+     * and binds it with `ReflectionMethod::getClosure()`, which ignores visibility. It is `protected` rather
+     * than the trait's `private` because no reader of the source can see that call — a private method with no
+     * visible caller reads as dead code to every analyser, and the honest remedy is a visibility that does not
+     * claim "nothing else calls this".
      */
-    private function configureContainer(ContainerConfigurator $container): void
+    protected function configureContainer(ContainerConfigurator $container): void
     {
         $this->defaultConfigureContainer($container);
 
