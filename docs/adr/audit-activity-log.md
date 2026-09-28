@@ -732,9 +732,10 @@ transacción de negocio ya hizo rollback en su handler, de modo que la escritura
 independiente — una conexión DBAL dedicada queda como *trigger de revisita* si algún flujo registrara una
 denegación con una transacción de negocio aún abierta. El contrato de `ip` de D4 se cumple con
 `Request::getClientIp()` (misma decisión de *trusted proxies* que el rate-limiter), sellado en
-`SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `/api/` que
-acota ambos listeners se declara una sola vez (`ApiRequestMatcher`) para que no diverjan; `Shared/ErrorContract`
-mantiene su propia copia para el pipeline de errores y unificarlas es un cambio aparte.
+`SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `^/api` que
+acota ambos listeners se declara una sola vez, en `ApiRequestMatcher::PATH_PATTERN`: la misma regex que nombra
+el catch-all de `access_control`, evaluada sobre el path decodificado y compartida por estos listeners y el
+pipeline de errores.
 
 **Contratos y heurísticos de la captura (endurecidos en Epic 2).** Tres supuestos que el código ya asume
 y que aquí se fijan como contrato, para que una refactorización futura no los rompa en silencio:

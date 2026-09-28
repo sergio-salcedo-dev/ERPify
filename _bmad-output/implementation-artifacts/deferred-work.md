@@ -237,7 +237,9 @@ archived: 2026-09-28
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
 location: api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:57, api/src/Shared/Http/Infrastructure/ApiRequestMatcher.php
 reason: A future route at exactly /api or /apiX would be firewall-authenticated but not session-gated; not exploitable today (everything outside /api/v1/ 404s). Both boundaries should derive from one definition.
-status: open
+status: done 2026-09-28
+resolution: resolved by sweep bundle dw-api-boundary-single-definition
+resolution-undo: 368d96dbce23e1bea2c3b29f624a92313cfa7cc5eabd008f64aec09b18ea97bd 2026-09-28 7374617475733a206f70656e
 
 **(api/Iam/Session — defensa en profundidad) Matcher del gate `/api/` más estrecho que el firewall `^/api`.** `SessionAdmissionGate` gatea vía `ApiRequestMatcher` (prefijo literal `/api/`), mientras `access_control` exige `IS_AUTHENTICATED_FULLY` en el regex `^/api` (sin barra). Una ruta futura montada en `/api` exacto o `/apiX...` quedaría firewall-autenticada pero SIN gate de sesión (una sesión revocada-pero-con-cookie pasaría). No explotable hoy (ninguna ruta fuera de `/api/v1/` → 404), pero ambos límites deberían derivar de una única definición. Ref: `api/src/Iam/Session/Infrastructure/Security/SessionAdmissionGate.php:57`, `api/src/Shared/Http/Infrastructure/ApiRequestMatcher.php`.
 
@@ -525,3 +527,10 @@ source_spec: `spec-dw-25-suite-clock-seed-alignment.md`
 severity: medium
 archived: 2026-09-28
 
+### DW-59: Registrar en docs/rules/security.md (y, si aplica, PRODUCTION_SECURITY_CHECKLIST.md) el patrón «un límite por path se evalúa como el router: PathRequestMatcher sobre el path decodificado, nunca
+origin: spec-deferred ea65b7a10c18
+location: docs/rules/security.md
+source_spec: `spec-dw-26-api-boundary-single-definition.md`
+severity: low
+reason: Blind Hunter: el bypass /%61pi/v1/me existía porque un listener comparaba el path crudo mientras firewall y router decodifican. Hoy no queda ningún '/api/' literal en api/src (git grep), pero ninguna regla escrita ni gate impide reintroducir un chequeo crudo. Diferido porque el arreglo edita ficheros de reglas para agentes (docs/rules).
+status: open

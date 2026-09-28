@@ -36,11 +36,14 @@ final readonly class PublicAccessExemptions
     }
 
     /**
+     * Parsed with constants resolved, as the container's loader parses it: the catch-all names its path
+     * through `!php/const`, which a flagless parse refuses outright.
+     *
      * @return array<array-key, mixed>
      */
     public function securityConfig(): array
     {
-        $parsed = Yaml::parseFile($this->apiRoot . '/config/packages/security.yaml');
+        $parsed = Yaml::parseFile($this->apiRoot . '/config/packages/security.yaml', Yaml::PARSE_CONSTANT);
 
         return \is_array($parsed) ? $parsed : [];
     }
