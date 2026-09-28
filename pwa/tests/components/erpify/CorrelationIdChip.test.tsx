@@ -28,8 +28,9 @@ describe("CorrelationIdChip", () => {
       expect(writeText).toHaveBeenCalledWith("01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6");
     });
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("Copied");
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("Copied");
     });
+    expect(screen.getByRole("button").querySelector("[role='status']")).toBeNull();
   });
 
   it("announces a failed copy instead of swallowing it", async () => {
@@ -40,7 +41,7 @@ describe("CorrelationIdChip", () => {
     fireEvent.click(screen.getByRole("button"));
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("Copy failed");
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("Copy failed");
     });
     expect(screen.getByRole("button")).toHaveAttribute("data-copy-status", "error");
     // A sighted user without a screen reader gets the failure from the icon, not the live region.

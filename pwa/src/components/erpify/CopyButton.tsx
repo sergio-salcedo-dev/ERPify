@@ -47,21 +47,29 @@ export function CopyButton({
   testId,
   onCopyResult,
 }: Readonly<CopyButtonProps>) {
-  const { status, copy } = useCopyToClipboard(value, { feedbackTimeoutMs, onCopyResult });
-
   const labelByStatus: Record<CopyButtonStatus, ReactNode> = {
     copied: copiedLabel,
     error: errorLabel,
     idle: label,
   };
-  const fallbackAriaLabelByStatus: Record<CopyButtonStatus, string> = {
+  const fallbackTextByStatus: Record<CopyButtonStatus, string> = {
     copied: "Copied",
     error: "Copy failed",
     idle: "Copy",
   };
+  const textFor = (of: CopyButtonStatus): string => {
+    const labelled = labelByStatus[of];
+    return typeof labelled === "string" ? labelled : fallbackTextByStatus[of];
+  };
+  const { status, copy } = useCopyToClipboard(value, {
+    feedbackTimeoutMs,
+    onCopyResult,
+    announcements: { copied: textFor("copied"), error: textFor("error") },
+  });
   const currentLabel = labelByStatus[status];
-  const ariaLabel =
-    typeof currentLabel === "string" ? currentLabel : fallbackAriaLabelByStatus[status];
+  // The name stays the action: the outcome is spoken once, by the shared announcer, instead of
+  // a second time as a change to the name of the control that holds focus.
+  const ariaLabel = textFor("idle");
   const tooltip = title ?? (typeof label === "string" ? label : "Copy");
   const Icon = status === "copied" ? Check : Copy;
 
@@ -79,12 +87,7 @@ export function CopyButton({
       className={cn("copy-button", className)}
     >
       <Icon className="size-3.5" aria-hidden="true" />
-      {iconOnly ? <span className="sr-only">{ariaLabel}</span> : <span>{currentLabel}</span>}
-      {/* The relabelled button is not enough on its own: a screen reader does not reliably speak
-          a change to the name of the control that already has focus. */}
-      <span className="sr-only" role="status" aria-live="polite">
-        {status === "idle" ? "" : fallbackAriaLabelByStatus[status]}
-      </span>
+      {iconOnly ? <span className="sr-only">{textFor(status)}</span> : <span>{currentLabel}</span>}
     </Button>
   );
 }

@@ -120,18 +120,20 @@ describe("CopyButton", () => {
     expect(setTimeoutSpy.mock.calls.length).toBe(timersBefore);
   });
 
-  it("announces the outcome through a polite live region", async () => {
+  it("announces its own result label through the shared announcer, keeping its name stable", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<CopyButton value="x" />);
-    expect(screen.getByRole("status")).toHaveTextContent("");
-    fireEvent.click(screen.getByRole("button"));
+    render(<CopyButton value="x" iconOnly label="Copy bank ID" copiedLabel="ID copied" />);
+    const button = screen.getByRole("button");
+    fireEvent.click(button);
 
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("Copied");
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("ID copied");
     });
-    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+    expect(button).toHaveAttribute("data-copy-status", "copied");
+    expect(button).toHaveAccessibleName("Copy bank ID");
+    expect(button.querySelector("[role='status']")).toBeNull();
   });
 
   it("uses sr-only text in icon-only mode and still announces the label", () => {

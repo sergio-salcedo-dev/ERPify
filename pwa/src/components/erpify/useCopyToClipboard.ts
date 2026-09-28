@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { announce } from "./liveAnnouncer";
 
 export type CopyStatus = "idle" | "copied" | "error";
 
 export interface UseCopyToClipboardOptions {
+  /** What assistive technology hears for each outcome, through the shared announcer. */
+  announcements: Readonly<Record<Exclude<CopyStatus, "idle">, string>>;
   /** How long the copied/error feedback remains, in ms. Defaults to 2000. */
   feedbackTimeoutMs?: number;
   /** Called after the clipboard write settles (success or failure). */
@@ -29,12 +31,17 @@ async function writeToClipboard(value: string): Promise<void> {
 
 /**
  * The one place the app writes to the clipboard. Controls that copy differ in how they look — a labelled
- * button, a code token — and share this: the write, the copied/error feedback, and its expiry. Keeping the
+ * button, a code token — and share this: the write, the copied/error feedback, its expiry, and the
+ * announcement of the outcome through the document's single live region. Keeping the
  * write here is what lets a single component decide how an unavailable clipboard is reported.
  */
 export function useCopyToClipboard(
   value: string,
-  { feedbackTimeoutMs = DEFAULT_FEEDBACK_MS, onCopyResult }: UseCopyToClipboardOptions = {},
+  {
+    feedbackTimeoutMs = DEFAULT_FEEDBACK_MS,
+    onCopyResult,
+    announcements,
+  }: UseCopyToClipboardOptions,
 ): { status: CopyStatus; copy: () => Promise<void> } {
   const [status, setStatus] = useState<CopyStatus>("idle");
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,11 +56,6 @@ export function useCopyToClipboard(
   }, []);
 
   async function copy(): Promise<void> {
-    // A live region speaks only when its text changes, so a second identical outcome would be
-    // silent. Clearing it before the write lands makes every outcome a change; flushed so the empty
-    // state reaches the DOM on its own instead of merging into the render that sets the result.
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    flushSync(() => setStatus("idle"));
     let next: CopyStatus;
     try {
       await writeToClipboard(value);
@@ -65,6 +67,7 @@ export function useCopyToClipboard(
     // left to run, so arming a timer here would leave one nothing ever clears.
     if (!mountedRef.current) return;
     setStatus(next);
+    announce(announcements[next]);
     // Armed before the caller is told, so a callback that throws cannot strand the control in its
     // copied/error state.
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);

@@ -29,11 +29,7 @@ const ICON_BY_STATUS: Record<CopyStatus, ReactNode> = {
   error: <X className="text-destructive size-3 shrink-0" aria-hidden="true" />,
 };
 
-const ANNOUNCEMENT_BY_STATUS: Record<CopyStatus, string> = {
-  idle: "",
-  copied: "Copied",
-  error: "Copy failed",
-};
+const ANNOUNCEMENTS = { copied: "Copied", error: "Copy failed" } as const;
 
 /**
  * A copyable correlation/error identifier. The label (when supplied) reads as
@@ -46,7 +42,7 @@ export function CorrelationIdChip({
   size = "xs",
   className,
 }: Readonly<CorrelationIdChipProps>) {
-  const { status, copy } = useCopyToClipboard(id);
+  const { status, copy } = useCopyToClipboard(id, { announcements: ANNOUNCEMENTS });
   const isSm = size === "sm";
 
   return (
@@ -66,7 +62,7 @@ export function CorrelationIdChip({
         type="button"
         onClick={copy}
         aria-label={`Copy correlation ID ${id}`}
-        title={status === "idle" ? `Copy correlation ID ${id}` : ANNOUNCEMENT_BY_STATUS[status]}
+        title={status === "idle" ? `Copy correlation ID ${id}` : ANNOUNCEMENTS[status]}
         data-copy-status={status}
         className={cn(
           "correlation-id-chip__token group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded font-mono transition-colors",
@@ -79,9 +75,6 @@ export function CorrelationIdChip({
           {id}
         </span>
         {ICON_BY_STATUS[status]}
-        <span className="sr-only" role="status" aria-live="polite">
-          {ANNOUNCEMENT_BY_STATUS[status]}
-        </span>
       </button>
     </span>
   );
