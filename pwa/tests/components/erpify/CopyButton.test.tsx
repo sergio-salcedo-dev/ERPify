@@ -118,6 +118,7 @@ describe("CopyButton", () => {
 
     expect(onCopyResult).not.toHaveBeenCalled();
     expect(setTimeoutSpy.mock.calls.length).toBe(timersBefore);
+    expect(document.querySelector("[data-live-announcer]")).toBeNull();
   });
 
   it("announces its own result label through the shared announcer, keeping its name stable", async () => {
@@ -134,6 +135,18 @@ describe("CopyButton", () => {
     expect(button).toHaveAttribute("data-copy-status", "copied");
     expect(button).toHaveAccessibleName("Copy bank ID");
     expect(button.querySelector("[role='status']")).toBeNull();
+  });
+
+  it("announces its own failure label", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" errorLabel="IBAN not copied" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("IBAN not copied");
+    });
   });
 
   it("uses sr-only text in icon-only mode and still announces the label", () => {

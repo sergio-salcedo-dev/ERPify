@@ -62,7 +62,7 @@ export function CorrelationIdChip({
         type="button"
         onClick={copy}
         aria-label={`Copy correlation ID ${id}`}
-        title={status === "idle" ? `Copy correlation ID ${id}` : ANNOUNCEMENTS[status]}
+        title={`Copy correlation ID ${id}`}
         data-copy-status={status}
         className={cn(
           "correlation-id-chip__token group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded font-mono transition-colors",

@@ -12,11 +12,11 @@ export type CopyButtonStatus = CopyStatus;
 export interface CopyButtonProps {
   /** Text written to the clipboard. */
   value: string;
-  /** Visible label and aria-label for the idle state. Defaults to `Copy`. */
+  /** Visible label for the idle state, and the button's accessible name in every state. Defaults to `Copy`. */
   label?: ReactNode;
-  /** Visible label and aria-label after a successful copy. Defaults to `Copied`. */
+  /** Visible label after a successful copy, and what the shared announcer speaks when it is a string. Defaults to `Copied`. */
   copiedLabel?: ReactNode;
-  /** Visible label and aria-label after a failed copy. Defaults to `Copy failed`. */
+  /** Visible label after a failed copy, and what the shared announcer speaks when it is a string. Defaults to `Copy failed`. */
   errorLabel?: ReactNode;
   /** Tooltip for the idle state. Defaults to a string version of `label`. */
   title?: string;
@@ -68,7 +68,9 @@ export function CopyButton({
   });
   const currentLabel = labelByStatus[status];
   // The name stays the action: the outcome is spoken once, by the shared announcer, instead of
-  // a second time as a change to the name of the control that holds focus.
+  // a second time as a change to the name of the control that holds focus. The cost is that for
+  // the feedback window the visible text says the outcome while the name says the action — which
+  // is still the word a voice-control user says to press it again.
   const ariaLabel = textFor("idle");
   const tooltip = title ?? (typeof label === "string" ? label : "Copy");
   const Icon = status === "copied" ? Check : Copy;
