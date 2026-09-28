@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\ErrorContract\Application;
+namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -45,7 +45,7 @@ use Throwable;
  *
  * The use of `\hrtime` in this test file is itself permissible because this is
  * a test, not the production source. The companion {@see ConstantTimeAuthBranchingContractTest}
- * pins that the production source (`api/src/Shared/ErrorContract/Application/ProblemDetailsFactory.php`)
+ * pins that the production source (`api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php`)
  * carries no such timing primitive.
  *
  * @internal

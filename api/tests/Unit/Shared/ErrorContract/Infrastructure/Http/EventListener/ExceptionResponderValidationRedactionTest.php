@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use LogicException;

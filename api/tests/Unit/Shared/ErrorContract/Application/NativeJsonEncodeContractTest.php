@@ -16,6 +16,7 @@ use SplFileInfo;
  * error contract path.
  *
  * The body-serialisation pipeline ({@see \Erpify\Shared\ErrorContract\Application}
+ * + {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory}
  * + {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder}
  * + {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder})
  * MUST:
@@ -35,8 +36,9 @@ use SplFileInfo;
  * `SearchResponder`) — which are NOT part of the Problem Details error
  * contract — keep their Symfony Serializer dependency without tripping this
  * gate. (`SearchExceptionListener` and its `JsonApiErrorBuilder` envelope
- * were retired once {@see ProblemDetailsFactory} subsumed their mappings
- * natively.)
+ * were retired once
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory} subsumed their
+ * mappings natively.)
  *
  * Comments and docblocks are stripped before scanning so a docblock that names
  * `\json_encode([...])` to document an intentional NON-encode (e.g. the
@@ -124,7 +126,7 @@ final class NativeJsonEncodeContractTest extends TestCase
             $totalCalls,
             'json_encode grep gate scanned zero calls — the directory roots no longer '
             . 'cover any error-path encode site. Either the gate is misconfigured or the '
-            . 'serialisation moved out of Shared/ErrorContract/Application and Shared/Http/Infrastructure.',
+            . 'serialisation moved out of the Shared/ErrorContract error path.',
         );
 
         $this->assertSame(
@@ -175,10 +177,11 @@ final class NativeJsonEncodeContractTest extends TestCase
     }
 
     /**
-     * Yields the explicit Problem Details error-contract files / directory: the entire
-     * `Shared/ErrorContract/Application/` subtree (factory + value objects + denylist) plus
-     * the responder and listener that emit the wire body. The success-payload resource
-     * responders under `Shared/Http/Infrastructure/Responder/` (e.g. `ResourceResponder`,
+     * Yields every file of the Problem Details error contract outside `Domain/`: the
+     * `Shared/ErrorContract/Application/` subtree (value objects + redaction) and the
+     * `Shared/ErrorContract/Infrastructure/Http/` subtree (factory, responder, listeners) that
+     * build and emit the wire body. The success-payload resource responders under
+     * `Shared/Http/Infrastructure/Responder/` (e.g. `ResourceResponder`,
      * `SearchResponder`) are intentionally excluded — they serialize success bodies, not
      * error bodies, so they live in `Shared/Http/Infrastructure/` but are not part of the
      * listener / factory / responder triple. (`SearchExceptionListener` and its
@@ -191,9 +194,16 @@ final class NativeJsonEncodeContractTest extends TestCase
     {
         $apiRoot = $this->resolveApiRoot();
 
-        $directoryRoot = $apiRoot . '/src/Shared/ErrorContract/Application';
+        // Directories, never a file list: a named file that moves drops out of a list in silence, and a
+        // missing root fails rather than shrinking the sweep.
+        $directoryRoots = [
+            $apiRoot . '/src/Shared/ErrorContract/Application',
+            $apiRoot . '/src/Shared/ErrorContract/Infrastructure/Http',
+        ];
 
-        if (\is_dir($directoryRoot)) {
+        foreach ($directoryRoots as $directoryRoot) {
+            $this->assertDirectoryExists($directoryRoot, 'Error-path directory moved or renamed; update this sweep.');
+
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($directoryRoot, FilesystemIterator::SKIP_DOTS),
             );
@@ -213,19 +223,6 @@ final class NativeJsonEncodeContractTest extends TestCase
 
                 yield $file;
             }
-        }
-
-        $explicitFiles = [
-            $apiRoot . '/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsResponder.php',
-            $apiRoot . '/src/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponder.php',
-        ];
-
-        foreach ($explicitFiles as $explicitFile) {
-            if (!\is_file($explicitFile)) {
-                continue;
-            }
-
-            yield new SplFileInfo($explicitFile);
         }
     }
 
