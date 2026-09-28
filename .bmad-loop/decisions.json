@@ -52,5 +52,14 @@
     "key": "1",
     "label": "Make the access cluster session-aware",
     "resolution": ""
+  },
+  "DW-43": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "keep-open",
+    "intent": "",
+    "key": "3",
+    "label": "Keep open",
+    "resolution": ""
   }
 }
