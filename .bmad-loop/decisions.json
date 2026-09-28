@@ -25,5 +25,14 @@
     "key": "1",
     "label": "Revoke the prior session on re-login",
     "resolution": ""
+  },
+  "DW-30": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Make DbalEventStore write event_store.metadata as a JSON object ({} when empty), align the ADR with the migration's actual default, and record that historical audit_log [] rows are accepted without backfill.",
+    "key": "1",
+    "label": "Fix (b) only; accept (a)",
+    "resolution": ""
   }
 }
