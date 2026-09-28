@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
 use Erpify\Shared\ErrorContract\Application\ProblemDetails;
-use Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Application\RequestUriRedaction;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsResponder;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;

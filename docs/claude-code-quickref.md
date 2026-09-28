@@ -138,13 +138,12 @@ while the installer resolves externals from **release tags**. Read the tags.
 there: one install per machine, serving every session. Run one only when no other session is
 mid-task, or their skills change under them.
 
-**Open, and nobody has dated them:** `bmb` is pinned at v1.8.1 (`channel: pinned`) while v2.2.2 is
-the stable release, two majors on, and the pin's motivation is not recorded anywhere; `wds` is
-deprecated upstream in 6.12 — hidden from the module picker for new installs and warning on every
-flow — yet still installed at v0.4.3; and the `_bmad/custom/` pinning above protects **one machine**,
-because `/_bmad/` is gitignored, so a fresh clone gets the installer's defaults and the next
-`quick-update` there resets them the same way. If that last one matters, the fix has to live
-somewhere tracked.
+**Still open:** `bmb` stays on `channel: pinned` — today at v2.2.2, the latest stable release, but
+a pinned module does not follow a new release on `quick-update`, so it has to be moved by hand,
+and the pin's motivation is not recorded anywhere. And the `_bmad/custom/` pinning above protects
+**one machine**, because `/_bmad/` is gitignored, so a fresh clone gets the installer's defaults and
+the next `quick-update` there resets them the same way. If that last one matters, the fix has to
+live somewhere tracked.
 
 **Every skill root is installer output, and none of them is tracked.** `_bmad/` is gitignored, and 67 of the
 77 `bmad-*` skills call into it, so a clone carrying the skill files would hold ~1800 files it cannot run —
