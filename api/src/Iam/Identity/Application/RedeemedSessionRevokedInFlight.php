@@ -11,8 +11,8 @@ use RuntimeException;
  * session of the identity before the consuming transaction took the lock. It never reaches the wire on its
  * own — {@see \Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure} carries it as
  * `previous` — and it exists so the HTTP adapter can tell this outcome from a genuine deadlock, which answers
- * the same 503 over a session that is still alive: only here is the device's native session holding a dead
- * token, which the adapter has to drop or the retry the 503 invites meets the gate's 401 first.
+ * the same 503 over a session that is still alive: only here is the device signed in over a dead session,
+ * which the adapter has to sign it out of or the retry the 503 invites meets the gate's 401 first.
  */
 final class RedeemedSessionRevokedInFlight extends RuntimeException
 {

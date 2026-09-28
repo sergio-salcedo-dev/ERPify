@@ -14,6 +14,7 @@ use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
 /**
@@ -69,6 +70,7 @@ final readonly class RedeemRecoverySecretController
         private RedeemRecoverySecret $redeemRecoverySecret,
         private ReauthenticateDevice $reauthenticateDevice,
         private PasswordRecoveryThrottle $throttle,
+        private TokenStorageInterface $tokenStorage,
     ) {
     }
 
@@ -99,13 +101,17 @@ final readonly class RedeemRecoverySecretController
                 $this->reauthenticateDevice->reauthenticate(...),
             );
         } catch (TransientTransactionFailure $transientTransactionFailure) {
-            // The 503 invites a retry, and this device's native session still carries the token and the
-            // correlation of the session another device just revoked. Left in place, the retry is admitted by
-            // nothing: the gate reads that dead row on the way in and answers 401 before this route runs. So the
-            // session is dropped here — exactly what the gate would do — and only on this cause: a deadlock
+            // The 503 invites a retry, and this device is signed in over the session another device just revoked.
+            // Left in place, the retry is admitted by nothing: the gate reads that dead row on the way in and
+            // answers 401 before this route runs. So the device is made anonymous here, and both halves are
+            // needed. Dropping the native session removes the correlation, but `ContextListener` writes whatever
+            // token storage still holds back into the regenerated session on `kernel.response`, and a token with
+            // no correlation is refused by the gate just the same — so the token is cleared first, which is what
+            // leaves the response carrying a session with no identity in it. Only on this cause: a deadlock
             // answering the same 503 leaves the session this request established alive, and signing the device
             // out of it would be a loss the retry does not need.
             if ($transientTransactionFailure->getPrevious() instanceof RedeemedSessionRevokedInFlight) {
+                $this->tokenStorage->setToken(null);
                 $httpRequest->getSession()->invalidate();
             }
 

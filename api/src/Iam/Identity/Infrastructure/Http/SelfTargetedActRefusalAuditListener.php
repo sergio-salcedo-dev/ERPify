@@ -43,7 +43,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * **No budget of its own**, unlike {@see InvalidCurrentPasswordAuditListener}, whose row would be a write
  * amplifier on an endpoint any session can reach. Only a session already holding a `users.*` permission reaches
  * these refusals; that session can already write one unbudgeted `security` row per unlock call on another
- * target, or per 403; and the action is `ordinary`, so the retention prune bounds what it writes.
+ * target, or per 403. The action is `ordinary`, so the retention prune bounds how long a row lives — not how
+ * many such a session writes between two sweeps, which is as unbounded here as on those routes.
  *
  * **The write propagates, as every `security` write does**
  * ({@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger}): a failed write surfaces as a 5xx instead of

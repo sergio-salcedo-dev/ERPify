@@ -20,8 +20,10 @@ use LogicException;
  * **It is not best-effort, and that is the difference from every other session collaborator in this layer.**
  * A credential change can swallow its teardown because the native `refreshUser` path de-authenticates the old
  * sessions anyway; nothing de-authenticates them after a recovery redemption, which replaces no credential.
- * The eviction is therefore the security property itself, and a failure has to abort what it guards: it runs
- * inside the redemption's consuming transaction and anything it raises rolls the consumption back with it.
+ * The eviction is therefore the security property itself, and a failure has to abort the consumption it
+ * guards: it runs inside the redemption's consuming transaction and anything it raises rolls the consumption
+ * back with it. What it cannot abort is the admission — the session the login already committed stays
+ * standing, which is the infrastructure-failure case {@see RedeemRecoverySecret} documents.
  *
  * A missing correlation fails the same way rather than widening into a revoke of every session, which would
  * take the one this request just minted and spend the secret over an owner left with nothing. It is not

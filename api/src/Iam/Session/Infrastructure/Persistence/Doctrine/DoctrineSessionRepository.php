@@ -6,6 +6,7 @@ namespace Erpify\Iam\Session\Infrastructure\Persistence\Doctrine;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception as DbalException;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
@@ -32,9 +33,10 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *   - any DBAL failure on any statement (a lost connection, a statement timeout, an exhausted pool — all
  *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503) by
  *     {@see convertingStoreFailure()}, so a store outage lets the gate fail closed instead of leaking a raw
- *     500. All seven methods go through it — reads, the locked read, the persist/flush, the bulk revokes and
- *     the two hard deletes — because a single request reaches several of them: revoke-others runs a read and then an
- *     UPDATE, and the erasure path admits through `findActiveById` and then deletes through
+ *     500 — except a lost lock race inside a transaction, which is handed to the transaction's owner (see
+ *     there). All eight methods go through it — the two reads, the locked read, the persist/flush, the two
+ *     bulk revokes and the two hard deletes — because a single request reaches several of them: revoke-others
+ *     runs a read and then an UPDATE, and the erasure path admits through `findActiveById` and then deletes through
  *     `deleteAllForUser`. Guarding a subset answers one outage with two different statuses. Every statement
  *     is fixed DQL with no user-supplied fragment, so a DBAL exception here is always infrastructural — a 503
  *     (which still reaches Sentry) is the honest outcome, never masking an application bug. The bulk
@@ -274,12 +276,25 @@ final readonly class DoctrineSessionRepository implements SessionRepository
      * never at the `persist()`. Handing the statement in means the execution cannot end up outside the guard
      * while the guard still looks present.
      *
+     * **A lost lock race inside a transaction is not an outage, and is not converted.** DBAL marks a deadlock
+     * or a serialization failure {@see RetryableException}, and the transaction manager that opened the
+     * transaction turns exactly that marker into the retryable 503 `transient-transaction-failure`. Converting it
+     * here first would hide the marker from the manager, so the caller would read a lock-order race — which
+     * {@see lockActiveForUser()} is the one statement here able to lose — as the session store being down.
+     * Outside a transaction there is no such owner, and the outage conversion stands.
+     *
      * @param callable(): mixed $statement
      */
     private function convertingStoreFailure(callable $statement): mixed
     {
         try {
             return $statement();
+        } catch (RetryableException $retryableException) {
+            if ($this->entityManager->getConnection()->isTransactionActive()) {
+                throw $retryableException;
+            }
+
+            throw SessionStoreUnavailable::storeUnreachable($retryableException);
         } catch (DbalException $dbalException) {
             throw SessionStoreUnavailable::storeUnreachable($dbalException);
         }

@@ -340,8 +340,10 @@ Two properties the placement alone does not give, each pinned:
   before the eviction revoked the redeemed session after it committed. And a redemption whose own session was
   revoked before it took the lock evicts the rest, **withholds** the consumption and answers 503
   `transient-transaction-failure`: the retry meets nobody left to interfere, where consuming would have stranded the
-  owner. The endpoint drops the device's native session on that cause, or the retry would carry the revoked
-  session's correlation into the admission gate and be refused before reaching the route. That outcome records `AllSessionsRevoked` (nothing was kept) and a `RECOVERY_SECRET_REDEMPTION_INTERRUPTED`
+  owner. The endpoint signs the device out on that cause — it clears the stored token and drops the native
+  session, both, because `ContextListener` writes a token left in storage back into the regenerated session on
+  `kernel.response` — or the retry would reach the admission gate authenticated with no live session behind it
+  and be refused before reaching the route. That outcome records `AllSessionsRevoked` (nothing was kept) and a `RECOVERY_SECRET_REDEMPTION_INTERRUPTED`
   audit row.
 - **It is not best-effort**, unlike the credential-change teardown. That one can swallow its failure because
   `refreshUser` de-authenticates the old sessions anyway; a redemption changes no credential, so the eviction

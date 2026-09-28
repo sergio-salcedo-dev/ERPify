@@ -37,6 +37,7 @@ use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 
 /**
  * The anonymous redemption edge, asserted at the one place its opacity is decided.
@@ -246,6 +247,7 @@ final class RedeemRecoverySecretControllerTest extends TestCase
             // somebody in cannot pass for a refusal that never got that far.
             new ReauthenticateDevice(new InMemoryUserRepository(), new Security(new Container())),
             new PasswordRecoveryThrottle($perEmail, $perSelector),
+            new TokenStorage(),
         );
     }
 }

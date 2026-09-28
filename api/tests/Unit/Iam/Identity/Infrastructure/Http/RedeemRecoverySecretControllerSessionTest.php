@@ -45,6 +45,10 @@ use Symfony\Component\HttpFoundation\Session\Session as NativeSession;
 use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Http\Authentication\UserAuthenticatorInterface;
 use Symfony\Component\Security\Http\Authenticator\AuthenticatorInterface;
@@ -78,12 +82,15 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
 
     private RecordingCurrentSessionReference $correlation;
 
+    private TokenStorage $tokenStorage;
+
     #[Override]
     protected function setUp(): void
     {
         SystemClock::set(FixedClock::at(self::NOW));
         $this->sessions = new InMemorySessionRepository();
         $this->correlation = new RecordingCurrentSessionReference();
+        $this->tokenStorage = new TokenStorage();
     }
 
     #[Test]
@@ -109,6 +116,13 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
             $request->getSession()->has('_security_main'),
             'the device still carries the token of a session another device revoked, so its retry meets a 401',
         );
+        // Dropping the session alone is not enough, and only the kernel shows why: `ContextListener` writes the
+        // stored token back into the regenerated session on `kernel.response`. That half is pinned end to end
+        // by `RedeemInterruptedRetryFunctionalTest`; this one pins that the controller clears what it writes.
+        $this->assertNull(
+            $this->tokenStorage->getToken(),
+            'the token survives in storage, so the response listener re-serialises it into the new session',
+        );
     }
 
     #[Test]
@@ -132,12 +146,19 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
             $request->getSession()->has('_security_main'),
             'a deadlock signed the device out of a session that is still alive',
         );
+        $this->assertInstanceOf(
+            TokenInterface::class,
+            $this->tokenStorage->getToken(),
+            'a deadlock cleared the token of a live session',
+        );
     }
 
     private function requestWithNativeSession(): Request
     {
         $native = new NativeSession(new MockArraySessionStorage());
         $native->set('_security_main', 'the token the login wrote');
+        // The same login also left its token in storage, which is what `ContextListener` serialises back.
+        $this->tokenStorage->setToken(new UsernamePasswordToken(new InMemoryUser('device', null), 'main'));
 
         $request = new Request();
         $request->setSession($native);
@@ -205,6 +226,7 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
                 $this->mintingSecurity(),
             ),
             new PasswordRecoveryThrottle($unbounded('per_email'), $unbounded('per_selector')),
+            $this->tokenStorage,
         );
     }
 

@@ -126,6 +126,22 @@ one of those handlers: `CompletePasswordReset` sends it itself, after the commit
 revocation, best-effort. A blocking mailer must be able neither to roll the reset back nor to delay the
 teardown this flow exists to perform.
 
+### Iam.Session (`aggregateType: Iam.Session`)
+
+Classified `person` in `api/.persistent-transport-policy`, so every event here is unrouted and handled in
+process. None has a consumer today. The two bulk facts are published by use cases rather than recorded on an
+aggregate, because their revocations are directed UPDATEs that hydrate no row.
+
+| `eventName` | ver | Producer (use case) | Payload |
+|-------------|:---:|---------------------|---------|
+| `erpify.iam.session.started` | 1 | `StartSession` (recorded by `Session::start()`) | `userId` |
+| `erpify.iam.session.revoked` | 1 | `RevokeSession` (recorded by `Session::revoke()`) | `userId` |
+| `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `[]` |
+| `erpify.iam.session.others-revoked` | 1 | `RevokeOtherSessions` (sign out my other devices); `EvictOtherSessions` on every completed recovery redemption | `keptSessionId` |
+
+Neither bulk event names its cause, so `…others-revoked` from a recovery redemption and from the owner's own
+"sign out my other devices" are the same fact; the recovery-secret audit rows are what attribute it.
+
 #### `BankSnapshot` — the shared payload
 
 Created and updated carry the same value object so they stay byte-identical in the store; they share
