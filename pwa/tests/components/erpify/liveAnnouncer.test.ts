@@ -90,6 +90,7 @@ describe("announce", () => {
 describe("announce across tests", () => {
   it("arms an announcement and ends before it lands", () => {
     announce("stale from the previous test");
+    expect(regions()[0].textContent).toBe("");
   });
 
   it("never hears the previous test's announcement", async () => {
