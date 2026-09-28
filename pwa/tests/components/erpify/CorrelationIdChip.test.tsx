@@ -28,8 +28,38 @@ describe("CorrelationIdChip", () => {
       expect(writeText).toHaveBeenCalledWith("01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6");
     });
     await waitFor(() => {
-      expect(screen.getByRole("status")).toHaveTextContent("Copied");
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("Copied");
     });
+    expect(screen.getByRole("button").querySelector("[role='status']")).toBeNull();
+  });
+
+  it("announces a failed copy instead of swallowing it", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CorrelationIdChip id="01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-live-announcer]")).toHaveTextContent("Copy failed");
+    });
+    expect(screen.getByRole("button")).toHaveAttribute("data-copy-status", "error");
+    expect(screen.getByRole("button")).toHaveAttribute(
+      "title",
+      "Copy correlation ID 01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6",
+    );
+    // A sighted user without a screen reader gets the failure from the icon, not the live region.
+    expect(screen.getByRole("button").querySelector("svg.lucide-x")).not.toBeNull();
+  });
+
+  it("names the token the same way in its tooltip as in its accessible name", () => {
+    render(<CorrelationIdChip id="01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6" label="Error ID:" />);
+    const button = screen.getByRole("button");
+    expect(button).toHaveAttribute(
+      "title",
+      "Copy correlation ID 01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6",
+    );
+    expect(button).toHaveAccessibleName("Copy correlation ID 01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6");
   });
 
   it("renders the optional label prefix when supplied", () => {

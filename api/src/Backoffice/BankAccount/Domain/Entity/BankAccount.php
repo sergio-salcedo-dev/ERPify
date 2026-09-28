@@ -98,6 +98,12 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         $this->id = $id;
     }
 
+    /**
+     * Every account is born `ACTIVE`. Any other status is a transition, reached through {@see changeStatus()},
+     * which is the one place a {@see BankAccountStatusChangedDomainEvent} carrying the from/to pair is recorded:
+     * an account born `INACTIVE` or `CLOSED` would be a transition no consumer of that event ever sees, and no
+     * production caller needs one — the creation request carries no status.
+     */
     public static function create(
         string $id,
         string $bankId,
@@ -106,7 +112,6 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         ?string $bic = null,
         ?string $alias = null,
         Currency $currency = Currency::EUR,
-        BankAccountStatus $status = BankAccountStatus::ACTIVE,
     ): self {
         Uuid::ensure($bankId);
 
@@ -118,7 +123,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
             self::canonicalizeBic($bic),
             $alias,
             $currency,
-            $status,
+            BankAccountStatus::ACTIVE,
         );
 
         $account->record(new BankAccountCreatedDomainEvent(
