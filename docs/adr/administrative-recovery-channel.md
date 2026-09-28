@@ -381,6 +381,21 @@ kept their session through a thief's redemption and could evict the thief, who h
 with. The trade is taken because the secret is shown once and held offline, while a session cookie rides
 every request; what remains open for #602 is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
+**Two residuals accepted (Sergio, 2026-09-28)**, both surfaced by the fourth review round:
+
+- **A leaked secret can evict without being spent.** Two concurrent redemptions of one secret, where the first
+  one's session revokes the second's through `revoke-others`, end both interrupted: every session of the
+  identity is evicted and neither consumes. The holder can repeat it, bounded only by the per-selector
+  throttle, and the owner never sees the secret disappear, so the detection property above does not fire —
+  only `RECOVERY_SECRET_REDEMPTION_INTERRUPTED` rows attest it. Discarded: consuming after a number of
+  interruptions, or alarming on them — product work for a path that already presupposes a leaked secret,
+  which §7 (iii) accepts as an eviction weapon.
+- **An infrastructure failure after admission leaves an unaudited session.** When the locked pass dies without
+  a verdict — a lost lock race, the session store unreachable — the session the login committed stays
+  standing, as the flow intends, and no `audit_log` row names it: the redemption's audit rows are written only
+  on the outcomes that reach one. Discarded: a best-effort `RECOVERY_SECRET_REDEMPTION_INCOMPLETE` row — a new
+  action in the evidence registry for a rare path, over a session whose holder did present a valid secret.
+
 ## Falsification
 
 **I-1 is falsified statically, not by a scenario — and this is the correction the adversarial pass
