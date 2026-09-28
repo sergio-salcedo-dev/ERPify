@@ -30,8 +30,8 @@
 #     needs an argued ADR exception. Keying per event class instead would be finer, but a class rename would
 #     silently empty the registry; `aggregateType()` is the stable key.
 #   - It classifies the `aggregate_id`, NOT the payload. An event whose id is safe but whose payload carries
-#     a person's id — `SessionStarted` and `SessionRevoked` (`userId`) — is out of its reach. Closing that is
-#     FR9/G-4b in the GDPR-hardening epic.
+#     a person's id — `SessionStarted` and `SessionRevoked` (`userId`) — is out of its reach. Open in
+#     PRODUCTION_SECURITY_CHECKLIST.md §7 ("A person's id persisted through configuration").
 #   - It only sees `DomainEvent` subclasses under `src`. A plain Messenger message carrying a user id, routed
 #     to `async` and consumed by an `#[AsMessageHandler]`, reproduces the defect with this gate green. That
 #     is the cheapest way to reintroduce it and nothing here stops it.

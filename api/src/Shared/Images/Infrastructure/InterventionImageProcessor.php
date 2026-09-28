@@ -28,7 +28,7 @@ use Throwable;
  * trigger for introducing an explicit versioning scheme is the first time this pipeline's output
  * changes in code merged to `main`.
  *
- * Supported formats extend the epic's cited precedent (jpeg/png/webp) with GIF. Verified against
+ * Supported formats extend the precedent first cited for this module (jpeg/png/webp) with GIF. Verified against
  * the installed `intervention/image` source: under the GD driver, the non-GIF decode path always
  * calls plain `imagecreatefromstring()`, which decodes only the first frame of an animated WebP
  * regardless of any application-level handling — so "reduce an animated source to one frame" can
