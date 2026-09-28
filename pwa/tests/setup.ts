@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { afterEach } from "vitest";
 import "reflect-metadata";
 
 // Defensive shim for contributors on Node versions outside the supported
@@ -39,3 +40,9 @@ if (dom?.window) {
     get: () => dom.window.sessionStorage,
   });
 }
+
+// The copy announcer lives on <body>, outside every container Testing Library unmounts, so a message
+// from one test would otherwise still be readable in the next and satisfy its assertion.
+afterEach(() => {
+  document.body.querySelector("[data-live-announcer]")?.remove();
+});
