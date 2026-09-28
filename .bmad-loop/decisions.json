@@ -70,5 +70,14 @@
     "key": "1",
     "label": "Keep open for a dedicated epic",
     "resolution": ""
+  },
+  "DW-46": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Add a migration with CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL)) and an enum-token CHECK on actor_type, mirror them in the schema listener, fix any fixture/Behat SQL that violates them, and add a functional test proving an illegal row is refused.",
+    "key": "1",
+    "label": "Add the CHECK constraints",
+    "resolution": ""
   }
 }
