@@ -16,5 +16,14 @@
     "key": "1",
     "label": "Route 503 to /maintenance",
     "resolution": ""
+  },
+  "DW-24": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "When a login mints a new session while the HTTP session already correlates a live iam_session, revoke that previous row in the same transaction, with a functional test showing no ghost device after re-login.",
+    "key": "1",
+    "label": "Revoke the prior session on re-login",
+    "resolution": ""
   }
 }
