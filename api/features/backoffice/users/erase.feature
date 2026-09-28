@@ -222,6 +222,23 @@ Feature: Erase an identity (GDPR right to erasure)
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "self-erasure-forbidden"
     And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    # The refusal is recorded, once, on the actor axis alone: the target is the actor by definition, so the row
+    # names no resource, and its metadata is the problem type and the route — never the request body.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_erase\", \"refusal\": \"self-erasure-forbidden\"}"
+      }
+    ]
+    """
 
   Scenario: Self-erasure is refused even when the admin spells their own id in a different case
     Given I am logged in as an administrator
@@ -229,6 +246,22 @@ Feature: Erase an identity (GDPR right to erasure)
     Then the response status code should be 409
     And the JSON node "type" should be equal to "self-erasure-forbidden"
     And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    # The actor comes from the session, so the row names it in its canonical lower case.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_erase\", \"refusal\": \"self-erasure-forbidden\"}"
+      }
+    ]
+    """
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator

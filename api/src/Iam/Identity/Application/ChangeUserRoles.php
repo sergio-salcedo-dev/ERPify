@@ -44,13 +44,14 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *    neither writes, nor emits an event, nor — the reason this matters — tears down live sessions.
  *
  * **An administrator may never change their own roles.** The refusal reads the trusted actor from
- * {@see ActorContextFactory} and runs before the transaction opens, so a self-targeted call touches no row,
- * takes no lock and writes no audit entry — whatever set it asks for, a widening or a redundant re-send
- * included. The reason is the teardown below: it revokes every session of the target after the commit without
- * re-checking that the caller's own session is still alive, so a self-targeted change fired by a stolen
- * administrator session that was admitted before a recovery-secret redemption evicted it would revoke the
- * session that redemption has just established. Nothing a self-targeted change could legitimately buy is worth
- * that; another administrator makes it.
+ * {@see ActorContextFactory} and runs before the transaction opens, so a self-targeted call touches no row and
+ * takes no lock — whatever set it asks for, a widening or a redundant re-send included. Its `security` audit row is
+ * written on the way out, never here, by the exception listener matching
+ * {@see \Erpify\Iam\Identity\Domain\Exception\SelfTargetedActForbidden}. The reason is the teardown below: it
+ * revokes every session of the target after the commit without re-checking that the caller's own session is still
+ * alive, so a self-targeted change fired by a stolen administrator session that was admitted before a
+ * recovery-secret redemption evicted it would revoke the session that redemption has just established. Nothing a
+ * self-targeted change could legitimately buy is worth that; another administrator makes it.
  *
  * The post-commit revoke is defence in depth here, not the only barrier. A changed role set already
  * de-authenticates at the firewall — `SecurityUser::isEqualTo()` compares the role set the session carries

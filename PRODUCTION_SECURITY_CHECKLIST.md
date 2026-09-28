@@ -762,7 +762,8 @@ you change anything here.
       signal rather than always claiming a recovery happened, and the call is audited (`SECURITY`,
       `ACCOUNT_UNLOCKED_BY_ADMIN`) whether or not it mutated anything — the lever being invoked is itself the
       fact worth keeping. **An administrator may never unlock their own identity** (409
-      `self-unlock-forbidden`, refused before any row is touched): granting that would make `users.unlock` a
+      `self-unlock-forbidden`, refused before any row is touched, and recorded as a `SELF_TARGETED_ACT_REFUSED`
+      `security` row rather than an `ACCOUNT_UNLOCKED_BY_ADMIN`): granting that would make `users.unlock` a
       second, credential-independent path into one's own account, defeating the lockout it exists to recover
       from. **The residual this left — an installation with a single administrator has nobody to invoke the lever —
       is closed by the recovery secret below**, which is the edge that depends on no peer. The
@@ -1240,7 +1241,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       the redeemed session — secret spent, owner holding nothing. It is closed by the refusal, not by a
       re-check: neither write re-verifies its caller's session under a lock (only `revoke-others` does), and
       from the stolen session itself neither needs to, because its own identity is the one target it could aim
-      them at whose teardown reaches the redeemed session. **What still survives is everything aimed at
+      them at whose teardown reaches the redeemed session. The attempt is not silent either: each of the four
+      self-refusals writes a resource-less `SELF_TARGETED_ACT_REFUSED` row at `security` level (`metadata` holds
+      the problem `type` and the route), where a 409 would otherwise reach no `audit_log` row at all — the
+      generic hook records successful reads only. **What still survives is everything aimed at
       somebody else, and one path of it comes back to the owner**: the identities and grants the intruder
       created, and the administrators it demoted or suspended, none of which an eviction reaches — and an
       administrator it planted holds sessions the owner's redemption does not evict, so that administrator can

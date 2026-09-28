@@ -18,7 +18,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
  * but collides with that invariant, reusing the existing marker — no new error-contract entry. Off-request
  * callers (the CLI's `system` actor, which carries no id) can never trip it.
  */
-final class SelfUnlockForbidden extends DomainException implements Conflict
+final class SelfUnlockForbidden extends DomainException implements Conflict, SelfTargetedActForbidden
 {
     public static function forActor(string $userId): self
     {

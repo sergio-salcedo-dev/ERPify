@@ -27,6 +27,8 @@ Feature: Assign an identity's roles
     }
     """
     Then the response status code should be 200
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'SELF_TARGETED_ACT_REFUSED'"
+    And there should have 0 records in SQL result
     And the JSON node "data" should have 6 elements
     And the JSON node "data.id" should be equal to "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
     And the JSON node "data.email" should be equal to "trent@erpify.test"
@@ -156,6 +158,23 @@ Feature: Assign an identity's roles
     And there should have 0 records in SQL result
     And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66' AND roles::jsonb = jsonb_build_array('ADMIN')"
     And there should have 1 records in SQL result
+    # The refusal is recorded, once, on the actor axis alone: the target is the actor by definition, so the row
+    # names no resource, and its metadata is the problem type and the route — never the request body.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_change_roles\", \"refusal\": \"self-role-change-forbidden\"}"
+      }
+    ]
+    """
 
     # The second row spells the actor's own id in upper case: RFC 4122 hex is case-insensitive, so it is the
     # same identity and must not slip past the refusal.

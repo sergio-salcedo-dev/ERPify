@@ -363,7 +363,10 @@ case-insensitively — the shape `self-unlock-forbidden` and `self-erasure-forbi
 re-checking the caller's session under the ordered `iam_session` lock inside each write, which would put a
 session lock into two Identity use cases for a target nobody legitimately needs, and would still have to
 decide what a self-change that survives the re-check may do; a self-targeted change has no use worth that
-(another administrator makes it, and an identity cannot reinstate itself).
+(another administrator makes it, and an identity cannot reinstate itself). All four refusals write a
+resource-less `SELF_TARGETED_ACT_REFUSED` row at `security` level from one exception listener, since a
+session aiming the users surface at its own identity is the signal a stolen one gives off, and a 409 otherwise
+reaches no `audit_log` row.
 
 What still survives: everything the stolen session aims at somebody else — identities and grants it planted,
 administrators it demoted or suspended — which no eviction reaches; and an administrator it planted keeps

@@ -20,7 +20,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
  * A {@see Conflict} (409), mirroring {@see SelfUnlockForbidden}: well-formed and authorized, but colliding with
  * that invariant.
  */
-final class SelfRoleChangeForbidden extends DomainException implements Conflict
+final class SelfRoleChangeForbidden extends DomainException implements Conflict, SelfTargetedActForbidden
 {
     public static function forActor(string $userId): self
     {

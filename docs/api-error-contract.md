@@ -206,8 +206,14 @@ three surfaces, `recovery-secret-already-exists`; every other value here is an e
 
 Three administrative writes refuse a target that is the acting administrator's own identity, and erasure a
 fourth. Each is a `Conflict` (**409**) with a `type()` of its own, raised by the use case **before its
-transaction opens**, so a refused call takes no lock, touches no row, publishes no event and writes no audit
-entry. The actor is read from the sealed session through `ActorContextFactory`, never from the request, and
+transaction opens**, so a refused call takes no lock, touches no row and publishes no event. It does leave one
+`audit_log` row: every refusal writes a `SELF_TARGETED_ACT_REFUSED` entry at `security` level, because an
+administrator's session turning the users surface on its own identity is what a stolen session looks like, and a
+409 otherwise reaches no `audit_log` row (the generic hook records successful reads only). The row is written on the way out by `SelfTargetedActRefusalAuditListener`, which
+matches the domain interface `SelfTargetedActForbidden` rather than the four classes. It is resource-less
+(`actor_id` already seals the target) and its `metadata` holds only the problem `type` and the route. A failed
+write propagates, as every `security` write does, so the refusal surfaces as a 5xx rather than completing
+unrecorded. The actor is read from the sealed session through `ActorContextFactory`, never from the request, and
 compared to the route id **case-insensitively** (`ActorContext::isUser()`), so re-casing one's own id does not
 slip past. Only a `user` actor can trip one: the CLI's `system` actor carries no id, and an API key's id names
 the key.
@@ -221,8 +227,8 @@ the key.
 
 These refusals precede **409 `last-active-administrator-protected`**, which therefore answers only a target
 other than the actor — in practice the concurrent case, two administrators acting on each other. No marker
-interface is added (all four reuse `Conflict`), so the drift gate does not fire and this table is the manual
-NFR26 record.
+interface is added (all four reuse `Conflict`; `SelfTargetedActForbidden` classifies the refusal for the audit
+trail and maps nothing), so the drift gate does not fire and this table is the manual NFR26 record.
 
 ### Authenticated password change (`POST /api/v1/me/password`)
 

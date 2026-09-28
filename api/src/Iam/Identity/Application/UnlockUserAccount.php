@@ -15,9 +15,9 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
- * Clears a persisted lockout on another identity — the administrative recovery lever #602 documents as
- * missing: a per-identity lockout ({@see \Erpify\Iam\Identity\Domain\Entity\User::recordFailedAttempt()}, ten
- * attempts, fifteen minutes) recovers only through a successful login or a completed password reset, both of
+ * Clears a persisted lockout on another identity — the administrative recovery lever: without it a per-identity
+ * lockout ({@see \Erpify\Iam\Identity\Domain\Entity\User::recordFailedAttempt()}, ten attempts, fifteen
+ * minutes) recovers only through a successful login or a completed password reset, both of
  * which an attacker who merely knows the target's email can hold shut indefinitely. This is the third
  * recovery edge, reachable only behind `users.unlock` rather than the target's own credential.
  *
@@ -36,13 +36,15 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *
  * **An administrator may never unlock their own identity**, and the guard mirrors
  * {@see FulfilIdentityErasure::refuseSelfErasure()} deliberately: read the trusted actor from
- * {@see ActorContextFactory} — never the request body, which the caller controls — compare case-insensitively
- * (RFC 4122 hex), and refuse before the transaction opens, so a self-targeted call touches no row and writes
- * no audit entry. The reason is not "a locked-out actor cannot make this request" (a locked-out session was
- * never admitted past the firewall in the first place, so that scenario cannot arise); it is that granting
- * `users.unlock` over one's own identity would make it a second, credential-independent path into an account —
- * exactly the authentication bypass the lockout exists to prevent, and precisely the failure mode #602's design
- * review named as non-negotiable.
+ * {@see ActorContextFactory} — never the request body, which the caller controls — compare case-insensitively (RFC
+ * 4122 hex), and refuse before the transaction opens, so a self-targeted call touches no row; its `security` audit
+ * row is written on the way out, by the exception listener matching
+ * {@see \Erpify\Iam\Identity\Domain\Exception\SelfTargetedActForbidden}, and no `ACCOUNT_UNLOCKED_BY_ADMIN` row is
+ * written. The reason is not "a locked-out actor cannot make this request" (a locked-out session was never admitted
+ * past the firewall in the first place, so that scenario cannot arise); it is that granting `users.unlock` over
+ * one's own identity would make it a second, credential-independent path into an account — exactly the
+ * authentication bypass the lockout exists to prevent, and precisely the failure mode the recovery channel's design
+ * named as non-negotiable.
  */
 final readonly class UnlockUserAccount
 {
