@@ -462,7 +462,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: adversarial pass of the #831 residual fix (2026-08-22)"), 2026-09-24
 location: pwa/src/context/shared/navigation/infrastructure/hardNavigate.ts (fire)
 reason: fire() calls onFailure for the claim's own caller before draining superseded, so a throw leaves queued losers unreported. Not fixed: the module has no error-handling contract for caller callbacks and neither real caller throws.
-status: open
+status: done 2026-09-28
+resolution: resolved by sweep bundle dw-hardnavigate-drain-losers-on-throw
+resolution-undo: 905bfed871485deb8609fc4a9cea47bd91ea83216eae17ac60d1043b629464fc 2026-09-28 7374617475733a206f70656e
 
 **(hardNavigate seam) A throwing own-caller callback strands the queued losers.** `fire()` calls `onFailure("not-committed")` for the claim's own caller and only then drains `superseded`, so a throw in the first leaves every queued loser with no report at all — they wait for a callback that never comes. New in kind: before `superseded` was deferred there were no losers to strand. Not fixed, because the module has no error-handling contract for caller callbacks and inventing one means swallowing errors it cannot interpret; neither of the two real callers throws. The sibling hazard — a throw leaving the CLAIM itself unarmed — was a real defect and is fixed, with the ordering pinned by "arms the new claim before running the preempted caller's callback". Ref: `pwa/src/context/shared/navigation/infrastructure/hardNavigate.ts` (`fire`).
 
