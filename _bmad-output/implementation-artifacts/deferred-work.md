@@ -429,6 +429,7 @@ origin: migrated from legacy ledger ("Deferred from: quick-dev intent split of s
 location: pwa/src/app/backoffice/profile/settings/page.tsx, pwa/src/context/shared/theme/domain/Theme.ts
 reason: Split from the My-account spec as an independent deliverable with its own data model: theme is client-only (localStorage), language does not exist as a concept, and there is no notification channel. Server-side persistence needs a new aggregate/table and endpoint.
 status: open
+decision: 2026-09-28 Keep open for a dedicated epic
 
 **(pwa+api · alcance · medium) Preferencias de usuario (tema, idioma, notificaciones) editables y persistidas desde `/backoffice/profile/settings`.** Separado del spec de «Mi cuenta» porque es un entregable independiente con su propio modelo de datos: **no** toca el agregado `User` (que hoy solo lleva `email`, `password_hash`, `roles`, `status`, `failed_attempts`, `locked_until`), sino que exige decidir dónde vive una preferencia — hoy el tema es puramente cliente (`erpify:theme` en localStorage vía `next-themes`), el idioma no existe como concepto (el traductor está apagado, `config/packages/translation.yaml`) y no hay canal de notificaciones que configurar (`notification/domain/` solo materializa `Toast`). Persistirlas server-side implica agregado/tabla nuevos y endpoint propio, revisable y mergeable sin la vista de perfil. Ref: `pwa/src/app/backoffice/profile/settings/page.tsx` (placeholder solo-título), `pwa/src/context/shared/theme/domain/Theme.ts`.
 
