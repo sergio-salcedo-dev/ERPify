@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DbalSessionPersonReferences;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsKeysetPagedIds;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -33,6 +34,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalSessionPersonReferences::class)]
 final class DbalSessionPersonReferencesTest extends KernelTestCase
 {
+    use AssertsKeysetPagedIds;
+
     private EntityManagerInterface $entityManager;
 
     private Connection $connection;
@@ -66,6 +69,25 @@ final class DbalSessionPersonReferencesTest extends KernelTestCase
 
             // One person owns many sessions over time; an operator must be handed one id to repair.
             $this->assertCount(1, \array_keys($ids, $userId, true), 'DISTINCT collapses the repeated rows');
+        });
+    }
+
+    public function testItPagesThroughTheColumnOneIdAtATime(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $seeded = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
+
+            foreach ($seeded as $userId) {
+                $this->seedExpiredSession($userId);
+            }
+
+            // A repeated holder across the page boundary: the cursor must not hand it out twice.
+            $this->seedExpiredSession($seeded[0]);
+
+            $this->assertKeysetPagedIds(
+                $seeded,
+                (new DbalSessionPersonReferences($this->connection, 1))->retainedPersonIds(),
+            );
         });
     }
 

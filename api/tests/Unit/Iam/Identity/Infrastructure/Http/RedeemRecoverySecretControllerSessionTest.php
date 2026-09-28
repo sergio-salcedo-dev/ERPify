@@ -86,12 +86,6 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
         $this->correlation = new RecordingCurrentSessionReference();
     }
 
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-        parent::tearDown();
-    }
-
     #[Test]
     public function anInterruptedRedemptionDropsTheDevicesNativeSessionSoTheRetryIsNotRefusedByTheGate(): void
     {

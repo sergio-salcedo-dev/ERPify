@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -61,7 +61,7 @@ final class RevokeSessionsBestEffortTest extends TestCase
 
     private function revoker(SessionRepository $sessions, LoggerInterface $logger): RevokeSessionsBestEffort
     {
-        $clock = new FixedClock(new DateTimeImmutable('2026-07-13T12:00:00+00:00'));
+        $clock = new FixedClock(SystemClock::now());
 
         return new RevokeSessionsBestEffort(
             new RevokeAllSessions($sessions, new RecordingEventBus(), new InlineTransactionManager(), $clock),

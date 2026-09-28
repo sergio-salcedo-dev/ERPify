@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
-use DateTimeImmutable;
 use Erpify\Iam\Session\Application\RevokeOtherSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
 use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
@@ -23,6 +23,14 @@ use PHPUnit\Framework\TestCase;
 final class RevokeOtherSessionsTest extends TestCase
 {
     private const string OTHER_ID = '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c7e';
+
+    private const string NOW = '2026-07-10T12:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     public function testBulkRevokesEveryOtherSessionExceptTheCurrentAndPublishesTheBulkFact(): void
     {
@@ -109,7 +117,7 @@ final class RevokeOtherSessionsTest extends TestCase
             $sessions,
             $eventBus,
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable('2026-07-10T12:00:00+00:00')),
+            FixedClock::at(self::NOW),
         );
     }
 }

@@ -49,14 +49,16 @@ use Throwable;
  * Liveness is resolved ONCE, over the union of every place's ids, rather than per place. Two reasons, and
  * the first is correctness: with a probe per place, an erasure committing mid-run is seen by the places
  * probed after it and not by those probed before, so one report could name a subject under one axis and
- * clear them under another — a verdict true of no single state of the database. One probe also collapses
- * five expanded `IN` lists into one over the deduplicated union, which matters because a person typically
- * appears in several of these places at once.
+ * clear them under another — a verdict true of no single state of the database. It is one LOGICAL probe:
+ * the adapter splits the union into as many statements as its driver needs, and the argument survives that
+ * because what it splits is IDS, never places — each id is still asked about exactly once, so every place
+ * naming it inherits the same answer. One probe over the deduplicated union also asks about a person once
+ * rather than once per place, which matters because a person typically appears in several places at once.
  *
- * The reads are still NOT one snapshot: each source queries its own table before the union probe runs, so an
- * erasure that commits inside that window can be reported as a divergence it is not. It self-corrects on the
- * next run and the suggested repair is idempotent, so the cost is a transient false positive rather than a
- * wrong action — but it is a real limit, and the registry's blind-spot block states it.
+ * The reads are still NOT one snapshot: each source queries its own table in pages before the union probe
+ * runs, so an erasure that commits inside that window can be reported as a divergence it is not. It
+ * self-corrects on the next run and the suggested repair is idempotent, so the cost is a transient false
+ * positive rather than a wrong action — but it is a real limit, and the registry's blind-spot block states it.
  *
  * A failed read is NOT an empty verdict. Every read here can fail, and "no divergence found" and "the
  * question could not be asked" are the two answers an unattended consumer must never confuse — so a failure

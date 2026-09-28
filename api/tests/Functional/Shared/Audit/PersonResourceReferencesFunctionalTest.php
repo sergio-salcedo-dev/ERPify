@@ -15,6 +15,7 @@ use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditResourceAnonymiser;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalPersonResourceReferences;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsKeysetPagedIds;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -32,6 +33,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalPersonResourceReferences::class)]
 final class PersonResourceReferencesFunctionalTest extends KernelTestCase
 {
+    use AssertsKeysetPagedIds;
+
     private const string PERSON_TYPE = 'User';
 
     #[Test]
@@ -73,6 +76,34 @@ final class PersonResourceReferencesFunctionalTest extends KernelTestCase
 
             $this->assertNotContains($erased, $ids, 'the real id is gone from the trail');
             $this->assertNotContains($pseudonym, $ids, 'and its pseudonym is not a fresh divergence');
+        });
+    }
+
+    #[Test]
+    public function itPagesThroughTheTypeOneIdAtATimeAndStaysInsideItsScope(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $writer = new DbalAuditLogWriter($connection);
+            $seeded = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
+            $bankId = Uuid::generate();
+            $erased = Uuid::generate();
+
+            foreach ($seeded as $subject) {
+                $this->seed($writer, self::PERSON_TYPE, $subject);
+            }
+
+            $this->seed($writer, self::PERSON_TYPE, $seeded[0]);
+            $this->seed($writer, 'Bank', $bankId);
+            $this->seed($writer, self::PERSON_TYPE, $erased);
+            (new DbalAuditResourceAnonymiser($connection))
+                ->anonymise(AuditResource::of(self::PERSON_TYPE, $erased), Uuid::generate())
+            ;
+
+            $ids = (new DbalPersonResourceReferences($connection, 1))->unerasedIdsOfType(self::PERSON_TYPE);
+
+            $this->assertKeysetPagedIds($seeded, $ids);
+            $this->assertNotContains($bankId, $ids, 'the scope holds on every page, not only the first');
+            $this->assertNotContains($erased, $ids, 'an erased reference stays out on every page');
         });
     }
 

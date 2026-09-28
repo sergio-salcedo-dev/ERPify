@@ -6,6 +6,8 @@ namespace Erpify\Tests\Double\Clock;
 
 use DateTimeImmutable;
 use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Shared\Clock\Domain\SystemClock;
+use LogicException;
 use Override;
 
 /**
@@ -32,11 +34,30 @@ use Override;
  * anonymous class, so a file containing one is skipped whole by PHPMD — the analyser reports one error and
  * every rule it would have applied to that file silently does not run.
  *
+ * **Reading an injected instance that disagrees with the ambient {@see SystemClock} throws.** Aggregates
+ * stamp `createdAt`/`updatedAt` off the ambient clock while a use case computes an expiry off the one it was
+ * handed, so a test injecting this clock at one instant while the ambient one stands at another builds
+ * rows no production run can produce — a session created in 2050 that expires in 2026 — and stays green
+ * because nothing compares the two. Seed from the clock the subject reads: install this one with
+ * `SystemClock::set()` before the subject runs, or build it from `SystemClock::now()`. A test that advances
+ * time installs the later clock before invoking the subject that reads it, and aggregates built earlier keep
+ * their earlier stamp.
+ *
+ * The check runs on READ, not on construction, because only the read tells a divergence apart from a test
+ * preparing two instants and advancing between them. It compares instants, so the same moment in two zones
+ * passes. When the ambient clock IS a `FixedClock`, consulting it re-enters this method; the static flag
+ * lets that nested read answer without checking; the class is not `readonly` because a readonly class cannot
+ * declare that static property. It sees only this double: a bare `new DateTimeImmutable()`,
+ * `DomainEvent`'s `occurredOn` default, a Symfony `MockClock` handed to a service directly, and the Behat
+ * lane all read past it.
+ *
  * @internal
  */
-final readonly class FixedClock implements Clock
+final class FixedClock implements Clock
 {
-    public function __construct(private DateTimeImmutable $now)
+    private static bool $consultingAmbient = false;
+
+    public function __construct(private readonly DateTimeImmutable $now)
     {
     }
 
@@ -52,6 +73,28 @@ final readonly class FixedClock implements Clock
     #[Override]
     public function now(): DateTimeImmutable
     {
+        if (!self::$consultingAmbient) {
+            self::$consultingAmbient = true;
+
+            try {
+                $ambient = SystemClock::now();
+            } finally {
+                self::$consultingAmbient = false;
+            }
+
+            // Epoch seconds with microseconds: the instant, whatever zone either side was written in.
+            if ($ambient->format('U.u') !== $this->now->format('U.u')) {
+                throw new LogicException(\sprintf(
+                    'An injected FixedClock reads %s while the ambient SystemClock reads %s: aggregates would be '
+                    . 'stamped by one clock and the subject would compute from the other. Seed from the clock the '
+                    . 'subject reads — SystemClock::set() this clock before the subject runs, or build it from '
+                    . 'SystemClock::now().',
+                    $this->now->format('c'),
+                    $ambient->format('c'),
+                ));
+            }
+        }
+
         return $this->now;
     }
 }

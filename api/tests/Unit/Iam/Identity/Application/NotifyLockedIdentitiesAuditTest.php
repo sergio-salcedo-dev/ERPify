@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\NotifyLockedIdentities;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -34,6 +35,12 @@ final class NotifyLockedIdentitiesAuditTest extends TestCase
     private const string NOW = '2026-08-11T12:00:00+00:00';
 
     private const string FIRST_ID = '0190a1b2-c3d4-7e5f-8a9b-000000000001';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     /**
      * The delivery is projected onto `security`, distinct from the trip's own `USER_LOCKED` row: this one
