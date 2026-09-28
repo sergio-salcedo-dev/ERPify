@@ -34,5 +34,14 @@
     "key": "1",
     "label": "Fix (b) only; accept (a)",
     "resolution": ""
+  },
+  "DW-32": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "keep-open",
+    "intent": "",
+    "key": "2",
+    "label": "Keep open for a dedicated PR outside the sweep",
+    "resolution": ""
   }
 }
