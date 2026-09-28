@@ -417,7 +417,9 @@ decision: 2026-09-28 Keep open
 origin: migrated from legacy ledger ("Deferred from: code review of g-2-ids-de-persona-fuera-de-audit-log-metadata (2026-08-04)"), 2026-09-24
 location: api/src/Iam (FulfilIdentityErasure:144)
 reason: GDPR_SUBJECT_ERASED is conditioned on erasedAnything(); when the identity is gone but references remain only GDPR_ERASURE_EXECUTED is written. Pre-existing; open question whether the resource axis needs its own row. Two tests pin the opposite behaviour on purpose, so changing it reopens their argument.
-status: open
+status: done 2026-09-28
+resolution: closed by human decision: GDPR_ERASURE_EXECUTED with anonymized_actor_id is sufficient evidence on the repair path.
+decision: 2026-09-28 Keep current behaviour and close — GDPR_ERASURE_EXECUTED with anonymized_actor_id is sufficient evidence on the repair path.
 
 **(api/Iam · evidencia de cumplimiento · medium) La ruta de reparación puede ejecutar un borrado sin dejar fila que nombre al sujeto.** `FulfilIdentityErasure:144` condiciona `GDPR_SUBJECT_ERASED` a `$identity->erasedAnything()` (identidad + tokens). Cuando la identidad ya no está pero quedan referencias — el estado exacto que `identity:gdpr:reconcile-subject-references` existe para detectar, y que `UserEraseController` documenta como «a completed cleanup, not a no-op» — solo se escribe `GDPR_ERASURE_EXECUTED`. **Preexistente**: la guarda no cambió en #636, y desde la review esa fila sí lleva `anonymized_actor_id`, así que el pseudónimo ya no queda huérfano. Lo que sigue abierto es si el eje **recurso** debe tener fila propia en ese camino. Dos tests fijan hoy el comportamiento contrario a propósito (`testResourceRowsAloneStillProduceComplianceEvidence`, `testReferenceRowsAloneStillProduceComplianceEvidence`), así que cambiarlo es reabrir su argumento, no corregir un descuido.
 
