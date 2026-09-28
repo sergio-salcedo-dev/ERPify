@@ -6,6 +6,7 @@ namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
+use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -31,11 +32,13 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * (`Uuid::ensure()` validates without normalising). The sibling axis was measured to leak exactly this way:
  * the same identifier in upper case passed a `LIKE` and failed an `ILIKE`.
  *
- * **Both arguments are validated UUIDs, and both have to be.** The pattern needs it because a regular
- * expression would otherwise read metacharacters out of it; the replacement needs it because Postgres gives
- * that string its own syntax too, where `\1`…`\9` are back-references and `\&` is the whole match.
- * `Uuid::ensure()` on each is what makes the pair safe, in code rather than in this comment: the canonical
- * 36-character form it accepts contains no character either syntax reads.
+ * **Both members of the pair are validated UUIDs, and both have to be.** The pattern needs it because a
+ * regular expression would otherwise read metacharacters out of it; the replacement needs it because Postgres
+ * gives that string its own syntax too, where `\1`…`\9` are back-references and `\&` is the whole match.
+ * {@see SubjectPseudonymisation} validates both when it is built, and this adapter validates them again
+ * immediately before the statement: the interpolation is safe only while the canonical 36-character form
+ * holds, and a class invariant is one that reflection or `unserialize()` can bypass, so the guard sits at the
+ * boundary where the value becomes syntax.
  *
  * **`metadata` is covered even though it is empty today, and that goes one column beyond D12's letter.** The
  * reason is NOT that the ADR reserves it for an actor id: D9 reserves `correlation_id` and `causation_id`,
@@ -54,8 +57,10 @@ final readonly class DbalEventStoreSubjectAnonymiser implements EventStoreSubjec
     }
 
     #[Override]
-    public function anonymise(string $subjectId, string $pseudonym): int
+    public function anonymise(SubjectPseudonymisation $pseudonymisation): int
     {
+        $subjectId = $pseudonymisation->subjectId;
+        $pseudonym = $pseudonymisation->pseudonym;
         Uuid::ensure($subjectId);
         Uuid::ensure($pseudonym);
 

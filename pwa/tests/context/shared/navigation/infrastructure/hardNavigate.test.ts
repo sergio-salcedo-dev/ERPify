@@ -392,6 +392,119 @@ describe("hardNavigate", () => {
       }
     });
 
+    const catchThrown = (run: () => void): unknown => {
+      try {
+        run();
+      } catch (error) {
+        return error;
+      }
+      throw new Error("expected the call to throw");
+    };
+
+    it("still tells every loser when the winner's own callback throws, and hands that error back unwrapped", () => {
+      const ownFailure = new Error("the winner's own recovery blew up");
+      hardNavigate(DESTINATION, () => {
+        throw ownFailure;
+      });
+      const onFailureLoser = vi.fn();
+      const onFailureLaterLoser = vi.fn();
+      hardNavigate(OTHER_DESTINATION, onFailureLoser);
+      hardNavigate(OTHER_DESTINATION, onFailureLaterLoser);
+
+      const thrown = catchThrown(() => vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS));
+
+      // A throw that ended `fire()` before the drain would leave every loser latched for the life of
+      // the document, waiting on a report nothing was left to deliver.
+      expect(thrown).toBe(ownFailure);
+      expect(onFailureLoser).toHaveBeenCalledTimes(1);
+      expect(onFailureLoser).toHaveBeenCalledWith("superseded");
+      expect(onFailureLaterLoser).toHaveBeenCalledTimes(1);
+      expect(onFailureLaterLoser).toHaveBeenCalledWith("superseded");
+
+      // And the throw did not leave the sink held.
+      const onFailureAfter = vi.fn();
+      hardNavigate(DESTINATION, onFailureAfter);
+      expect(replace).toHaveBeenCalledTimes(2);
+      expect(replace).toHaveBeenLastCalledWith(DESTINATION);
+      expect(onFailureAfter).not.toHaveBeenCalled();
+    });
+
+    it("moves the losers onto the takeover when the preempted caller's callback throws, and tells them once it stays", () => {
+      const hidden = vi.spyOn(document, "hidden", "get");
+      try {
+        const ownFailure = new Error("the preempted caller's recovery blew up");
+        hardNavigate(DESTINATION, () => {
+          throw ownFailure;
+        });
+        const onFailureLoser = vi.fn();
+        hardNavigate(OTHER_DESTINATION, onFailureLoser);
+
+        hidden.mockReturnValue(true);
+        document.dispatchEvent(new Event("visibilitychange"));
+        hidden.mockReturnValue(false);
+        document.dispatchEvent(new Event("visibilitychange"));
+
+        const onFailureTakeover = vi.fn();
+        const thrown = catchThrown(() => hardNavigate(DESTINATION, onFailureTakeover));
+
+        expect(thrown).toBe(ownFailure);
+        // Still waiting on "nothing is pending", and something is: the takeover, armed before the
+        // foreign callback ran.
+        expect(onFailureLoser).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS);
+        expect(onFailureTakeover).toHaveBeenCalledTimes(1);
+        expect(onFailureTakeover).toHaveBeenCalledWith("not-committed");
+        expect(onFailureLoser).toHaveBeenCalledTimes(1);
+        expect(onFailureLoser).toHaveBeenCalledWith("superseded");
+      } finally {
+        hidden.mockRestore();
+      }
+    });
+
+    it("tells the losers behind one whose callback throws", () => {
+      const onFailureFirst = vi.fn();
+      hardNavigate(DESTINATION, onFailureFirst);
+      const loserFailure = new Error("a loser's recovery blew up");
+      const onFailureThrowingLoser = vi.fn(() => {
+        throw loserFailure;
+      });
+      hardNavigate(OTHER_DESTINATION, onFailureThrowingLoser);
+      const onFailureNextLoser = vi.fn();
+      hardNavigate(OTHER_DESTINATION, onFailureNextLoser);
+
+      const thrown = catchThrown(() => vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS));
+
+      expect(thrown).toBe(loserFailure);
+      expect(onFailureFirst).toHaveBeenCalledTimes(1);
+      expect(onFailureFirst).toHaveBeenCalledWith("not-committed");
+      expect(onFailureThrowingLoser).toHaveBeenCalledTimes(1);
+      expect(onFailureThrowingLoser).toHaveBeenCalledWith("superseded");
+      expect(onFailureNextLoser).toHaveBeenCalledTimes(1);
+      expect(onFailureNextLoser).toHaveBeenCalledWith("superseded");
+    });
+
+    it("hands back every failure, in report order, when several callbacks throw", () => {
+      const ownFailure = new Error("the winner's own recovery blew up");
+      hardNavigate(DESTINATION, () => {
+        throw ownFailure;
+      });
+      const loserFailure = new Error("a loser's recovery blew up");
+      hardNavigate(OTHER_DESTINATION, () => {
+        throw loserFailure;
+      });
+      const onFailureLastLoser = vi.fn();
+      hardNavigate(OTHER_DESTINATION, onFailureLastLoser);
+
+      const thrown = catchThrown(() => vi.advanceTimersByTime(NAVIGATION_COMMIT_BUDGET_MS));
+
+      expect(thrown).toBeInstanceOf(AggregateError);
+      expect((thrown as AggregateError).errors[0]).toBe(ownFailure);
+      expect((thrown as AggregateError).errors[1]).toBe(loserFailure);
+      expect(onFailureLastLoser).toHaveBeenCalledTimes(1);
+      expect(onFailureLastLoser).toHaveBeenCalledWith("superseded");
+    });
+
     it("keeps a preemptible claim's losers when the preempting call is refused by the browser", () => {
       const hidden = vi.spyOn(document, "hidden", "get");
       try {

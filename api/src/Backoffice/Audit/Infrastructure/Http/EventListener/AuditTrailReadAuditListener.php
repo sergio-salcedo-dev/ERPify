@@ -6,8 +6,8 @@ namespace Erpify\Backoffice\Audit\Infrastructure\Http\EventListener;
 
 use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditEventDetailController;
 use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditTimelineSearchController;
-use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -17,10 +17,11 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * Records every authorized read of the audit trail as its own `security` entry, so accessing the audit
  * log is itself auditable. It mirrors the sibling `AccessDeniedAuditListener` on the success path: on
  * `kernel.response`, for a 2xx main-request read of one of the two audit routes, it emits
- * `AUDIT_TRAIL_READ` at {@see AuditLevel::SECURITY} through the {@see AuditLogger} seam — a
- * synchronous write-before-send, so the access record survives even if the process dies after the
- * response. The actor, correlation id and instant are sealed by the adapter; this listener only names the
- * action and the route (plus the read event id on the detail route) as the forensic "who read what".
+ * `AUDIT_TRAIL_READ` at {@see AuditLevel::SECURITY} through {@see RequestBoundarySecurityAudit} — a
+ * synchronous write-before-send in autocommit, so the access record survives even if the process dies after
+ * the response, and is refused rather than written when a transaction is still open on the audit connection.
+ * The actor, correlation id and instant are sealed by the adapter; this listener only names the action and the
+ * route (plus the read event id on the detail route) as the forensic "who read what".
  *
  * It lives in `Backoffice/Audit` because it references its own module's two routes; the shared audit
  * policy deliberately holds no catalogue of concrete routes. Those routes carry `_audit_canonical`, so the
@@ -41,7 +42,7 @@ final readonly class AuditTrailReadAuditListener
     ];
 
     public function __construct(
-        private AuditLogger $auditLogger,
+        private RequestBoundarySecurityAudit $securityAudit,
     ) {
     }
 
@@ -58,11 +59,7 @@ final readonly class AuditTrailReadAuditListener
             return;
         }
 
-        $this->auditLogger->log(
-            self::ACTION,
-            AuditLevel::SECURITY,
-            metadata: $this->metadataFor($event->getRequest(), $route),
-        );
+        $this->securityAudit->record(self::ACTION, $this->metadataFor($event->getRequest(), $route));
     }
 
     /**

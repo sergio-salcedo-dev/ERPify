@@ -144,6 +144,7 @@ tests/Unit/Gate/CorrelationIdOwnershipGateTest.php :: home
 tests/Unit/Gate/CredentialProofActionRulesGateTest.php :: home
 tests/Unit/Gate/CredentialProofGateTest.php :: home
 tests/Unit/Gate/CredentialProofRulesGateTest.php :: home
+tests/Unit/Gate/DeptracBlessedLayerGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
 tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
@@ -235,3 +236,4 @@ tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack
 tests/Unit/Gate/BmadLoopSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
+tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home

@@ -191,7 +191,8 @@ deptrac:
               # The anchor is load-bearing, and the reason generalises to anything added
               # here: unanchored, a `…\Validator\Constraint` entry would also swallow
               # ConstraintViolation and its List/Interface siblings, which are runtime
-              # RESULTS and must stay confined to Infrastructure.
+              # RESULTS: confined to Infrastructure except for the one class
+              # Shared.ValidatorSeam is blessed to (Vendor.SymfonyValidatorRuntime below).
               - type: classLike
                 value: ^Symfony\\Component\\Validator\\Context\\ExecutionContextInterface$
 

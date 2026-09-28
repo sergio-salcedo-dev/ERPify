@@ -30,8 +30,10 @@
 # ---------------------------------------------------------------------------------------------------------
 # WHAT A GREEN BUILD HERE PROVES, AND WHAT IT DOES NOT. `make php.lint.audit-evidence` derives the universe by
 # reflection — every string constant matching an action token on a class whose constructor takes
-# `AuditLogger` — refuses an unrecognised verdict and a duplicated token outright, then checks completeness
-# (every derived token is classified), staleness (every classified token still exists in the tree), and
+# `AuditLogger`, directly or through a forwarder that declares no token of its own (such as
+# `RequestBoundarySecurityAudit`; forwarders are derived to a fixed point, never listed) — refuses an
+# unrecognised verdict and a duplicated token outright, then checks completeness (every derived token is
+# classified), staleness (every classified token still exists in the tree), and
 # agreement in BOTH directions (`evidence` here ⇔ a member of `AuditErasureEvidence::ACTIONS`). Its limits:
 #
 #   - IT NEVER JUDGES THE CLASSIFICATION. `ordinary` over an action that really is erasure evidence passes,
@@ -40,9 +42,13 @@
 #     loses data, so a new `ordinary` line deserves the same scrutiny as a new `person ::` owner.
 #   - IT ONLY SEES ACTIONS DECLARED AS A CONSTANT ON AN `AuditLogger` COLLABORATOR, and "collaborator" is
 #     narrower than it reads: the sweep asks `ConstructorCollaboratorTypes`, so it is CONSTRUCTOR PARAMETER
-#     TYPES ONLY. A logger arriving by setter or property injection, or a class that declares the token and
-#     delegates the write to another writer, is outside the universe. So is a file whose FQCN does not
-#     resolve under PSR-4: `class_exists()` returns false and the file is skipped with no error and no count.
+#     TYPES ONLY. A logger arriving by setter or property injection is outside the universe, and so is a class
+#     that declares the token and delegates the write to a collaborator that ALSO declares a token: only a
+#     token-free forwarder is followed, because following every writer would pull in the constants of each
+#     use case's callers. A forwarder whose own class comes to carry an uppercase string constant therefore
+#     stops being followed: its callers' classified tokens then read as stale (a red), while a token one of
+#     them adds afterwards is simply unseen. Also outside is a file whose FQCN does not resolve under
+#     PSR-4: `class_exists()` returns false and the file is skipped with no error and no count.
 #     An action passed as an inline literal at the `log()` call site, read from configuration, or composed at
 #     runtime is invisible for the same reason. The route-derived actions are the standing example and are
 #     safe on other grounds: `AuditPolicy` prefixes them `ROUTE_` unconditionally, so no user-influenced

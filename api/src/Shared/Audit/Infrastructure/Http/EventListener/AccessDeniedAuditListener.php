@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Infrastructure\Http\EventListener;
 
-use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use Erpify\Shared\Http\Infrastructure\ApiRequestMatcher;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
@@ -19,14 +19,17 @@ use Throwable;
  * pipeline, rather than scattering audit calls through the handlers. On `kernel.exception` it looks for
  * a Security-Core {@see AccessDeniedException} anywhere in the throwable chain (a firewall may wrap it)
  * and, when an `/api` main request raised one, emits `ACCESS_DENIED` at {@see AuditLevel::SECURITY}
- * through the {@see AuditLogger} seam — a synchronous write-before-send, so the denial survives even if
- * the process dies after the response.
+ * through {@see RequestBoundarySecurityAudit} — a synchronous write-before-send in autocommit, so the denial
+ * is committed before the 403 is built and survives even if the process dies after the response. That seam
+ * refuses when a transaction is still open on the audit connection, since a later rollback would take the
+ * denial with it.
  *
  * Priority > `ExceptionResponder::PRIORITY` (16): {@see ExceptionEvent} extends `RequestEvent`, whose
  * `setResponse()` stops propagation, so a listener after the Problem Details responder never sees the
  * throwable. This one runs first, only reads, and never sets a response — the 403 body is left
- * untouched. The one exception is durability: a failed `security` write propagates by design rather
- * than letting a denial complete unrecorded, so it may surface as a 5xx.
+ * untouched. The one exception is durability: a failed `security` write, or a refusal to write one inside
+ * a leaked transaction, replaces the event's throwable rather than letting a denial complete unrecorded, so
+ * the responder answers a Problem Details 5xx instead of the 403.
  */
 final readonly class AccessDeniedAuditListener
 {
@@ -35,7 +38,7 @@ final readonly class AccessDeniedAuditListener
     private const string ACTION = 'ACCESS_DENIED';
 
     public function __construct(
-        private AuditLogger $auditLogger,
+        private RequestBoundarySecurityAudit $securityAudit,
         private ApiRequestMatcher $apiRequestMatcher,
     ) {
     }
@@ -61,7 +64,13 @@ final readonly class AccessDeniedAuditListener
         // cardinality-1 `ACCESS_DENIED` (so "all denials" remains an indexed equality, and dashboards
         // and alerts aggregate over it), while the route lives in `metadata` for the per-resource
         // drill-down an investigation actually runs.
-        $this->auditLogger->log(self::ACTION, AuditLevel::SECURITY, metadata: ['route' => $this->routeOf($request)]);
+        try {
+            $this->securityAudit->record(self::ACTION, ['route' => $this->routeOf($request)], $event->getThrowable());
+        } catch (Throwable $throwable) {
+            // Handed to the event, never thrown: a throwable leaving a `kernel.exception` listener escapes
+            // HttpKernel with no Problem Details at all. The responder renders this one as the 5xx it is.
+            $event->setThrowable($throwable);
+        }
     }
 
     private function routeOf(Request $request): ?string

@@ -21,6 +21,7 @@ final class PublicAccessExemptionRules
 {
     public const string PUBLIC_ROLE = 'PUBLIC_ACCESS';
 
+    // Kept as its own literal on purpose: the gate's expected value must not follow the constant it checks.
     public const string CATCH_ALL_PATH = '^/api';
 
     public const string AUTHENTICATED_ROLE = 'IS_AUTHENTICATED_FULLY';

@@ -1,6 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-07-20 (D3 amended by D3.1 — `activity` writes synchronously)
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-09-28 (D3 reviewed — request-boundary
+> `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
 > its own epic and is not mixed with the code of the feature that surfaced it.
@@ -122,6 +123,48 @@ satisfacer: o no hay transacción de negocio abierta al registrar la denegación
 conexión DBAL o semántica `REQUIRES_NEW`). El mecanismo concreto se decide en Epic 2; aquí se fija
 que «escribir-antes-de-responder» sólo es durable si la escritura no comparte la transacción de
 negocio que puede revertirse.
+
+**Revisión (2026-09-28): el invariante se hace cumplir, no se afirma.** Aplica sólo a las filas
+`security` que registran un rehúso **en la frontera de la request** —`ACCESS_DENIED`,
+`INVALID_CURRENT_PASSWORD`, `AUDIT_TRAIL_READ`—. Los productores `security` de caso de uso
+(`ChangeUserRoles`, `InviteUser`, `UnlockUserAccount`, `FulfilIdentityErasure`…) escriben **dentro**
+de su transacción a propósito: su fila debe revertirse con el cambio que describe, y siguen llamando a
+`AuditLogger` directamente. Los tres listeners de frontera pasan por un seam único,
+`Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit`, que antes de escribir pregunta
+`isTransactionActive()` a la **misma** `Connection` por defecto que usa `DbalAuditLogWriter`: sin
+transacción, escribe en autocommit y la fila está commiteada cuando el listener vuelve (antes de que el
+responder fije la respuesta); con una abierta —que sólo puede ser una fuga, porque `wrapInTransaction`
+revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir. Ese rehúso, y un fallo de
+persistencia, **no se lanzan desde un listener de `kernel.exception`**: `HttpKernel::handleThrowable()` no
+envuelve a sus listeners en ningún `try`, así que un throwable que saliera de ahí escaparía del kernel sin
+Problem Details y perdería la excepción original. Esos dos listeners se lo entregan al evento
+(`setThrowable()`), el rehúso encadena la excepción de la request como `previous`, y el responder contesta
+el 5xx como RFC 9457 y lo registra; el de `kernel.response` sí lanza, porque desde ahí el kernel lo reconduce
+por su propio manejo de excepciones. Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la
+de «commitear aparte» (segunda conexión DBAL o `REQUIRES_NEW`): una segunda conexión duplica el pool y
+el sellado para un caso que no debería ocurrir, y ocultaría la fuga en vez de hacerla visible; hacer
+rollback de la transacción ajena destruiría trabajo que no es del listener. D3 prefiere un 5xx a una
+pérdida silenciosa, y eso es lo que produce el rehúso. Lo prueban `RequestBoundarySecurityAuditTest`
+(unitario) y `RequestBoundarySecurityAuditFunctionalTest` (contra Postgres, visibilidad desde una
+segunda conexión), y `BoundarySecurityAuditSeamGateTest` impide que un fichero de `Infrastructure/Http/`
+distinto del seam escriba `AuditLevel::SECURITY` por su cuenta.
+
+**Coste en el worker, medido en el código y no supuesto.** DoctrineBundle sólo reinicia entre peticiones el
+registro `doctrine` (los entity managers) y su recolector de depuración, **no la conexión**: en el worker
+de FrankenPHP una transacción filtrada sobrevive a la petición que la abrió, y desde entonces cada frontera
+auditada de **ese** worker responde 5xx hasta que se recicla. Es el precio consciente de hacer visible la
+fuga en lugar de absorberla; revertirla al final de cada petición contendría el radio a una sola, pero
+cambia lo que prueban los tests funcionales que abren una transacción y después hacen peticiones, y queda
+como decisión abierta.
+
+**Quién queda fuera del seam, y por qué.** Los productores `security` de caso de uso escriben dentro de su
+transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffort`,
+`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`) escriben **después** del
+commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
+`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los comandos de operador
+(`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
+no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
+distingue además con su propio código de salida (`ERASED_UNRECORDED`).
 
 El sistema es, por diseño, **observabilidad operativa con pérdida parcial tolerada en `activity`**,
 **no** logging forense uniforme: `security` es traza *compliance-grade* (durable), `activity` es
@@ -299,7 +342,13 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   **anonimiza de forma irreversible la identidad del actor conservando la traza de seguridad**. Un único
   `UPDATE` reescribe `actor_id` en todas las filas del sujeto con **un UUID aleatorio nuevo acuñado en el
   borrado** —sin valor original, sin tabla de mapeo, sin derivación determinista— y redige
-  `ip`/`user_agent` al centinela `[REDACTED]`. No borra filas; la traza (`action`, `level`, `occurred_on`,
+  `ip`/`user_agent` al centinela `[REDACTED]` —literal **reservado** a las dos sentencias de supresión:
+  `AuditLogEntry::create()` reescribe un valor capturado que lo iguale (sin espacios en los extremos, sin
+  distinguir mayúsculas) como `[client-supplied] <valor>`, así que una cabecera `User-Agent: [REDACTED]` no
+  fabrica evidencia de una redacción en las filas capturadas desde que esa regla se desplegó (las
+  anteriores no se reescribieron y pueden conservar un literal enviado por el cliente; los flags lo
+  atribuyen igual, ver más abajo; y el prefijo también es forjable: sólo garantiza que el valor difiere del
+  centinela)—. No borra filas; la traza (`action`, `level`, `occurred_on`,
   recurso, correlación) sobrevive y queda **correlacionada intra-sujeto** porque las N filas comparten el
   nuevo id. Al no quedar nada que invierta el reemplazo, el vínculo con la persona se rompe de verdad
   (anonimización efectiva, Recital 26), no una pseudonimización con clave reversible (Art. 4(5)).
@@ -367,8 +416,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   cualquier salto dentro de `SYMFONY_TRUSTED_PROXIES`—, pero Symfony descarta todo valor reenviado que
   falle `FILTER_VALIDATE_IP`, así que el centinela en concreto no es forjable en esa columna. Un centinela
   ahí solo puede venir, por tanto, de uno de los dos pases, y `actor_erased` los distingue (`true` el de
-  actor; `false` junto a `resource_erased = true`, éste). `user_agent` no tiene ese filtro y sí es forjable
-  como literal: la inferencia se apoya solo en `ip`. Un investigador ve que allí
+  actor; `false` junto a `resource_erased = true` y `actor_type = 'anonymous'`, éste). `user_agent` no tiene
+  ese filtro, pero el literal exacto tampoco es forjable ahí en las filas capturadas desde que se desplegó
+  `AuditRedaction::neutraliseCaptured()`, que prefija `[client-supplied] ` a todo valor que equivalga al
+  centinela; las anteriores pueden conservar un literal enviado por el cliente, y el mismo predicado lo
+  atribuye bien también en ellas, porque cada pase sobrescribe todo valor no vacío de las columnas que
+  redacta. Un investigador ve que allí
   había algo y que una erasure lo quitó. Errar al revés no es la opción segura que parece: el reconciliador
   solo lee `resource_erased = FALSE`, así que una dirección que se deje aquí es una que ninguna
   reconciliación podrá sacar nunca. **Es una capacidad nueva del insider, no una ampliada:** el pase de
@@ -405,7 +458,10 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   y almacenarlo sería una segunda fuente de verdad.** El mismo `UPDATE` escribe el pseudónimo y la
   redacción, y `GDPR_ERASURE_EXECUTED` sella ese pseudónimo, así que las filas se recuperan por
   `resource_id = <pseudónimo> AND resource_erased AND actor_type = 'anonymous' AND NOT actor_erased AND
-  (ip = '[REDACTED]' OR user_agent = '[REDACTED]')` —indexado, retroactivo a toda erasure aún en retención,
+  (ip = '[REDACTED]' OR user_agent = '[REDACTED]')` —el brazo de `user_agent` no depende de la
+  neutralización en captura: sobre filas anónimas este pase sobrescribe todo `user_agent` no vacío, un
+  literal falsificado incluido, así que la consulta vale también para filas anteriores a
+  `AuditRedaction::neutraliseCaptured()`; indexado, retroactivo a toda erasure aún en retención,
   cobertura que un campo nuevo no tendría—. Un entero almacenado, en cambio, sobrevive a las filas que
   cuenta: son más antiguas que la entrada de cumplimiento, luego la poda las retira primero y deja un número
   infalsificable. **Lo que esto no es:** la derivación es una consulta que nadie ha escrito todavía, no un
@@ -454,7 +510,15 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
   históricas. Tres formas se sirven tal cual, y ninguna la produce el capturador: una **lista no vacía**, a
   propósito —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
-  `null` o un escalar. El guard de la PWA rechaza cualquiera de las tres y con ella el sobre entero.
+  `null` o un escalar. El mapper sella una forma y nunca la fabrica ni la borra, así que ninguna de las tres
+  se reescribe en el cable. El cliente no las trata igual: la lista (y un mapa con un par `{old,new}` mal
+  formado) sigue rechazando el sobre entero, porque puede llevar pares `{old,new}` reales que perdieron el
+  nombre de campo —un fallo del constructor del diff— y degradarla tiraría en silencio datos de cambio
+  reales; un `null` o un escalar no lleva ningún par que perder, así que el cliente admite el sobre, retira
+  `changes` del slot tipado y marca el detalle como **diff ilegible** (`changesUnreadable`), que el drawer
+  pinta con un aviso propio y nunca como «No changes recorded» —eso afirmaría que la escritura no cambió
+  nada, y para un diff desconocido es falso—. Coste declarado: el valor crudo no se muestra en la UI; sigue
+  en el cable para quien investigue.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
@@ -727,14 +791,15 @@ actor `anonymous` + correlación + `ip`/`user_agent` reales, no un acto de `syst
 (`AccessDeniedAuditListener` sobre `kernel.exception`, prioridad > `ExceptionResponder`, puramente aditivo)
 registra `ACCESS_DENIED` síncrono sellando la ruta objetivo en `metadata` para el análisis forense por
 recurso (la `action` permanece de cardinalidad 1 —indexable y agregable—; la ruta es la dimensión, no el
-nombre del evento); satisface el invariante de D3 porque en `kernel.exception` cualquier
-transacción de negocio ya hizo rollback en su handler, de modo que la escritura `security` commitea
-independiente — una conexión DBAL dedicada queda como *trigger de revisita* si algún flujo registrara una
-denegación con una transacción de negocio aún abierta. El contrato de `ip` de D4 se cumple con
+nombre del evento); satisface el invariante de D3 escribiendo a través de `RequestBoundarySecurityAudit`,
+que comprueba que no queda transacción abierta en la conexión compartida y, si la hay, rehúsa en lugar de
+escribir una fila que un rollback posterior se llevaría (ver la revisión en D3). El contrato de `ip` de D4
+se cumple con
 `Request::getClientIp()` (misma decisión de *trusted proxies* que el rate-limiter), sellado en
-`SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `/api/` que
-acota ambos listeners se declara una sola vez (`ApiRequestMatcher`) para que no diverjan; `Shared/ErrorContract`
-mantiene su propia copia para el pipeline de errores y unificarlas es un cambio aparte.
+`SealedAuditEntryFactory` junto con `user_agent` (recortado al ancho de columna). La frontera `^/api` que
+acota ambos listeners se declara una sola vez, en `ApiRequestMatcher::PATH_PATTERN`: la misma regex que nombra
+el catch-all de `access_control`, evaluada sobre el path decodificado y compartida por estos listeners y el
+pipeline de errores.
 
 **Contratos y heurísticos de la captura (endurecidos en Epic 2).** Tres supuestos que el código ya asume
 y que aquí se fijan como contrato, para que una refactorización futura no los rompa en silencio:

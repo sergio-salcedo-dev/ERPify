@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Double;
 
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
+use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Override;
 
 /**
@@ -29,9 +30,12 @@ final class RecordingEventStoreSubjectAnonymiser implements EventStoreSubjectAno
     }
 
     #[Override]
-    public function anonymise(string $subjectId, string $pseudonym): int
+    public function anonymise(SubjectPseudonymisation $pseudonymisation): int
     {
-        $this->calls[] = ['subjectId' => $subjectId, 'pseudonym' => $pseudonym];
+        $this->calls[] = [
+            'subjectId' => $pseudonymisation->subjectId,
+            'pseudonym' => $pseudonymisation->pseudonym,
+        ];
 
         return $this->matchCount;
     }

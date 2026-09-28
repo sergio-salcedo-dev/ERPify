@@ -47,11 +47,13 @@ namespace Erpify\Shared\Event\Application;
 interface EventStoreSubjectAnonymiser
 {
     /**
-     * Irreversibly rewrites every occurrence of `$subjectId` in the log to `$pseudonym` — a UUID minted fresh
-     * in the erasure, with no original value, no mapping table and no deterministic derivation (D4 of
-     * `docs/adr/audit-activity-log.md` vetoes the last two by name).
+     * Irreversibly rewrites every occurrence of the pair's `subjectId` in the log to its `pseudonym` — a UUID
+     * minted fresh in the erasure, with no original value, no mapping table and no deterministic derivation
+     * (D4 of `docs/adr/audit-activity-log.md` vetoes the last two by name). The pair arrives as one value
+     * because the two members are indistinguishable by shape, and a swapped pair rewrites nothing while
+     * reporting success.
      *
      * @return int rows the erasure rewrote
      */
-    public function anonymise(string $subjectId, string $pseudonym): int;
+    public function anonymise(SubjectPseudonymisation $pseudonymisation): int;
 }

@@ -640,13 +640,13 @@ final class ProblemDetailsFactoryTest extends TestCase
     }
 
     /**
-     * It narrows the original `'Symfony\\'` ban to an explicit allowlist of Symfony imports
-     * (`HttpKernel\Exception\HttpExceptionInterface`, `Security\Core\Exception\AccessDeniedException`,
-     * `Security\Core\Exception\AuthenticationException`, plus `HttpFoundation\Response` for the named
-     * `Response::HTTP_*` status constants used in `MARKER_STATUS_MAP` / `HTTP_STATUS_TYPE_MAP`). Every
-     * other Symfony namespace is still banned via the narrower prefix list below.
+     * The factory sits in `Shared.Infrastructure`, whose deptrac ruleset admits every vendor, so deptrac no
+     * longer bounds what it may import — this list does. Every qualified name the source spells outside
+     * `Erpify\\` must be one of these, and every one of these must still be spelled: an import added to the
+     * factory fails the first direction, a stale entry the second. Read from `token_get_all`, so an inline
+     * FQCN counts exactly like a `use` and a name inside a comment or docblock counts as nothing.
      */
-    public function testSourceFileContainsNoBannedImports(): void
+    public function testSourceFileReferencesOnlyTheAllowedExternalNames(): void
     {
         $sourcePath = \dirname(__DIR__, 6) . '/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php';
         $this->assertFileExists($sourcePath);
@@ -654,26 +654,43 @@ final class ProblemDetailsFactoryTest extends TestCase
         $contents = \file_get_contents($sourcePath);
         $this->assertNotFalse($contents);
 
-        $banned = [
-            'Doctrine\\',
-            'Psr\Http\\',
-            'Symfony\Component\Messenger\\',
-            'Symfony\Component\Routing\\',
-            'Symfony\Bundle\\',
-            'Symfony\Bridge\\',
-            'App\\',
+        $allowed = [
+            LogLevel::class,
+            LoggerInterface::class,
+            \Symfony\Component\DependencyInjection\Attribute\Autowire::class,
+            \Symfony\Component\HttpFoundation\Response::class,
+            HttpExceptionInterface::class,
+            AccessDeniedException::class,
+            AuthenticationException::class,
+            \Symfony\Component\Validator\ConstraintViolationInterface::class,
+            ValidationFailedException::class,
         ];
 
-        foreach ($banned as $prefix) {
-            $this->assertStringNotContainsString(
-                'use ' . $prefix,
-                $contents,
-                \sprintf(
-                    'ProblemDetailsFactory.php must not import any %s symbol — factory stays mapping-focused.',
-                    $prefix,
-                ),
-            );
+        $referenced = [];
+
+        foreach (\token_get_all($contents) as $token) {
+            if (!\is_array($token) || !\in_array($token[0], [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                continue;
+            }
+
+            $name = \ltrim($token[1], '\\');
+
+            // A bare global (`\sprintf`) is not a dependency; only a namespaced name is.
+            if (\str_contains($name, '\\') && !\str_starts_with($name, 'Erpify\\')) {
+                $referenced[$name] = true;
+            }
         }
+
+        $referenced = \array_keys($referenced);
+        \sort($referenced);
+        \sort($allowed);
+
+        $this->assertSame(
+            $allowed,
+            $referenced,
+            'ProblemDetailsFactory.php references an external name outside its allowlist, or an allowlisted '
+            . 'name is no longer used — the factory stays mapping-focused; widen the list only by decision.',
+        );
     }
 
     public function testFactoryHasEnvironmentConstructorAndIsFinal(): void

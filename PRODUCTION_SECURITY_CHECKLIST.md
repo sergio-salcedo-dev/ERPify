@@ -396,8 +396,15 @@ you change anything here.
       every forwarded value failing `FILTER_VALIDATE_IP`, so the sentinel specifically
       cannot be forged into that column. A sentinel there therefore came from one of the two
       passes, and `actor_erased` tells them apart (TRUE = actor pass; FALSE beside
-      `resource_erased = TRUE` = this one). `user_agent` carries no such filter and is
-      forgeable as the literal; only `ip` supports the inference.
+      `resource_erased = TRUE` and `actor_type = anonymous` = this one). `user_agent` carries
+      no such filter, but capture rewrites a value equal to the sentinel (trimmed,
+      case-insensitive) as `[client-supplied] <value>` (`AuditRedaction::neutraliseCaptured()`),
+      so on rows captured once that rule is deployed the exact literal in either column is
+      written only by the two erasure statements. Rows persisted before it were not
+      backfilled and may still hold a client-sent literal; the full predicate above still
+      attributes a sentinel correctly on them, because each pass overwrites every non-blank
+      value in the columns it redacts. The prefix is itself forgeable and proves only that
+      the value differs from the sentinel, never that the server minted it.
       **This is a new insider capability, not a widened one, and an admin-initiated erasure
       is not forensically neutral.** The actor pass matches `actor_id = <subject>`, so every
       column it overwrites belonged to the person being erased; this pass matches on the
