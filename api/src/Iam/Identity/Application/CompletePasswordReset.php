@@ -29,7 +29,8 @@ use SensitiveParameter;
  *
  * The heart of the flow, and the ordering is load-bearing:
  *   1. Resolve the token opaquely — a malformed, unknown, expired or already-consumed link all raise the SAME
- *      {@see InvalidResetToken} BEFORE anything mutates, so the three death cases are byte-identical (SI-13).
+ *      {@see InvalidResetToken} BEFORE anything mutates, so the death cases are byte-identical: a dead token
+ *      never tells the caller why it died (token opacity, `docs/adr/identity-invitation-lifecycle.md` D11).
  *   2. Ask the identity to admit itself ({@see User::ensureActive()}), WITHOUT consuming the token or
  *      mutating. The aggregate names the reason its own status implies; a valid token proves email control,
  *      so that specificity is safe here. The token stays live for a later attempt if the account is
