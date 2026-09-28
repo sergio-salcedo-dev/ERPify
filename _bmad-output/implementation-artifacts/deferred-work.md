@@ -58,7 +58,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of g-5-ids-de-persona-fuera-del-event-store (2026-08-04)"), 2026-09-24
 location: api/src/Shared/Event/Application/EventStoreSubjectAnonymiser.php:61
 reason: An irreversible mutation whose argument order is fixed only by a unit-test spy; a second caller inverting the pair would report 0 anonymised rows indistinguishable from 'no events'. YAGNI with one caller; fix with a subject/pseudonym value object or mandatory named args when a second caller appears.
-status: open
+status: done 2026-09-28
+resolution: resolved by sweep bundle dw-event-store-anonymiser-typed-args
+resolution-undo: d72b63ce85460b3f51815097f28a5b37c80f0840e0f625e0762d17aa1f21b6b6 2026-09-28 7374617475733a206f70656e
 
 **(api/Shared/Event — diseño de firma) `anonymise(string $subjectId, string $pseudonym)` toma dos `string` consecutivos en una mutación irreversible, y permutarlos es un no-op silencioso.** El anonimizador del eje de recurso recibe un `AuditResource` tipado precisamente para que los argumentos no se puedan intercambiar (`FulfilIdentityErasure:157`); aquí lo único que fija el orden es el espía del test unitario, y sólo sobre el orquestador actual. Un segundo llamador que invierta el par busca el pseudónimo, no casa nada, y deja `anonymized_event_rows: 0` en la entrada de cumplimiento — indistinguible de «este sujeto no tenía eventos», con el id real vivo. Con un solo llamador, tiparlo hoy es YAGNI; el argumento crece en cuanto aparezca el segundo. Fix: un value object para el par sujeto/pseudónimo, o parámetros nombrados obligatorios. Ref: `api/src/Shared/Event/Application/EventStoreSubjectAnonymiser.php:61`.
 
