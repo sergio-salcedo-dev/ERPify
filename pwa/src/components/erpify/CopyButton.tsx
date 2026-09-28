@@ -80,6 +80,11 @@ export function CopyButton({
     >
       <Icon className="size-3.5" aria-hidden="true" />
       {iconOnly ? <span className="sr-only">{ariaLabel}</span> : <span>{currentLabel}</span>}
+      {/* The relabelled button is not enough on its own: a screen reader does not reliably speak
+          a change to the name of the control that already has focus. */}
+      <span className="sr-only" role="status" aria-live="polite">
+        {status === "idle" ? "" : fallbackAriaLabelByStatus[status]}
+      </span>
     </Button>
   );
 }

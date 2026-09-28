@@ -120,6 +120,20 @@ describe("CopyButton", () => {
     expect(setTimeoutSpy.mock.calls.length).toBe(timersBefore);
   });
 
+  it("announces the outcome through a polite live region", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CopyButton value="x" />);
+    expect(screen.getByRole("status")).toHaveTextContent("");
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("Copied");
+    });
+    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+  });
+
   it("uses sr-only text in icon-only mode and still announces the label", () => {
     render(<CopyButton value="x" iconOnly label="Copy bank ID" testId="banks-detail__copy-id" />);
     const btn = screen.getByTestId("banks-detail__copy-id");

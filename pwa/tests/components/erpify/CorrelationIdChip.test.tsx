@@ -47,6 +47,16 @@ describe("CorrelationIdChip", () => {
     expect(screen.getByRole("button").querySelector("svg.lucide-x")).not.toBeNull();
   });
 
+  it("names the token the same way in its tooltip as in its accessible name", () => {
+    render(<CorrelationIdChip id="01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6" label="Error ID:" />);
+    const button = screen.getByRole("button");
+    expect(button).toHaveAttribute(
+      "title",
+      "Copy correlation ID 01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6",
+    );
+    expect(button).toHaveAccessibleName("Copy correlation ID 01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6");
+  });
+
   it("renders the optional label prefix when supplied", () => {
     render(<CorrelationIdChip id="abcdef0123456789" label="Error ID:" />);
     // The label reads as muted prose alongside — not inside — the copy token,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 export type CopyStatus = "idle" | "copied" | "error";
 
@@ -48,6 +49,11 @@ export function useCopyToClipboard(
   }, []);
 
   async function copy(): Promise<void> {
+    // A live region speaks only when its text changes, so a second identical outcome would be
+    // silent. Clearing it before the write lands makes every outcome a change; flushed so the empty
+    // state reaches the DOM on its own instead of merging into the render that sets the result.
+    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
+    flushSync(() => setStatus("idle"));
     let next: CopyStatus;
     try {
       await writeToClipboard(value);
