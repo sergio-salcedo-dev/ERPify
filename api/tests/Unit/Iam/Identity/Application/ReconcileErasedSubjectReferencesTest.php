@@ -130,8 +130,8 @@ final class ReconcileErasedSubjectReferencesTest extends TestCase
     #[Test]
     public function itWrapsAFailedLivenessProbeSoAFaultIsNeverReadAsACleanRun(): void
     {
-        // The probe raising is ordinary — the port declares PostgreSQL's parameter ceiling as a hard bound —
-        // and both consumers act on the difference: a finding has a documented repair, a fault has none.
+        // The probe raising is ordinary — any driver read can meet a transient fault — and both consumers act
+        // on the difference: a finding has a documented repair, a fault has none.
         $identities = $this->createStub(LiveIdentityDirectory::class);
         $identities->method('existingIdsAmong')->willThrowException(new RuntimeException('connection lost'));
 

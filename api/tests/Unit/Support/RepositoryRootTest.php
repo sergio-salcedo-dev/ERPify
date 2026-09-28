@@ -95,4 +95,44 @@ final class RepositoryRootTest extends TestCase
             );
         }
     }
+
+    /**
+     * `path()` accepts a candidate on ANY one marker, so the set is only as discriminating as its weakest
+     * member. The nested deployables are where a root-level file is most likely to be repeated — each
+     * carries its own `CLAUDE.md` on purpose — and `api/` is the directory a one-level move of the resolver
+     * would turn into a candidate.
+     */
+    #[Test]
+    public function noMarkerItDeclaresExistsInsideANestedDeployable(): void
+    {
+        $root = RepositoryRoot::path();
+
+        $this->assertIsString($root);
+
+        $markers = (new ReflectionClass(RepositoryRoot::class))->getConstant('MARKERS');
+
+        $this->assertIsArray($markers);
+        $this->assertNotEmpty($markers);
+
+        foreach (['api', 'pwa'] as $deployable) {
+            $this->assertDirectoryExists(
+                $root . '/' . $deployable,
+                \sprintf('%s/ is missing from the resolved root, so this check would pass vacuously.', $deployable),
+            );
+
+            foreach ($markers as $marker) {
+                $this->assertIsString($marker);
+                $this->assertFileDoesNotExist(
+                    $root . '/' . $deployable . '/' . $marker,
+                    \sprintf(
+                        '%s also exists in %s/, so it does not discriminate the repository root: a candidate '
+                        . 'list reaching %s/ would resolve it as the root and point every gate at the wrong tree.',
+                        $marker,
+                        $deployable,
+                        $deployable,
+                    ),
+                );
+            }
+        }
+    }
 }

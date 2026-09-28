@@ -10,7 +10,7 @@ namespace Erpify\Shared\ErrorContract\Domain\Exception;
  * technical intervention (e.g. deleting a bank that still has accounts → 409 conflict).
  *
  * Single source of truth for "this is a client error". The eight 4xx marker interfaces in
- * {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory::MARKER_STATUS_MAP}
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory::MARKER_STATUS_MAP}
  * ({@see Conflict}, {@see InvalidInput}, {@see NotFound}, {@see Forbidden},
  * {@see Unauthenticated}, {@see InvariantViolation}, {@see RateLimited},
  * {@see InvalidSearchCriteria}) extend this, so every concrete exception implementing one of

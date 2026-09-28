@@ -26,9 +26,15 @@ security:
                 password_path: password
                 failure_handler: Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
             # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
-            # leaked credential list cannot be sprayed. The 401 body does not distinguish which accounts exist;
-            # the latency half of that claim rests on the timing-equalised UserProvider dominating an
-            # unmeasured, transaction-shaped differential on the failure-recording path (issue #881).
+            # leaked credential list cannot be sprayed. The 401 body does not distinguish which accounts exist.
+            # Nor does the shape of the work behind it: an unknown address pays one verification of this hasher
+            # (the UserProvider's timing floor) where a known one pays one of its stored hash — the same cost
+            # for as long as that hash was minted under this configuration — and the failure recorder takes the
+            # same transaction and locked read either way; a password too long for the hasher to verify is
+            # refused before the identity is resolved, at the price of one floor. What still differs is the
+            # counter's UPDATE, a row's hydration and a wait on that row's lock for an existing identity —
+            # unmeasured and presumed noise under the KDF, not shown unclassifiable
+            # (PRODUCTION_SECURITY_CHECKLIST.md §7).
             login_throttling:
                 max_attempts: 5
 

@@ -12,7 +12,6 @@ use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DoctrineSessionReposi
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
-use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -48,14 +47,9 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
         $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
         $this->entityManager = $entityManager;
         $this->connection = $entityManager->getConnection();
-        $clock = new FixedClock(new DateTimeImmutable(self::NOW));
+        $clock = FixedClock::at(self::NOW);
+        SystemClock::set($clock);
         $this->repository = new DoctrineSessionRepository($entityManager, $clock);
-    }
-
-    protected function tearDown(): void
-    {
-        SystemClock::reset();
-        parent::tearDown();
     }
 
     public function testDropsBothKindsOfDeadRowAndLeavesTheRestAlone(): void
@@ -137,16 +131,14 @@ final class DoctrineSessionRetentionTest extends KernelTestCase
         $now = new DateTimeImmutable(self::NOW);
         $session = $this->newSession($userId, $expiryOffset);
 
-        // The aggregate stamps `revokedAt` from the ambient clock, so it is frozen for the revocation and
-        // released immediately — nothing else in this class wants a frozen one.
+        // The aggregate stamps `revokedAt` from the ambient clock, so it is moved to the revocation instant
+        // for the revocation alone and handed back to `NOW`, the instant the repository was given.
         SystemClock::set(new FixedClock($now->modify($revokedOffset)));
 
         try {
             $session->revoke();
         } finally {
-            // Back to the suite's pinned instant, not to the wall clock: `reset()` un-pins, and every
-            // aggregate this method builds afterwards would carry a calendar-dependent stamp.
-            FreezeSystemClockExtension::pin();
+            SystemClock::set(FixedClock::at(self::NOW));
         }
 
         $session->pullDomainEvents();

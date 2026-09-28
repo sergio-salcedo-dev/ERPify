@@ -1,6 +1,6 @@
 # ERPify PWA Design System
 
-Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers, and the **visual authority**: the per-axis UX runs under `_bmad-output/planning-artifacts/ux-designs/` are deltas that inherit from this file and define only what they add.
+Lean implementation-facing reference for polishing the ERPify back-office PWA. Day-to-day artifact for engineers, and the **visual authority**: a surface axis (audit, access) inherits everything here and states only what it adds, in its own section below, together with the reason for each rule.
 
 > **Status:** v1, brownfield-safe, applied iteratively. Tokens land first; components consume tokens; composites wrap Shadcn primitives. No big-bang rewrite.
 > **Inspiration:** Linear's restraint principles and palette discipline, applied to an ERP back-office that runs **light-mode by default**. Dark mode is a fully supported variant on a navy-slate band (GitHub-dimmed undertone / Stripe-Vercel navy).
@@ -325,7 +325,7 @@ slow      240ms    page-level transition (rare)
 
 Live in `pwa/src/components/erpify/`. Wrap Shadcn primitives via slots and `cn()`. Forkable; Shadcn primitives are not.
 
-> **Status (v1):** all 9 mandatory composites are built and unit-tested, plus three supporting primitives (`<CopyButton>`, `<DateField>`, `<DatePickerField>` — see below). Import via `@/components/erpify`. Tests at `pwa/tests/components/erpify/*.test.tsx` (12 files, 69 tests passing).
+> **Status (v1):** all 9 mandatory composites are built and unit-tested, plus three supporting primitives (`<CopyButton>`, `<DateField>`, `<DatePickerField>` — see below). Import via `@/components/erpify`. Tests at `pwa/tests/components/erpify/*.test.tsx`.
 
 ### `<ProblemDisplay>`
 
@@ -353,7 +353,7 @@ Dot-first anatomy (Linear style): a 6 px hue dot + an **always-neutral label** (
 
 ### `<CorrelationIdChip>`
 
-Geist Mono, truncated middle (`01926e7…f5c6`), one-click copy with 2-second copied affordance. Background `--color-bg-subtle` (light) / `rgba(255,255,255,0.05)` (dark), `1px solid --color-border-subtle`, `--radius-micro`, font 12 px weight 500. Tooltip shows full ID. `aria-live="polite"` on copy success. First-class to every error and audit surface.
+Geist Mono (`font-mono`), the full ID — never clipped; on a narrow surface it wraps at the hyphens — as one click-to-copy token: `bg-muted/40`, `border border-border`, `rounded`, muted text that turns foreground on hover. 11 px at the default `xs` size, 12 px at `sm`; only the optional label is `font-medium`. A 2-second affordance follows each copy — a check on success, a destructive `X` on failure — and both are spoken through the shared announcer (below). Copies through `useCopyToClipboard`, the same path as `<CopyButton>`. First-class to every error and audit surface.
 
 ### `<EmptyState>`
 
@@ -380,7 +380,7 @@ Values are mode-aware via tokens; the table shows the alias each variant consume
 
 Exported from the same `@/components/erpify` barrel. Not part of the "mandatory four-state / error / form" contract, but cross-entity enough to live beside the composites rather than being re-implemented per feature.
 
-- **`<CopyButton value testId>`** — canonical copy-to-clipboard control. Owns the success/error feedback flip, the icon swap, the `sr-only` fallback, and the async-clipboard → `execCommand` degradation path. Never trusts the value as HTML. `<CorrelationIdChip>` builds on it; entity components must use it instead of calling `navigator.clipboard.writeText` directly.
+- **`<CopyButton value testId>`** — canonical copy-to-clipboard control. Owns the success/error feedback flip, the icon swap and the `sr-only` fallback; its accessible name stays the action, and the outcome — its own `copiedLabel`/`errorLabel` when they are strings — is spoken once through `announce()` (`components/erpify/liveAnnouncer.ts`), a single polite region on `<body>`, never one per control or inside a button, created when the first copy control mounts, emptied for a beat so a repeated outcome is spoken again, and emptied again once the message is stale; copies through the async Clipboard API only and reports a failed copy on an insecure origin rather than degrading to the deprecated `execCommand`. Never trusts the value as HTML. Entity components must use it instead of reaching the clipboard themselves. The write lives in `useCopyToClipboard`, which `<CopyButton>` and `<CorrelationIdChip>` share and which is not exported from the barrel; `tests/clipboard-access-ownership.test.ts` refuses any other file under `src/` reaching the clipboard, and any import of the hook from outside `components/erpify/`.
 - **`<DateField testId>`** — the canonical `dd/mm/yyyy` text input: correct `pattern` / `inputMode` / `placeholder` / tooltip and the `(dd/mm/yyyy)` label hint, exported alongside the `DD_MM_YYYY_*` constants. Pairs with the `dateTimeProvider.parseDdMmYyyyToStartTimestamp` / `parseDdMmYyyyToEndTimestamp` methods (from `@/context/shared/date-time-provider/infrastructure`) for inclusive filter bounds.
 - **`<DatePickerField>`** — wraps the **native** `<input type="date">` (`yyyy-mm-dd`) inside `<FormField>`, with `min` / `max` bounds and `violations[]` wiring. Zero added dependency — distinct from the deferred third-party date-picker _library_ (see "Out of scope"); use it where a native picker is acceptable and `<DateField>`'s free-text `dd/mm/yyyy` is not.
 - **`<ThemeToggle testId>`** — the canonical light → dark → system switch. Cycles the active mode via `next-themes` (`useTheme`), shows the current theme's `Sun` / `Moon` / `Monitor` icon, and names the next action in `title` / `aria-label` (with an `sr-only` fallback). It only flips the mode — see "Theming & mode activation" below for the wiring it relies on.
@@ -532,6 +532,31 @@ Both modes are authored as tokens in `globals.css` (`:root` light + `.dark`, eac
 
 ---
 
+## Audit surfaces
+
+Read-only investigation UI over `audit_log` (`context/backoffice/audit/`). Stated elsewhere and not repeated here: the level is not a severity and never takes `{color.danger}` (`AuditLevelBadge.tsx`); state lives only in the URL, `[REDACTED]` is never collapsed into «—», pivots are suppressed on an erased axis, and the `security` row carries a 2 px lateral accent (`docs/architecture-pwa.md` → _Audit investigation (Backoffice)_).
+
+- **Legible text in the anonymised chip and in `[REDACTED]` is `{color.text-muted}`** over `{color.bg-subtle}`; `{color.text-subtle}` / `{color.text-faint}` colour only the icon or the background. Both lighter greys are sub-AA as text; the inertness is carried by the background and the mono treatment, not by a grey nobody can read.
+- **An actor never takes the brand tint or `<MonogramAvatar>`.** An audit actor is a subject of evidence, not a business identity, and an erased actor must never look like a live one; the monogram exception above is for records.
+- **The raw `action` token is always rendered in `{font.mono}` beside the humanised label**, in the row and in the drawer. The token is the evidence and the label only a reading aid; the two tiers that produce the label are `application/humanizeAuditAction.ts`.
+- **The resource is `resourceType · resourceId`, copyable, never a link to its business page.** The record may be deleted or erased by the time anyone reads the trail, and a link would turn an investigation into navigation into business data.
+- **The action filter is free text.** Any suggestion is derived from the data, never a frozen catalogue: the `ROUTE_*` family is open-ended and the taxonomy is meant to emerge from what investigators actually query.
+- **Time is local**: `HH:mm:ss.SSS` in the row under its per-day divider; in the drawer the local date-time, the relative distance, and the full ISO value (microseconds and offset) verbatim and copyable. No UTC toggle — the ISO string already carries the unambiguous instant, so a second rendering would only be a second thing to compare.
+
+## Access surfaces
+
+Login, recovery, invitation acceptance, the status walls and the security emails. The trust contract behind them — pre-identity indistinguishability, token opacity, error specificity by trust level — is [`docs/adr/identity-invitation-lifecycle.md`](../docs/adr/identity-invitation-lifecycle.md) (D10–D12) and [`docs/rules/security.md`](../docs/rules/security.md); it is not restated here. Also already stated at the component: input preserved offline (`OfflineNotice.tsx`), double-submit guard and idempotent retry (`ConnectivityButton.tsx`), focus to the `<h1>` on the success transition (`SecuritySignal.tsx`).
+
+- **Status walls (suspended, deactivated, locked, invalid link) are never `{color.danger}`**, nor alarm icons. They report account state, not an error; `{color.danger}` stays reserved for a real failure of the UI itself (`<ProblemDisplay>`, `<MutationError>`).
+- **Every `AccessWall` variant offers "Sign in"**, besides its specific action. Offered unconditionally it discloses nothing, and it rescues the person whose link died because it had already worked.
+- **Body copy is `--text-md` (16 px), titles Heading 1 / Heading 2** — the one sanctioned exception to the 14 px density default. These screens are read once, in a hurry, often on a phone. The `(auth)` layout does not apply it yet: the forms still inherit the 14 px body.
+- **One-hand ergonomics.** Touch-height inputs (≥ 44 px), the primary action below the fields within thumb reach, the soft keyboard never covering it, autofocus on the first field and focus back on the first invalid field after an error. Not all applied yet: the inputs are the shared 32 px `Input` and no `(auth)` form autofocuses.
+- **An access surface is a primary document, never a dialog.** `AccessWall` and `TokenActionScreen` keep the natural focus order with no focus trap, so the logo and the theme toggle stay reachable by keyboard (WCAG 2.1.2), and each surface carries exactly one `<h1>`, whose visual size is set independently of its element level.
+- **A security action confirms with `SecuritySignal` and its next step**, inside `AuthLayout`, never with a toast (see _Never_): a confirmation that disappears leaves the person unsure whether the credential changed.
+- **Security emails are plain and banking-grade**: flat header, one sentence of purpose, one prominent bulletproof CTA, minimal footer, no hero or marketing imagery; system font stack; the button is a literal light/dark pair (`#2f5cd9` / `#6c9bff`), because mail clients load neither webfonts nor CSS variables. The light value is set on the button in `api/src/Shared/Mailer/Infrastructure/SecurityLinkMailer.php` and the dark override in `BulletproofEmailChrome.php` beside it; the replyable sender is `SecuritySenderAddress.php`.
+
+---
+
 ## Governance — when each pattern wins
 
 | Decision                               | Rule                                                                                                                                                                                                                                                                                                                                      |
@@ -639,4 +664,4 @@ A long-term goal is an ESLint rule that flags raw Shadcn primitive use where an 
 - **Light-mode ramp tuning.** The light-mode neutrals (`#f7f8f8`, `#f3f4f5`, `#e9eaec`, `#dcdfe3`, `#bfc3ca`) are first-pass. Refine after the first feature surface ships and we see them in context.
 - **`--color-warning` light value `#d97706`** is provisional; pick a final low-chroma amber when the first warning surface ships.
 
-Updates to this file: PRs that change tokens, primitives, or patterns must update the relevant section here. Rationale for a given axis lives in that axis's UX run (`_bmad-output/planning-artifacts/ux-designs/ux-ERPify-2026-06-26/DESIGN.md` for the audit surfaces, `.../ux-ERPify-2026-07-06/DESIGN.md` for access and identity); where a run and this file disagree, this file wins.
+Updates to this file: PRs that change tokens, primitives, or patterns must update the relevant section here. The rationale for a surface axis lives in its section here (_Audit surfaces_, _Access surfaces_), next to the rule it justifies; provenance is git history — the audit surfaces shipped in #377 and lost their journey view in #928, their UX run entered in `4c5bb241`, and the access surfaces and their run arrived in #458.

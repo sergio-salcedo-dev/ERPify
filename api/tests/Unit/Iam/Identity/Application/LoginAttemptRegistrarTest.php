@@ -16,8 +16,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The registrar owns the persisted lockout counter: a failed attempt increments it (and trips the lock at the
- * threshold), a successful login clears it. It resolves failures BY EMAIL and no-ops on an unknown or malformed
- * one, so a failure against a non-existent account writes nothing and emits nothing.
+ * threshold), a successful login clears it. It resolves failures BY EMAIL under the row lock whether or not the
+ * address exists, so a failure against a non-existent account pays the same round trips and writes nothing.
  *
  * @internal
  */
@@ -41,7 +41,7 @@ final class LoginAttemptRegistrarTest extends TestCase
         $this->assertFalse($user->isLockedAt(new DateTimeImmutable(self::NOW)));
     }
 
-    public function testAnUnknownEmailIsANoOpThatNeitherWritesNorEmits(): void
+    public function testAnUnknownEmailNeitherWritesNorEmits(): void
     {
         $repository = new InMemoryUserRepository();
         $eventBus = new RecordingEventBus();
@@ -141,29 +141,6 @@ final class LoginAttemptRegistrarTest extends TestCase
             $journal->crossTableOrder(),
             'the decision must be taken on the LOCKED row, or the refusal is as untrustworthy as the write',
         );
-    }
-
-    public function testAnUnknownAddressOpensNoTransactionAtAll(): void
-    {
-        // The only branch that skips the transaction, and the reason it may: an address resolving to no row
-        // has nothing to count, so it writes nothing, publishes nothing and does not even BEGIN. Existence is
-        // also the only thing an unlocked read may conclude here, since a row that exists cannot stop
-        // existing under the attack this path is counting.
-        //
-        // What the asymmetry costs is a latency differential between a known and an unknown address on this
-        // path. It is not claimed to be immaterial — that claim would need a measurement nobody has taken
-        // (#881); what is claimed is only that no row and no event distinguish the two.
-        $repository = new InMemoryUserRepository();
-        $eventBus = new RecordingEventBus();
-        $transactionManager = $this->createMock(TransactionManager::class);
-        $transactionManager->expects($this->never())->method('transactional');
-
-        $registrar = $this->registrarWith($repository, $eventBus, $transactionManager);
-
-        $registrar->recordFailure('nobody@erpify.test');
-
-        $this->assertSame([], $repository->saved);
-        $this->assertSame([], $eventBus->publishedEvents);
     }
 
     public function testAConcurrentUnlockCommittingUnderTheLockIsNotUndoneByTheAttemptInFlight(): void

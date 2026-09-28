@@ -10,6 +10,7 @@ use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DbalMembershipPersonReferences;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsKeysetPagedIds;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -31,6 +32,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalMembershipPersonReferences::class)]
 final class DbalMembershipPersonReferencesTest extends KernelTestCase
 {
+    use AssertsKeysetPagedIds;
+
     private EntityManagerInterface $entityManager;
 
     private Connection $connection;
@@ -73,6 +76,30 @@ final class DbalMembershipPersonReferencesTest extends KernelTestCase
 
             $this->assertContains($userId, $ids);
             $this->assertNotContains($absentUserId, $ids, 'a user with no membership is not this axis');
+        });
+    }
+
+    public function testItPagesThroughTheColumnOneIdAtATime(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $organization = Organization::provision(Uuid::generate(), 'ACME Corp');
+            $this->entityManager->persist($organization);
+            $this->entityManager->flush();
+
+            $organizationId = $organization->getId();
+            $this->assertNotNull($organizationId);
+            $seeded = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
+
+            foreach ($seeded as $userId) {
+                $this->entityManager->persist(Membership::grant(Uuid::generate(), $userId, $organizationId));
+            }
+
+            $this->entityManager->flush();
+
+            $this->assertKeysetPagedIds(
+                $seeded,
+                (new DbalMembershipPersonReferences($this->connection, 1))->retainedPersonIds(),
+            );
         });
     }
 

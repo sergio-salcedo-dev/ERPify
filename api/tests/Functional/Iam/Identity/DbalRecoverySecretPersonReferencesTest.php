@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalRecoverySecretPersonReferences;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsKeysetPagedIds;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -33,6 +34,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(DbalRecoverySecretPersonReferences::class)]
 final class DbalRecoverySecretPersonReferencesTest extends KernelTestCase
 {
+    use AssertsKeysetPagedIds;
+
     private EntityManagerInterface $entityManager;
 
     private Connection $connection;
@@ -67,19 +70,19 @@ final class DbalRecoverySecretPersonReferencesTest extends KernelTestCase
         });
     }
 
-    public function testTheUniqueIndexIsWhatMakesTheAbsentDistinctSafe(): void
+    public function testItPagesThroughTheColumnOneIdAtATime(): void
     {
-        // The sibling source over `identity_password_reset_token` needs a DISTINCT because a person can hold
-        // several pending resets. This one deliberately has none, and that omission is only correct while one
-        // identity cannot hold two secrets — so the constraint is asserted rather than assumed. Losing the
-        // unique index would not fail any other test here; it would quietly start double-reporting a holder.
         $this->inRolledBackTransaction(function (): void {
-            $userId = Uuid::generate();
-            $this->seedRecoverySecret($userId);
+            $seeded = [Uuid::generate(), Uuid::generate(), Uuid::generate()];
 
-            $this->expectExceptionMessageMatches('/uniq_identity_recovery_secret_user_id/');
+            foreach ($seeded as $userId) {
+                $this->seedRecoverySecret($userId);
+            }
 
-            $this->seedRecoverySecret($userId);
+            $this->assertKeysetPagedIds(
+                $seeded,
+                (new DbalRecoverySecretPersonReferences($this->connection, 1))->retainedPersonIds(),
+            );
         });
     }
 

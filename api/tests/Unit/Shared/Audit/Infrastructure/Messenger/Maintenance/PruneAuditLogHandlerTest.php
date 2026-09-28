@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance\PruneAuditLogHandler;
 use Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance\PruneAuditLogMessage;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogPruner;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -25,6 +26,7 @@ final class PruneAuditLogHandlerTest extends TestCase
     {
         $pruner = new RecordingAuditLogPruner();
         $clock = new FixedClock(new DateTimeImmutable('2026-06-25 12:00:00'));
+        SystemClock::set($clock);
 
         (new PruneAuditLogHandler($pruner, $clock))(
             new PruneAuditLogMessage(activityRetentionDays: 90, securityRetentionDays: 365),

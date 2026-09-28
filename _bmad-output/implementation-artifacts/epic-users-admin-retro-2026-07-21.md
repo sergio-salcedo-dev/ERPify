@@ -127,5 +127,5 @@ Lectura hostil de `FulfilIdentityErasure` + `EraseIdentitySubject` + `PurgeUserS
 ### Higiene de artefactos (este PR)
 
 - Poda de specs `done` (u-0…u-5b) — sin enlaces entrantes (las referencias de `deferred-work.md` son encabezados de texto, no links).
-- `arch-addendum-users-admin.md` + `epics-users-admin.md` marcados como implementados/históricos.
+- `arch-addendum-users-admin.md` + `epics-users-admin.md` (#500): retirados del árbol; sus decisiones durables viven en `docs/adr/authorization-model-boundaries.md`.
 - Release notes del cambio de semántica de la CLI de erase (U-5b): `identity:gdpr:erase-subject` deja de ser aditiva (anonimiza rastro + purga sesiones + exige ≥1-admin) y el self-audit SECURITY dentro de la tx hace rollback del erase.

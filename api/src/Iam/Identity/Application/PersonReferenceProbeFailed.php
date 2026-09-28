@@ -13,10 +13,9 @@ use Throwable;
  *
  * The two outcomes are acted on by different people and only one of them is actionable as compliance. A
  * finding is a missed erasure with a documented repair; this is an infrastructure fault whose repair is to
- * fix the infrastructure and run the control again. The reads that raise it are ordinary:
- * {@see \Erpify\Iam\Identity\Domain\Repository\LiveIdentityDirectory::existingIdsAmong()} declares
- * PostgreSQL's 65535-parameter ceiling as a hard bound it fails at rather than degrades past, and any source
- * can meet a transient driver error.
+ * fix the infrastructure and run the control again. The reads that raise it are ordinary: any source, and
+ * {@see \Erpify\Iam\Identity\Domain\Repository\LiveIdentityDirectory::existingIdsAmong()}, can meet a
+ * transient driver error or a row the store should never have handed back.
  *
  * A dedicated type rather than a bare `catch (Throwable)` at each consumer, and the difference is not
  * cosmetic: this use case raises {@see \LogicException} on purpose when two sources claim one axis — a wiring

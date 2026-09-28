@@ -206,13 +206,15 @@ final class ConsoleCommandRedactionProcessorTest extends TestCase
      * noticing.
      */
     #[Test]
-    public function itPreservesEverySiblingKeyOfTheRedactedField(): void
+    #[DataProvider('provideItPreservesEverySiblingKeyOfTheRedactedFieldCases')]
+    public function itPreservesEverySiblingKeyOfTheRedactedField(mixed $command): void
     {
         $record = $this->recordWith([
             'exception' => new RuntimeException('handler blew up'),
-            'command' => 'identity:gdpr:erase-subject 0193a1f2-7c4d-7e21-9b3a-8f14e45fceea',
+            'command' => $command,
             'message' => 'handler blew up',
             'code' => 1,
+            5 => 'positional',
         ]);
 
         $processed = (new ConsoleCommandRedactionProcessor())($record);
@@ -220,10 +222,25 @@ final class ConsoleCommandRedactionProcessorTest extends TestCase
         $this->assertSame('handler blew up', $processed->context['message'] ?? null);
         $this->assertSame(1, $processed->context['code'] ?? null);
         $this->assertInstanceOf(RuntimeException::class, $processed->context['exception'] ?? null);
+        // An integer key is what a `{5}` placeholder resolves against: renumbering it would detach the
+        // placeholder from its value.
+        $this->assertSame('positional', $processed->context[5] ?? null);
     }
 
     /**
-     * @param array<string, mixed> $context
+     * Both ways the field is rewritten — a string argv redacted past its name, and a carrier this rule
+     * cannot read replaced whole.
+     *
+     * @return iterable<string, array{mixed}>
+     */
+    public static function provideItPreservesEverySiblingKeyOfTheRedactedFieldCases(): iterable
+    {
+        yield 'a string argv' => ['identity:gdpr:erase-subject 0193a1f2-7c4d-7e21-9b3a-8f14e45fceea'];
+        yield 'an unreadable carrier' => [['identity:gdpr:erase-subject', '0193a1f2-7c4d-7e21-9b3a-8f14e45fceea']];
+    }
+
+    /**
+     * @param array<array-key, mixed> $context
      */
     private function recordWith(array $context): LogRecord
     {

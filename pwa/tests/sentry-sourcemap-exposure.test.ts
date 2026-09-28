@@ -63,8 +63,8 @@ import { describe, expect, it } from "vitest";
  *     spread or a call inlines entries nobody wrote out, the token among them.
  *
  * The credentials `next.config.ts` spreads into the options come from
- * `sentry-upload-options.ts`, whose return type admits `authToken`, `org` and
- * `project` alone; the config-side rules run over that module too, so the one
+ * `sentry-upload-options.ts`, whose return type admits `authToken`, `org`,
+ * `project` and `release` alone; the config-side rules run over that module too, so the one
  * variable spread into the options is read rather than trusted.
  *
  * Every rule is a pure function over source text, run once against the real

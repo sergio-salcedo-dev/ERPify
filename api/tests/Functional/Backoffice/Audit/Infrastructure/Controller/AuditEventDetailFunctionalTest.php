@@ -192,6 +192,27 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     }
 
     /**
+     * A `change` row whose diff came out empty — every field discarded by the diff builder, or a write that
+     * touched only a to-many collection — is kept as evidence, and must still reach the wire as a MAP. The
+     * writer seals only the top level of `metadata`, so such a row — this seed and the capture listener's
+     * alike — is stored as `"changes":[]`, and `json_decode(…, true)` would hand it back as a PHP `[]` even
+     * had it been stored as `{}`. Without the mapper's seal it is served as `"changes":[]`, which the
+     * client's guard refuses and with it the whole detail envelope. Asserted over the BYTES for the reason
+     * the test above gives.
+     */
+    public function testAnEmptyDiffSerializesChangesAsAnObject(): void
+    {
+        $id = $this->seedChangeRow(['changes' => [], 'operation' => 'UPDATED']);
+
+        $this->detail($id);
+        $content = (string) $this->client->getResponse()->getContent();
+
+        $this->assertStringContainsString('"changes":{}', $content);
+        $this->assertStringNotContainsString('"changes":[]', $content);
+        $this->assertStringContainsString('"operation":"UPDATED"', $content);
+    }
+
+    /**
      * @param array<string, mixed> $data
      *
      * @return array<string, mixed>

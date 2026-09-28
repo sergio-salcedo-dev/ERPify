@@ -35,6 +35,16 @@
 #                   which git does not carry either — so a fresh checkout has none
 #                   and /bmad-* slash commands would otherwise
 #                   be "Unknown command" inside the worktree.
+#                   The bmad-loop-* skills are seeded separately, from the main
+#                   checkout's .claude/skills only: `bmad-loop init` installs them
+#                   there and the BMad installer never writes them to .agent/skills,
+#                   so the bmad-* seed above, which copies from one root only,
+#                   never carries them. scripts/seed-bmad-loop-skills.sh seeds
+#                   each on its own and reports a failed copy; a failure does
+#                   not stop the worktree being created. Measured: a
+#                   sweep run from a worktree seeded without them answered
+#                   "Unknown command: /bmad-loop-sweep" twice and sat idle until
+#                   its session timeout, and `bmad-loop validate` reported ok.
 #                   It also links _bmad -> the main checkout's install. /_bmad is
 #                   gitignored too, so no worktree ever had it, and every bmad
 #                   skill dies at activation: it resolves the workflow block via
@@ -190,6 +200,7 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	else \
 		echo "! the main checkout holds no bmad-* skills in any root — run the BMad installer there; /bmad-* will be Unknown command in this worktree"; \
 	fi; \
+	"$(PROJECT_ROOT)/scripts/seed-bmad-loop-skills.sh" "$$main" "$$path" || true; \
 	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
 		ln -s ../../../_bmad "$$path/_bmad"; \
 		echo "→ linked _bmad -> the main checkout's install (gitignored; every bmad skill reads it on activation)"; \

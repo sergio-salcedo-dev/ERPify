@@ -17,6 +17,7 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorPositionExtractor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\FingerprintCanonicalizer;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetNavigation;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetPredicateBuilder;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\OrderByColumns;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\QueryExecutionTrace;
@@ -82,8 +83,6 @@ final readonly class DoctrineSearchEngine
      *                                       integrity binding, never consulted for navigation (AR21)
      *
      * @return Page<object>
-     *
-     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     public function paginate(
         QueryBuilder $queryBuilder,
@@ -118,13 +117,10 @@ final readonly class DoctrineSearchEngine
         return $this->execute(
             $queryBuilder,
             $alias,
-            $orderByColumns,
-            $cursor,
+            new KeysetNavigation($orderByColumns, $cursor, $routingDirection, $fingerprint),
             $appliedLimit->value,
-            $routingDirection,
             $policy,
             $config,
-            $fingerprint,
         );
     }
 
@@ -312,25 +308,20 @@ final readonly class DoctrineSearchEngine
      * inverted in SQL and the page is re-reversed in memory, so the contract never sees it.
      *
      * @return Page<object>
-     *
-     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     private function execute(
         QueryBuilder $queryBuilder,
         string $alias,
-        OrderByColumns $orderByColumns,
-        ?Cursor $cursor,
+        KeysetNavigation $navigation,
         int $limit,
-        string $routingDirection,
         WirePaginationPolicy $policy,
         PaginatorConfig $config,
-        string $fingerprint,
     ): Page {
-        $isBefore = Cursor::DIRECTION_BEFORE === $routingDirection;
-        $physicalColumns = $isBefore ? $this->invert($orderByColumns) : $orderByColumns;
+        $isBefore = $navigation->isBefore();
+        $physicalColumns = $isBefore ? $this->invert($navigation->orderByColumns) : $navigation->orderByColumns;
 
         $fetch = clone $queryBuilder;
-        $this->applyKeysetPredicate($fetch, $physicalColumns, $cursor, $alias, $policy);
+        $this->applyKeysetPredicate($fetch, $physicalColumns, $navigation->cursor, $alias, $policy);
         $this->applyOrderBy($fetch, $physicalColumns, $alias);
         $fetch->setMaxResults($limit + 1);
 
@@ -343,15 +334,7 @@ final readonly class DoctrineSearchEngine
         // `before` fetched in reversed physical order — restore the caller-facing order.
         $items = $isBefore ? \array_reverse($rows) : $rows;
 
-        return $this->buildPage(
-            $items,
-            $orderByColumns,
-            $hasExtra,
-            $cursor,
-            $isBefore,
-            $fingerprint,
-            $this->countIfDetailed($queryBuilder, $alias, $config),
-        );
+        return $this->buildPage($items, $navigation, $hasExtra, $this->countIfDetailed($queryBuilder, $alias, $config));
     }
 
     /**
@@ -402,19 +385,13 @@ final readonly class DoctrineSearchEngine
      *
      * @return Page<object>
      *
-     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */
-    private function buildPage(
-        array $items,
-        OrderByColumns $orderByColumns,
-        bool $hasExtra,
-        ?Cursor $cursor,
-        bool $isBefore,
-        string $fingerprint,
-        ?int $count,
-    ): Page {
-        $hadCursor = $cursor instanceof Cursor;
+    private function buildPage(array $items, KeysetNavigation $navigation, bool $hasExtra, ?int $count): Page
+    {
+        $cursor = $navigation->cursor;
+        $isBefore = $navigation->isBefore();
+        $fingerprint = $navigation->fingerprint;
 
         if ([] === $items) {
             if (!$cursor instanceof Cursor) {
@@ -439,13 +416,14 @@ final readonly class DoctrineSearchEngine
             );
         }
 
+        $orderByColumns = $navigation->orderByColumns;
         $lastItem = \array_last($items);
         $nextCursor = $this->encodeBoundary($orderByColumns, $lastItem, Cursor::DIRECTION_AFTER, $fingerprint);
         $prevCursor = $this->encodeBoundary($orderByColumns, $items[0], Cursor::DIRECTION_BEFORE, $fingerprint);
 
         // `before` discovers "more rows exist before" via its extra row; `after` discovers "more after".
-        $hasNext = $isBefore ? $hadCursor : $hasExtra;
-        $hasPrev = $isBefore ? $hasExtra : $hadCursor;
+        $hasNext = $isBefore ? $navigation->hasCursor() : $hasExtra;
+        $hasPrev = $isBefore ? $hasExtra : $navigation->hasCursor();
 
         return new Page($items, $hasNext, $hasPrev, $count, $nextCursor, $prevCursor);
     }

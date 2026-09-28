@@ -47,43 +47,34 @@ final readonly class LoginAttemptRegistrar
     }
 
     /**
-     * Records a failed password attempt for the identity resolved BY EMAIL. An unknown or malformed email is a
-     * no-op — no row, no write, no event, no transaction — so a failure against a non-existent account leaves
-     * nothing that could tell it apart from a real one (pre-identity indistinguishability); the ephemeral
-     * per-IP throttle covers the anonymous flood.
+     * Records a failed password attempt for the identity resolved BY EMAIL. A malformed email is a no-op — it
+     * cannot name an account, so skipping it tells a caller nothing they did not send. Every well-formed
+     * address, known or not, takes the SAME transaction and the SAME locked read; only what that read returns
+     * decides whether anything is written.
      *
-     * **Everything after that existence probe happens under `SELECT … FOR UPDATE`, and the probe itself is
-     * allowed to decide nothing else.** The counter is the only state in this application written from a path
-     * that holds just an address, and reading it unlocked let the increment be computed against a row another
-     * transaction had already replaced: a recovery-secret redemption clears the lock and this write puts
-     * `locked_until` straight back, which is precisely the state the redemption exists to leave. An
-     * administrative unlock is the same shape. The window is the span from the read to the save, and an
-     * attacker sustaining the attack that caused the lock is retrying continuously inside it.
+     * **The transaction is paid for an unknown address on purpose, and that is the whole point of its shape.**
+     * A branch that skipped it for an unknown address would make BEGIN + `SELECT … FOR UPDATE` + COMMIT a clean
+     * existence signal — a failed login for an unknown address answers faster at p50 than one for an existing `ACTIVE`
+     * identity, separably above chance (PRODUCTION_SECURITY_CHECKLIST.md §7) — so both branches take the same round
+     * trips. What an unknown address still does not pay is the hydration of a row, the wait on a row lock another
+     * attempt against the same address holds, and, for an `ACTIVE` identity, the counter's UPDATE, because there is no
+     * row — that is the residual, and it is not claimed to be unclassifiable. The price is a transaction per failed
+     * login against an address that does not exist, bounded by the login throttle and by a credential verification the
+     * attempt has already paid; the locking read over no row locks nothing, so it contends with nobody.
      *
-     * **The fast path this costs was never sound, which is why it goes rather than being preserved.** It
-     * skipped the transaction when the aggregate reported the attempt changed nothing — a non-`ACTIVE` or
-     * already-locked identity — but that report came from the same unlocked snapshot, so it was wrong in both
-     * directions exactly when it mattered. What replaces it is a skip taken INSIDE the transaction: the
-     * aggregate still refuses, and the write and the events are still skipped; only the BEGIN/COMMIT pair is
-     * paid. That pair is bounded by an attempt which has already run a credential verification, so it is not
-     * the round trip that decides the cost of a sustained attack.
-     *
-     * The provisional read deliberately does NOT call {@see User::recordFailedAttempt()}. Beyond deciding
-     * nothing, that call also RECORDS on the aggregate, and the locked re-read re-hydrates mapped fields
-     * without touching the recorded-event list — so a provisional call would leave a `UserLocked` behind to be
-     * published a second time beside the authoritative one.
+     * **Everything is decided under `SELECT … FOR UPDATE`.** The counter is the only state in this application
+     * written from a path that holds just an address, and deciding it on an unlocked read would let the increment be
+     * computed against a row another transaction had already replaced: a recovery-secret redemption clears the
+     * lock and this write puts `locked_until` straight back, which is precisely the state the redemption exists
+     * to leave. An administrative unlock is the same shape. A non-`ACTIVE` or already-locked identity is refused
+     * INSIDE the transaction: the aggregate still refuses, the write and the events are still skipped, and only
+     * the BEGIN/COMMIT pair is paid.
      */
     public function recordFailure(#[SensitiveParameter] string $email): void
     {
         try {
             $canonicalEmail = Email::from($email);
         } catch (InvalidEmail) {
-            return;
-        }
-
-        // Existence only. It is the one thing safe to conclude from an unlocked row — a row that exists does
-        // not stop existing under an attack — and it is what keeps an unknown address free of a transaction.
-        if (!$this->users->findByEmail($canonicalEmail) instanceof User) {
             return;
         }
 
@@ -126,7 +117,7 @@ final readonly class LoginAttemptRegistrar
     }
 
     /**
-     * Resolves the identity again under the row lock and lets the aggregate decide there, returning whatever
+     * Resolves the identity under the row lock and lets the aggregate decide there, returning whatever
      * it recorded so the caller can project it after the commit.
      *
      * The audit projection is deliberately raised by the CALLER, after this returns, never from inside: the
@@ -145,8 +136,9 @@ final readonly class LoginAttemptRegistrar
         return $this->transactionManager->transactional(function () use ($email): array {
             $user = $this->users->findByEmailForUpdate($email);
 
-            // Gone between the probe and the lock — a hard-deleted identity, which the GDPR erasure does.
-            // Nothing to count against a row that no longer exists.
+            // An unknown address, or an identity hard-deleted by the GDPR erasure: nothing to count. The
+            // transaction and the locked read have already been paid, so this branch costs the same round
+            // trips as a refused attempt against a row that exists.
             if (!$user instanceof User) {
                 return [];
             }

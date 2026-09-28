@@ -22,7 +22,7 @@ use Throwable;
 /**
  * The listener classifies rather than formats: it must leave the event carrying a throwable whose chain holds a
  * {@see ValidationFailedException}, because that — and only that — is what
- * {@see \Erpify\Shared\ErrorContract\Application\ProblemDetailsFactory} answers with the `validation-failed`
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory} answers with the `validation-failed`
  * envelope. These tests pin that contract and the chain walk that finds a wrapped serializer failure.
  *
  * @internal

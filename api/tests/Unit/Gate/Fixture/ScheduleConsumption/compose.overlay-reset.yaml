@@ -1,0 +1,5 @@
+# Compose's `!reset` tag on `command`. The reader does not model it, and the YAML parser refuses a tag it was
+# not told to accept — so this stack must throw rather than be read as whatever the base said.
+services:
+  messenger_worker:
+    command: !reset []

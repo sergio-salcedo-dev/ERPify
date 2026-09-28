@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
-use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\ChangeUserRoles;
 use Erpify\Iam\Identity\Application\ChangeUserStatus;
 use Erpify\Iam\Identity\Application\RevokeSessionsBestEffort;
 use Erpify\Iam\Session\Application\RevokeAllSessions;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -123,7 +123,7 @@ final class AdministratorSetLockOrderTest extends TestCase
                 new InMemorySessionRepository(),
                 new RecordingEventBus(),
                 new InlineTransactionManager(),
-                new FixedClock(new DateTimeImmutable('2026-08-07T12:00:00+00:00')),
+                new FixedClock(SystemClock::now()),
             ),
             new NullLogger(),
         );

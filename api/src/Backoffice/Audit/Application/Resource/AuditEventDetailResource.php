@@ -31,6 +31,9 @@ final readonly class AuditEventDetailResource
      * so an entry carrying no metadata — the bulk of the `activity` timeline — would fail the envelope and
      * blank the drawer with no visible error. `ArrayObject` is the one shape that survives normalization as
      * an object, and only while the normalizer preserves it; {@see ResourceNormalizer} is where that is set.
+     * The same holds one level down: `changes`, when present, is a map of field to `{old, new}` and the
+     * guard refuses it as an array, so the mapper hands it over as an `ArrayObject` too — an empty diff
+     * then reaches the wire as `"changes":{}` rather than failing the whole envelope.
      *
      * @param ArrayObject<string, mixed> $metadata
      */

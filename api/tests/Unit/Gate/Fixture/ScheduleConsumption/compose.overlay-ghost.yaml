@@ -1,0 +1,5 @@
+# An overlay command naming a transport no schedule backs: the worker of the merged stack fails to boot, and
+# only the stale direction reading the merged command can say so.
+services:
+  messenger_worker:
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_alpha", "scheduler_ghost", "--time-limit=3600"]

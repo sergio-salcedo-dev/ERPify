@@ -7,7 +7,6 @@
 /*
  * ERPify Design Tokens — v3 (light-mode canonical, navy-slate dark mode).
  * Canonical reference: pwa/DESIGN.md
- * Full spec: _bmad-output/planning-artifacts/ux-design-specification.md
  *
  * Architecture:
  *   - Ramps and semantic aliases live in :root (light, canonical) and .dark.

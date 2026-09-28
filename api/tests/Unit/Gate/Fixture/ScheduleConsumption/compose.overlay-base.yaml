@@ -1,0 +1,6 @@
+# The base every overlay fixture below is layered on, the way `make/config.mk` layers compose.dev.yaml and
+# compose.prod.yaml over compose.yaml. Read alone it consumes scheduler_alpha on messenger_worker.
+services:
+  messenger_worker:
+    image: alpine
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_alpha", "--time-limit=3600"]

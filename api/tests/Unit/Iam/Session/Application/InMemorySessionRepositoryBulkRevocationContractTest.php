@@ -115,15 +115,15 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
     public function testABulkRevocationFlipsALapsedSessionThatIsStillActive(): void
     {
         $now = new DateTimeImmutable(self::NOW);
-        SystemClock::set(new FixedClock($now));
 
         // Inadmissible by time and untouched in status — the row the adapter's `status = ACTIVE` filter does
         // reach, and the one a selection written against the reads' admissibility predicate would skip. It is
         // invisible to both reads either way, so nothing but its own state can tell the two selections apart.
+        // Minted two hours back so the `updated_at` assertion below reads the revocation's stamp rather than
+        // the instant the mint already wrote there, which every arm of this test would satisfy.
+        SystemClock::set(new FixedClock($now->modify('-2 hours')));
         $lapsed = SessionMother::active(expiresAt: $now->modify('-1 hour'));
-        // Backdated so the `updated_at` assertion below reads the revocation's stamp rather than the instant
-        // the mint already wrote there, which every arm of this test would satisfy.
-        $lapsed->setUpdatedAt($now->modify('-2 hours'));
+        SystemClock::set(new FixedClock($now));
 
         $sessions = new InMemorySessionRepository($lapsed);
 

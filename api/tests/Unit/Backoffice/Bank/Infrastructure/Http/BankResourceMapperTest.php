@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure\Http;
 
-use DateTimeImmutable;
 use Erpify\Backoffice\Bank\Application\BankWithAccountCount;
 use Erpify\Backoffice\Bank\Application\Resource\BankListResource;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Page;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -115,12 +116,19 @@ final class BankResourceMapperTest extends TestCase
         );
     }
 
+    /**
+     * Created at one instant and renamed at a later one, so the two timestamps differ the only way a real
+     * row's can: the ambient clock stamps both, and a mutation moves `updatedAt` alone.
+     */
     private function pinnedBank(): Bank
     {
-        return Bank::create(self::BANK_ID, 'JPMorgan Chase', 'JPM')
-            ->setCreatedAt(new DateTimeImmutable(self::CREATED_AT))
-            ->setUpdatedAt(new DateTimeImmutable(self::UPDATED_AT))
-        ;
+        SystemClock::set(FixedClock::at(self::CREATED_AT));
+        $bank = Bank::create(self::BANK_ID, 'JPMorgan', 'JPMC');
+
+        SystemClock::set(FixedClock::at(self::UPDATED_AT));
+        $bank->rename('JPMorgan Chase', 'JPM');
+
+        return $bank;
     }
 
     private function mapper(): BankResourceMapper

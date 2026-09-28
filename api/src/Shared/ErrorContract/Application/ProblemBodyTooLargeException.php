@@ -7,7 +7,8 @@ namespace Erpify\Shared\ErrorContract\Application;
 use RuntimeException;
 
 /**
- * Escalation marker thrown by {@see ProblemDetailsFactory} when the required core fields
+ * Escalation marker thrown by
+ * {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory} when the required core fields
  * (`type`, `title`, `status`, `instance`, `correlation-id`) — together with the lone
  * `'truncated' => true` extension marker — STILL exceed the 16 KiB body cap after every
  * other extension has been dropped.

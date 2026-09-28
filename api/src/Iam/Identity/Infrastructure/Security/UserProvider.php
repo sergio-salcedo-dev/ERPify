@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Application\PreIdentityTimingFloor;
+use Erpify\Iam\Identity\Application\RehashPasswordBestEffort;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Exception\InvalidEmail;
@@ -14,6 +15,8 @@ use Override;
 use SensitiveParameter;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
 use Symfony\Component\Security\Core\Exception\UserNotFoundException;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\PasswordUpgraderInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
 
@@ -26,13 +29,22 @@ use Symfony\Component\Security\Core\User\UserProviderInterface;
  * malformed identifier cannot be told apart from a known email with a wrong password by response latency —
  * the normalised 401 body already makes them indistinguishable, the floor closes the timing side channel too.
  *
+ * It is also the firewall's {@see PasswordUpgraderInterface}: `json_login` attaches a password-upgrade badge only
+ * when the provider implements it, and Symfony's `PasswordMigratingListener` then offers a fresh encoding of the
+ * submitted password whenever the configured hasher reports the stored one `needsRehash()` — a bcrypt cost other
+ * than the configured one (in either direction), or an algorithm `auto` has moved past. That listener runs on
+ * `LoginSuccessEvent`, so only a login that already verified the credential and passed admission ever reaches
+ * {@see upgradePassword()}: a failed login pays exactly what it paid without the upgrade, and no new timing
+ * difference opens on that path.
+ *
  * @implements UserProviderInterface<SecurityUser>
  */
-final readonly class UserProvider implements UserProviderInterface
+final readonly class UserProvider implements UserProviderInterface, PasswordUpgraderInterface
 {
     public function __construct(
         private UserRepository $users,
         private PreIdentityTimingFloor $timingFloor,
+        private RehashPasswordBestEffort $rehashPassword,
     ) {
     }
 
@@ -87,6 +99,33 @@ final readonly class UserProvider implements UserProviderInterface
         }
 
         return $this->loadUserByIdentifier($user->getUserIdentifier());
+    }
+
+    /**
+     * The hash the login verified is read off the SAME user object the firewall authenticated — never a reload —
+     * and the swap is conditional on the row still holding it, so a credential replaced between the verification
+     * and this call is never overwritten by an encoding of the secret it superseded. The collaborator swallows
+     * every failure of its own: the login has already succeeded, and a failed upgrade leaves a hash that still
+     * verifies.
+     */
+    #[Override]
+    public function upgradePassword(
+        PasswordAuthenticatedUserInterface $user,
+        #[SensitiveParameter]
+        string $newHashedPassword,
+    ): void {
+        if (!$user instanceof SecurityUser) {
+            return;
+        }
+
+        $userId = $user->id();
+        $verified = $user->getPassword();
+
+        if (null === $userId || null === $verified) {
+            return;
+        }
+
+        $this->rehashPassword->rehash($userId, $verified, $newHashedPassword);
     }
 
     #[Override]

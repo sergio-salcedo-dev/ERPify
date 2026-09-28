@@ -48,9 +48,12 @@ services:
       # Sentry (error + performance monitoring) — REQUIRED in prod (test machine
       # and VPS). Set both in .env.prod.local (DSN from the Sentry MCP; rate ~0.2);
       # `make prod.env.check` and the `:?` guards abort the deploy if either is
-      # missing. The Sentry "environment" tag is just APP_ENV (= prod).
+      # missing. The Sentry "environment" tag is just APP_ENV (= prod). The
+      # release is the commit SHA `make` exports (make/config.mk), the same one
+      # the pwa build bakes in; optional, since a missing one only untags events.
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       # This service sends the token-bearing security mail (invitation, password reset), and declared neither
       # of these, so prod inherited api/.env: the null:// discard transport, and a sender at a domain that
       # receives nothing. Required rather than defaulted for the same reason as on the two workers.
@@ -86,6 +89,10 @@ services:
         # prints it, so it rides the secret mount below instead.
         SENTRY_ORG: ${SENTRY_ORG:-}
         SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+        # The commit SHA `make` exports for ENV=prod|staging (make/config.mk),
+        # shared with the API services below. Empty = untagged events, not an error.
+        SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+        SENTRY_REPOSITORY: ${SENTRY_REPOSITORY:-}
       secrets:
         - sentry_auth_token
     security_opt:
@@ -175,6 +182,7 @@ services:
       # Sentry captures async handler failures too (same required gating as php).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -282,6 +290,7 @@ services:
       # Sentry captures prune failures too (same required gating as php/messenger_worker).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
     security_opt:
       - no-new-privileges:true
     cap_drop:

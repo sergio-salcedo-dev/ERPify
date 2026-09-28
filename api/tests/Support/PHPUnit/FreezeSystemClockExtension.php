@@ -85,6 +85,15 @@ use Symfony\Component\Clock\MockClock;
  * wall clock stands from {@see self::SUITE_INSTANT}. Around ten events take that default and no test
  * compares the two sources, so nothing would notice. Postgres keeps a clock of its own that nothing here
  * touches. And Behat boots from its own bootstrap, which registers none of this.
+ *
+ * **A clock INJECTED into a service is not one of those blind spots.** A test handing a use case a
+ * {@see FixedClock} at an instant of its own does not widen any gap the pin opened: it opens its own, between
+ * the expiry the use case computes and the `createdAt` the ambient clock stamps. The double refuses that read
+ * — a `FixedClock` whose instant differs from the ambient one throws when read — so the pin and an injected
+ * clock disagree in a red whenever the subject reads the injected clock. Two gaps remain: an injected clock
+ * the subject never reads is never compared and stays green however far it stands from the pin, and the
+ * comparison is against the ambient `SystemClock` only — Symfony's global clock, which this pin also sets
+ * and which the container's `clock` service reads, is never consulted.
  */
 final class FreezeSystemClockExtension implements Extension
 {
