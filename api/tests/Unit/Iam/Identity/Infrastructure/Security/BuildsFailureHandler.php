@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use DateTimeImmutable;
 use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
 use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
@@ -27,13 +27,16 @@ use Throwable;
  */
 trait BuildsFailureHandler
 {
+    /**
+     * The registrar is frozen at the ambient instant, the one the identities it weighs were stamped by.
+     */
     private function handler(UserRepository $repository): ProblemDetailsAuthenticationFailureHandler
     {
         $registrar = new LoginAttemptRegistrar(
             $repository,
             new RecordingEventBus(),
             new InlineTransactionManager(),
-            new FixedClock(new DateTimeImmutable('2026-07-11T12:00:00+00:00')),
+            new FixedClock(SystemClock::now()),
             new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
         );
 
@@ -70,7 +73,7 @@ trait BuildsFailureHandler
             new InMemoryUserRepository(UserMother::create()),
             new RecordingEventBus(),
             $transactionManager,
-            new FixedClock(new DateTimeImmutable('2026-07-11T12:00:00+00:00')),
+            new FixedClock(SystemClock::now()),
             new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
         );
 

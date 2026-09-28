@@ -92,11 +92,12 @@ services:
         bind:
           create_host_path: false
       # The schedule-consumption gate asserts that every #[AsSchedule] in api/src has its derived
-      # `scheduler_*` transport named in a `messenger:consume` command of BOTH root compose files —
-      # without it a schedule ships dead and every other gate stays green. Those files live at the repo
-      # root, which the ./api build context does not contain.
+      # `scheduler_*` transport named in a `messenger:consume` command of BOTH deployed stacks — dev
+      # (compose.yaml + compose.dev.yaml) and prod (compose.yaml + compose.prod.yaml), each merged the way
+      # Compose merges `command` — without it a schedule ships dead and every other gate stays green. Those
+      # files live at the repo root, which the ./api build context does not contain.
       #
-      # The DIRECTORY and not the two files, for the reason spelled out on the docs mount above: a
+      # The DIRECTORY and not the individual files, for the reason spelled out on the docs mount above: a
       # single-file bind mount pins one inode, and every ordinary way of changing a compose file (IDE
       # safe-write, git checkout, git stash) replaces it by rename — after which the container keeps
       # serving the pre-edit bytes and the gate passes on wiring the working tree no longer has. The

@@ -13,6 +13,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Event\InvitationAccepted;
 use Erpify\Iam\Invitation\Domain\Exception\InvalidToken;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -48,6 +49,12 @@ final class AcceptInvitationTest extends TestCase
     private const string NOW = '2026-07-13T10:00:00+00:00';
 
     private int $kdfRuns = 0;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function itActivatesTheIdentityRetiresTheInvitationAndPublishesOnce(): void

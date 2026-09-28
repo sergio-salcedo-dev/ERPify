@@ -289,7 +289,7 @@ final class InMemorySessionRepository implements SessionRepository
         // Parenthesised rather than a bare dereferenced `new`, the form `PhpmdParsableSyntaxGateTest` refuses.
         (new ReflectionProperty(Session::class, 'status'))->setValue($session, SessionStatus::REVOKED);
         (new ReflectionProperty(Session::class, 'revokedAt'))->setValue($session, $now);
-        $session->setUpdatedAt($now);
+        (new ReflectionProperty(Session::class, 'updatedAt'))->setValue($session, $now);
     }
 
     private function index(Session $session): void

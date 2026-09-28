@@ -152,10 +152,10 @@
 #   - IT PROVES A SOURCE EXISTS, NEVER THAT IT READS THE RIGHT COLUMN. A source whose SQL pointed at another
 #     table would satisfy every check here and report an empty axis for ever. That the query matches the
 #     column is proven by each source's functional test against real Postgres.
-#   - THE READS ARE NOT ONE SNAPSHOT. Each source queries its own table, then one probe resolves which of the
-#     collected ids are live; an erasure committing inside that window is reported as a divergence it is not.
-#     It self-corrects on the next run and the repair is idempotent, so the cost is a transient false
-#     positive — but a finding is not proof that the state was ever wrong.
+#   - THE READS ARE NOT ONE SNAPSHOT. Each source queries its own table in keyset pages, then one probe resolves
+#     which of the collected ids are live; an erasure committing inside that window is reported as a
+#     divergence it is not. It self-corrects on the next run and the repair is idempotent, so the cost is a
+#     transient false positive — but a finding is not proof that the state was ever wrong.
 #   - IT DETECTS ERASURE RESIDUE, NOT ILLEGITIMATE REFERENCES. A finding is an id that resolves to no live
 #     identity. A row that names a person who still exists but should no longer be referenced is a correct
 #     row to this control, whatever the business rule says.

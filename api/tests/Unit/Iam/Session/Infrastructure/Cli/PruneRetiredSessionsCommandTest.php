@@ -13,7 +13,6 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -27,10 +26,10 @@ final class PruneRetiredSessionsCommandTest extends TestCase
 {
     private const string NOW = '2026-07-10T12:00:00+00:00';
 
-    #[Override]
-    protected function tearDown(): void
+    protected function setUp(): void
     {
-        SystemClock::reset();
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
     }
 
     public function testPrunesOnlyRetiredSessionsAndReportsTheCount(): void
@@ -67,11 +66,15 @@ final class PruneRetiredSessionsCommandTest extends TestCase
 
     private function longRevokedSession(): Session
     {
+        // Built and revoked at the revocation instant, then the ambient clock returns to `NOW`, the instant the
+        // sweep reads.
         $now = new DateTimeImmutable(self::NOW);
-        $session = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
-
         SystemClock::set(new FixedClock($now->modify('-31 days')));
+
+        $session = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
         $session->revoke();
+
+        SystemClock::set(new FixedClock($now));
 
         return $session;
     }

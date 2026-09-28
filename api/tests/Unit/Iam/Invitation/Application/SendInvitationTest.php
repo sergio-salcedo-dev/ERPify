@@ -13,6 +13,7 @@ use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Validation\Application\Validator;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -44,6 +45,12 @@ final class SendInvitationTest extends TestCase
     private const string ORG_ID = '0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b70';
 
     private const string NOW = '2026-07-13T10:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function itInvitesFunnelsThroughMembershipMintsTheInvitationAndEmailsTheToken(): void

@@ -9,6 +9,7 @@ use Erpify\Iam\Invitation\Application\ResendInvitation;
 use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Infrastructure\Cli\ResendInvitationCommand;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -43,6 +44,12 @@ final class ResendInvitationCommandTest extends TestCase
     private const string ORG_ID = '0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b96';
 
     private const string NOW = '2026-07-13T10:00:00+00:00';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        SystemClock::set(FixedClock::at(self::NOW));
+    }
 
     #[Test]
     public function itKeepsTheTokenOffStdoutWhenTheMailerAcceptedTheSend(): void
