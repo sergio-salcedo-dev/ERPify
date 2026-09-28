@@ -262,7 +262,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of af-1-1-user-aggregate-backoffice-identity-persistencia (2026-07-02)"), 2026-09-24
 location: api/src/Iam/Identity/Domain/Entity/User.php
 reason: Today email is a scalar string with a transient Email::from() in the constructor; mapping #[ORM\Embedded] would make the VO the state. Open design question left by the architect; blocks nothing — revisit if the identity model grows.
-status: open
+status: done 2026-09-28
+resolution: closed by human decision: Scalar email plus boundary validation is sufficient; revisit only if the identity model grows.
+decision: 2026-09-28 Keep the scalar and close — Scalar email plus boundary validation is sufficient; revisit only if the identity model grows.
 
 **(auth-foundation / futuro) ¿`User` guarda `Email` como Doctrine embeddable (el VO = estado persistido)?** Hoy `email` es `string` escalar + `Email::from()->toString()` transitorio en el constructor. Alternativa: mapear `Email` como `#[ORM\Embedded]` para que el VO sea el estado (embeddable + migración + API de la entidad). Pregunta mayor que Winston dejó anotada — NO bloquea nada, revisar si el modelo de identidad crece. Ref: `api/src/Iam/Identity/Domain/Entity/User.php`.
 
