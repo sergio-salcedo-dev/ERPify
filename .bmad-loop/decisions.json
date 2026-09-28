@@ -79,5 +79,14 @@
     "key": "1",
     "label": "Add the CHECK constraints",
     "resolution": ""
+  },
+  "DW-48": {
+    "answered_at": "2026-09-28",
+    "bundle_name": "",
+    "effect": "build",
+    "intent": "Make the late audit writers take a lock on the subject's identity_user row (or skip when absent) so none can commit inside the erasure window.",
+    "key": "2",
+    "label": "Serialise late writers on identity_user",
+    "resolution": ""
   }
 }
