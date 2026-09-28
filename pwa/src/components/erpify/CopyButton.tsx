@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type ButtonVariantProps } from "@/components/ui/button-variants";
 import { cn } from "@/components/cn";
+import { useCopyToClipboard, type CopyStatus } from "./useCopyToClipboard";
 
-export type CopyButtonStatus = "idle" | "copied" | "error";
+export type CopyButtonStatus = CopyStatus;
 
 export interface CopyButtonProps {
   /** Text written to the clipboard. */
@@ -32,28 +33,13 @@ export interface CopyButtonProps {
   onCopyResult?: (status: CopyButtonStatus) => void;
 }
 
-const DEFAULT_FEEDBACK_MS = 2000;
-
-/**
- * The async Clipboard API is the only path. It needs a secure context, which every surface of this app is —
- * production and staging are served over HTTPS and `localhost` counts as secure — so a missing API means an
- * insecure origin such as plain HTTP on a LAN address, and the button reports a failed copy there instead
- * of reaching for the deprecated `document.execCommand("copy")`.
- */
-async function writeToClipboard(value: string): Promise<void> {
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-    throw new TypeError("Clipboard API unavailable.");
-  }
-  await navigator.clipboard.writeText(value);
-}
-
 export function CopyButton({
   value,
   label = "Copy",
   copiedLabel = "Copied",
   errorLabel = "Copy failed",
   title,
-  feedbackTimeoutMs = DEFAULT_FEEDBACK_MS,
+  feedbackTimeoutMs,
   iconOnly = false,
   variant = "outline",
   size = "sm",
@@ -61,29 +47,7 @@ export function CopyButton({
   testId,
   onCopyResult,
 }: Readonly<CopyButtonProps>) {
-  const [status, setStatus] = useState<CopyButtonStatus>("idle");
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    },
-    [],
-  );
-
-  async function handleClick(): Promise<void> {
-    let next: CopyButtonStatus;
-    try {
-      await writeToClipboard(value);
-      next = "copied";
-    } catch {
-      next = "error";
-    }
-    setStatus(next);
-    onCopyResult?.(next);
-    if (timeoutRef.current !== null) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setStatus("idle"), feedbackTimeoutMs);
-  }
+  const { status, copy } = useCopyToClipboard(value, { feedbackTimeoutMs, onCopyResult });
 
   const labelByStatus: Record<CopyButtonStatus, ReactNode> = {
     copied: copiedLabel,
@@ -106,7 +70,7 @@ export function CopyButton({
       type="button"
       variant={variant}
       size={size}
-      onClick={handleClick}
+      onClick={copy}
       data-icon={iconOnly ? undefined : "inline-start"}
       data-copy-status={status}
       data-testid={testId}

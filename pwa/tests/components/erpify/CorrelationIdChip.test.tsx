@@ -32,6 +32,19 @@ describe("CorrelationIdChip", () => {
     });
   });
 
+  it("announces a failed copy instead of swallowing it", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    render(<CorrelationIdChip id="01926e7e-7b8a-7c4e-9f31-a2b7d1e4f5c6" />);
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("Copy failed");
+    });
+    expect(screen.getByRole("button")).toHaveAttribute("data-copy-status", "error");
+  });
+
   it("renders the optional label prefix when supplied", () => {
     render(<CorrelationIdChip id="abcdef0123456789" label="Error ID:" />);
     // The label reads as muted prose alongside — not inside — the copy token,
