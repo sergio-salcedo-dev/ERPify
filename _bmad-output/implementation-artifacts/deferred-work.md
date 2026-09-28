@@ -26,7 +26,9 @@ archived: 2026-09-28
 origin: migrated from legacy ledger ("Deferred from: retiring the named review bot from the code-review rule (2026-09-19)"), 2026-09-24
 location: CLAUDE.md (Code review section)
 reason: CLAUDE.md records the review bot as inactive since 2026-08-31 (last real review #903), which stays correct only while it is inactive; reactivating it means reverting that paragraph, and the choice is the user's.
-status: open
+status: done 2026-09-28
+resolution: closed by human decision: Bot retired; CLAUDE.md already describes the three layers as the surviving control.
+decision: 2026-09-28 Retire it permanently and close — Bot retired; CLAUDE.md already describes the three layers as the surviving control.
 
 **The reactivate-or-retire decision on the review bot itself is still the user's and is unresolved.** `CLAUDE.md` now records it as inactive since 2026-08-31 (last real review: #903), which is correct only while it stays inactive — reactivating it means reverting that paragraph. Its own notice reports 46 PRs reviewed and 2 security issues surfaced workspace-wide; the two measured here are the #899 threads, one independently rediscovered by the Blind Hunter layer and one a false positive against a closed epic decision. Two data points, not a verdict on the other 44.
 
