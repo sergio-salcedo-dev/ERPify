@@ -483,7 +483,9 @@ location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceM
 source_spec: `spec-audit-change-metadata-shape.md`
 severity: low
 reason: Preexistente: AuditEventDetailResourceMapper sólo sella arrays; isAuditEventMetadata exige isAuditChanges cuando la clave existe. El listener nunca escribe null/escalar, así que sólo lo produciría otra vía de escritura o una fila corrupta.
-status: open
+status: done 2026-09-28
+resolution: resolved by sweep bundle dw-audit-detail-changes-shape
+resolution-undo: 47b99c0a536e6197cb31dd804d9cd38d0ebecf361b4b3d51d5618b3a4186e8db 2026-09-28 7374617475733a206f70656e
 
 ### DW-53: CLAUDE.md "Required checks" no nombra que añadir una mutación sobre event_store/audit_log exige una línea en SANCTIONED de SanctionedLogMutationGateTest más la decisión en el ADR.
 
@@ -554,4 +556,20 @@ location: docs/rules/security.md:298
 source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
 severity: low
 reason: security.md:298 y database.md:75-79 no se tocaron en este cambio; el ADR y PRODUCTION_SECURITY_CHECKLIST.md sí. No afirman nada falso (no dicen que user_agent sea forjable), sólo omiten el patrón nuevo. Diferido porque el arreglo edita ficheros de reglas para agentes (docs/rules).
+status: open
+
+### DW-62: Una fila de nivel change SIN clave changes sigue pintando «No changes recorded», afirmación igual de desconocida que la del diff ilegible.
+origin: spec-deferred 3f20d89e3077
+location: pwa/src/context/backoffice/audit/infrastructure/ui/AuditEntryDrawer.tsx
+source_spec: `spec-dw-52-audit-detail-changes-shape.md`
+severity: low
+reason: AuditEntryDrawer pasa `detail.metadata.changes ?? {}` a AuditChangeDiff cuando no hay flag; comportamiento previo a este cambio, y el capturador siempre escribe `changes` en filas change, así que sólo aparece con otra vía de escritura.
+status: open
+
+### DW-63: Un changes escalar corrupto nunca pasó por el sellado por campo, así que podría llevar PII sin cifrar servida tal cual por la ruta de detalle.
+origin: spec-deferred fb38058ee328
+location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapper.php
+source_spec: `spec-dw-52-audit-detail-changes-shape.md`
+severity: low
+reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
 status: open

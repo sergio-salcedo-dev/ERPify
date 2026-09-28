@@ -510,7 +510,15 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
   históricas. Tres formas se sirven tal cual, y ninguna la produce el capturador: una **lista no vacía**, a
   propósito —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
-  `null` o un escalar. El guard de la PWA rechaza cualquiera de las tres y con ella el sobre entero.
+  `null` o un escalar. El mapper sella una forma y nunca la fabrica ni la borra, así que ninguna de las tres
+  se reescribe en el cable. El cliente no las trata igual: la lista (y un mapa con un par `{old,new}` mal
+  formado) sigue rechazando el sobre entero, porque puede llevar pares `{old,new}` reales que perdieron el
+  nombre de campo —un fallo del constructor del diff— y degradarla tiraría en silencio datos de cambio
+  reales; un `null` o un escalar no lleva ningún par que perder, así que el cliente admite el sobre, retira
+  `changes` del slot tipado y marca el detalle como **diff ilegible** (`changesUnreadable`), que el drawer
+  pinta con un aviso propio y nunca como «No changes recorded» —eso afirmaría que la escritura no cambió
+  nada, y para un diff desconocido es falso—. Coste declarado: el valor crudo no se muestra en la UI; sigue
+  en el cable para quien investigue.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando

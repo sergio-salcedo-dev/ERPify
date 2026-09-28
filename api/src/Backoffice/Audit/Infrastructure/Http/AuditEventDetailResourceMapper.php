@@ -23,6 +23,11 @@ use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
  * wire, so it is also the one place that covers rows already stored. Only `changes` is sealed, and only
  * when empty or keyed: forcing every nested array into an object would turn a legitimate list inside a
  * value into `{"0": …}`, and a list-shaped `changes` is drift the client must still see as a list.
+ *
+ * A `changes` stored as `null` or a scalar is served verbatim too — neither wrapped into a map nor deleted,
+ * because either would hide the corruption from every consumer of the wire. The client degrades it to an
+ * unreadable diff rather than refusing the envelope; why a list is not degraded the same way is recorded in
+ * the audit ADR (D4).
  */
 final readonly class AuditEventDetailResourceMapper
 {
