@@ -31,17 +31,17 @@ dev URL is a one-line change in
 
 If you'd rather hit each surface directly:
 
-| Surface                 | URL                                         | Trigger                                                 |
-| ----------------------- | ------------------------------------------- | ------------------------------------------------------- |
-| 404 — Page not found    | `https://localhost/this-does-not-exist`     | unmatched route                                         |
-| 401 — Sign in required  | `https://localhost/unauthenticated`         | direct navigation                                       |
-| 403 — Access denied     | `https://localhost/unauthorized`            | direct navigation                                       |
-| 503 — Maintenance       | `https://localhost/maintenance`             | direct navigation, or a `/me` 503 under a guarded route |
-| 429 — Too many requests | `https://localhost/rate-limited`            | direct navigation                                       |
-| Offline (PWA)           | `https://localhost/offline`                 | direct navigation                                       |
-| 500 — Boundary          | `https://localhost/dev-throw`               | dev/test-only fixture                                   |
-| Dev Tools hub           | `https://localhost/dev-tools`               | dev/test-only                                           |
-| QA gallery (all of ↑)   | `https://localhost/dev-tools/error-gallery` | dev/test-only                                           |
+| Surface                   | URL                                              | Trigger                                                                                                                                                                                                             |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 404 — Page not found      | `https://localhost/this-does-not-exist`          | unmatched route                                                                                                                                                                                                     |
+| 401 — Sign in required    | `https://localhost/unauthenticated`              | direct navigation                                                                                                                                                                                                   |
+| 403 — Access denied       | `https://localhost/unauthorized`                 | direct navigation                                                                                                                                                                                                   |
+| 503 — Service unavailable | `https://localhost/maintenance?next=/backoffice` | direct navigation, or a `/me` 502/503/504 under a guarded route (the guard carries the route in `?next=`; `Try again` returns there, falling back to `/backoffice` when `next` is absent or not a safe in-app path) |
+| 429 — Too many requests   | `https://localhost/rate-limited`                 | direct navigation                                                                                                                                                                                                   |
+| Offline (PWA)             | `https://localhost/offline`                      | direct navigation                                                                                                                                                                                                   |
+| 500 — Boundary            | `https://localhost/dev-throw`                    | dev/test-only fixture                                                                                                                                                                                               |
+| Dev Tools hub             | `https://localhost/dev-tools`                    | dev/test-only                                                                                                                                                                                                       |
+| QA gallery (all of ↑)     | `https://localhost/dev-tools/error-gallery`      | dev/test-only                                                                                                                                                                                                       |
 
 For the BackOffice context (primary CTA flips to `Return to BackOffice`),
 prefix the URL with `/backoffice` — e.g. `/backoffice/anything`.

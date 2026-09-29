@@ -39,23 +39,33 @@ describe("Navbar — Sign in follows the session", () => {
     },
   );
 
-  it.each([AuthStatus.UNAUTHENTICATED, AuthStatus.UNAVAILABLE])(
-    "offers Sign in to /login when the session is %s, on desktop and mobile",
-    (current) => {
-      status = current;
-      renderNavbar();
-      openMobileMenu();
+  it("offers Sign in to /login when the session is unauthenticated, on desktop and mobile", () => {
+    renderNavbar();
+    openMobileMenu();
 
-      expect(screen.getByTestId(DESKTOP_SIGN_IN).getAttribute("href")).toBe("/login");
-      expect(screen.getByTestId(MOBILE_SIGN_IN).getAttribute("href")).toBe("/login");
-      expect(screen.getByTestId("navbar__go-to-backoffice-button")).toBeTruthy();
-      expect(screen.getByTestId("navbar__go-to-backoffice-button--mobile")).toBeTruthy();
-    },
-  );
+    expect(screen.getByTestId(DESKTOP_SIGN_IN).getAttribute("href")).toBe("/login");
+    expect(screen.getByTestId(MOBILE_SIGN_IN).getAttribute("href")).toBe("/login");
+    expect(screen.getByTestId("navbar__go-to-backoffice-button")).toBeTruthy();
+    expect(screen.getByTestId("navbar__go-to-backoffice-button--mobile")).toBeTruthy();
+  });
+
+  it("offers neither Sign in nor the Backoffice entry while the session is unavailable, on desktop or mobile", () => {
+    status = AuthStatus.UNAVAILABLE;
+    renderNavbar();
+    openMobileMenu();
+
+    expect(screen.queryByTestId(DESKTOP_SIGN_IN)).toBeNull();
+    expect(screen.queryByTestId(MOBILE_SIGN_IN)).toBeNull();
+    expect(screen.queryByTestId("navbar__go-to-backoffice-button")).toBeNull();
+    expect(screen.queryByTestId("navbar__go-to-backoffice-button--mobile")).toBeNull();
+    // The rest of the navbar stays usable: the outage is the session's, not the page's.
+    expect(screen.getByTestId("navbar__link-status")).toBeTruthy();
+    expect(screen.getByTestId("navbar__link-status--mobile")).toBeTruthy();
+  });
 });
 
 describe("Navbar — Backoffice entry", () => {
-  it.each(Object.values(AuthStatus))(
+  it.each([AuthStatus.AUTHENTICATED, AuthStatus.UNAUTHENTICATED, AuthStatus.HYDRATING])(
     "invokes goToBackoffice from both clusters when the session is %s",
     (current) => {
       status = current;

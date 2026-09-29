@@ -16,7 +16,8 @@ export interface IdentityRepository {
   /**
    * The signed-in identity, or `null` when there is no live session (401).
    *
-   * Rejects with `IdentityUnavailableError` when the server says it cannot decide (503): that is
+   * Rejects with `IdentityUnavailableError` when the server, or a gateway in front of it, says it
+   * cannot decide (502/503/504): that is
    * an outage, not a missing session, and the caller must not treat it as one. Any other failure
    * rejects with whatever the transport raised.
    */

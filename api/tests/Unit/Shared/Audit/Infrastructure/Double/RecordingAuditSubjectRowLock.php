@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double;
 use Closure;
 use Erpify\Shared\Audit\Application\AuditSubjectRowLock;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
@@ -28,6 +29,9 @@ final class RecordingAuditSubjectRowLock implements AuditSubjectRowLock
     /** @var list<int> */
     public array $anonymisationsAlreadyRun = [];
 
+    /** Set when a test is asserting where the trail's lock falls among the other tables'. */
+    public ?LockOrderJournal $lockOrderJournal = null;
+
     /**
      * @param (Closure(): int)|null $anonymisationCounter total anonymiser calls made so far; omit when a test
      *                                                    only cares that the lock was taken at all
@@ -41,6 +45,7 @@ final class RecordingAuditSubjectRowLock implements AuditSubjectRowLock
     public function lock(AuditResource $subject): void
     {
         $this->locked[] = $subject;
+        $this->lockOrderJournal?->locked(LockOrderJournal::AUDIT_LOG);
 
         if ($this->anonymisationCounter instanceof Closure) {
             $this->anonymisationsAlreadyRun[] = ($this->anonymisationCounter)();

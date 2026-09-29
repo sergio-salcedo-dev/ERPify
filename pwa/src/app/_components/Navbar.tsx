@@ -18,9 +18,12 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
   const showDevTools = isDevToolsAvailable();
   const { status } = useSession();
   // "Sign in" is offered only once the session is known not to be an active one. While
-  // hydrating it stays hidden, so an authenticated visitor never sees it flash on load;
-  // `unavailable` shows it, because the server did not confirm any session.
-  const showSignIn = status === AuthStatus.UNAUTHENTICATED || status === AuthStatus.UNAVAILABLE;
+  // hydrating it stays hidden, so an authenticated visitor never sees it flash on load.
+  const showSignIn = status === AuthStatus.UNAUTHENTICATED;
+  // `unavailable` means the server cannot tell whether anyone is signed in, and both entries
+  // lead through the same outage: the sign-in form would be refused, and the back office
+  // would bounce straight to the maintenance page. Offering neither is the honest state.
+  const showBackoffice = status !== AuthStatus.UNAVAILABLE;
 
   return (
     <nav
@@ -82,14 +85,16 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
               </span>
             ) : null}
 
-            <Button
-              onClick={goToBackoffice}
-              size="default"
-              className="navbar__button rounded-full"
-              data-testid="navbar__go-to-backoffice-button"
-            >
-              Backoffice
-            </Button>
+            {showBackoffice ? (
+              <Button
+                onClick={goToBackoffice}
+                size="default"
+                className="navbar__button rounded-full"
+                data-testid="navbar__go-to-backoffice-button"
+              >
+                Backoffice
+              </Button>
+            ) : null}
           </div>
 
           {/* Mobile Menu Button */}
@@ -138,14 +143,16 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
               Sign in
             </Link>
           ) : null}
-          <Button
-            onClick={goToBackoffice}
-            size="lg"
-            className="navbar__button w-full rounded-xl"
-            data-testid="navbar__go-to-backoffice-button--mobile"
-          >
-            Backoffice
-          </Button>
+          {showBackoffice ? (
+            <Button
+              onClick={goToBackoffice}
+              size="lg"
+              className="navbar__button w-full rounded-xl"
+              data-testid="navbar__go-to-backoffice-button--mobile"
+            >
+              Backoffice
+            </Button>
+          ) : null}
         </div>
       )}
     </nav>

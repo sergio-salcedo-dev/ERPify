@@ -122,28 +122,34 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
   Per-stream replay y agregados event-sourced futuros podrán consumirla, pero antes habrá que serializar el
   *append* (ver la enmienda): hoy dos *appends* concurrentes pueden compartir versión.
 
-  *Enmienda (2026-09-28).* Este punto afirmaba que el cálculo quedaba serializado por el row-lock del agregado
-  y que el `UNIQUE` lo convertía en control de concurrencia optimista (un 409 reintentable). Ninguna de las
-  dos premisas se sostiene. El lock no está: re-medido el 2026-09-20 sobre
-  `git grep -l 'eventBus->publish(' api/src`, de 24 clases publicadoras 7 sostienen el lock del agregado por el
-  que publican, 2 son mixtas (`LoginAttemptRegistrar`, `RevokeInvitation`) y 15 no. Y `event_store_stream_version_uniq` incluye `tenant_id`, que hoy se escribe siempre `NULL` —
-  PostgreSQL trata los `NULL` como distintos (`NULLS DISTINCT`), así que el índice no impone nada y dos
-  *appends* concurrentes pueden registrar la misma versión. Se decide que la versión es informativa: el
-  escritor no captura la violación ni la traduce (si llegara a producirse, propaga sin traducir), y no existe
-  ya excepción de conflicto de stream. Descartado: recrear el índice con `NULLS NOT DISTINCT` o sin
-  `tenant_id` — sin lock en los publicadores solo cambiaría duplicados silenciosos por 409 que nadie espera.
+  *Enmienda (2026-09-28).* La versión no la serializa nada. Ni el lock: medido el 2026-09-29 sobre
+  `git grep -l 'eventBus->publish(' api/src` (25 clases), leyendo si cada `publish` va precedido en su
+  transacción de una lectura con bloqueo (`…ForUpdate(` o `lock…(` de un repositorio), 14 clases la toman en
+  todos sus caminos, 2 solo en alguno (`LoginAttemptRegistrar::clear()` y `StartSession` sin sesión previa
+  correlada) y 9 en ninguno (los siete casos de uso de `Bank`/`BankAccount`, `SendInvitation`,
+  `RevokeSession`) — y es una cota superior, porque una lectura con bloqueo no tiene por qué ser la del
+  agregado cuyo stream se anexa (`AcceptInvitation` anexa al del usuario bajo el lock de la invitación). Ni el
+  índice: `event_store_stream_version_uniq` incluye `tenant_id`, que hoy se escribe siempre `NULL`, y
+  PostgreSQL trata los `NULL` como distintos (`NULLS DISTINCT`), así que no impone nada y dos *appends*
+  concurrentes pueden registrar la misma versión. Por eso la versión es informativa: el escritor no captura la
+  violación ni la traduce (si llegara a producirse, propaga sin traducir) y no hay excepción de conflicto de
+  stream ni 409 reintentable. Descartado: recrear el índice con `NULLS NOT DISTINCT` o sin `tenant_id` — sin
+  lock en los publicadores solo cambiaría duplicados silenciosos por 409 que nadie espera.
   Descartado también: serializar dentro de `append()` (p. ej. `pg_advisory_xact_lock` por `aggregate_id`) —
   hoy nada consume `aggregate_version` (per-stream replay y agregados event-sourced son triggers futuros), así
   que añadiría contención a cada publicación por un número del que ningún lector depende; es la vía a tomar
   si algún día se quiere el invariante.
   Si `tenant_id` llega a ser no nulo, el índice se **activa** por sí solo y esta decisión hay que retomarla
   antes: con él activo, una carrera abortaría la transacción de escritura.
-- **`metadata`** se escribe siempre como **objeto** JSON (`{}` si está vacío). La coerción es **solo de nivel
-  superior** (`(object)`, como el escritor de `audit_log`): un valor anidado conserva la forma que traiga. La
-  columna no declara default — la migración la crea `NOT NULL` sin él — y la garantía es del escritor, no del
-  esquema. Las filas escritas antes de la coerción guardan `[]` y **se aceptan sin backfill**: reescribirlas
-  sería otra mutación sancionada (D12) para corregir una forma que nada lee como array. Quien trate
-  `metadata` como objeto acota por `jsonb_typeof(metadata) = 'object'`, nunca asume la forma.
+- **`payload`** y **`metadata`** se escriben siempre como **objeto** JSON (`{}` si están vacíos: un array PHP
+  vacío se codificaría `[]`). La coerción es **solo de nivel superior** (`(object)`, como el escritor de
+  `audit_log`): un valor anidado conserva la forma que traiga. Ningún lector la nota — `stream()` decodifica
+  con `json_decode(…, true)`, donde `[]` y `{}` dan el mismo array vacío, y el anonimizador reescribe el texto
+  sin mirar la forma. Las columnas no declaran default — la migración las crea `NOT NULL` sin él — y la
+  garantía es del escritor, no del esquema. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
+  sin backfill**: reescribirlas sería otra mutación sancionada (D12) para corregir una forma que nada lee como
+  array. Quien consulte cualquiera de las dos como objeto en SQL acota por `jsonb_typeof(…) = 'object'`, nunca
+  asume la forma.
 - **`tenant_id`** entra hoy (nullable): retro-encajar una clave de aislamiento en un log inmutable es inviable;
   es candidato a partition key y RLS. Mismo patrón que `actor_id` en `audit_log` (nullable→not-null con auth).
 - **`occurred_on`/`recorded_on` `TIMESTAMPTZ`** y **separados** (dominio vs sistema): catch-up y BI necesitan

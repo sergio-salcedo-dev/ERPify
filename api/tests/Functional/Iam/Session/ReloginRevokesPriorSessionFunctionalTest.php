@@ -27,6 +27,9 @@ use Symfony\Component\HttpFoundation\Response;
  * different rows and neither login may touch the other's — the fix revokes the row THIS cookie pointed at, and
  * nothing of the identity beyond it.
  *
+ * The programmatic re-login a credential change performs reaches the same minting path, over a correlation its
+ * own teardown has already revoked, so it is driven here too: the prior row must end once, not twice.
+ *
  * @internal
  */
 #[CoversClass(StartSession::class)]
@@ -38,6 +41,10 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
     private const string LOGIN_PATH = '/api/v1/backoffice/login';
 
     private const string SESSIONS_PATH = '/api/v1/sessions';
+
+    private const string PASSWORD_PATH = '/api/v1/me/password';
+
+    private const string NEW_PASSWORD = 'a-replacement-for-the-twice-logged-in-password';
 
     private const string ORIGIN = 'http://localhost';
 
@@ -76,21 +83,8 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->connection->executeStatement(\sprintf('DROP TRIGGER IF EXISTS %s ON iam_session', self::FAULT));
         $this->connection->executeStatement(\sprintf('DROP FUNCTION IF EXISTS %s()', self::FAULT));
 
-        if ('' !== $this->userId) {
-            $this->connection->executeStatement(
-                'DELETE FROM iam_session WHERE user_id = CAST(:id AS uuid)',
-                ['id' => $this->userId],
-            );
-            $this->forgetTheOrganizationMember($this->userId, $this->email);
-        }
-
-        if ('' !== $this->otherUserId) {
-            $this->connection->executeStatement(
-                'DELETE FROM iam_session WHERE user_id = CAST(:id AS uuid)',
-                ['id' => $this->otherUserId],
-            );
-            $this->forgetTheOrganizationMember($this->otherUserId, $this->otherEmail);
-        }
+        $this->forget($this->userId, $this->email);
+        $this->forget($this->otherUserId, $this->otherEmail);
 
         parent::tearDown();
     }
@@ -200,6 +194,80 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->assertTrue($listed[0]['current']);
     }
 
+    /**
+     * A credential change signs its own device back in through the programmatic login, which reaches the same
+     * minting path over a correlation the change has just revoked — its teardown flips every session of the
+     * identity in bulk, recording one `AllSessionsRevoked` and no per-row event. The re-login therefore finds the
+     * row it correlated already inadmissible and must not revoke or announce it a second time: the device's
+     * earlier session ends exactly once, by the teardown, and the device walks away with one live session.
+     */
+    public function testAPasswordChangeRevokesThePriorDeviceSessionOnceAndMintsOneReplacement(): void
+    {
+        $this->login();
+        $first = $this->sessionIdsIn('ACTIVE');
+        $this->assertCount(1, $first);
+
+        $this->service(EntityManagerInterface::class)->clear();
+        $this->client->request(
+            Request::METHOD_POST,
+            self::PASSWORD_PATH,
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: (string) \json_encode(['currentPassword' => self::PASSWORD, 'newPassword' => self::NEW_PASSWORD]),
+        );
+        $this->assertSame(
+            Response::HTTP_NO_CONTENT,
+            $this->client->getResponse()->getStatusCode(),
+            (string) $this->client->getResponse()->getContent(),
+        );
+
+        $active = $this->sessionIdsIn('ACTIVE');
+        $this->assertCount(1, $active, 'the device was signed back in with exactly one live session');
+        $this->assertNotSame($first, $active);
+        $this->assertSame($first, $this->sessionIdsIn('REVOKED'));
+
+        $this->assertSame(
+            0,
+            $this->revokedEventCount($first[0]),
+            'the teardown revoked the row in bulk, and the re-login did not revoke it again',
+        );
+        $this->assertSame(1, $this->eventCount($this->userId, 'erpify.iam.session.all-revoked'), 'one teardown');
+        $this->assertSame(1, $this->eventCount($active[0], 'erpify.iam.session.started'), 'one replacement');
+
+        $listed = $this->mySessions();
+        $this->assertCount(1, $listed, 'the new session admits the device and lists no phantom');
+        $this->assertSame($active[0], $listed[0]['id']);
+    }
+
+    /**
+     * The session rows, the event-store rows the logins appended for them and for the identity itself — each
+     * carries the person's id, in the aggregate id or the payload — the access-audit rows the authenticated
+     * requests wrote as that person, and then the member. The event-store rows go first because they are found
+     * through the session rows. The audit rows are keyed on `actor_id` because that is where the measured rows
+     * carry the person: a run of this class leaves one `ROUTE_IAM_MY_SESSIONS` row per "my sessions" read, with
+     * the identity as actor and no resource at all.
+     */
+    private function forget(string $userId, string $email): void
+    {
+        if ('' === $userId) {
+            return;
+        }
+
+        $this->connection->executeStatement(
+            'DELETE FROM event_store WHERE aggregate_id = CAST(:id AS uuid) OR aggregate_id IN'
+            . ' (SELECT id FROM iam_session WHERE user_id = CAST(:id AS uuid))',
+            ['id' => $userId],
+        );
+        $this->connection->executeStatement(
+            'DELETE FROM iam_session WHERE user_id = CAST(:id AS uuid)',
+            ['id' => $userId],
+        );
+        $this->connection->executeStatement(
+            'DELETE FROM audit_log WHERE actor_id = CAST(:id AS uuid)',
+            ['id' => $userId],
+        );
+        $this->forgetTheOrganizationMember($userId, $email);
+    }
+
     private function refuseSessionInserts(): void
     {
         $this->connection->executeStatement(
@@ -279,9 +347,14 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
 
     private function revokedEventCount(string $sessionId): int
     {
+        return $this->eventCount($sessionId, 'erpify.iam.session.revoked');
+    }
+
+    private function eventCount(string $aggregateId, string $eventName): int
+    {
         $count = $this->connection->fetchOne(
             'SELECT count(*) FROM event_store WHERE aggregate_id = CAST(:id AS uuid) AND event_name = :name',
-            ['id' => $sessionId, 'name' => 'erpify.iam.session.revoked'],
+            ['id' => $aggregateId, 'name' => $eventName],
         );
         $this->assertIsNumeric($count);
 

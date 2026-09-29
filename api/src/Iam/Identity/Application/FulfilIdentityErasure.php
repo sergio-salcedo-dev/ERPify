@@ -161,6 +161,13 @@ final readonly class FulfilIdentityErasure
 
                 // The refusal above decides nothing — it takes no lock. This is the one that holds at
                 // commit, and it belongs HERE and nowhere earlier: see the port for both halves.
+                //
+                // It is also the row the late audit writers wait on — RecordLockoutAuditBestEffort,
+                // RecordLockoutNoticeAuditBestEffort, RecordRecoveryThrottleAuditBestEffort and
+                // RecordRecoverySecretAuditBestEffort each take it through IdentityRowLock before writing a row
+                // that names the subject. That is only a guarantee while this lock is taken BEFORE the trail pass
+                // below and held to commit: taken after, a writer could commit its row between the pass and the
+                // lock, and nothing would ever redact it.
                 if ($this->administrators->holdsAdministratorRoleForUpdate($subjectId)) {
                     throw AdministratorErasureRequiresDemotion::forUser($subjectId);
                 }

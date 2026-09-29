@@ -40,6 +40,8 @@ export const HttpStatus = {
   BAD_GATEWAY: 502,
   /** 503 — service unavailable. */
   SERVICE_UNAVAILABLE: 503,
+  /** 504 — upstream gateway timed out. */
+  GATEWAY_TIMEOUT: 504,
 } as const;
 
 export type HttpStatus = (typeof HttpStatus)[keyof typeof HttpStatus];

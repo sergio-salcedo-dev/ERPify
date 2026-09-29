@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\RecordLockoutNoticeAuditBestEffort;
 use Erpify\Iam\Identity\Application\ReportsAuditFailureSafely;
+use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -29,6 +30,8 @@ use RuntimeException;
  * the suite could see it.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(RecordLockoutNoticeAuditBestEffort::class)]
 #[CoversTrait(ReportsAuditFailureSafely::class)]
@@ -41,7 +44,7 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort($auditLogger, $logger))->record($subjectId, $lockedUntil);
+        $this->recorder($auditLogger, $logger)->record($subjectId, $lockedUntil);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
@@ -60,9 +63,7 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
     {
         $auditLogger = new RecordingAuditLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort($auditLogger, new RecordingLogger()))
-            ->record(Uuid::generate(), null)
-        ;
+        $this->recorder($auditLogger)->record(Uuid::generate(), null);
 
         $this->assertCount(1, $auditLogger->records);
         $this->assertSame([], $auditLogger->records[0]['metadata']);
@@ -73,9 +74,7 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger($failure), $logger))
-            ->record(Uuid::generate(), null)
-        ;
+        $this->recorder(new FailingAuditLogger($failure), $logger)->record(Uuid::generate(), null);
 
         $this->assertCount(
             1,
@@ -83,6 +82,62 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
             'A swallowed projection failure that logs nothing is an effect that silently did not happen.',
         );
         $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('write', $logger->records[0]['context']['phase'] ?? null);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
+    }
+
+    public function testTheRowIsWrittenWhileTheSubjectRowIsHeld(): void
+    {
+        // The tick reads, sends and stamps before this runs, and an erasure can commit anywhere in that span;
+        // only a write made under the subject's row lock is on one side of it or the other.
+        $subjectId = Uuid::generate();
+        $identityRows = new InMemoryIdentityRowLock();
+        $auditLogger = new RowLockAwareAuditLogger($identityRows);
+        $rowsWhenLocked = null;
+        $identityRows->onLock = static function () use ($auditLogger, &$rowsWhenLocked): void {
+            $rowsWhenLocked = \count($auditLogger->records);
+        };
+
+        $this->recorder($auditLogger, identityRows: $identityRows)->record($subjectId, null);
+
+        $this->assertSame([$subjectId], $identityRows->lockRequests);
+        $this->assertSame(0, $rowsWhenLocked, 'The subject row is locked before the audit row is written.');
+        $this->assertCount(1, $auditLogger->records);
+        $this->assertTrue($auditLogger->records[0]['held'], 'The write runs while the lock is still held.');
+    }
+
+    public function testAnIdentityGoneUnderTheLockIsOwedNoRow(): void
+    {
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->goneUnderLock = true;
+
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        $this->recorder($auditLogger, $logger, $identityRows)
+            ->record(Uuid::generate(), new DateTimeImmutable('2026-08-11T12:15:00+00:00'))
+        ;
+
+        $this->assertSame([], $auditLogger->records);
+        $this->assertSame([], $logger->records, 'An erased subject is an outcome, not a failure.');
+    }
+
+    public function testALockThatFailsIsSwallowedAndReportedAsTheLockPhase(): void
+    {
+        // A wait behind an erasure that exhausts the bound (`55P03`) may not stop the tick: every remaining
+        // locked identity in the run would go unreported.
+        $failure = new RuntimeException('canceling statement due to lock timeout');
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->onLock = static fn () => throw $failure;
+
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        $this->recorder($auditLogger, $logger, $identityRows)->record(Uuid::generate(), null);
+
+        $this->assertSame([], $auditLogger->records);
+        $this->assertCount(1, $logger->records);
+        $this->assertSame('lock', $logger->records[0]['context']['phase'] ?? null);
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
@@ -94,12 +149,12 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $subjectId = Uuid::generate();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))->record($subjectId, null);
+        $this->recorder(new FailingAuditLogger(), $logger)->record($subjectId, null);
 
         $this->assertCount(1, $logger->records);
         $record = $logger->records[0];
         $this->assertStringNotContainsString($subjectId, $record['message']);
-        $this->assertSame(['exception'], \array_keys($record['context']));
+        $this->assertSame(['phase', 'exception'], \array_keys($record['context']));
     }
 
     public function testALoggerFailureWhileReportingDoesNotEscape(): void
@@ -112,8 +167,18 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $logger = $this->createStub(LoggerInterface::class);
         $logger->method('error')->willThrowException(new RuntimeException('stderr pipe closed'));
 
-        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))
-            ->record(Uuid::generate(), null)
-        ;
+        $this->recorder(new FailingAuditLogger(), $logger)->record(Uuid::generate(), null);
+    }
+
+    private function recorder(
+        AuditLogger $auditLogger,
+        ?LoggerInterface $logger = null,
+        ?InMemoryIdentityRowLock $identityRows = null,
+    ): RecordLockoutNoticeAuditBestEffort {
+        return new RecordLockoutNoticeAuditBestEffort(
+            $identityRows ?? new InMemoryIdentityRowLock(),
+            $auditLogger,
+            $logger ?? new RecordingLogger(),
+        );
     }
 }

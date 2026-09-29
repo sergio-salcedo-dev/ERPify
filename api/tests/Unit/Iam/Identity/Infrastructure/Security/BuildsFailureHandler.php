@@ -13,6 +13,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -32,15 +33,13 @@ trait BuildsFailureHandler
      */
     private function handler(UserRepository $repository): ProblemDetailsAuthenticationFailureHandler
     {
-        $transactionManager = new InlineTransactionManager();
         $registrar = new LoginAttemptRegistrar(
             $repository,
             new RecordingEventBus(),
-            $transactionManager,
+            new InlineTransactionManager(),
             new FixedClock(SystemClock::now()),
             new RecordLockoutAuditBestEffort(
-                $repository,
-                $transactionManager,
+                new InMemoryIdentityRowLock($repository),
                 new RecordingAuditLogger(),
                 new NullLogger(),
             ),
@@ -82,8 +81,7 @@ trait BuildsFailureHandler
             $transactionManager,
             new FixedClock(SystemClock::now()),
             new RecordLockoutAuditBestEffort(
-                $repository,
-                $transactionManager,
+                new InMemoryIdentityRowLock($repository),
                 new RecordingAuditLogger(),
                 new NullLogger(),
             ),

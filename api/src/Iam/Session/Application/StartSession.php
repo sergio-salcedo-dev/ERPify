@@ -33,6 +33,16 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * it — that row was reachable only through this cookie, whose holder could already revoke it as the current
  * session, so no capability is granted. Only that one row is touched; this is not a "log out everywhere", and
  * revoking a single row by id takes no set lock, so it cannot close a lock cycle with a bulk revocation.
+ *
+ * That row is read under its row lock ({@see SessionRepository::lockActiveById()}), because the read decides
+ * whether a `SessionRevoked` is published. Read unlocked, a rival that revokes or deletes the row between this
+ * read and the flush — a "log out everywhere", a credential change's teardown, a single-session log-out, an
+ * erasure — leaves the flush re-stamping `revoked_at` over a revocation that already happened and publishing a
+ * `SessionRevoked` for it: a duplicate when the rival revoked that row alone, and after an erasure an event naming
+ * the person that outlives the erasure. Locked, the rival either waits
+ * for this transaction or has committed first, and then the row no longer reads as admissible and nothing is
+ * published for it.
+ *
  * Two residuals remain, both bounded the same way — an unreachable `ACTIVE` row the sweep removes once its expiry
  * is 90 days behind it, ~97 days after the login. A post-commit failure to write the new correlation leaves the
  * NEW row unreachable. A mint the store refuses rolls the revocation back with it, while the minting listener
@@ -77,7 +87,7 @@ final readonly class StartSession
     /**
      * Revokes and saves the session the bag correlated before this login, returning the events it recorded so
      * they are published with the new session's; nothing when there was no correlation or the row is no longer
-     * admissible.
+     * admissible once its lock is held.
      *
      * @return list<DomainEvent>
      */
@@ -87,7 +97,7 @@ final readonly class StartSession
             return [];
         }
 
-        $previous = $this->sessions->findActiveById($previousId);
+        $previous = $this->sessions->lockActiveById($previousId);
 
         if (!$previous instanceof Session) {
             return [];

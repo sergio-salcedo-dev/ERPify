@@ -5,7 +5,11 @@ import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { IdentityUnavailableError } from "@/context/shared/access/domain/IdentityUnavailableError";
-import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
+import {
+  MALFORMED_RESPONSE_ENVELOPE,
+  NETWORK_ERROR,
+  REQUEST_TIMEOUT,
+} from "@/context/shared/http-client/domain/HttpClient";
 import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/domain/HttpClient";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
@@ -149,12 +153,18 @@ describe("ApiIdentityRepository.me", () => {
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toBe(boom);
   });
 
-  // Discriminated by status, not type: a gateway's bare 503 has no RFC 9457 body of ours, and
-  // bouncing it to sign-in is the same defect as bouncing the session store's own.
-  it.each(["service-unavailable", "about:blank"])(
-    "rejects a 503 (%s) with IdentityUnavailableError carrying the HttpError as cause",
-    async (type) => {
-      const boom = new HttpError(problem(HttpStatus.SERVICE_UNAVAILABLE, type));
+  // Discriminated by status, not type: a gateway's bare 502/503/504 has no RFC 9457 body of ours,
+  // and bouncing it to sign-in is the same defect as bouncing the session store's own 503 — the
+  // sign-in form sits behind the same gateway.
+  it.each([
+    [503, "service-unavailable"],
+    [503, "about:blank"],
+    [502, "about:blank"],
+    [504, "about:blank"],
+  ])(
+    "rejects a %i (%s) with IdentityUnavailableError carrying the HttpError as cause",
+    async (status, type) => {
+      const boom = new HttpError(problem(status, type));
       const get = vi.fn().mockRejectedValue(boom);
 
       const outcome = new ApiIdentityRepository(httpClientGetting(get)).me();
@@ -164,8 +174,8 @@ describe("ApiIdentityRepository.me", () => {
     },
   );
 
-  it.each([HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.BAD_GATEWAY])(
-    "rethrows a %i unchanged (only a 503 means the server could not decide)",
+  it.each([HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.NOT_IMPLEMENTED])(
+    "rethrows a %i unchanged (only 502, 503 and 504 mean the server could not decide)",
     async (status) => {
       const boom = new HttpError(problem(status, "server-error"));
       const get = vi.fn().mockRejectedValue(boom);
@@ -180,6 +190,18 @@ describe("ApiIdentityRepository.me", () => {
     await expect(outcome).rejects.toBeInstanceOf(HttpError);
     await expect(outcome).rejects.not.toBeInstanceOf(IdentityUnavailableError);
   });
+
+  // The client mints these with status 0: they say the request never got an answer, not that a
+  // gateway answered it cannot decide, so they keep the "no live session" path.
+  it.each([REQUEST_TIMEOUT, NETWORK_ERROR])(
+    "rethrows a client-minted %s unchanged, never as IdentityUnavailableError",
+    async (type) => {
+      const boom = new HttpError(problem(0, type));
+      const get = vi.fn().mockRejectedValue(boom);
+
+      await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toBe(boom);
+    },
+  );
 
   it("rethrows a non-HTTP transport failure", async () => {
     const boom = new Error("network down");

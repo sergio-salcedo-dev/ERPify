@@ -222,7 +222,11 @@ final class RevokeRecoverySecretTest extends TestCase
             $users,
             $secrets,
             new ProveCurrentPassword(),
-            new RecordRecoverySecretAuditBestEffort($audit ?? new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                $audit ?? new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
             $eventBus ?? new RecordingEventBus(),
             new InlineTransactionManager(),
         );

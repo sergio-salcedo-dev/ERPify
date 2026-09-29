@@ -10,7 +10,6 @@ use Erpify\Iam\Identity\Application\ReportsAuditFailureSafely;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
-use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -27,8 +26,8 @@ use RuntimeException;
  * bare `catch` left the whole suite green — the failure mode of a best-effort projection is silence, and
  * nothing else in the suite could see it.
  *
- * What a single-threaded double can say about the lock is its ORDER: the locked read ran, inside the
- * projection's own unit of work, before the write. That a rival erasure really waits on it is Postgres's to
+ * What a single-threaded double can say about the lock is its ORDER: the subject's row was locked before the
+ * write, and was still held while it ran. That a rival erasure really waits on it is Postgres's to
  * prove, in {@see \Erpify\Tests\Functional\Iam\Identity\LateAuditWriterErasureSerialisationFunctionalTest}.
  *
  * @internal
@@ -41,13 +40,11 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
 {
     public function testPassesTheLockoutThroughToTheAuditLogger(): void
     {
-        $transactionManager = new InlineTransactionManager();
-        $auditLogger = new TransactionAwareAuditLogger($transactionManager);
+        $identityRows = new InMemoryIdentityRowLock();
+        $auditLogger = new RowLockAwareAuditLogger($identityRows);
         $logger = new RecordingLogger();
 
-        $this->recorder($auditLogger, transactionManager: $transactionManager, logger: $logger)
-            ->record(UserMother::DEFAULT_ID)
-        ;
+        $this->recorder($auditLogger, $identityRows, $logger)->record(UserMother::DEFAULT_ID);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
@@ -62,46 +59,38 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $this->assertSame([], $logger->records, 'A successful projection must not log.');
     }
 
-    public function testTheRowIsWrittenInsideItsOwnUnitOfWorkAfterTheSubjectRowIsLocked(): void
+    public function testTheRowIsWrittenWhileTheSubjectRowIsHeld(): void
     {
         // An unlocked write is exactly as green on "a row was written" as a locked one, and that difference is
         // the whole of what keeps the row from committing after an erasure's pass over the trail.
-        $transactionManager = new InlineTransactionManager();
-        $auditLogger = new TransactionAwareAuditLogger($transactionManager);
-        $users = new InMemoryUserRepository(UserMother::create());
-        $lockedInside = null;
+        $identityRows = new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create()));
+        $auditLogger = new RowLockAwareAuditLogger($identityRows);
         $rowsWhenLocked = null;
-        $users->onFindByIdForUpdate = static function () use (
-            $transactionManager,
-            $auditLogger,
-            &$lockedInside,
-            &$rowsWhenLocked,
-        ): void {
-            $lockedInside = $transactionManager->inside;
+        $identityRows->onLock = static function () use ($auditLogger, &$rowsWhenLocked): void {
             $rowsWhenLocked = \count($auditLogger->records);
         };
 
-        $this->recorder($auditLogger, $users, $transactionManager)->record(UserMother::DEFAULT_ID);
+        $this->recorder($auditLogger, $identityRows)->record(UserMother::DEFAULT_ID);
 
-        $this->assertSame([UserMother::DEFAULT_ID], $users->forUpdateCalls);
-        $this->assertTrue($lockedInside, 'The row lock is taken inside the unit of work that writes.');
+        $this->assertSame([UserMother::DEFAULT_ID], $identityRows->lockRequests, "The lock names the subject's row.");
         $this->assertSame(0, $rowsWhenLocked, 'The subject row is locked before the audit row is written.');
         $this->assertCount(1, $auditLogger->records);
-        $this->assertTrue($auditLogger->records[0]['inside'], "The write shares the lock's transaction.");
+        $this->assertTrue($auditLogger->records[0]['held'], 'The write runs while the lock is still held.');
     }
 
     public function testAnIdentityGoneUnderTheLockIsOwedNoRow(): void
     {
         // Seen absent under the lock means an erasure committed first and has already run its pass over the
         // trail: a row written now would name the subject with nothing left to redact it.
-        $auditLogger = new TransactionAwareAuditLogger(new InlineTransactionManager());
-        $users = new InMemoryUserRepository(UserMother::create());
-        $users->goneUnderLock = true;
+        $identityRows = new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create()));
+        $identityRows->goneUnderLock = true;
 
+        $auditLogger = new RowLockAwareAuditLogger($identityRows);
         $logger = new RecordingLogger();
 
-        $this->recorder($auditLogger, $users, logger: $logger)->record(UserMother::DEFAULT_ID);
+        $this->recorder($auditLogger, $identityRows, $logger)->record(UserMother::DEFAULT_ID);
 
+        $this->assertSame([UserMother::DEFAULT_ID], $identityRows->lockRequests);
         $this->assertSame([], $auditLogger->records);
         $this->assertSame([], $logger->records, 'An erased subject is an outcome, not a failure.');
     }
@@ -119,41 +108,28 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
             'A swallowed projection failure that logs nothing is an effect that silently did not happen.',
         );
         $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('write', $logger->records[0]['context']['phase'] ?? null);
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
-    public function testALockThatFailsIsSwallowedAndLoggedAtError(): void
+    public function testALockThatFailsIsSwallowedAndReportedAsTheLockPhase(): void
     {
-        // A lock wait that times out (`55P03`) or a deadlock surfaces from the locked read, before any write —
-        // outside the swallow it would be a 500 on exactly the tenth failed attempt of a resolved identity.
+        // A lock wait that times out (`55P03`), a deadlock or BEGIN itself surfaces before any write — outside
+        // the swallow it would be a 500 on exactly the tenth failed attempt of a resolved identity — and the
+        // report has to say it was the lock, since the message is the same whatever failed.
         $failure = new RuntimeException('canceling statement due to lock timeout');
-        $users = new InMemoryUserRepository(UserMother::create());
-        $users->onFindByIdForUpdate = static fn () => throw $failure;
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->onLock = static fn () => throw $failure;
 
-        $auditLogger = new TransactionAwareAuditLogger(new InlineTransactionManager());
+        $auditLogger = new RowLockAwareAuditLogger($identityRows);
         $logger = new RecordingLogger();
 
-        $this->recorder($auditLogger, $users, logger: $logger)->record(UserMother::DEFAULT_ID);
+        $this->recorder($auditLogger, $identityRows, $logger)->record(UserMother::DEFAULT_ID);
 
         $this->assertSame([], $auditLogger->records);
         $this->assertCount(1, $logger->records);
         $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
-        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
-    }
-
-    public function testATransactionThatFailsIsSwallowedAndLoggedAtError(): void
-    {
-        $failure = new RuntimeException('could not begin a transaction');
-        $transactionManager = $this->createStub(TransactionManager::class);
-        $transactionManager->method('transactional')->willThrowException($failure);
-        $logger = new RecordingLogger();
-
-        $this->recorder(new FailingAuditLogger(), transactionManager: $transactionManager, logger: $logger)
-            ->record(UserMother::DEFAULT_ID)
-        ;
-
-        $this->assertCount(1, $logger->records);
-        $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('lock', $logger->records[0]['context']['phase'] ?? null);
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
@@ -169,7 +145,7 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $this->assertCount(1, $logger->records);
         $record = $logger->records[0];
         $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $record['message']);
-        $this->assertSame(['exception'], \array_keys($record['context']));
+        $this->assertSame(['phase', 'exception'], \array_keys($record['context']));
     }
 
     public function testALoggerFailureWhileReportingDoesNotEscape(): void
@@ -188,13 +164,11 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
 
     private function recorder(
         AuditLogger $auditLogger,
-        ?InMemoryUserRepository $users = null,
-        ?TransactionManager $transactionManager = null,
+        ?InMemoryIdentityRowLock $identityRows = null,
         ?LoggerInterface $logger = null,
     ): RecordLockoutAuditBestEffort {
         return new RecordLockoutAuditBestEffort(
-            $users ?? new InMemoryUserRepository(UserMother::create()),
-            $transactionManager ?? new InlineTransactionManager(),
+            $identityRows ?? new InMemoryIdentityRowLock(),
             $auditLogger,
             $logger ?? new RecordingLogger(),
         );

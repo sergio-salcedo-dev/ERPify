@@ -17,9 +17,10 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Pins the two decisions {@see DbalEventStore::append()} makes about what it writes and what it refuses to
- * promise. `metadata` is written as a JSON object whatever the envelope holds — an empty PHP array encodes as
- * `[]`, which would store a JSON array in a column every reader treats as an object. And a stream UNIQUE
- * violation propagates untranslated: `aggregate_version` is informative, so no retryable answer is invented.
+ * promise. `payload` and `metadata` are each written as a JSON object whatever the envelope holds — an empty
+ * PHP array encodes as `[]`, which would store a JSON array in a column every reader treats as an object. And
+ * a stream UNIQUE violation propagates untranslated: `aggregate_version` is informative, so no retryable
+ * answer is invented.
  *
  * @internal
  */
@@ -27,10 +28,10 @@ use PHPUnit\Framework\TestCase;
 final class DbalEventStoreAppendTest extends TestCase
 {
     /**
-     * @param array<string, mixed> $metadata
+     * @param array<string, mixed> $data
      */
-    #[DataProvider('provideWritesMetadataAsAJsonObjectCases')]
-    public function testWritesMetadataAsAJsonObject(array $metadata, string $expected): void
+    #[DataProvider('provideWritesBothJsonColumnsAsAJsonObjectCases')]
+    public function testWritesBothJsonColumnsAsAJsonObject(array $data, string $expected): void
     {
         $captured = [];
         $connection = $this->createMock(Connection::class);
@@ -44,20 +45,20 @@ final class DbalEventStoreAppendTest extends TestCase
             ->willReturn(1)
         ;
 
-        $store = new DbalEventStore($connection, $this->serializerReturning($metadata));
+        $store = new DbalEventStore($connection, $this->serializerReturning($data, $data));
         $store->append($this->anEvent());
 
-        $this->assertSame($expected, $captured['metadata'] ?? null);
-        $this->assertSame('[]', $captured['payload'] ?? null, 'the object coercion applies to metadata only');
+        $this->assertSame($expected, $captured['payload'] ?? null, 'payload');
+        $this->assertSame($expected, $captured['metadata'] ?? null, 'metadata');
     }
 
     /**
      * @return iterable<string, array{array<string, mixed>, string}>
      */
-    public static function provideWritesMetadataAsAJsonObjectCases(): iterable
+    public static function provideWritesBothJsonColumnsAsAJsonObjectCases(): iterable
     {
-        yield 'empty metadata is an empty object' => [[], '{}'];
-        yield 'keyed metadata is an object' => [['correlation_id' => 'x'], '{"correlation_id":"x"}'];
+        yield 'empty is an empty object' => [[], '{}'];
+        yield 'keyed is an object' => [['correlation_id' => 'x'], '{"correlation_id":"x"}'];
         yield 'the coercion is top-level only' => [['x' => []], '{"x":[]}'];
     }
 
@@ -67,7 +68,7 @@ final class DbalEventStoreAppendTest extends TestCase
         $connection = $this->createStub(Connection::class);
         $connection->method('executeStatement')->willThrowException($violation);
 
-        $store = new DbalEventStore($connection, $this->serializerReturning([]));
+        $store = new DbalEventStore($connection, $this->serializerReturning([], []));
 
         $this->expectExceptionObject($violation);
 
@@ -75,12 +76,13 @@ final class DbalEventStoreAppendTest extends TestCase
     }
 
     /**
+     * @param array<string, mixed> $payload
      * @param array<string, mixed> $metadata
      */
-    private function serializerReturning(array $metadata): DomainEventSerializer
+    private function serializerReturning(array $payload, array $metadata): DomainEventSerializer
     {
         $serializer = $this->createStub(DomainEventSerializer::class);
-        $serializer->method('serialize')->willReturn(['payload' => [], 'metadata' => $metadata]);
+        $serializer->method('serialize')->willReturn(['payload' => $payload, 'metadata' => $metadata]);
 
         return $serializer;
     }

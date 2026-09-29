@@ -11,18 +11,17 @@ use Override;
 
 /**
  * An {@see AuditLogger} that stamps each record with whether the unit of work had already committed when the
- * call arrived, and whether one was running at that moment.
+ * call arrived.
  *
  * The stamp is the whole point: "the audit row was written" is true on both sides of the transaction
  * boundary, so a test asserting only that would stay green if the write were moved back inside the closure —
- * which is the one placement that lets a failed audit INSERT roll the lockout back. `inside` is the other
- * half: a row that must be written under a lock of its own has to arrive while a (second) unit of work runs.
+ * which is the one placement that lets a failed audit INSERT roll the lockout back.
  *
  * @internal
  */
 final class TransactionAwareAuditLogger implements AuditLogger
 {
-    /** @var list<array{action: string, level: AuditLevel, resource: ?AuditResource, metadata: array<string, mixed>, committed: bool, inside: bool}> */
+    /** @var list<array{action: string, level: AuditLevel, resource: ?AuditResource, metadata: array<string, mixed>, committed: bool}> */
     public array $records = [];
 
     public function __construct(private readonly InlineTransactionManager $transactionManager)
@@ -41,7 +40,6 @@ final class TransactionAwareAuditLogger implements AuditLogger
             'resource' => $resource,
             'metadata' => $metadata,
             'committed' => $this->transactionManager->committed,
-            'inside' => $this->transactionManager->inside,
         ];
     }
 }

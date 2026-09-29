@@ -40,6 +40,13 @@ const isMeEnvelope: ResponseGuard<MeEnvelope> = (body): body is MeEnvelope => {
 
 const KNOWN_PERMISSIONS = new Set<string>(ALL_PERMISSIONS);
 
+/** The statuses by which the server — or a gateway in front of it — says it cannot decide. */
+const UNDECIDED_STATUSES = new Set<number>([
+  HttpStatus.BAD_GATEWAY,
+  HttpStatus.SERVICE_UNAVAILABLE,
+  HttpStatus.GATEWAY_TIMEOUT,
+]);
+
 /**
  * The API publishes the whole installation's vocabulary (bank, bankAccount, audit…), of which this console
  * declares only the slice it gates on. Anything it cannot name is dropped rather than widening the session
@@ -63,13 +70,16 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
  *    verbatim; permissions are the set the API derives from them, narrowed to the
  *    ones this client declares (anything else — the wildcard included — is dropped).
  *  - 401 (`session-expired`) → no live session → null.
- *  - 503, whatever its `type` → `IdentityUnavailableError` carrying the `HttpError`
- *    as `cause`. The session store's own `service-unavailable` and a gateway's bare
- *    503 mean the same thing to the user: nobody can tell whether they are signed
- *    in, and the sign-in form would be refused by the same outage.
+ *  - 502, 503 or 504, whatever its `type` → `IdentityUnavailableError` carrying the
+ *    `HttpError` as `cause`. The session store's own `service-unavailable` and a
+ *    gateway's bare 502/503/504 mean the same thing to the user: nobody can tell
+ *    whether they are signed in, and the sign-in form sits behind the same gateway,
+ *    so it would be refused by the same outage.
  *
- * Any other failure (network / malformed body / another 5xx) propagates unchanged
- * so the caller can distinguish "no session" from "could not reach the server".
+ * Any other failure (network / client timeout / malformed body / another 5xx)
+ * propagates unchanged so the caller can distinguish "no session" from "could not
+ * reach the server". A client-side timeout or network error carries status 0, so
+ * it never reads as a gateway's answer.
  *
  * The set is a rendering convenience only: every route enforces its own authorization server-side, so a
  * tampered session gains nothing beyond seeing controls that then fail.
@@ -92,7 +102,7 @@ export class ApiIdentityRepository implements IdentityRepository {
       if (error instanceof HttpError && error.problem.status === HttpStatus.UNAUTHORIZED) {
         return null;
       }
-      if (error instanceof HttpError && error.problem.status === HttpStatus.SERVICE_UNAVAILABLE) {
+      if (error instanceof HttpError && UNDECIDED_STATUSES.has(error.problem.status)) {
         throw new IdentityUnavailableError({ cause: error });
       }
       throw error;

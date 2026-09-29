@@ -137,7 +137,7 @@ origin: migrated from legacy ledger ("Deferred from: G-4a — fuga de `PasswordR
 location: api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:73-77
 reason: tenant_id is always NULL so (NULL, x, 1) duplicates pass, the UniqueConstraintViolation catch is unreachable and EventStreamConcurrencyConflict is never thrown. Not fixed in G-4a because most publishers take no row lock, so NULLS NOT DISTINCT would turn silent races into 409s across ~15 paths; the owning story must decide whether stream version is a real invariant or informative.
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-event-store-informative-version
+resolution: resolved by sweep bundle dw-event-store-informative-version (#1035)
 resolution-undo: e9c25f1139d58488497417fd599a52fe820e5c9fd72ca8394ff120b983635e09 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Informative: retire the promise — Retire the optimistic-concurrency claim from DbalEventStore's docblock, remove the unreachable catch and EventStreamConcurrencyConflict, and document aggregate_version as informative in the event-store ADR.
 
@@ -208,7 +208,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session
 location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx:70
 reason: Half (a) closed by 31423b68; (b) a store outage 503 still presents as 'session required' and bounces to /login. Deferred, not a bug: ratified Decision F/AC9; routing 503 to /maintenance would be a UX-resilience improvement to the spec.
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-pwa-me-503-to-maintenance
+resolution: resolved by sweep bundle dw-pwa-me-503-to-maintenance (#1035)
 resolution-undo: 1e34e2bec4d8fa80f5ba5ab6505a9700c856b8d10a86062670180f7c1dc50c0d 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Route 503 to /maintenance — Distinguish a 503 store-unavailable /me response in the identity adapter and AuthProvider and route it to the existing /maintenance page rather than to /login, keeping network/malformed-body failures on the current path; update Decision F/AC9's record.
 
@@ -229,7 +229,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session
 location: api/src/Iam/Session/Application/StartSession.php:52
 reason: Conscious trade-off documented in StartSession; PruneRetiredSessions now bounds such rows at ~97 days after login, so they are bounded, not avoided, and show as a 'ghost device' for the whole ACTIVE window.
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-revoke-prior-session-on-relogin
+resolution: resolved by sweep bundle dw-revoke-prior-session-on-relogin (#1035)
 resolution-undo: dea7356760358eced66f116cc50b7f0295b0a1ea9d640115599edf4ea64806dd 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Revoke the prior session on re-login — When a login mints a new session while the HTTP session already correlates a live iam_session, revoke that previous row in the same transaction, with a functional test showing no ghost device after re-login.
 
@@ -290,7 +290,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of the metadata
 location: api/src/Shared/Audit (audit_log writer), api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:73
 reason: (a) No backfill of historical [] rows — that would be a fourth sanctioned mutation on an append-only table, not the implementer's decision; object-shaped queries must keep bounding by ::text or jsonb_typeof. (b) event_store.metadata has the same defect and the ADR describes a default the migration lacks. Trigger for (b): the first query treating event_store.metadata as an object.
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-event-store-informative-version
+resolution: resolved by sweep bundle dw-event-store-informative-version (#1035)
 resolution-undo: e9c25f1139d58488497417fd599a52fe820e5c9fd72ca8394ff120b983635e09 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Fix (b) only; accept (a) — Make DbalEventStore write event_store.metadata as a JSON object ({} when empty), align the ADR with the migration's actual default, and record that historical audit_log [] rows are accepted without backfill.
 
@@ -379,7 +379,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of landing-logi
 location: pwa/src/app/_components/Navbar.tsx:54-69
 reason: Neither CTA consults the session, so 'Sign in' is meaningless for a logged-in user. Out of the landing slice's scope; making the access cluster session-aware (useSession()) is a product + UX decision (consult the access spine).
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-public-navbar-session-aware
+resolution: resolved by sweep bundle dw-public-navbar-session-aware (#1035)
 resolution-undo: 86daafc5a5042e9f52f2a9dd054271b9d896c4cb2cf567ee0828e525a5e59e9d 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Make the access cluster session-aware — Use useSession() in the public Navbar to hide 'Sign in' and show a backoffice entry for authenticated users, with unit tests for both states.
 
@@ -449,7 +449,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of br-4c-602-ob
 location: audit_log schema (api/migrations), api/src/Shared/Audit
 reason: Illegal rows are unrepresentable in PHP but not in the plain VARCHAR/nullable UUID columns written by raw DBAL, fixtures and Behat SQL; a user row with NULL actor_id escapes both erasure passes silently. Pre-existing; a schema CHECK plus enum-token CHECK is its own migration and decision.
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-audit-log-actor-check-constraints
+resolution: resolved by sweep bundle dw-audit-log-actor-check-constraints (#1035)
 resolution-undo: 616f89c8d7dc406a646d9c76ded067eb47fc34773f56778663cd395af56352ca 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Add the CHECK constraints — Add a migration with CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL)) and an enum-token CHECK on actor_type, mirror them in the schema listener, fix any fixture/Behat SQL that violates them, and add a functional test proving an illegal row is refused.
 
@@ -472,7 +472,7 @@ origin: migrated from legacy ledger ("Deferred from: code review of br-4c-602-ob
 location: api/src/Shared/Audit (AuditSubjectRowLock), RecordLockoutAuditBestEffort, RecordRecoveryThrottleAuditBestEffort
 reason: Neither late writer contends on identity_user, so the window is closed by nothing; it is recoverable (reconciler surfaces it and re-running the idempotent resource pass redacts it) but nothing re-runs it automatically.
 status: done 2026-09-29
-resolution: resolved by sweep bundle dw-serialise-late-audit-writers-on-identity
+resolution: resolved by sweep bundle dw-serialise-late-audit-writers-on-identity (#1035)
 resolution-undo: 9d428fdb4548d84211b380e0baaa40b44b90e5117b8cbfc08e1afa77869fc35f 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Serialise late writers on identity_user — Make the late audit writers take a lock on the subject's identity_user row (or skip when absent) so none can commit inside the erasure window.
 
@@ -614,7 +614,8 @@ location: api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php
 source_spec: `spec-dw-16-30-event-store-informative-version.md`
 severity: low
 reason: DbalEventStore::encode() hace json_encode de un array PHP vacío; la columna se lee como objeto. Preexistente y fuera de DW-30(b), que sólo pedía metadata.
-status: open
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): DbalEventStore writes an empty payload as a JSON object {}, like metadata; readers decode both shapes to the same array
 
 ### DW-65: RepositoryUniqueViolationTest no tiene caso para el puerto `image` de ConcurrentUniqueWrite.
 origin: spec-deferred 1ab3b10287b9
@@ -622,7 +623,8 @@ location: api/tests/Unit/Shared/Persistence/RepositoryUniqueViolationTest.php
 source_spec: `spec-dw-16-30-event-store-informative-version.md`
 severity: low
 reason: api-error-contract.md dice que el `resource` es lo único que distingue los cuatro puertos y que se afirma por puerto; el proveedor del test sólo cubre bank, bank-account e identity-user. Preexistente.
-status: open
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): RepositoryUniqueViolationTest covers the image port
 
 ### DW-66: La sonda en frío de /me que se resuelve después de un login() puede pisar la sesión recién obtenida.
 origin: spec-deferred 3ae2cbd0cfb3
@@ -630,7 +632,8 @@ location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
 source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
 severity: low
 reason: AuthProvider aplica el resultado de la sonda inicial sin secuenciar contra login(); la forma es previa a DW-22 (antes pisaba con null, ahora también con unavailable). Solo ocurre si la sonda en frío tarda más que un login completo.
-status: open
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): AuthProvider sequences every probe (cold, per-route, login) with a ticket; only the latest applies
 
 ### DW-67: Un re-sondeo de /me disparado por navegación puede pisar el resultado de un login() o logout() posterior.
 origin: spec-deferred 64a9c85297cc
@@ -638,7 +641,8 @@ location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
 source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
 severity: low
 reason: Misma causa raíz que la entrada anterior: AuthProvider no secuencia sus sondas (el efecto de ruta cancela solo la suya). Con UNAVAILABLE/HYDRATING RequireAuth no monta los controles de logout; el caso requiere un login() que resuelva antes que el re-sondeo lanzado al llegar a /login.
-status: open
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): same probe sequencing; logout() also invalidates probes in flight
 
 ### DW-68: audit_log.level no tiene CHECK; una fila escrita por SQL crudo con un level desconocido o mal capitalizado no la casa ninguna pasada del pruner.
 origin: spec-deferred 473433d709dd
@@ -646,12 +650,14 @@ location: api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener
 source_spec: `spec-dw-46-audit-log-actor-check-constraints.md`
 severity: low
 reason: DbalAuditLogPruner borra por WHERE level = :level por cada AuditLevel; un token fuera del enum sobrevive para siempre. Preexistente y fuera del intent de DW-46 (solo actor_type/actor_id).
-status: open
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): Version20260929102251 adds audit_log_level_check in the same ALTER TABLE, with a drift test against AuditLevel::cases()
 
 ### DW-69: Otros dos escritores post-commit nombran al sujeto en resource_id sin bloquear identity_user: RecordLockoutNoticeAuditBestEffort y RecordRecoverySecretAuditBestEffort.
 origin: spec-deferred d63734244a81
-location: api/src/Iam/Identity/Application/RecordRecoverySecretAuditBestEffort.php:118; api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort.php
+location: api/src/Iam/Identity/Application/RecordRecoverySecretAuditBestEffort::record(); api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort::record()
 source_spec: `spec-dw-48-serialise-late-audit-writers-on-identity.md`
 severity: medium
 reason: RecordRecoverySecretAuditBestEffort::record() (L118-127) escribe AuditResource::of(User, $userId) tras el commit de Mint/Redeem/RevokeRecoverySecret sin transacción ni bloqueo; RecordLockoutNoticeAuditBestEffort igual tras NotifyLockedIdentities::save(). Mismo defecto que DW-48 pero fuera de los dos escritores que nombra el intent; el del aviso es riesgo aceptado (@accepted-risk #860, cuyo razonamiento "aggregate-wide concurrency policy" conviene reabrir ahora que el mecanismo existe). Su residuo lo señala identity:gdpr:reconcile-subject-references; el docblock de DbalAuditSubjectRowLock y el ADR ya los nombran como NO serializados.
-status: open
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): every late audit writer, lockout notice and recovery secret included, writes under IdentityRowLock (lock-only DBAL port); accepted risk #860 closed

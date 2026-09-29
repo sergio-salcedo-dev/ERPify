@@ -15,6 +15,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\ClearLockoutOnLoginSuccess;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
@@ -99,15 +100,13 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
 
     private function listener(UserRepository $repository): ClearLockoutOnLoginSuccess
     {
-        $transactionManager = new InlineTransactionManager();
         $registrar = new LoginAttemptRegistrar(
             $repository,
             new RecordingEventBus(),
-            $transactionManager,
+            new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
             new RecordLockoutAuditBestEffort(
-                $repository,
-                $transactionManager,
+                new InMemoryIdentityRowLock($repository),
                 new RecordingAuditLogger(),
                 new NullLogger(),
             ),

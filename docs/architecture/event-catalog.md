@@ -135,7 +135,7 @@ aggregate, because their revocations are directed UPDATEs that hydrate no row.
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|
 | `erpify.iam.session.started` | 1 | `StartSession` (recorded by `Session::start()`) | `userId` |
-| `erpify.iam.session.revoked` | 1 | `RevokeSession` (recorded by `Session::revoke()`) | `userId` |
+| `erpify.iam.session.revoked` | 1 | `RevokeSession`; `StartSession` for the session the same browser's cookie correlated before a re-login, when that row is still admissible under its row lock (recorded by `Session::revoke()`) | `userId` |
 | `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `[]` |
 | `erpify.iam.session.others-revoked` | 1 | `RevokeOtherSessions` (sign out my other devices); `EvictOtherSessions` on every completed recovery redemption | `keptSessionId` |
 

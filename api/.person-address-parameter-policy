@@ -100,7 +100,8 @@ Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey::forEmail($email) 
 Erpify\Iam\Identity\Infrastructure\Security\RateLimiterRecoveryThrottleAuditBudget::claimFor($email) => sensitive
 Erpify\Iam\Identity\Application\RecoveryThrottleAuditBudget::claimFor($email) => sensitive
 Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort::record($email) => sensitive
-Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort::subjectOf($email) => sensitive
+Erpify\Iam\Identity\Application\IdentityRowLock::whileHeldByEmail($email) => sensitive
+Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalIdentityRowLock::whileHeldByEmail($email) => sensitive
 Erpify\Iam\Identity\Application\CreateUser::create($email) => sensitive
 Erpify\Iam\Identity\Application\InviteUser::invite($email) => sensitive
 Erpify\Iam\Invitation\Application\SendInvitation::invite($email) => sensitive

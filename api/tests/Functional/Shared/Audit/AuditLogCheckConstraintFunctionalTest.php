@@ -9,6 +9,7 @@ use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\ActorType;
+use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Persistence\AuditLogSchemaListener;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -18,9 +19,10 @@ use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * The two `CHECK` constraints on the actor discriminant of `audit_log`, asked of Postgres itself. DBAL
- * neither models nor introspects a table-level `CHECK`, so `make db.diff` cannot see them drift or vanish,
- * and `ActorContext` guards only the rows PHP writes — raw SQL is what these constraints exist for.
+ * The three `CHECK` constraints of `audit_log` — the two on its actor discriminant and the one on its
+ * level — asked of Postgres itself. DBAL neither models nor introspects a table-level `CHECK`, so
+ * `make db.diff` cannot see them drift or vanish, and `ActorContext`/`AuditLevel` guard only the rows PHP
+ * writes — raw SQL is what these constraints exist for.
  *
  * Every insert runs in a transaction that is rolled back, one row per case: a rejected statement aborts the
  * Postgres transaction it runs in, so two cases never share one.
@@ -28,7 +30,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * @internal
  */
 #[CoversClass(AuditLogSchemaListener::class)]
-final class AuditLogActorCheckConstraintFunctionalTest extends KernelTestCase
+final class AuditLogCheckConstraintFunctionalTest extends KernelTestCase
 {
     private const string CHECK_VIOLATION = '23514';
 
@@ -148,6 +150,67 @@ final class AuditLogActorCheckConstraintFunctionalTest extends KernelTestCase
         );
     }
 
+    #[Test]
+    public function everyAuditLevelIsAccepted(): void
+    {
+        foreach (AuditLevel::cases() as $level) {
+            $this->connection->beginTransaction();
+
+            try {
+                $this->assertSame(1, $this->insertActor('system', false, $level->value), $level->value);
+            } finally {
+                $this->connection->rollBack();
+            }
+        }
+    }
+
+    /**
+     * A legal actor on every row, so the level check is the only one that can report it.
+     */
+    #[Test]
+    #[DataProvider('provideAnIllegalLevelIsRejectedByTheLevelCheckCases')]
+    public function anIllegalLevelIsRejectedByTheLevelCheck(string $level): void
+    {
+        $this->connection->beginTransaction();
+
+        try {
+            $this->insertActor('system', false, $level);
+            $this->fail(\sprintf('Postgres accepted level "%s".', $level));
+        } catch (DriverException $driverException) {
+            $this->assertSame(self::CHECK_VIOLATION, $driverException->getSQLState());
+            $this->assertStringContainsString(
+                \sprintf('"%s"', AuditLogSchemaListener::LEVEL_CHECK),
+                $driverException->getMessage(),
+            );
+        } finally {
+            $this->connection->rollBack();
+        }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideAnIllegalLevelIsRejectedByTheLevelCheckCases(): iterable
+    {
+        yield 'unknown token' => ['debug'];
+        yield 'upper-cased token' => ['SECURITY'];
+        yield 'empty token' => [''];
+    }
+
+    #[Test]
+    public function theLevelCheckAdmitsExactlyTheAuditLevelCases(): void
+    {
+        $cases = \array_map(static fn (AuditLevel $level): string => $level->value, AuditLevel::cases());
+        \sort($cases);
+
+        $this->assertSame(
+            $cases,
+            $this->quotedTokensOf(AuditLogSchemaListener::LEVEL_CHECK),
+            'The tokens audit_log_level_check admits have drifted from AuditLevel::cases(): a new case needs a '
+            . 'migration that replaces the constraint, and the pruner a retention window for it.',
+        );
+    }
+
     /**
      * @return list<string> the quoted literals of the named `audit_log` CHECK, sorted
      */
@@ -171,14 +234,15 @@ final class AuditLogActorCheckConstraintFunctionalTest extends KernelTestCase
         return $tokens;
     }
 
-    private function insertActor(string $actorType, bool $withActorId): int
+    private function insertActor(string $actorType, bool $withActorId, string $level = 'activity'): int
     {
         return (int) $this->connection->executeStatement(
             'INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, metadata, occurred_on) '
-            . "VALUES (CAST(:id AS UUID), 'activity', 'ACTOR_CHECK_PROBED', :actorType, CAST(:actorId AS UUID), "
+            . "VALUES (CAST(:id AS UUID), :level, 'CHECK_PROBED', :actorType, CAST(:actorId AS UUID), "
             . "CAST(:correlationId AS UUID), CAST('{}' AS JSONB), NOW())",
             [
                 'id' => Uuid::generate(),
+                'level' => $level,
                 'actorType' => $actorType,
                 'actorId' => $withActorId ? Uuid::generate() : null,
                 'correlationId' => Uuid::generate(),

@@ -16,6 +16,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
@@ -198,8 +199,7 @@ final class RequestPasswordResetControllerTest extends TestCase
             new RecoveryThrottleAuditListener(
                 new RecordRecoveryThrottleAuditBestEffort(
                     new RateLimiterRecoveryThrottleAuditBudget($limiter('audit', 1)),
-                    $users,
-                    new InlineTransactionManager(),
+                    new InMemoryIdentityRowLock($users),
                     $auditLogger,
                     new NullLogger(),
                 ),

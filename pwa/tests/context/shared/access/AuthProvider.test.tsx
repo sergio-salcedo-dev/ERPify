@@ -279,6 +279,119 @@ describe("AuthProvider", () => {
     });
   });
 
+  describe("only the latest probe decides", () => {
+    function pending(): {
+      promise: Promise<Identity | null>;
+      settle: (identity: Identity | null) => void;
+      fail: (error: unknown) => void;
+    } {
+      let settle!: (identity: Identity | null) => void;
+      let fail!: (error: unknown) => void;
+      const promise = new Promise<Identity | null>((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      });
+      return { promise, settle, fail };
+    }
+
+    it("keeps a login() session when a slower cold probe answers 503 after it", async () => {
+      const cold = pending();
+      me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      let resolved: unknown = "unset";
+      await act(async () => {
+        resolved = await result.current.login();
+      });
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+
+      await act(async () => {
+        cold.fail(unavailable());
+      });
+
+      expect(resolved).toMatchObject({ user: { email: "admin@erpify.dev" } });
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+    });
+
+    it("keeps a login() session when a slower cold probe answers 401 after it", async () => {
+      const cold = pending();
+      me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await act(async () => {
+        await result.current.login();
+      });
+
+      await act(async () => {
+        cold.settle(null);
+      });
+
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("keeps a login() session when a navigation re-probe answers 503 after it", async () => {
+      me.mockRejectedValueOnce(unavailable());
+      const { result, rerender } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+      const reprobe = pending();
+      me.mockReturnValueOnce(reprobe.promise).mockResolvedValueOnce(ADMIN);
+      nav.pathname = "/login";
+      rerender();
+      expect(me).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await result.current.login();
+      });
+      await act(async () => {
+        reprobe.fail(unavailable());
+      });
+
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("keeps the signed-out state when a probe started before logout() answers 200 after it", async () => {
+      const cold = pending();
+      me.mockReturnValueOnce(cold.promise);
+
+      const { result } = renderAuth();
+      await act(async () => {
+        await result.current.logout();
+      });
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+
+      await act(async () => {
+        cold.settle(ADMIN);
+      });
+
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+      expect(result.current.session).toBeNull();
+    });
+
+    it("login() resolves null, and applies nothing, when a later probe superseded it", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const first = pending();
+      me.mockReturnValueOnce(first.promise).mockResolvedValueOnce(null);
+      let firstLogin!: Promise<unknown>;
+      act(() => {
+        firstLogin = result.current.login();
+      });
+      await act(async () => {
+        await result.current.login();
+      });
+      await act(async () => {
+        first.settle(ADMIN);
+      });
+
+      await expect(firstLogin).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+  });
+
   it("login() re-hydrates from /me (never accepts a fabricated identity)", async () => {
     me.mockResolvedValueOnce(null).mockResolvedValueOnce(ADMIN);
 

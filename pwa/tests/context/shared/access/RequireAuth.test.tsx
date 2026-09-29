@@ -25,12 +25,15 @@ vi.mock("next/navigation", () => {
 
 import { RequireAuth } from "@/context/shared/access/infrastructure/ui/RequireAuth";
 import { AuthStatus } from "@/context/shared/access/infrastructure/ui/AuthProvider";
-import { Routes } from "@/context/shared/routing/domain/Routes";
 import {
   claimDeparture,
   releaseDeparture,
   DepartureReason,
 } from "@/context/shared/navigation/application/departure";
+
+// Literal rather than `Routes.MAINTENANCE`: a test compared against the constant it imports stays
+// green over a renamed route, which is the regression it is here to catch.
+const MAINTENANCE_WITH_NEXT = `/maintenance?next=${encodeURIComponent("/backoffice/users?page=2")}`;
 
 function guarded() {
   return (
@@ -51,14 +54,14 @@ afterEach(() => {
 });
 
 describe("RequireAuth", () => {
-  it("replaces the route with /maintenance when the server cannot decide, never /login", () => {
+  it("replaces the route with /maintenance, carrying the blocked target, never /login", () => {
     auth.status = AuthStatus.UNAVAILABLE;
 
     render(guarded());
 
     expect(replace).toHaveBeenCalledTimes(1);
-    expect(replace).toHaveBeenCalledWith(Routes.MAINTENANCE);
-    expect(replace).not.toHaveBeenCalledWith(expect.stringContaining(Routes.LOGIN));
+    expect(replace).toHaveBeenCalledWith(MAINTENANCE_WITH_NEXT);
+    expect(replace).not.toHaveBeenCalledWith(expect.stringContaining("/login"));
     expect(screen.queryByTestId("require-auth-test__content")).toBeNull();
   });
 
@@ -68,7 +71,7 @@ describe("RequireAuth", () => {
     render(guarded());
 
     expect(replace).toHaveBeenCalledWith(
-      `${Routes.LOGIN}?next=${encodeURIComponent("/backoffice/users?page=2")}`,
+      `/login?next=${encodeURIComponent("/backoffice/users?page=2")}`,
     );
   });
 
@@ -90,7 +93,7 @@ describe("RequireAuth", () => {
     act(() => releaseDeparture());
 
     expect(replace).toHaveBeenCalledTimes(1);
-    expect(replace).toHaveBeenCalledWith(Routes.MAINTENANCE);
+    expect(replace).toHaveBeenCalledWith(MAINTENANCE_WITH_NEXT);
   });
 
   it("redirects to /maintenance when a mounted, authenticated guard turns unavailable", () => {
@@ -102,7 +105,7 @@ describe("RequireAuth", () => {
     auth.status = AuthStatus.UNAVAILABLE;
     view.rerender(guarded());
 
-    expect(replace).toHaveBeenCalledWith(Routes.MAINTENANCE);
+    expect(replace).toHaveBeenCalledWith(MAINTENANCE_WITH_NEXT);
     expect(screen.queryByTestId("require-auth-test__content")).toBeNull();
   });
 });

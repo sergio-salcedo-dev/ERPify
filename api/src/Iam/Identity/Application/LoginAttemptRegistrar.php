@@ -57,10 +57,12 @@ final readonly class LoginAttemptRegistrar
      * existence signal — a failed login for an unknown address answers faster at p50 than one for an existing `ACTIVE`
      * identity, separably above chance (PRODUCTION_SECURITY_CHECKLIST.md §7) — so both branches take the same round
      * trips. What an unknown address still does not pay is the hydration of a row, the wait on a row lock another
-     * attempt against the same address holds, and, for an `ACTIVE` identity, the counter's UPDATE, because there is no
-     * row — that is the residual, and it is not claimed to be unclassifiable. The price is a transaction per failed
-     * login against an address that does not exist, bounded by the login throttle and by a credential verification the
-     * attempt has already paid; the locking read over no row locks nothing, so it contends with nobody.
+     * attempt against the same address holds, for an `ACTIVE` identity the counter's UPDATE, and, on the one attempt
+     * that trips the lock, the lockout projection's own transaction — BEGIN, a second locked read of the same row and
+     * the `audit_log` INSERT — because there is no row. That is the residual, and it is not claimed to be
+     * unclassifiable. The price is a transaction per failed login against an address that does not exist, bounded
+     * by the login throttle and by a credential verification the attempt has already paid; the locking read over no
+     * row locks nothing, so it contends with nobody.
      *
      * **Everything is decided under `SELECT … FOR UPDATE`.** The counter is the only state in this application
      * written from a path that holds just an address, and deciding it on an unlocked read would let the increment be

@@ -29,6 +29,7 @@ use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
@@ -359,7 +360,11 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
         return new RedeemRecoverySecret(
             $users,
             ProbingRecoverySecretRepository::aroundSelectorLock($secrets, $onArrival(...), $onLeaving(...)),
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
             $revokeSessions,
             new KeepOnlyCurrentSession(
                 $this->correlation,
@@ -396,7 +401,11 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
             $users,
             ProbingRecoverySecretRepository::aroundUserIdLock($secrets, $onArrival(...), $onLeaving(...)),
             new ProveCurrentPassword(),
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
             $eventBus,
             $transactions,
         );

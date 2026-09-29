@@ -22,9 +22,11 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * connection, so {@see append()} joins the use-case write transaction (aggregate row + this row +
  * outbox commit atomically). It is a log of infrastructure with no domain invariants and no ORM
  * entity — the `IDENTITY` sequence and the `aggregate_version` sub-select sit outside the ORM unit of
- * work (ADR D4). `tenant_id` is reserved and written `NULL`; `metadata` carries the serializer's
- * envelope metadata (empty today) and is always written as a JSON object, `{}` when empty — a top-level
- * coercion only, so a nested value keeps whatever shape it carries.
+ * work (ADR D4). `tenant_id` is reserved and written `NULL`; `payload` carries the event's primitives and
+ * `metadata` the serializer's envelope metadata (empty today), and both are always written as a JSON object,
+ * `{}` when empty — PHP encodes an empty array as `[]`, a JSON array in a column every reader treats as an
+ * object. The coercion is top-level only, so a nested value keeps whatever shape it carries; it changes
+ * nothing a reader of {@see stream()} sees, because both shapes decode to the same empty PHP array.
  *
  * `aggregate_version` is informative, not a concurrency control: it is `MAX+1` over the stream at insert
  * time with no serialisation guaranteed (most publishers hold no row lock on the aggregate they publish
@@ -73,8 +75,8 @@ final readonly class DbalEventStore implements EventStore
                 'aggregate_type' => $event::aggregateType(),
                 'event_name' => $event::eventName(),
                 'event_version' => $event::eventVersion(),
-                'payload' => $this->encode($envelope['payload']),
-                'metadata' => \json_encode((object) $envelope['metadata'], JSON_THROW_ON_ERROR),
+                'payload' => $this->encodeObject($envelope['payload']),
+                'metadata' => $this->encodeObject($envelope['metadata']),
                 'tenant_id' => null,
                 'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
             ],
@@ -165,9 +167,9 @@ final readonly class DbalEventStore implements EventStore
     /**
      * @param array<string, mixed> $data
      */
-    private function encode(array $data): string
+    private function encodeObject(array $data): string
     {
-        return \json_encode($data, JSON_THROW_ON_ERROR);
+        return \json_encode((object) $data, JSON_THROW_ON_ERROR);
     }
 
     /**

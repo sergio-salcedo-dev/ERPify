@@ -107,7 +107,7 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
 
         $sessionId = $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
 
-        $this->assertSame([SessionMother::DEFAULT_ID], $sessions->findActiveByIdCalls);
+        $this->assertSame([SessionMother::DEFAULT_ID], $sessions->lockActiveByIdCalls);
         $this->assertSame([$sessionId->toString()], $this->savedIds($sessions));
         $this->assertSame([[self::STARTED, $sessionId->toString()]], $this->published());
     }
@@ -122,13 +122,50 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
         yield 'lapsed' => ['lapsed'];
     }
 
+    /**
+     * The row is revoked (in bulk, which records no per-row event) or deleted by a rival that commits while this
+     * login waits on the row's lock. The locked read then finds it inadmissible, so the login publishes no
+     * `SessionRevoked` for it and never writes it: the rival's `revokedAt` stands, and a deleted row is not
+     * resurrected into an event naming its owner.
+     */
+    #[DataProvider('provideARowARivalRetiresUnderTheLockIsNeitherRevokedAgainNorAnnouncedCases')]
+    public function testARowARivalRetiresUnderTheLockIsNeitherRevokedAgainNorAnnounced(string $rival): void
+    {
+        $previous = SessionMother::active();
+        $previous->pullDomainEvents();
+
+        $sessions = new InMemorySessionRepository($previous);
+        $sessions->beforeLockActiveById = static function () use ($sessions, $rival): void {
+            'delete' === $rival
+                ? $sessions->deleteAllForUser(SessionMother::DEFAULT_USER_ID)
+                : $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
+        };
+
+        $sessionId = $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
+
+        $this->assertSame([SessionMother::DEFAULT_ID], $sessions->lockActiveByIdCalls, 'the read took the lock');
+        $this->assertSame([], $sessions->findActiveByIdCalls, 'and no unlocked read decided anything');
+        $this->assertSame([$sessionId->toString()], $this->savedIds($sessions), 'the earlier row is not written');
+        $this->assertSame([[self::STARTED, $sessionId->toString()]], $this->published());
+        $this->assertSame([], $previous->pullDomainEvents(), 'nor is a revocation left pending on it');
+    }
+
+    /**
+     * @return iterable<string, array{0: string}>
+     */
+    public static function provideARowARivalRetiresUnderTheLockIsNeitherRevokedAgainNorAnnouncedCases(): iterable
+    {
+        yield 'revoked by a log-out-everywhere' => ['revoke'];
+        yield 'deleted by an erasure' => ['delete'];
+    }
+
     public function testAFirstLoginLooksNothingUp(): void
     {
         $sessions = new InMemorySessionRepository();
 
         $sessionId = $this->start(new RecordingCurrentSessionReference(), $sessions);
 
-        $this->assertSame([], $sessions->findActiveByIdCalls, 'no correlation means no extra lookup');
+        $this->assertSame([], $sessions->lockActiveByIdCalls, 'no correlation means no extra lookup');
         $this->assertSame([$sessionId->toString()], $this->savedIds($sessions));
         $this->assertSame([[self::STARTED, $sessionId->toString()]], $this->published());
     }

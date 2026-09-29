@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
-use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
-use Erpify\Shared\Persistence\Application\TransactionManager;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -25,15 +22,11 @@ use Throwable;
  * logger. A brute-force defence that its own observability can switch off is the wrong trade in a control
  * whose entire purpose is observability.
  *
- * **Post-commit does not mean unserialised: the row is written in a transaction of its own, under the subject's
- * `identity_user` row lock.** The row names a natural person in its resource columns, and the erasure's resource
- * pass ({@see FulfilIdentityErasure}) clears only the rows committed when it runs. A write that disputed nothing
- * could commit after that pass and leave the subject's real id in the trail with `resource_erased = FALSE`.
- * Taking `SELECT … FOR UPDATE` on the subject's row first puts this write on one side of the erasure or the
- * other: before it, and the erasure waits on the row, then sees this row committed and redacts it; after it,
- * and the locked read — re-evaluated by Postgres once the erasure commits — finds no row, so nothing is written.
- * The order is `identity_user` → `audit_log`, the erasure's own, so the two cannot deadlock. The transaction is
- * this class's, never the registrar's: a failed INSERT here rolls back only this projection.
+ * **Post-commit does not mean unserialised: the row is written under the subject's `identity_user` row lock**,
+ * through {@see IdentityRowLock}, which says why that keeps a row naming the subject from committing after an
+ * erasure's pass over the trail. The transaction is the lock's own, never the registrar's, and it is opened on
+ * the connection rather than through the entity manager: a failed INSERT, a lock wait that times out or a failed
+ * COMMIT rolls back this projection alone, flushes nothing the request still holds and leaves the manager open.
  *
  * `Throwable` and not `DbalException`: {@see \Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter}
  * encodes metadata with `JSON_THROW_ON_ERROR`, so a `JsonException` can leave the writer, and it is not a DBAL
@@ -76,8 +69,7 @@ final readonly class RecordLockoutAuditBestEffort
     private const string LOCKED_ACTION = 'USER_LOCKED';
 
     public function __construct(
-        private UserRepository $users,
-        private TransactionManager $transactionManager,
+        private IdentityRowLock $identityRows,
         private AuditLogger $auditLogger,
         private LoggerInterface $logger,
     ) {
@@ -94,22 +86,22 @@ final readonly class RecordLockoutAuditBestEffort
      */
     public function record(string $userId): void
     {
-        try {
-            $this->transactionManager->transactional(function () use ($userId): void {
-                if (!$this->users->findByIdForUpdate($userId) instanceof User) {
-                    return;
-                }
+        $phase = self::PHASE_LOCK;
 
+        try {
+            $this->identityRows->whileHeld($userId, function () use ($userId, &$phase): void {
+                $phase = self::PHASE_WRITE;
                 $this->auditLogger->log(
                     self::LOCKED_ACTION,
                     AuditLevel::SECURITY,
                     AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
                 );
+                $phase = self::PHASE_COMMIT;
             });
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
-                'Lockout committed; security audit projection skipped (write failed).',
-                ['exception' => $throwable],
+                'Lockout committed; security audit projection skipped.',
+                ['phase' => $phase, 'exception' => $throwable],
             ));
         }
     }

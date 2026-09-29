@@ -174,11 +174,12 @@ transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffo
 `RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`,
 `RecordRecoverySecretAuditBestEffort`) escriben **después** del
 commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
-`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. `RecordLockoutAuditBestEffort` y
-`RecordRecoveryThrottleAuditBestEffort` escriben en una transacción propia bajo el bloqueo de la fila
-`identity_user` del sujeto (orden `identity_user` → `audit_log`, el de la erasure), así que no pueden confirmar
-una fila que lo nombre tras la pasada de la erasure; `RecordLockoutNoticeAuditBestEffort` (riesgo aceptado
-#860) y `RecordRecoverySecretAuditBestEffort` no, y el residuo que dejan lo señala
+`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los cuatro escriben en una transacción
+propia bajo el bloqueo de la fila `identity_user` del sujeto (`IdentityRowLock`: un `SELECT … FOR UPDATE` sobre
+la conexión, sin hidratar `User` ni vaciar el entity manager, con la espera acotada por `lock_timeout`), en el
+orden de la erasure (`identity_user` → `audit_log`), así que no pueden confirmar una fila que lo nombre tras la
+pasada de la erasure: o confirman antes y la pasada la redacta, o esperan y no encuentran sujeto. Una espera que
+agota su cota es una proyección omitida y reportada, no una fila escrita; lo que escape a todo ello lo señala
 `identity:gdpr:reconcile-subject-references`. Los comandos de operador
 (`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
 no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
@@ -694,8 +695,11 @@ La tabla la impone también Postgres, no solo `ActorContext`: SQL crudo (DBAL, f
 borrado. Dos `CHECK` con nombre: `audit_log_actor_type_check` (`actor_type` ∈ los cuatro tokens) y
 `audit_log_actor_id_presence_check` (`(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`, igualdad
 booleana que nunca evalúa a NULL). DBAL no modela ni introspecta un `CHECK` de tabla, así que viven solo en su
-migración y `db.diff` no los ve; su guardián es `AuditLogActorCheckConstraintFunctionalTest`, que además falla
-si `ActorType` gana un caso que el `CHECK` de tokens no admite.
+migración y `db.diff` no los ve; su guardián es `AuditLogCheckConstraintFunctionalTest`, que además falla
+si `ActorType` gana un caso que el `CHECK` de tokens no admite. La misma migración añade `audit_log_level_check`
+(`level` ∈ los tres tokens de `AuditLevel`, mismo guardián): el pruner borra `WHERE level = :level` por cada
+caso del enum, así que una fila con otro token sobreviviría a toda ventana de retención. Una fila existente que
+viole cualquiera de los tres aborta la migración con su recuento y la consulta que la lista; se repara a mano.
 
 `ActorContext` (en `Shared/…/Audit/Domain`, value object de dominio, sin dependencias de framework):
 
@@ -721,7 +725,7 @@ frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`
 
 ```text
 id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
-level           enum         activity | security | change
+level           enum         activity | security | change — CHECK audit_log_level_check (D7)
 action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
 actor_type      enum         anonymous|system|api_key|user — obligatorio (D7); CHECK audit_log_actor_type_check
 actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audit_log_actor_id_presence_check

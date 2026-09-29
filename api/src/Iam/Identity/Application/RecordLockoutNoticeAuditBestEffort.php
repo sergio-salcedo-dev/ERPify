@@ -27,6 +27,14 @@ use Throwable;
  * would turn a maintenance tick's lost observability row into a scheduler fault that stops the tick — the
  * mailer already sent, so nothing about that send should be undone by a trail write failing afterwards.
  *
+ * **Post-save does not mean unserialised: the row is written under the subject's `identity_user` row lock**,
+ * through {@see IdentityRowLock}, which says why that keeps a row naming the subject from committing after an
+ * erasure's pass over the trail. The tick is where that matters most: {@see NotifyLockedIdentities} reads the
+ * identity, sends, and saves its stamp, and an erasure committing anywhere in that span leaves `save()` updating
+ * zero rows without raising — `User` carries no version column — so the notice would otherwise be written for a
+ * subject whose erasure had already run. Under the lock the absent row is seen and no row is written; an erasure
+ * arriving after the lock waits, then finds this row committed and redacts it.
+ *
  * The resource type is reached through {@see FulfilIdentityErasure}'s constant rather than spelled here, for
  * the same reason its sibling does: the type denotes a natural person, so the file holding its literal is the
  * one the audit-resource registry names as obliged to erase it.
@@ -49,6 +57,7 @@ final readonly class RecordLockoutNoticeAuditBestEffort
     private const string NOTICE_ACTION = 'ACCOUNT_LOCKOUT_NOTIFIED';
 
     public function __construct(
+        private IdentityRowLock $identityRows,
         private AuditLogger $auditLogger,
         private LoggerInterface $logger,
     ) {
@@ -65,19 +74,26 @@ final readonly class RecordLockoutNoticeAuditBestEffort
      */
     public function record(string $userId, ?DateTimeImmutable $lockedUntil): void
     {
+        $metadata = $lockedUntil instanceof DateTimeImmutable
+            ? ['lockedUntil' => $lockedUntil->format(DateTimeInterface::ATOM)]
+            : [];
+        $phase = self::PHASE_LOCK;
+
         try {
-            $this->auditLogger->log(
-                self::NOTICE_ACTION,
-                AuditLevel::SECURITY,
-                AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
-                $lockedUntil instanceof DateTimeImmutable
-                    ? ['lockedUntil' => $lockedUntil->format(DateTimeInterface::ATOM)]
-                    : [],
-            );
+            $this->identityRows->whileHeld($userId, function () use ($userId, $metadata, &$phase): void {
+                $phase = self::PHASE_WRITE;
+                $this->auditLogger->log(
+                    self::NOTICE_ACTION,
+                    AuditLevel::SECURITY,
+                    AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
+                    $metadata,
+                );
+                $phase = self::PHASE_COMMIT;
+            });
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
-                'Lockout notice sent; security audit projection skipped (write failed).',
-                ['exception' => $throwable],
+                'Lockout notice sent; security audit projection skipped.',
+                ['phase' => $phase, 'exception' => $throwable],
             ));
         }
     }

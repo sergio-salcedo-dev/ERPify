@@ -30,14 +30,20 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * `/me` probe resolves, the provider is `hydrating` and guards render nothing —
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
  * session is `authenticated`; no live session (401) or any other failure
- * (network, malformed body, another 5xx) is `unauthenticated`. There is no seeded
- * default and no auto-admin.
+ * (network, client timeout, malformed body, another 5xx) is `unauthenticated`.
+ * There is no seeded default and no auto-admin.
  *
- * `unavailable` is the server saying it cannot decide (503): the session store is
- * down, so sending the user to sign in would land them on a form the same outage
- * refuses. The verdict holds only for the route it was observed on — the provider
+ * `unavailable` is the server, or a gateway in front of it, saying it cannot decide
+ * (502/503/504): the session store is unreachable, so sending the user to sign
+ * in would land them on a form the same outage refuses. The verdict holds only for the route it was observed on — the provider
  * outlives client navigations, so on the next route it reads `hydrating` again
  * until a fresh probe answers.
+ *
+ * Probes are sequenced: the cold probe, a per-route re-probe and `login()` each take a
+ * ticket when they START, and only the most recently started one may apply its answer.
+ * A slow cold probe answering 503 after a completed `login()` would otherwise sign the
+ * user out of the session they just obtained. `logout()` takes a ticket too, so an
+ * answer still in flight when the user signs out cannot sign them back in.
  */
 export const AuthStatus = {
   HYDRATING: "hydrating",
@@ -59,7 +65,9 @@ export interface AuthContextValue {
    * otherwise tell an authenticated provider from one the probe never
    * confirmed. `null` conflates "no live session" with "could not tell", and
    * deliberately so: neither is grounds to announce a sign-in, so the caller's
-   * move is the same for both.
+   * move is the same for both. It also resolves `null` when a probe started later
+   * (another `login()`, a re-probe) or a `logout()` superseded this one: its answer
+   * is then discarded, and the provider's status is the later one's to decide.
    */
   login: () => Promise<Session | null>;
   /**
@@ -116,8 +124,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // the probe (or a login re-probe) has settled.
   const [session, setSession] = useState<Session | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  // The route a 503 was observed on, or null when the last probe decided. Bound to
-  // the route rather than a boolean because this provider is mounted once for the
+  // The route an unavailable verdict was observed on, or null when the last probe
+  // decided. Bound to the route rather than a boolean because this provider is mounted once for the
   // whole app and its cold probe runs only on mount: a boolean would outlive the
   // outage and bounce every later client navigation back to maintenance.
   const [unavailableAt, setUnavailableAt] = useState<string | null>(null);
@@ -129,17 +137,28 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     routeRef.current = route;
   }, [route]);
 
+  // The ticket of the most recently started probe or sign-out; see the provider's docblock.
+  const probeSeqRef = useRef(0);
+
   const resolveSession = useCallback(async (): Promise<Probe> => {
     try {
       const identity = await identityRepository.me();
       return { session: identity ? sessionFromIdentity(identity) : null, unavailable: false };
     } catch (error) {
-      // The adapter already maps 401 to null. A 503 is an outage, not a missing
-      // session; any other failure (network, malformed body) is treated as "no
-      // live session".
+      // The adapter already maps 401 to null and a 502/503/504 to
+      // IdentityUnavailableError: an outage, not a missing session. Any other
+      // failure (network, malformed body) is treated as "no live session".
       return { session: null, unavailable: error instanceof IdentityUnavailableError };
     }
   }, [identityRepository]);
+
+  /** Runs one probe and answers `null` when a later probe or sign-out has superseded it. */
+  const sequencedProbe = useCallback(async (): Promise<Probe | null> => {
+    probeSeqRef.current += 1;
+    const ticket = probeSeqRef.current;
+    const probe = await resolveSession();
+    return ticket === probeSeqRef.current ? probe : null;
+  }, [resolveSession]);
 
   // Stamped with the route current when the probe ANSWERED, not when it started.
   const applyProbe = useCallback((probe: Probe): void => {
@@ -150,38 +169,40 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   useEffect(() => {
     let active = true;
-    resolveSession().then((probe) => {
-      if (!active) return;
+    sequencedProbe().then((probe) => {
+      if (!active || probe === null) return;
       applyProbe(probe);
     });
     return () => {
       active = false;
     };
-  }, [resolveSession, applyProbe]);
+  }, [sequencedProbe, applyProbe]);
 
-  // A 503 observed on another route is stale. Re-probe once the user has moved,
-  // exactly as a cold load of the new route would — never on a timer.
+  // An unavailable verdict observed on another route is stale. Re-probe once the
+  // user has moved, exactly as a cold load of the new route would — never on a timer.
   const staleVerdict = unavailableAt !== null && unavailableAt !== route;
   useEffect(() => {
     if (!staleVerdict) return;
     let active = true;
-    resolveSession().then((probe) => {
-      if (!active) return;
+    sequencedProbe().then((probe) => {
+      if (!active || probe === null) return;
       applyProbe(probe);
     });
     return () => {
       active = false;
     };
-  }, [staleVerdict, route, resolveSession, applyProbe]);
+  }, [staleVerdict, route, sequencedProbe, applyProbe]);
 
   const login = useCallback(async (): Promise<Session | null> => {
-    const probe = await resolveSession();
+    const probe = await sequencedProbe();
+    if (probe === null) return null;
     applyProbe(probe);
     return probe.session;
-  }, [resolveSession, applyProbe]);
+  }, [sequencedProbe, applyProbe]);
 
   const logout = useCallback(
     async (budgetMs?: number): Promise<void> => {
+      probeSeqRef.current += 1;
       try {
         await sessionsRepository.revokeCurrent(budgetMs);
       } catch (error) {
@@ -192,6 +213,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           cause: error,
         });
       } finally {
+        // Again on settling: a probe started while the revoke was in flight read a session
+        // this sign-out is ending, and the local session is always cleared.
+        probeSeqRef.current += 1;
         setSession(null);
         setUnavailableAt(null);
         setHydrated(true);
