@@ -683,6 +683,14 @@ ActorType  enum  anonymous | system | api_key | user
 | `api_key`    | `<api_key_uuid>` |
 | `user`       | `<user_uuid>`    |
 
+La tabla la impone también Postgres, no solo `ActorContext`: SQL crudo (DBAL, fixtures, Behat) escribe
+`audit_log` sin pasar por él, y una fila `user` con `actor_id` NULL no la casa ninguno de los dos pases de
+borrado. Dos `CHECK` con nombre: `audit_log_actor_type_check` (`actor_type` ∈ los cuatro tokens) y
+`audit_log_actor_id_presence_check` (`(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`, igualdad
+booleana que nunca evalúa a NULL). DBAL no modela ni introspecta un `CHECK` de tabla, así que viven solo en su
+migración y `db.diff` no los ve; su guardián es `AuditLogActorCheckConstraintFunctionalTest`, que además falla
+si `ActorType` gana un caso que el `CHECK` de tokens no admite.
+
 `ActorContext` (en `Shared/…/Audit/Domain`, value object de dominio, sin dependencias de framework):
 
 ```php
@@ -709,8 +717,8 @@ frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`
 id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
 level           enum         activity | security | change
 action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
-actor_type      enum         anonymous|system|api_key|user — obligatorio (D7)
-actor_id        uuid         NULL salvo api_key/user (D7)
+actor_type      enum         anonymous|system|api_key|user — obligatorio (D7); CHECK audit_log_actor_type_check
+actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audit_log_actor_id_presence_check
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
@@ -733,7 +741,8 @@ y ninguna consulta usa operadores CIDR/subred — solo se almacena como evidenci
 
 `level` y `actor_type` se persisten como `VARCHAR` guardando el `->value` de enums PHP
 string-backed (`EnumType` es una constraint de Symfony Validator, no un Doctrine `Type`; no se usan
-enums nativos de Postgres).
+enums nativos de Postgres). El conjunto cerrado de `actor_type` lo refuerza un `CHECK` (D7); `level` no lleva
+ninguno.
 
 Índices previstos: `(actor_id, occurred_on)` (jornada), `(correlation_id)` (request), `(level,
 occurred_on)` (retención/prune), `(resource_type, resource_id)` (investigación por recurso).

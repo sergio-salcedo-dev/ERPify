@@ -448,7 +448,9 @@ decision: 2026-09-28 Keep open for a dedicated epic
 origin: migrated from legacy ledger ("Deferred from: code review of br-4c-602-observabilidad-del-throttle-de-recuperacion (2026-08-12)"), 2026-09-24
 location: audit_log schema (api/migrations), api/src/Shared/Audit
 reason: Illegal rows are unrepresentable in PHP but not in the plain VARCHAR/nullable UUID columns written by raw DBAL, fixtures and Behat SQL; a user row with NULL actor_id escapes both erasure passes silently. Pre-existing; a schema CHECK plus enum-token CHECK is its own migration and decision.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-audit-log-actor-check-constraints
+resolution-undo: 616f89c8d7dc406a646d9c76ded067eb47fc34773f56778663cd395af56352ca 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Add the CHECK constraints — Add a migration with CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL)) and an enum-token CHECK on actor_type, mirror them in the schema listener, fix any fixture/Behat SQL that violates them, and add a functional test proving an illegal row is refused.
 
 **`audit_log` has no CHECK tying `actor_type` to `actor_id` nullability, so illegal rows are representable.** `ActorContext` makes `anonymous`/`system` with an id — and `user`/`api_key` without one — unrepresentable in PHP, but the column is plain `VARCHAR(16)`/nullable `UUID` and the table is written by raw DBAL, fixtures and Behat SQL. A `user` row carrying a NULL `actor_id` is matched by neither erasure pass (the actor pass matches on `actor_id`; the resource pass's metadata guard requires `actor_type = anonymous`), so a person's request metadata would survive both silently. Surfaced by the adversarial pass on the anonymous-actor redaction; pre-existing, and a schema-level fix (`CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL))` plus an enum-token CHECK) is its own migration and its own decision.
@@ -634,4 +636,12 @@ location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
 source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
 severity: low
 reason: Misma causa raíz que la entrada anterior: AuthProvider no secuencia sus sondas (el efecto de ruta cancela solo la suya). Con UNAVAILABLE/HYDRATING RequireAuth no monta los controles de logout; el caso requiere un login() que resuelva antes que el re-sondeo lanzado al llegar a /login.
+status: open
+
+### DW-68: audit_log.level no tiene CHECK; una fila escrita por SQL crudo con un level desconocido o mal capitalizado no la casa ninguna pasada del pruner.
+origin: spec-deferred 473433d709dd
+location: api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php
+source_spec: `spec-dw-46-audit-log-actor-check-constraints.md`
+severity: low
+reason: DbalAuditLogPruner borra por WHERE level = :level por cada AuditLevel; un token fuera del enum sobrevive para siempre. Preexistente y fuera del intent de DW-46 (solo actor_type/actor_id).
 status: open
