@@ -55,8 +55,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * swallow would save is the status code, at the price of the record.
  *
  * Priority above the Problem Details responder, which stops propagation once it sets the response; this
- * listener only reads and never sets one, so the 409 body is untouched. The throwable is matched directly: the
- * four use cases throw it unwrapped.
+ * listener never sets one. A written refusal leaves the event untouched, so the 409 body is the responder's
+ * own; a refused or failed write is the one case where the throwable changes, and the 5xx above is the point.
+ * The throwable is matched directly: the four use cases throw it unwrapped.
  */
 final readonly class SelfTargetedActRefusalAuditListener
 {

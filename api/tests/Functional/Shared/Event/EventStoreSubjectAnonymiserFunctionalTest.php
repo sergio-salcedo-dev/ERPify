@@ -191,7 +191,7 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
     }
 
     #[Test]
-    public function itRefusesAPairWhoseSubjectIsItsOwnPseudonymBeforeReachingTheDriver(): void
+    public function itRefusesAPairWhoseSubjectIsItsOwnPseudonymRatherThanReportItAnonymised(): void
     {
         $this->inRolledBackTransaction(function (Connection $connection): void {
             $this->expectException(InvalidArgumentException::class);

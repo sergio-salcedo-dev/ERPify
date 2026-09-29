@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
 use LogicException;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -55,6 +56,16 @@ trait RequestBoundarySecurityAuditDoubles
     {
         $this->assertInstanceOf(LogicException::class, $handed);
         $this->assertSame($refused, $handed->getPrevious(), 'the refusal names what it refused');
+    }
+
+    /**
+     * The failed write a `kernel.exception` listener hands to its event: wrapped so it names what it was
+     * recording, with the write failure itself as the cause.
+     */
+    private function assertWriteFailureOf(Throwable $failure, ?Throwable $handed): void
+    {
+        $this->assertInstanceOf(RuntimeException::class, $handed);
+        $this->assertSame($failure, $handed->getPrevious(), 'the write failure stays the cause');
     }
 
     private function connection(bool $transactionActive): Connection
