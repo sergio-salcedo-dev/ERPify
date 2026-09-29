@@ -127,20 +127,30 @@ negocio que puede revertirse.
 **Revisión (2026-09-28): el invariante se hace cumplir, no se afirma.** Aplica sólo a las filas
 `security` que registran un rehúso **en la frontera de la request** —`ACCESS_DENIED`,
 `INVALID_CURRENT_PASSWORD`, `AUDIT_TRAIL_READ`, `SELF_TARGETED_ACT_REFUSED`—. Los productores
-`security` de caso de uso (`ChangeUserRoles`, `InviteUser`, `UnlockUserAccount`, `FulfilIdentityErasure`…) escriben **dentro**
-de su transacción a propósito: su fila debe revertirse con el cambio que describe, y siguen llamando a
-`AuditLogger` directamente. Los listeners de frontera pasan por un seam único,
-`Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit`, que antes de escribir pregunta
+`security` de caso de uso (`ChangeUserRoles`, `InviteUser`, `UnlockUserAccount`,
+`FulfilIdentityErasure`…) escriben **dentro** de su transacción a propósito: su fila debe revertirse con
+el cambio que describe, y siguen llamando a `AuditLogger` directamente. Los listeners de frontera pasan
+por un seam único, `Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit`, que antes de escribir pregunta
 `isTransactionActive()` a la **misma** `Connection` por defecto que usa `DbalAuditLogWriter`: sin
 transacción, escribe en autocommit y la fila está commiteada cuando el listener vuelve (antes de que el
 responder fije la respuesta); con una abierta —que sólo puede ser una fuga, porque `wrapInTransaction`
 revierte antes de relanzar— **rehúsa** con `LogicException` sin escribir. Ese rehúso, y un fallo de
 persistencia, **no se lanzan desde un listener de `kernel.exception`**: `HttpKernel::handleThrowable()` no
 envuelve a sus listeners en ningún `try`, así que un throwable que saliera de ahí escaparía del kernel sin
-Problem Details y perdería la excepción original. Los listeners de `kernel.exception` se lo entregan al evento a través de
-`RequestBoundarySecurityAudit::recordOnException()` (`setThrowable()`), el rehúso encadena la excepción
-de la request como `previous`, y el responder contesta el 5xx como RFC 9457 y lo registra; el de
-`kernel.response` sí lanza, porque desde ahí el kernel lo reconduce por su propio manejo de excepciones.
+Problem Details. Los listeners de `kernel.exception` se lo entregan al evento a través de
+`RequestBoundarySecurityAudit::recordOnException()` (`setThrowable()`) y el responder contesta el 5xx como
+RFC 9457 y lo registra; el de `kernel.response` sí lanza, porque desde ahí el kernel lo reconduce por su
+propio manejo de excepciones. Lo entregado sigue nombrando lo que se registraba: el rehúso encadena la
+excepción de la request como `previous`, y un fallo de persistencia se envuelve en una `RuntimeException`
+que nombra la acción y la clase de lo rehusado, con el fallo como `previous` —el único hueco de la cadena
+va a la causa sobre la que hay que actuar—. **Y el propio seam lo reporta a Sentry**, porque nadie más lo
+hará: el `ErrorListener` de Sentry corre a prioridad 128, antes que estos listeners (32), así que sólo vio
+el throwable original —un `ClientError` que `before_send` descarta— y nunca el 5xx que lo sustituyó, y la
+línea de log del responder no lleva throwable. Sin ese reporte, una fuga de transacción —justo lo que el
+rehúso existe para hacer visible— contestaría un 500 que ninguna alerta ve. Se descartan el handler
+Monolog→Sentry (ya rechazado en `sentry.yaml`: duplica cada 5xx que el listener sí captura) y reenviar el
+evento (un segundo despacho de `kernel.exception` re-ejecutaría todos sus listeners). El `HubInterface` es
+opcional porque el bundle no se carga en test; sin él el fallo se entrega igual, sin reportar.
 Se elige la lectura «probar que se escribe fuera de toda transacción» y se descarta la de «commitear
 aparte» (segunda conexión DBAL o `REQUIRES_NEW`): una segunda conexión duplica el pool y el sellado para
 un caso que no debería ocurrir, y ocultaría la fuga en vez de hacerla visible; hacer rollback de la

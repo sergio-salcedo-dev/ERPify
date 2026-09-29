@@ -558,7 +558,7 @@ source_spec: `spec-dw-26-api-boundary-single-definition.md`
 severity: low
 reason: Blind Hunter: el bypass /%61pi/v1/me existía porque un listener comparaba el path crudo mientras firewall y router decodifican. Hoy no queda ningún '/api/' literal en api/src (git grep), pero ninguna regla escrita ni gate impide reintroducir un chequeo crudo. Diferido porque el arreglo edita ficheros de reglas para agentes (docs/rules).
 status: done 2026-09-28
-resolution: fixed in #1026 (review pass): docs/rules/security.md gains «A path boundary is evaluated the way the router dispatches», and PRODUCTION_SECURITY_CHECKLIST.md states the session gate matches the decoded path
+resolution: fixed in #1027 (the #1026 review, landed after #1026 merged): docs/rules/security.md gains «A path boundary is evaluated the way the router dispatches», and PRODUCTION_SECURITY_CHECKLIST.md states the session gate matches the decoded path
 
 ### DW-60: Las filas de audit_log persistidas antes de este cambio con un User-Agent igual a [REDACTED] no se reescriben.
 origin: spec-deferred ee2d683b793e
@@ -575,7 +575,7 @@ source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
 severity: low
 reason: security.md:298 y database.md:75-79 no se tocaron en este cambio; el ADR y PRODUCTION_SECURITY_CHECKLIST.md sí. No afirman nada falso (no dicen que user_agent sea forjable), sólo omiten el patrón nuevo. Diferido porque el arreglo edita ficheros de reglas para agentes (docs/rules).
 status: done 2026-09-28
-resolution: fixed in #1026 (review pass): docs/rules/security.md and docs/rules/database.md state the [REDACTED] reservation and the [client-supplied] rewrite at capture
+resolution: fixed in #1027 (the #1026 review, landed after #1026 merged): docs/rules/security.md and docs/rules/database.md state the [REDACTED] reservation and the [client-supplied] rewrite at capture
 
 ### DW-62: Una fila de nivel change SIN clave changes sigue pintando «No changes recorded», afirmación igual de desconocida que la del diff ilegible.
 origin: spec-deferred 3f20d89e3077
@@ -584,7 +584,7 @@ source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
 reason: AuditEntryDrawer pasa `detail.metadata.changes ?? {}` a AuditChangeDiff cuando no hay flag; comportamiento previo a este cambio, y el capturador siempre escribe `changes` en filas change, así que sólo aparece con otra vía de escritura.
 status: done 2026-09-28
-resolution: fixed in #1026 (review pass): a change entry with no stored changes says so (audit-entry-drawer__diff--absent) instead of «No changes recorded»
+resolution: fixed in #1027 (the #1026 review, landed after #1026 merged): a change entry with no stored changes says so (audit-entry-drawer__diff--absent) instead of «No changes recorded»
 
 ### DW-63: Un changes escalar corrupto nunca pasó por el sellado por campo, así que podría llevar PII sin cifrar servida tal cual por la ruta de detalle.
 origin: spec-deferred fb38058ee328

@@ -211,9 +211,12 @@ transaction opens**, so a refused call takes no lock, touches no row and publish
 administrator's session turning the users surface on its own identity is what a stolen session looks like, and a
 409 otherwise reaches no `audit_log` row (the generic hook records successful reads only). The row is written on the way out by `SelfTargetedActRefusalAuditListener`, which
 matches the domain interface `SelfTargetedActForbidden` rather than the four classes. It is resource-less
-(`actor_id` already seals the target) and its `metadata` holds only the problem `type` and the route. A failed
-write propagates, as every `security` write does, so the refusal surfaces as a 5xx rather than completing
-unrecorded. The actor is read from the sealed session through `ActorContextFactory`, never from the request, and
+(`actor_id` already seals the target) and its `metadata` holds only the problem `type` and the route. A refused
+or failed write is never swallowed, as no `security` write is: the listener hands it to the event through
+`RequestBoundarySecurityAudit::recordOnException()`, so the responder answers a **5xx** instead of the 409 rather
+than letting the refusal complete unrecorded. That happens when the audit store fails, and when a transaction is
+still open on the audit connection at the boundary — a leak the seam refuses to write inside, since its rollback
+would take the row with it. The actor is read from the sealed session through `ActorContextFactory`, never from the request, and
 compared to the route id **case-insensitively** (`ActorContext::isUser()`), so re-casing one's own id does not
 slip past. Only a `user` actor can trip one: the CLI's `system` actor carries no id, and an API key's id names
 the key.
@@ -549,6 +552,8 @@ The drop keys on the [`ClientError`](../api/src/Shared/ErrorContract/Domain/Exce
 | `SentryBundle\…\ErrorListener`      | `kernel.exception` | 128      | dev + prod         |
 
 The Sentry `ErrorListener` (dev + prod, not test) runs first at `128` but only *captures* the throwable — it sets no response, so `ExceptionResponder` (16) still builds the RFC 9457 body unchanged.
+
+**A throwable a lower-priority listener substitutes with `setThrowable()` is never captured by it.** Sentry has already run and seen the original, which for the three request-boundary `security` recorders (`AccessDeniedAuditListener`, `InvalidCurrentPasswordAuditListener`, `SelfTargetedActRefusalAuditListener`, priority 32) is a client error `before_send` drops. So `RequestBoundarySecurityAudit::recordOnException()` reports the 5xx it hands over itself, through the optional `Sentry\State\HubInterface` it is constructed with (absent in test, where the bundle is not loaded). A failed write is wrapped so the message names the action and the refused throwable's class, with the write failure as `previous`; a leaked-transaction refusal chains the refused throwable instead. Any other listener that substitutes a throwable owes the same report.
 
 `ExceptionResponder` checks `$event->hasResponse()` first — if a higher-priority listener already produced a response, it leaves it alone and does **not** log. Listener priority ordering vs. Nelmio CORS is pinned by (`ExceptionResponderListenerPriorityTest`).
 
