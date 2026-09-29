@@ -85,7 +85,7 @@ Blocking condition: límite de uso alcanzado durante el triaje de la revisión (
 
 ## Review Triage Log
 
-The dev session hit the usage limit during review triage (step 4), with the four layers run and their eight findings not yet triaged. They were verified against the tree and triaged by hand in #1026.
+The dev session hit the usage limit during review triage (step 4), with the four layers run and their eight findings not yet triaged. They were verified against the tree and triaged by hand on the #1026 branch; the patches marked **Fixed** below reached `main` in #1027, because #1026 merged before they were pushed. #1027 also routed a fourth boundary recorder, `SelfTargetedActRefusalAuditListener`, through the seam; a three-layer review of #1027 then made `recordOnException()` wrap a failed write and report what it hands over to Sentry, in the pull request that follows it. The **Auto Run Result** above records the automated session as it stopped and is superseded by this log.
 
 | # | Finding | Outcome |
 |---|---|---|

@@ -8,6 +8,8 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use LogicException;
+use RuntimeException;
+use Sentry\State\HubInterface;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Throwable;
 
@@ -36,15 +38,25 @@ use Throwable;
  * A caller on `kernel.exception` uses {@see recordOnException()}, never {@see record()}:
  * `HttpKernel::handleThrowable()` has no `try` around its listeners, so a throwable leaving one bypasses the
  * Problem Details pipeline entirely. That method hands the failure to the event instead, where the responder
- * renders it as the 5xx it is and logs it, and chains the request's own throwable into a refusal so the log
- * line still names what was being recorded. `BoundarySecurityAuditSeamGateTest` refuses a `kernel.exception`
- * listener calling {@see record()}.
+ * renders it as the 5xx it is and logs it. Both failures keep what was being recorded in view: a refusal
+ * chains the request's own throwable as `previous`, and a failed write is wrapped in an exception naming the
+ * action and the refused throwable's class, with the write failure as `previous` — the one chain slot goes to
+ * the cause an operator has to act on, and the class carries no request data.
+ *
+ * It also reports the handed failure to the error tracker itself, because nothing downstream will: Sentry's
+ * own `kernel.exception` listener runs at priority 128, before any caller here, so it saw only the request's
+ * throwable — a client error its `before_send` drops — and never the 5xx that replaced it, while the
+ * responder's log line carries no throwable at all. Without this call a leaked transaction, the defect the
+ * refusal exists to surface, would answer a 500 that no alert ever sees. The tracker is absent where Sentry is
+ * not installed (the test kernel), and a failure is then handed over unreported rather than not handed over.
+ * `BoundarySecurityAuditSeamGateTest` refuses a `kernel.exception` listener calling {@see record()}.
  */
 final readonly class RequestBoundarySecurityAudit
 {
     public function __construct(
         private AuditLogger $auditLogger,
         private Connection $connection,
+        private ?HubInterface $errorTracker = null,
     ) {
     }
 
@@ -56,30 +68,62 @@ final readonly class RequestBoundarySecurityAudit
      */
     public function record(string $action, array $metadata, ?Throwable $cause = null): void
     {
-        if ($this->connection->isTransactionActive()) {
-            // The action only: metadata may carry ids, and this message reaches the error log.
-            throw new LogicException(\sprintf(
-                'Refusing to record the "%s" security audit entry: a transaction is still open on the audit '
-                . 'connection at the request boundary, so the row could be rolled back with it.',
-                $action,
-            ), 0, $cause);
+        $refusal = $this->refusalInsideATransaction($action, $cause);
+
+        if ($refusal instanceof LogicException) {
+            throw $refusal;
         }
 
         $this->auditLogger->log($action, AuditLevel::SECURITY, metadata: $metadata);
     }
 
     /**
-     * {@see record()} for a `kernel.exception` listener: a failed or refused write replaces the event's throwable
-     * rather than escaping the kernel, and the refusal chains the throwable the entry was recording.
+     * {@see record()} for a `kernel.exception` listener: a refused or failed write replaces the event's throwable
+     * and is reported, rather than escaping the kernel; a written one leaves the event untouched.
      *
      * @param array<string, mixed> $metadata
      */
     public function recordOnException(ExceptionEvent $event, string $action, array $metadata): void
     {
-        try {
-            $this->record($action, $metadata, $event->getThrowable());
-        } catch (Throwable $throwable) {
-            $event->setThrowable($throwable);
+        $recorded = $event->getThrowable();
+        $refusal = $this->refusalInsideATransaction($action, $recorded);
+
+        if ($refusal instanceof LogicException) {
+            $this->handOver($event, $refusal);
+
+            return;
         }
+
+        try {
+            $this->auditLogger->log($action, AuditLevel::SECURITY, metadata: $metadata);
+        } catch (Throwable $throwable) {
+            // The action and a class name only: metadata may carry ids, and this message reaches the error log.
+            $this->handOver($event, new RuntimeException(\sprintf(
+                'Failed to write the "%s" security audit entry recording a %s; the refusal is answered as a 5xx '
+                . 'rather than completing unrecorded.',
+                $action,
+                $recorded::class,
+            ), 0, $throwable));
+        }
+    }
+
+    private function refusalInsideATransaction(string $action, ?Throwable $cause): ?LogicException
+    {
+        if (!$this->connection->isTransactionActive()) {
+            return null;
+        }
+
+        // The action only: metadata may carry ids, and this message reaches the error log.
+        return new LogicException(\sprintf(
+            'Refusing to record the "%s" security audit entry: a transaction is still open on the audit '
+            . 'connection at the request boundary, so the row could be rolled back with it.',
+            $action,
+        ), 0, $cause);
+    }
+
+    private function handOver(ExceptionEvent $event, Throwable $failure): void
+    {
+        $this->errorTracker?->captureException($failure);
+        $event->setThrowable($failure);
     }
 }

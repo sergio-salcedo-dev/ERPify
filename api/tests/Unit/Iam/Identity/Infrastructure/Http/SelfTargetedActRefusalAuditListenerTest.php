@@ -45,7 +45,13 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
             )
         ;
 
-        $this->listener($logger)->onException($this->event(SelfUnlockForbidden::forActor(self::ACTOR_ID)));
+        $refusal = SelfUnlockForbidden::forActor(self::ACTOR_ID);
+        $event = $this->event($refusal);
+
+        $this->listener($logger)->onException($event);
+
+        $this->assertSame($refusal, $event->getThrowable(), 'a recorded refusal is still answered as its 409');
+        $this->assertFalse($event->hasResponse());
     }
 
     public function testIgnoresAConflictThatIsNotAimedAtTheActor(): void
@@ -53,7 +59,7 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException(
+        $this->ignoringListener($logger)->onException(
             $this->event(LastActiveAdministratorProtected::forUser(self::ACTOR_ID)),
         );
     }
@@ -63,7 +69,7 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException($this->event(new RuntimeException('boom')));
+        $this->ignoringListener($logger)->onException($this->event(new RuntimeException('boom')));
     }
 
     public function testIgnoresAnIdenticalRefusalRaisedOutsideTheApiPipeline(): void
@@ -71,7 +77,7 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException(
+        $this->ignoringListener($logger)->onException(
             $this->event(SelfUnlockForbidden::forActor(self::ACTOR_ID), '/_profiler/0a1b'),
         );
     }
@@ -81,7 +87,7 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onException(new ExceptionEvent(
+        $this->ignoringListener($logger)->onException(new ExceptionEvent(
             $this->createStub(HttpKernelInterface::class),
             Request::create('/api/v1/backoffice/users/' . self::ACTOR_ID . '/unlock', Request::METHOD_POST),
             HttpKernelInterface::SUB_REQUEST,
@@ -114,7 +120,7 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
 
         $this->listener($logger)->onException($event);
 
-        $this->assertSame($failure, $event->getThrowable());
+        $this->assertWriteFailureOf($failure, $event->getThrowable());
         $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
     }
 
@@ -140,6 +146,14 @@ final class SelfTargetedActRefusalAuditListenerTest extends TestCase
     private function listener(AuditLogger $logger): SelfTargetedActRefusalAuditListener
     {
         return new SelfTargetedActRefusalAuditListener($this->boundaryAudit($logger), new ApiRequestMatcher());
+    }
+
+    /**
+     * A request this listener does not audit must not reach the audit connection at all.
+     */
+    private function ignoringListener(AuditLogger $logger): SelfTargetedActRefusalAuditListener
+    {
+        return new SelfTargetedActRefusalAuditListener($this->untouchedBoundaryAudit($logger), new ApiRequestMatcher());
     }
 
     private function listenerOverALeakedTransaction(AuditLogger $logger): SelfTargetedActRefusalAuditListener

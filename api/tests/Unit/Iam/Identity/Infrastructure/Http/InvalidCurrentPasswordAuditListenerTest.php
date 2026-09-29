@@ -116,7 +116,7 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
 
         $this->listener($logger)->onException($event);
 
-        $this->assertSame($failure, $event->getThrowable());
+        $this->assertWriteFailureOf($failure, $event->getThrowable());
         $this->assertFalse($event->hasResponse(), 'the responder, not this listener, answers the 5xx');
     }
 

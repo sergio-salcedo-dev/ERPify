@@ -26,11 +26,32 @@ use ReflectionClass;
  * a string-built level, from a CLI command or a use case — those write inside their own transaction on
  * purpose and are outside this rule — nor about a listener living outside an `Infrastructure/Http/` directory.
  *
+ * A second rule holds the seam's callers on `kernel.exception` to
+ * {@see RequestBoundarySecurityAudit::recordOnException()}: `HttpKernel::handleThrowable()` wraps no `try`
+ * around those listeners, so a refusal thrown by `record()` there escapes the kernel with no Problem Details
+ * and is never reported. The set of files that take an
+ * `ExceptionEvent` and call `recordOnException()` is pinned, so a sweep whose selection stopped matching reds
+ * instead of passing over nothing. **A green proves** no file under `src` that mentions `ExceptionEvent` calls a
+ * method named `record` through `->` or `?->` (method names compared case-insensitively, as PHP resolves them),
+ * and that exactly the pinned files call the exception variant. It errs loud on any `->record(` in such a file,
+ * whatever its receiver. It says nothing about `record` reached as a callable (`[$audit, 'record']`,
+ * `$audit->record(...)` passed on), through a helper in another file, or from a listener that never names
+ * `ExceptionEvent` — an untyped or `KernelEvent`-typed one.
+ *
  * @internal
  */
 #[CoversNothing]
 final class BoundarySecurityAuditSeamGateTest extends TestCase
 {
+    /**
+     * @var list<string>
+     */
+    private const array EXCEPTION_LISTENERS = [
+        'Iam/Identity/Infrastructure/Http/InvalidCurrentPasswordAuditListener.php',
+        'Iam/Identity/Infrastructure/Http/SelfTargetedActRefusalAuditListener.php',
+        'Shared/Audit/Infrastructure/Http/EventListener/AccessDeniedAuditListener.php',
+    ];
+
     #[Test]
     public function onlyTheSeamNamesTheSecurityLevelUnderInfrastructureHttp(): void
     {
@@ -62,39 +83,52 @@ final class BoundarySecurityAuditSeamGateTest extends TestCase
         $this->assertSame(
             [],
             $offenders,
-            'A request-boundary security write must go through RequestBoundarySecurityAudit::record(), '
-            . 'which refuses inside a leaked transaction.',
+            'A request-boundary security write must go through RequestBoundarySecurityAudit — record() on '
+            . 'kernel.response, recordOnException() on kernel.exception — which refuses inside a leaked transaction.',
         );
     }
 
     #[Test]
     public function noExceptionListenerCallsThePlainRecord(): void
     {
-        // HttpKernel::handleThrowable() wraps no try around its listeners, so a throw from record() inside a
-        // kernel.exception listener escapes the kernel with no Problem Details; recordOnException() hands it to
-        // the event instead. A file that takes an ExceptionEvent is such a listener.
+        // A file that takes an ExceptionEvent is such a listener.
         $root = ApiSourceFiles::root();
         $seam = (string) (new ReflectionClass(RequestBoundarySecurityAudit::class))->getFileName();
         $offenders = [];
+        $callers = [];
 
         foreach (ApiSourceFiles::phpFiles($root) as $file) {
             $path = $file->getPathname();
             $source = (string) \file_get_contents($path);
 
-            if ($path !== $seam && \str_contains($source, 'ExceptionEvent') && $this->callsPlainRecord($source)) {
+            if ($path === $seam || !\str_contains($source, 'ExceptionEvent')) {
+                continue;
+            }
+
+            if ($this->callsMethod($source, 'record')) {
                 $offenders[] = \substr($path, \strlen($root) + 1);
+            }
+
+            if ($this->callsMethod($source, 'recordOnException')) {
+                $callers[] = \substr($path, \strlen($root) + 1);
             }
         }
 
+        \sort($callers);
+        $this->assertSame(self::EXCEPTION_LISTENERS, $callers, 'the kernel.exception callers of the seam moved');
         $this->assertSame([], $offenders, 'A kernel.exception listener must call recordOnException(), not record().');
     }
 
     #[Test]
     public function thePlainRecordCallIsSeenAndTheExceptionVariantIsNot(): void
     {
-        $this->assertTrue($this->callsPlainRecord('<?php $this->securityAudit->record(self::A, []);'));
-        $this->assertFalse($this->callsPlainRecord('<?php $this->securityAudit->recordOnException($e, self::A, []);'));
-        $this->assertFalse($this->callsPlainRecord('<?php /** calls ->record( here */ $x = 1;'));
+        $this->assertTrue($this->callsMethod('<?php $this->securityAudit->record(self::A, []);', 'record'));
+        $this->assertTrue($this->callsMethod('<?php $this->securityAudit?->record(self::A, []);', 'record'));
+        $this->assertTrue($this->callsMethod('<?php $this->securityAudit->Record(self::A, []);', 'record'));
+        $this->assertFalse(
+            $this->callsMethod('<?php $this->securityAudit->recordOnException($e, self::A, []);', 'record'),
+        );
+        $this->assertFalse($this->callsMethod('<?php /** calls ->record( here */ $x = 1;', 'record'));
     }
 
     #[Test]
@@ -172,7 +206,7 @@ final class BoundarySecurityAuditSeamGateTest extends TestCase
         return 'AuditLevel' === $name || \str_ends_with($name, '\AuditLevel');
     }
 
-    private function callsPlainRecord(string $source): bool
+    private function callsMethod(string $source, string $method): bool
     {
         $significant = \array_values(\array_filter(
             \token_get_all($source),
@@ -182,8 +216,10 @@ final class BoundarySecurityAuditSeamGateTest extends TestCase
 
         return \array_any(
             $significant,
-            static fn (array|string $token, int $index): bool => \is_array($token) && T_OBJECT_OPERATOR === $token[0]
-                && \is_array($significant[$index + 1] ?? null) && 'record' === $significant[$index + 1][1]
+            static fn (array|string $token, int $index): bool => \is_array($token)
+                && \in_array($token[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)
+                && \is_array($significant[$index + 1] ?? null)
+                && 0 === \strcasecmp($method, $significant[$index + 1][1])
                 && '(' === ($significant[$index + 2] ?? null),
         );
     }
