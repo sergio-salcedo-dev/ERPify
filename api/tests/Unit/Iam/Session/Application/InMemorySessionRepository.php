@@ -92,6 +92,9 @@ final class InMemorySessionRepository implements SessionRepository
      */
     public ?Closure $beforeLockActive = null;
 
+    /** @var list<string> ids passed to findActiveById */
+    public array $findActiveByIdCalls = [];
+
     /** @var list<string> userIds passed to revokeOthersForUser */
     public array $revokeOthersCalls = [];
 
@@ -129,6 +132,8 @@ final class InMemorySessionRepository implements SessionRepository
     #[Override]
     public function findActiveById(SessionId $id): ?Session
     {
+        $this->findActiveByIdCalls[] = $id->toString();
+
         $session = $this->byId[$id->toString()] ?? null;
 
         if (!$session instanceof Session) {

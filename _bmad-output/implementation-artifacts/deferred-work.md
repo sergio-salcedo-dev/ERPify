@@ -228,7 +228,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
 location: api/src/Iam/Session/Application/StartSession.php:52
 reason: Conscious trade-off documented in StartSession; PruneRetiredSessions now bounds such rows at ~97 days after login, so they are bounded, not avoided, and show as a 'ghost device' for the whole ACTIVE window.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-revoke-prior-session-on-relogin
+resolution-undo: dea7356760358eced66f116cc50b7f0295b0a1ea9d640115599edf4ea64806dd 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Revoke the prior session on re-login — When a login mints a new session while the HTTP session already correlates a live iam_session, revoke that previous row in the same transaction, with a functional test showing no ghost device after re-login.
 
 **(api/Iam/Session — higiene de datos) Filas `iam_session` `ACTIVE` huérfanas.** (a) `StartSession` escribe la correlación (`currentSession->set()`) DESPUÉS del commit del row+outbox; si `set()` lanza (p. ej. `getSession()` sin sesión) queda una fila `ACTIVE` sin `iamSessionId` que la referencie. (b) Un re-login con sesión viva acuña una fila nueva y sobrescribe `iamSessionId` sin revocar la previa → la anterior queda `ACTIVE` correlación-huérfana. Tradeoff consciente (documentado en el docblock de `StartSession`: correlación post-commit para no dejar un `iamSessionId` colgando), baja probabilidad; aparece como «dispositivo fantasma» en «mis sesiones». **La poda que esta bala esperaba ya no es futuro** (medido el 2026-09-20): `PruneRetiredSessions` existe, con `REVOKED_RETENTION` de `P30D` y `EXPIRED_RETENTION` de `P90D`, y su segundo disyuntor (`expiresAt < :expiredBefore`, que ignora el estado) **sí** barre una fila ACTIVE huérfana — pero a los ~97 días del login que la acuñó (7d de TTL + 90d de ventana). O sea que la fila está **acotada, no evitada**, y es visible como dispositivo fantasma durante toda la ventana ACTIVE. Ref: `api/src/Iam/Session/Application/StartSession.php:52`.
