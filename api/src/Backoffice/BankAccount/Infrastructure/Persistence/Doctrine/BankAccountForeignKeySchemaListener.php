@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\DBAL\Schema\ForeignKeyConstraint;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
 
@@ -35,12 +37,27 @@ final class BankAccountForeignKeySchemaListener
             return;
         }
 
-        $table = $schema->getTable(self::TABLE);
-
-        if ($table->hasForeignKey(self::FOREIGN_KEY)) {
+        if ($schema->getTable(self::TABLE)->hasForeignKey(self::FOREIGN_KEY)) {
             return;
         }
 
-        $table->addForeignKeyConstraint(self::REFERENCED_TABLE, [self::COLUMN], ['id'], [], self::FOREIGN_KEY);
+        $foreignKey = ForeignKeyConstraint::editor()
+            ->setUnquotedName(self::FOREIGN_KEY)
+            ->setUnquotedReferencingColumnNames(self::COLUMN)
+            ->setUnquotedReferencedTableName(self::REFERENCED_TABLE)
+            ->setUnquotedReferencedColumnNames('id')
+            ->create()
+        ;
+
+        $args->setSchema(
+            $schema->edit()
+                ->modifyTableByUnquotedName(
+                    self::TABLE,
+                    static function (TableEditor $table) use ($foreignKey): void {
+                        $table->addForeignKeyConstraint($foreignKey);
+                    },
+                )
+                ->create(),
+        );
     }
 }

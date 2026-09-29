@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\ColumnEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
@@ -29,12 +32,23 @@ final class BankCountSchemaListener
             return;
         }
 
-        $table = $schema->createTable(self::TABLE);
-        $table->addColumn('id', Types::SMALLINT, ['default' => 1]);
-        $table->addColumn('total', Types::INTEGER, ['default' => 0]);
-        $table->addColumn('updated_at', Types::DATETIMETZ_IMMUTABLE);
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()->setUnquotedColumnNames('id')->create(),
-        );
+        $table = Table::editor()
+            ->setUnquotedName(self::TABLE)
+            ->setColumns(
+                $this->column('id', Types::SMALLINT)->setDefaultValue(1)->create(),
+                $this->column('total', Types::INTEGER)->setDefaultValue(0)->create(),
+                $this->column('updated_at', Types::DATETIMETZ_IMMUTABLE)->create(),
+            )
+            ->setPrimaryKeyConstraint(PrimaryKeyConstraint::editor()->setUnquotedColumnNames('id')->create())
+            ->create()
+        ;
+
+        $args->setSchema($schema->edit()->addTable($table)->create());
+    }
+
+    /** @param non-empty-string $name */
+    private function column(string $name, string $type): ColumnEditor
+    {
+        return Column::editor()->setUnquotedName($name)->setTypeName($type);
     }
 }

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\ColumnEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
@@ -30,12 +33,25 @@ final class ProjectionCheckpointSchemaListener
             return;
         }
 
-        $table = $schema->createTable(self::TABLE);
-        $table->addColumn('name', Types::STRING, ['length' => 120]);
-        $table->addColumn('last_sequence', Types::BIGINT, ['default' => 0]);
-        $table->addColumn('updated_at', Types::DATETIMETZ_IMMUTABLE);
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()->setUnquotedColumnNames('name')->create(),
-        );
+        $table = Table::editor()
+            ->setUnquotedName(self::TABLE)
+            ->setColumns(
+                $this->column('name', Types::STRING)->setLength(120)->create(),
+                $this->column('last_sequence', Types::BIGINT)->setDefaultValue(0)->create(),
+                $this->column('updated_at', Types::DATETIMETZ_IMMUTABLE)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('name')->create(),
+            )
+            ->create()
+        ;
+
+        $args->setSchema($schema->edit()->addTable($table)->create());
+    }
+
+    /** @param non-empty-string $name */
+    private function column(string $name, string $type): ColumnEditor
+    {
+        return Column::editor()->setUnquotedName($name)->setTypeName($type);
     }
 }

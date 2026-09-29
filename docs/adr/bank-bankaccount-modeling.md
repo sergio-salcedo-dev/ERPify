@@ -55,8 +55,9 @@ sin enforcement).
 La referencia por ID en el ORM **no implica** perder la FK física: la columna `bank_id` y su
 constraint ya existen y el esquema queda **idéntico** tras el refactor (migración: ninguna). Para
 que `make db.diff` no intente dropear una FK que el ORM ya no conoce, se registra un listener de
-`postGenerateSchema` en `BankAccount/Infrastructure/Persistence/Doctrine` que inyecta la FK en el
-schema en memoria: Doctrine queda *ORM-unaware* (dominio limpio) pero *schema-aware* (diffs
+`postGenerateSchema` en `BankAccount/Infrastructure/Persistence/Doctrine` que añade la FK con
+`SchemaEditor::modifyTableByUnquotedName()` y devuelve el schema resultante con
+`GenerateSchemaEventArgs::setSchema()`: Doctrine queda *ORM-unaware* (dominio limpio) pero *schema-aware* (diffs
 limpios, sin migración manual recurrente).
 
 El doble check de `BankDeleter` (count para el 409 limpio + catch de

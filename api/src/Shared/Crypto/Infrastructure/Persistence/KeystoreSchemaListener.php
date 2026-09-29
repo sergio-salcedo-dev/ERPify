@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Shared\Crypto\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\ColumnEditor;
+use Doctrine\DBAL\Schema\Index;
+use Doctrine\DBAL\Schema\IndexEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
@@ -33,18 +38,40 @@ final class KeystoreSchemaListener
             return;
         }
 
-        $table = $schema->createTable(self::TABLE);
+        $table = Table::editor()
+            ->setUnquotedName(self::TABLE)
+            ->setColumns(
+                $this->column('encryption_scope_id', Types::STRING)->setLength(160)->create(),
+                $this->column('wrapped_dek', Types::TEXT)->setNotNull(false)->create(),
+                $this->column('kek_version', Types::SMALLINT)->create(),
+                $this->column('created_at', Types::DATETIMETZ_IMMUTABLE)->create(),
+                $this->column('destroyed_at', Types::DATETIMETZ_IMMUTABLE)->setNotNull(false)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('encryption_scope_id')->create(),
+            )
+            ->setIndexes(
+                $this->index('dek_keystore_destroyed_idx', 'destroyed_at')->create(),
+            )
+            ->create()
+        ;
 
-        $table->addColumn('encryption_scope_id', Types::STRING, ['length' => 160]);
-        $table->addColumn('wrapped_dek', Types::TEXT, ['notnull' => false]);
-        $table->addColumn('kek_version', Types::SMALLINT);
-        $table->addColumn('created_at', Types::DATETIMETZ_IMMUTABLE);
-        $table->addColumn('destroyed_at', Types::DATETIMETZ_IMMUTABLE, ['notnull' => false]);
+        $args->setSchema($schema->edit()->addTable($table)->create());
+    }
 
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()->setUnquotedColumnNames('encryption_scope_id')->create(),
-        );
+    /** @param non-empty-string $name */
+    private function column(string $name, string $type): ColumnEditor
+    {
+        return Column::editor()->setUnquotedName($name)->setTypeName($type);
+    }
 
-        $table->addIndex(['destroyed_at'], 'dek_keystore_destroyed_idx');
+    /**
+     * @param non-empty-string $name
+     * @param non-empty-string $firstColumn
+     * @param non-empty-string ...$otherColumns
+     */
+    private function index(string $name, string $firstColumn, string ...$otherColumns): IndexEditor
+    {
+        return Index::editor()->setUnquotedName($name)->setUnquotedColumnNames($firstColumn, ...$otherColumns);
     }
 }

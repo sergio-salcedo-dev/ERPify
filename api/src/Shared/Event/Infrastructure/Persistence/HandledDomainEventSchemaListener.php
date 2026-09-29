@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\ColumnEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
@@ -29,14 +32,25 @@ final class HandledDomainEventSchemaListener
             return;
         }
 
-        $table = $schema->createTable(self::TABLE);
-        $table->addColumn('event_id', Types::STRING, ['length' => 36]);
-        $table->addColumn('handler', Types::STRING, ['length' => 190]);
-        $table->addColumn('claimed_at', Types::DATETIME_IMMUTABLE);
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()
-                ->setUnquotedColumnNames('event_id', 'handler')
-                ->create(),
-        );
+        $table = Table::editor()
+            ->setUnquotedName(self::TABLE)
+            ->setColumns(
+                $this->column('event_id', Types::STRING)->setLength(36)->create(),
+                $this->column('handler', Types::STRING)->setLength(190)->create(),
+                $this->column('claimed_at', Types::DATETIME_IMMUTABLE)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('event_id', 'handler')->create(),
+            )
+            ->create()
+        ;
+
+        $args->setSchema($schema->edit()->addTable($table)->create());
+    }
+
+    /** @param non-empty-string $name */
+    private function column(string $name, string $type): ColumnEditor
+    {
+        return Column::editor()->setUnquotedName($name)->setTypeName($type);
     }
 }
