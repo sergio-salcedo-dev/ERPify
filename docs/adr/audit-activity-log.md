@@ -171,9 +171,15 @@ como decisión abierta.
 
 **Quién queda fuera del seam, y por qué.** Los productores `security` de caso de uso escriben dentro de su
 transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffort`,
-`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`) escriben **después** del
+`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`,
+`RecordRecoverySecretAuditBestEffort`) escriben **después** del
 commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
-`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los comandos de operador
+`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. `RecordLockoutAuditBestEffort` y
+`RecordRecoveryThrottleAuditBestEffort` escriben en una transacción propia bajo el bloqueo de la fila
+`identity_user` del sujeto (orden `identity_user` → `audit_log`, el de la erasure), así que no pueden confirmar
+una fila que lo nombre tras la pasada de la erasure; `RecordLockoutNoticeAuditBestEffort` (riesgo aceptado
+#860) y `RecordRecoverySecretAuditBestEffort` no, y el residuo que dejan lo señala
+`identity:gdpr:reconcile-subject-references`. Los comandos de operador
 (`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
 no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
 distingue además con su propio código de salida (`ERASED_UNRECORDED`).

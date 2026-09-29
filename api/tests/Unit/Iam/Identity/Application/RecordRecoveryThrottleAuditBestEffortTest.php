@@ -118,6 +118,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         (new RecordRecoveryThrottleAuditBestEffort(
             new ThrowingRecoveryThrottleAuditBudget(),
             new InMemoryUserRepository(UserMother::create()),
+            new InlineTransactionManager(),
             $auditLogger,
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -135,6 +136,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         (new RecordRecoveryThrottleAuditBestEffort(
             new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
+            new InlineTransactionManager(),
             new FailingAuditLogger($failure),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -155,6 +157,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         (new RecordRecoveryThrottleAuditBestEffort(
             new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
+            new InlineTransactionManager(),
             new FailingAuditLogger(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -179,6 +182,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         (new RecordRecoveryThrottleAuditBestEffort(
             new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
+            new InlineTransactionManager(),
             new FailingAuditLogger(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -191,6 +195,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         return new RecordRecoveryThrottleAuditBestEffort(
             $budget ?? new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
+            new InlineTransactionManager(),
             $auditLogger,
             new RecordingLogger(),
         );

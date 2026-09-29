@@ -46,6 +46,16 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * other as administrators, and `AdministratorErasureRequiresDemotion` refuses to erase an identity that still
  * carries the role. Read this as the boundary of the guarantee — a lock over the erasure's own pair of
  * statements, never a claim about the table.
+ *
+ * Nor does it hold back a row that names the subject and commits AFTER the anonymisers ran — such a row was not
+ * there to lock. For two of Identity's post-commit writers, `RecordLockoutAuditBestEffort` and
+ * `RecordRecoveryThrottleAuditBestEffort`, what prevents one is not this class either: each takes the subject's
+ * `identity_user` row lock before its INSERT, in the same transaction and in the erasure's own order
+ * (`identity_user` → `audit_log`). So they commit before the erasure takes that row — and its pass finds and
+ * redacts them — or they wait for it and then find no identity to name. The other two post-commit writers that
+ * name the subject in `resource_id`, `RecordLockoutNoticeAuditBestEffort` (an accepted risk, #860) and
+ * `RecordRecoverySecretAuditBestEffort`, are NOT serialised that way: a row from either that commits after an
+ * erasure is residue nothing here prevents, and it is what `identity:gdpr:reconcile-subject-references` surfaces.
  */
 #[AsAlias(AuditSubjectRowLock::class)]
 final readonly class DbalAuditSubjectRowLock implements AuditSubjectRowLock

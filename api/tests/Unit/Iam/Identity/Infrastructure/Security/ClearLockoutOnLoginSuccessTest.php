@@ -99,12 +99,18 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
 
     private function listener(UserRepository $repository): ClearLockoutOnLoginSuccess
     {
+        $transactionManager = new InlineTransactionManager();
         $registrar = new LoginAttemptRegistrar(
             $repository,
             new RecordingEventBus(),
-            new InlineTransactionManager(),
+            $transactionManager,
             new FixedClock(new DateTimeImmutable(self::NOW)),
-            new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutAuditBestEffort(
+                $repository,
+                $transactionManager,
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
         );
 
         return new ClearLockoutOnLoginSuccess($registrar);

@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort;
 use Erpify\Iam\Identity\Infrastructure\Http\RecoveryThrottleAuditListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Tests\Unit\Iam\Identity\Application\FixedRecoveryThrottleAuditBudget;
+use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingLogger;
 use Erpify\Tests\Unit\Iam\Identity\Application\ThrowingRecoveryThrottleAuditBudget;
@@ -97,6 +98,7 @@ final class RecoveryThrottleAuditListenerTest extends TestCase
             new RecordRecoveryThrottleAuditBestEffort(
                 new ThrowingRecoveryThrottleAuditBudget(),
                 new InMemoryUserRepository(UserMother::create()),
+                new InlineTransactionManager(),
                 new RecordingAuditLogger(),
                 new RecordingLogger(),
             ),
@@ -144,6 +146,7 @@ final class RecoveryThrottleAuditListenerTest extends TestCase
             new RecordRecoveryThrottleAuditBestEffort(
                 new FixedRecoveryThrottleAuditBudget(granted: true),
                 new InMemoryUserRepository(UserMother::create()),
+                new InlineTransactionManager(),
                 $auditLogger,
                 new RecordingLogger(),
             ),

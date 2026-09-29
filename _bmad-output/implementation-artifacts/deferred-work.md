@@ -471,7 +471,9 @@ resolution-undo: 4f8d06267155660d82fb4f59b2fae8eafa007099e63530253ebb124e4c9c484
 origin: migrated from legacy ledger ("Deferred from: code review of br-4c-602-observabilidad-del-throttle-de-recuperacion (2026-08-12)"), 2026-09-24
 location: api/src/Shared/Audit (AuditSubjectRowLock), RecordLockoutAuditBestEffort, RecordRecoveryThrottleAuditBestEffort
 reason: Neither late writer contends on identity_user, so the window is closed by nothing; it is recoverable (reconciler surfaces it and re-running the idempotent resource pass redacts it) but nothing re-runs it automatically.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-serialise-late-audit-writers-on-identity
+resolution-undo: 9d428fdb4548d84211b380e0baaa40b44b90e5117b8cbfc08e1afa77869fc35f 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Serialise late writers on identity_user — Make the late audit writers take a lock on the subject's identity_user row (or skip when absent) so none can commit inside the erasure window.
 
 **A row committed between the resource-axis `UPDATE` and the erasure's commit keeps its request metadata, and nothing serialises the two.** `AuditSubjectRowLock` scopes its guarantee to the rows existing when it ran, so a `USER_LOCKED` landing after the pass keeps the requester's ip with `resource_erased = FALSE`. **Neither writer of that shape contends on `identity_user`:** `RecordLockoutAuditBestEffort` runs post-commit with the subject id already in hand, and `RecordRecoveryThrottleAuditBestEffort::subjectOf()` resolves the subject with a plain unlocked `findByEmail` from a `kernel.terminate` listener — so the window is closed by nothing, not merely narrow. What makes it *recoverable* rather than permanent is that the late row keeps `resource_id` at the real id with `resource_erased = FALSE`: the reconciler surfaces it, and re-running the erasure's resource pass against that id redacts both columns, because the statement is idempotent by predicate rather than by flag. The residue is therefore narrower than "unhandled" — nothing re-runs it **automatically**, and an operator has to be told by the reconciler first.
@@ -644,4 +646,12 @@ location: api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener
 source_spec: `spec-dw-46-audit-log-actor-check-constraints.md`
 severity: low
 reason: DbalAuditLogPruner borra por WHERE level = :level por cada AuditLevel; un token fuera del enum sobrevive para siempre. Preexistente y fuera del intent de DW-46 (solo actor_type/actor_id).
+status: open
+
+### DW-69: Otros dos escritores post-commit nombran al sujeto en resource_id sin bloquear identity_user: RecordLockoutNoticeAuditBestEffort y RecordRecoverySecretAuditBestEffort.
+origin: spec-deferred d63734244a81
+location: api/src/Iam/Identity/Application/RecordRecoverySecretAuditBestEffort.php:118; api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort.php
+source_spec: `spec-dw-48-serialise-late-audit-writers-on-identity.md`
+severity: medium
+reason: RecordRecoverySecretAuditBestEffort::record() (L118-127) escribe AuditResource::of(User, $userId) tras el commit de Mint/Redeem/RevokeRecoverySecret sin transacción ni bloqueo; RecordLockoutNoticeAuditBestEffort igual tras NotifyLockedIdentities::save(). Mismo defecto que DW-48 pero fuera de los dos escritores que nombra el intent; el del aviso es riesgo aceptado (@accepted-risk #860, cuyo razonamiento "aggregate-wide concurrency policy" conviene reabrir ahora que el mecanismo existe). Su residuo lo señala identity:gdpr:reconcile-subject-references; el docblock de DbalAuditSubjectRowLock y el ADR ya los nombran como NO serializados.
 status: open

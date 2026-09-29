@@ -32,12 +32,18 @@ trait BuildsFailureHandler
      */
     private function handler(UserRepository $repository): ProblemDetailsAuthenticationFailureHandler
     {
+        $transactionManager = new InlineTransactionManager();
         $registrar = new LoginAttemptRegistrar(
             $repository,
             new RecordingEventBus(),
-            new InlineTransactionManager(),
+            $transactionManager,
             new FixedClock(SystemClock::now()),
-            new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutAuditBestEffort(
+                $repository,
+                $transactionManager,
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
         );
 
         return new ProblemDetailsAuthenticationFailureHandler($registrar);
@@ -69,12 +75,18 @@ trait BuildsFailureHandler
         $transactionManager = $this->createStub(TransactionManager::class);
         $transactionManager->method('transactional')->willThrowException($translated);
 
+        $repository = new InMemoryUserRepository(UserMother::create());
         $registrar = new LoginAttemptRegistrar(
-            new InMemoryUserRepository(UserMother::create()),
+            $repository,
             new RecordingEventBus(),
             $transactionManager,
             new FixedClock(SystemClock::now()),
-            new RecordLockoutAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutAuditBestEffort(
+                $repository,
+                $transactionManager,
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
         );
 
         return new ProblemDetailsAuthenticationFailureHandler($registrar);

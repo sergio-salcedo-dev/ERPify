@@ -31,7 +31,9 @@ final class LoginAttemptRegistrarAuditTest extends TestCase
     /**
      * `committed` is the assertion that carries this test. "A row was written" is true on both sides of the
      * transaction boundary, so without the stamp the whole case stays green when the write is moved back
-     * inside the closure — the one placement that lets a failed INSERT roll the lockout back.
+     * inside the closure — the one placement that lets a failed INSERT roll the lockout back. `inside` pins the
+     * other half: the row arrives inside a SECOND unit of work, the projection's own, which is what lets it hold
+     * the subject's row lock without sharing the registrar's transaction.
      */
     public function testTheLockoutAuditRowIsWrittenOnceAndOnlyOnceTheTransactionHasCommitted(): void
     {
@@ -51,6 +53,7 @@ final class LoginAttemptRegistrarAuditTest extends TestCase
         $resource = $record['resource'];
 
         $this->assertTrue($record['committed']);
+        $this->assertTrue($record['inside']);
         $this->assertSame('USER_LOCKED', $record['action']);
         $this->assertSame(AuditLevel::SECURITY, $record['level']);
         $this->assertInstanceOf(AuditResource::class, $resource);
