@@ -10,6 +10,7 @@ use Doctrine\DBAL\Schema\Table;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\MembershipOrganizationForeignKeySchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedForeignKeySchemaListener;
 use Erpify\Tests\Support\Persistence\SchemaFixture;
 use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(MembershipOrganizationForeignKeySchemaListener::class)]
+#[CoversClass(InjectedForeignKeySchemaListener::class)]
 final class MembershipOrganizationForeignKeySchemaListenerTest extends TestCase
 {
     private const string FOREIGN_KEY = 'fk_membership_organization';

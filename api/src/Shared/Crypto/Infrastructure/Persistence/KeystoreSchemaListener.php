@@ -5,15 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Shared\Crypto\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
-use Doctrine\DBAL\Schema\Column;
-use Doctrine\DBAL\Schema\ColumnEditor;
-use Doctrine\DBAL\Schema\Index;
-use Doctrine\DBAL\Schema\IndexEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
-use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\DBAL\Types\Types;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 
 /**
  * Injects the `dek_keystore` table into Doctrine's in-memory schema. It is written through plain DBAL
@@ -26,20 +22,16 @@ use Doctrine\ORM\Tools\ToolEvents;
  * (ADR D13/D17). No column default: the writer supplies every value, as in `audit_log`.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class KeystoreSchemaListener
+final class KeystoreSchemaListener extends InjectedTableSchemaListener
 {
-    private const string TABLE = 'dek_keystore';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
+        parent::__construct('dek_keystore');
+    }
 
-        if ($schema->hasTable(self::TABLE)) {
-            return;
-        }
-
-        $table = Table::editor()
-            ->setUnquotedName(self::TABLE)
+    protected function define(TableEditor $table): TableEditor
+    {
+        return $table
             ->setColumns(
                 $this->column('encryption_scope_id', Types::STRING)->setLength(160)->create(),
                 $this->column('wrapped_dek', Types::TEXT)->setNotNull(false)->create(),
@@ -53,25 +45,6 @@ final class KeystoreSchemaListener
             ->setIndexes(
                 $this->index('dek_keystore_destroyed_idx', 'destroyed_at')->create(),
             )
-            ->create()
         ;
-
-        $args->setSchema($schema->edit()->addTable($table)->create());
-    }
-
-    /** @param non-empty-string $name */
-    private function column(string $name, string $type): ColumnEditor
-    {
-        return Column::editor()->setUnquotedName($name)->setTypeName($type);
-    }
-
-    /**
-     * @param non-empty-string $name
-     * @param non-empty-string $firstColumn
-     * @param non-empty-string ...$otherColumns
-     */
-    private function index(string $name, string $firstColumn, string ...$otherColumns): IndexEditor
-    {
-        return Index::editor()->setUnquotedName($name)->setUnquotedColumnNames($firstColumn, ...$otherColumns);
     }
 }

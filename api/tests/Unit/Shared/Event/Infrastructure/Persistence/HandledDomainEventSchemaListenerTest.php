@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Shared\Event\Infrastructure\Persistence\HandledDomainEventSchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 use Erpify\Tests\Support\Persistence\ColumnShape;
 use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(HandledDomainEventSchemaListener::class)]
+#[CoversClass(InjectedTableSchemaListener::class)]
 final class HandledDomainEventSchemaListenerTest extends TestCase
 {
     private const string TABLE = 'handled_domain_event';

@@ -10,6 +10,7 @@ use Doctrine\DBAL\Schema\Table;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\BankAccountForeignKeySchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedForeignKeySchemaListener;
 use Erpify\Tests\Support\Persistence\SchemaFixture;
 use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(BankAccountForeignKeySchemaListener::class)]
+#[CoversClass(InjectedForeignKeySchemaListener::class)]
 final class BankAccountForeignKeySchemaListenerTest extends TestCase
 {
     private const string FOREIGN_KEY = 'FK_53A23E0A11C8FB41';

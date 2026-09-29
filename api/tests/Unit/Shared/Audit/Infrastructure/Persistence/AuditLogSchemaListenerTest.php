@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Shared\Audit\Infrastructure\Persistence\AuditLogSchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 use Erpify\Tests\Support\Persistence\ColumnShape;
 use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -25,6 +26,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(AuditLogSchemaListener::class)]
+#[CoversClass(InjectedTableSchemaListener::class)]
 final class AuditLogSchemaListenerTest extends TestCase
 {
     private const string TABLE = 'audit_log';

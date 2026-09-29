@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
-use Doctrine\DBAL\Schema\Column;
-use Doctrine\DBAL\Schema\ColumnEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
-use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\DBAL\Types\Types;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 
 /**
  * Injects the `projection_checkpoint` table (last applied `sequence` per projection) into Doctrine's
@@ -21,20 +19,16 @@ use Doctrine\ORM\Tools\ToolEvents;
  * `updated_at` is set by the writer (no DB-side `DEFAULT now()`).
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class ProjectionCheckpointSchemaListener
+final class ProjectionCheckpointSchemaListener extends InjectedTableSchemaListener
 {
-    private const string TABLE = 'projection_checkpoint';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
+        parent::__construct('projection_checkpoint');
+    }
 
-        if ($schema->hasTable(self::TABLE)) {
-            return;
-        }
-
-        $table = Table::editor()
-            ->setUnquotedName(self::TABLE)
+    protected function define(TableEditor $table): TableEditor
+    {
+        return $table
             ->setColumns(
                 $this->column('name', Types::STRING)->setLength(120)->create(),
                 $this->column('last_sequence', Types::BIGINT)->setDefaultValue(0)->create(),
@@ -43,15 +37,6 @@ final class ProjectionCheckpointSchemaListener
             ->setPrimaryKeyConstraint(
                 PrimaryKeyConstraint::editor()->setUnquotedColumnNames('name')->create(),
             )
-            ->create()
         ;
-
-        $args->setSchema($schema->edit()->addTable($table)->create());
-    }
-
-    /** @param non-empty-string $name */
-    private function column(string $name, string $type): ColumnEditor
-    {
-        return Column::editor()->setUnquotedName($name)->setTypeName($type);
     }
 }

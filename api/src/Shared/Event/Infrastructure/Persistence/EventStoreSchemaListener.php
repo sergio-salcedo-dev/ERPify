@@ -5,16 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
-use Doctrine\DBAL\Schema\Column;
-use Doctrine\DBAL\Schema\ColumnEditor;
-use Doctrine\DBAL\Schema\Index;
 use Doctrine\DBAL\Schema\Index\IndexType;
-use Doctrine\DBAL\Schema\IndexEditor;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
-use Doctrine\DBAL\Schema\Table;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\DBAL\Types\Types;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 
 /**
  * Injects the permanent `event_store` table — append-only, with a closed set of sanctioned mutations, the
@@ -30,20 +26,16 @@ use Doctrine\ORM\Tools\ToolEvents;
  * equivalent; only the literal DDL differs.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class EventStoreSchemaListener
+final class EventStoreSchemaListener extends InjectedTableSchemaListener
 {
-    private const string TABLE = 'event_store';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
+        parent::__construct('event_store');
+    }
 
-        if ($schema->hasTable(self::TABLE)) {
-            return;
-        }
-
-        $table = Table::editor()
-            ->setUnquotedName(self::TABLE)
+    protected function define(TableEditor $table): TableEditor
+    {
+        return $table
             ->setColumns(
                 $this->column('sequence', Types::BIGINT)->setAutoincrement(true)->create(),
                 $this->column('event_id', Types::GUID)->create(),
@@ -72,25 +64,6 @@ final class EventStoreSchemaListener
                 $this->index('event_store_name_idx', 'event_name', 'sequence')->create(),
                 $this->index('event_store_recorded_idx', 'recorded_on')->create(),
             )
-            ->create()
         ;
-
-        $args->setSchema($schema->edit()->addTable($table)->create());
-    }
-
-    /** @param non-empty-string $name */
-    private function column(string $name, string $type): ColumnEditor
-    {
-        return Column::editor()->setUnquotedName($name)->setTypeName($type);
-    }
-
-    /**
-     * @param non-empty-string $name
-     * @param non-empty-string $firstColumn
-     * @param non-empty-string ...$otherColumns
-     */
-    private function index(string $name, string $firstColumn, string ...$otherColumns): IndexEditor
-    {
-        return Index::editor()->setUnquotedName($name)->setUnquotedColumnNames($firstColumn, ...$otherColumns);
     }
 }

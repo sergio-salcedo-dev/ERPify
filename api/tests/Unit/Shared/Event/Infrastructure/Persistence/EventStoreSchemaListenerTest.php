@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Shared\Event\Infrastructure\Persistence\EventStoreSchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 use Erpify\Tests\Support\Persistence\ColumnShape;
 use Erpify\Tests\Support\Persistence\SchemaFixture;
 use Erpify\Tests\Support\Persistence\SchemaShape;
@@ -26,6 +27,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(EventStoreSchemaListener::class)]
+#[CoversClass(InjectedTableSchemaListener::class)]
 final class EventStoreSchemaListenerTest extends TestCase
 {
     private const string TABLE = 'event_store';

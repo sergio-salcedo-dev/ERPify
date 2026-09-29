@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Shared\Crypto\Infrastructure\Persistence\KeystoreSchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 use Erpify\Tests\Support\Persistence\ColumnShape;
 use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -25,6 +26,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(KeystoreSchemaListener::class)]
+#[CoversClass(InjectedTableSchemaListener::class)]
 final class KeystoreSchemaListenerTest extends TestCase
 {
     private const string TABLE = 'dek_keystore';
