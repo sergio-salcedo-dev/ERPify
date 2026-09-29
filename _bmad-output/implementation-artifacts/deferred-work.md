@@ -207,7 +207,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
 location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx:70
 reason: Half (a) closed by 31423b68; (b) a store outage 503 still presents as 'session required' and bounces to /login. Deferred, not a bug: ratified Decision F/AC9; routing 503 to /maintenance would be a UX-resilience improvement to the spec.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-pwa-me-503-to-maintenance
+resolution-undo: 1e34e2bec4d8fa80f5ba5ab6505a9700c856b8d10a86062670180f7c1dc50c0d 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Route 503 to /maintenance — Distinguish a 503 store-unavailable /me response in the identity adapter and AuthProvider and route it to the existing /maintenance page rather than to /login, keeping network/malformed-body failures on the current path; update Decision F/AC9's record.
 
 **(pwa/access — resiliencia UX) El PWA colapsa todo fallo no-401 de `/me` a «unauthenticated».** `AuthProvider.resolveSession` captura red/cuerpo-malformado/**503** → `null` → `UNAUTHENTICATED`. (a) **cerrada** — medido el 2026-09-20, `LoginForm.tsx:54-60` guarda hoy el `await login()` antes del toast y del `router.push`, así que un blip tras el login deja al usuario en el formulario con un error reintentable en vez de anunciar «Signed in» y rebotar; el arreglo entró el 2026-08-31 (`31423b68`), dos meses después de escribirse esta bala. (b) En un outage de store, `/me` 503 se presenta como «sesión requerida» y manda a `/login` (que también 503); se descarta la distinción 503/401 que el backend construyó (existe `/maintenance`). **Diferido, NO bug:** es la **Decisión F/AC9 ratificada** (`/me` KO → unauthenticated → B1 `/login`, para evitar el spinner infinito). Enrutar 503→`/maintenance` y no rebotar en un blip post-login sería una *mejora* del spec (pase de resiliencia UX), no un defecto. Ref: `pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx:70`, `pwa/src/app/(auth)/_components/LoginForm.tsx:53`.
@@ -612,4 +614,20 @@ location: api/tests/Unit/Shared/Persistence/RepositoryUniqueViolationTest.php
 source_spec: `spec-dw-16-30-event-store-informative-version.md`
 severity: low
 reason: api-error-contract.md dice que el `resource` es lo único que distingue los cuatro puertos y que se afirma por puerto; el proveedor del test sólo cubre bank, bank-account e identity-user. Preexistente.
+status: open
+
+### DW-66: La sonda en frío de /me que se resuelve después de un login() puede pisar la sesión recién obtenida.
+origin: spec-deferred 3ae2cbd0cfb3
+location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
+source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
+severity: low
+reason: AuthProvider aplica el resultado de la sonda inicial sin secuenciar contra login(); la forma es previa a DW-22 (antes pisaba con null, ahora también con unavailable). Solo ocurre si la sonda en frío tarda más que un login completo.
+status: open
+
+### DW-67: Un re-sondeo de /me disparado por navegación puede pisar el resultado de un login() o logout() posterior.
+origin: spec-deferred 64a9c85297cc
+location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
+source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
+severity: low
+reason: Misma causa raíz que la entrada anterior: AuthProvider no secuencia sus sondas (el efecto de ruta cancela solo la suya). Con UNAVAILABLE/HYDRATING RequireAuth no monta los controles de logout; el caso requiere un login() que resuelva antes que el re-sondeo lanzado al llegar a /login.
 status: open

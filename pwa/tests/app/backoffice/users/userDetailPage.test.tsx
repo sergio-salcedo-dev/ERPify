@@ -23,6 +23,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c" }),
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
+  usePathname: () => "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c",
 }));
 
 import UserDetailPage from "@/app/backoffice/users/[id]/page";

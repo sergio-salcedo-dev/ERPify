@@ -6,6 +6,7 @@ import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/dom
 import { UserStatus } from "../domain/UserStatus";
 import { ALL_PERMISSIONS, type HeldPermission, type Permission } from "../domain/Permission";
 import type { Identity } from "../domain/Identity";
+import { IdentityUnavailableError } from "../domain/IdentityUnavailableError";
 import type { ChangePasswordCommand, IdentityRepository } from "../domain/IdentityRepository";
 
 interface MeResponse {
@@ -62,9 +63,13 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
  *    verbatim; permissions are the set the API derives from them, narrowed to the
  *    ones this client declares (anything else — the wildcard included — is dropped).
  *  - 401 (`session-expired`) → no live session → null.
+ *  - 503, whatever its `type` → `IdentityUnavailableError` carrying the `HttpError`
+ *    as `cause`. The session store's own `service-unavailable` and a gateway's bare
+ *    503 mean the same thing to the user: nobody can tell whether they are signed
+ *    in, and the sign-in form would be refused by the same outage.
  *
- * A non-401 failure (network / malformed body) propagates so the caller can
- * distinguish "no session" from "could not reach the server".
+ * Any other failure (network / malformed body / another 5xx) propagates unchanged
+ * so the caller can distinguish "no session" from "could not reach the server".
  *
  * The set is a rendering convenience only: every route enforces its own authorization server-side, so a
  * tampered session gains nothing beyond seeing controls that then fail.
@@ -86,6 +91,9 @@ export class ApiIdentityRepository implements IdentityRepository {
     } catch (error) {
       if (error instanceof HttpError && error.problem.status === HttpStatus.UNAUTHORIZED) {
         return null;
+      }
+      if (error instanceof HttpError && error.problem.status === HttpStatus.SERVICE_UNAVAILABLE) {
+        throw new IdentityUnavailableError({ cause: error });
       }
       throw error;
     }

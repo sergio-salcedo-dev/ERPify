@@ -1,9 +1,19 @@
 "use client";
 
-import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { usePathname } from "next/navigation";
 import type { Session } from "../../domain/Session";
 import type { Identity } from "../../domain/Identity";
 import type { IdentityRepository } from "../../domain/IdentityRepository";
+import { IdentityUnavailableError } from "../../domain/IdentityUnavailableError";
 import type { SessionsRepository } from "../../domain/SessionsRepository";
 import { UserStatus } from "../../domain/UserStatus";
 import { AccessContext } from "../../domain/AccessContext";
@@ -19,13 +29,21 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * Identity must be resolved before authorization is evaluated. Until the cold
  * `/me` probe resolves, the provider is `hydrating` and guards render nothing —
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
- * session is `authenticated`; no live session (401) or any failure is
- * `unauthenticated`. There is no seeded default and no auto-admin.
+ * session is `authenticated`; no live session (401) or any other failure
+ * (network, malformed body, another 5xx) is `unauthenticated`. There is no seeded
+ * default and no auto-admin.
+ *
+ * `unavailable` is the server saying it cannot decide (503): the session store is
+ * down, so sending the user to sign in would land them on a form the same outage
+ * refuses. The verdict holds only for the route it was observed on — the provider
+ * outlives client navigations, so on the next route it reads `hydrating` again
+ * until a fresh probe answers.
  */
 export const AuthStatus = {
   HYDRATING: "hydrating",
   AUTHENTICATED: "authenticated",
   UNAUTHENTICATED: "unauthenticated",
+  UNAVAILABLE: "unavailable",
 } as const;
 export type AuthStatus = (typeof AuthStatus)[keyof typeof AuthStatus];
 
@@ -63,6 +81,13 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
+ * What one `/me` probe established. Two fields rather than `Session | null` so the
+ * catch cannot collapse "no live session" and "the server could not decide" into
+ * one value again.
+ */
+type Probe = { session: Session | null; unavailable: boolean };
+
+/**
  * Build the session from a resolved identity. A 200 from the gated `/me`
  * endpoint means an admitted, ACTIVE session; the session holds exactly the
  * permissions the endpoint derived from the identity's roles — never more.
@@ -91,36 +116,69 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // the probe (or a login re-probe) has settled.
   const [session, setSession] = useState<Session | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // The route a 503 was observed on, or null when the last probe decided. Bound to
+  // the route rather than a boolean because this provider is mounted once for the
+  // whole app and its cold probe runs only on mount: a boolean would outlive the
+  // outage and bounce every later client navigation back to maintenance.
+  const [unavailableAt, setUnavailableAt] = useState<string | null>(null);
 
-  const resolveSession = useCallback(async (): Promise<Session | null> => {
+  // Outside the App Router `usePathname()` is null; that is still one route.
+  const route = usePathname() ?? "";
+  const routeRef = useRef(route);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
+
+  const resolveSession = useCallback(async (): Promise<Probe> => {
     try {
       const identity = await identityRepository.me();
-      return identity ? sessionFromIdentity(identity) : null;
-    } catch {
-      // The adapter already maps 401 to null; any other failure (network,
-      // malformed body) is treated as "no live session" too.
-      return null;
+      return { session: identity ? sessionFromIdentity(identity) : null, unavailable: false };
+    } catch (error) {
+      // The adapter already maps 401 to null. A 503 is an outage, not a missing
+      // session; any other failure (network, malformed body) is treated as "no
+      // live session".
+      return { session: null, unavailable: error instanceof IdentityUnavailableError };
     }
   }, [identityRepository]);
 
+  // Stamped with the route current when the probe ANSWERED, not when it started.
+  const applyProbe = useCallback((probe: Probe): void => {
+    setSession(probe.session);
+    setUnavailableAt(probe.unavailable ? routeRef.current : null);
+    setHydrated(true);
+  }, []);
+
   useEffect(() => {
     let active = true;
-    resolveSession().then((resolved) => {
+    resolveSession().then((probe) => {
       if (!active) return;
-      setSession(resolved);
-      setHydrated(true);
+      applyProbe(probe);
     });
     return () => {
       active = false;
     };
-  }, [resolveSession]);
+  }, [resolveSession, applyProbe]);
+
+  // A 503 observed on another route is stale. Re-probe once the user has moved,
+  // exactly as a cold load of the new route would — never on a timer.
+  const staleVerdict = unavailableAt !== null && unavailableAt !== route;
+  useEffect(() => {
+    if (!staleVerdict) return;
+    let active = true;
+    resolveSession().then((probe) => {
+      if (!active) return;
+      applyProbe(probe);
+    });
+    return () => {
+      active = false;
+    };
+  }, [staleVerdict, route, resolveSession, applyProbe]);
 
   const login = useCallback(async (): Promise<Session | null> => {
-    const resolved = await resolveSession();
-    setSession(resolved);
-    setHydrated(true);
-    return resolved;
-  }, [resolveSession]);
+    const probe = await resolveSession();
+    applyProbe(probe);
+    return probe.session;
+  }, [resolveSession, applyProbe]);
 
   const logout = useCallback(
     async (budgetMs?: number): Promise<void> => {
@@ -135,6 +193,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         });
       } finally {
         setSession(null);
+        setUnavailableAt(null);
         setHydrated(true);
       }
     },
@@ -158,12 +217,18 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     [],
   );
 
+  // Derived during render rather than reset in an effect: a child's effects run
+  // before this provider's, so a guard would already have redirected on the stale
+  // verdict by the time an effect here flipped the status back to `hydrating`.
   const status = useMemo<AuthStatus>(() => {
     if (!hydrated) return AuthStatus.HYDRATING;
+    if (unavailableAt !== null) {
+      return unavailableAt === route ? AuthStatus.UNAVAILABLE : AuthStatus.HYDRATING;
+    }
     return session?.user.status === UserStatus.ACTIVE
       ? AuthStatus.AUTHENTICATED
       : AuthStatus.UNAUTHENTICATED;
-  }, [hydrated, session]);
+  }, [hydrated, unavailableAt, route, session]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ status, session, login, logout, override }),

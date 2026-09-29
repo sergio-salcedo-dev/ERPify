@@ -4,6 +4,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
+import { IdentityUnavailableError } from "@/context/shared/access/domain/IdentityUnavailableError";
 import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
 import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/domain/HttpClient";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
@@ -146,6 +147,38 @@ describe("ApiIdentityRepository.me", () => {
     const get = vi.fn().mockRejectedValue(boom);
 
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toBe(boom);
+  });
+
+  // Discriminated by status, not type: a gateway's bare 503 has no RFC 9457 body of ours, and
+  // bouncing it to sign-in is the same defect as bouncing the session store's own.
+  it.each(["service-unavailable", "about:blank"])(
+    "rejects a 503 (%s) with IdentityUnavailableError carrying the HttpError as cause",
+    async (type) => {
+      const boom = new HttpError(problem(HttpStatus.SERVICE_UNAVAILABLE, type));
+      const get = vi.fn().mockRejectedValue(boom);
+
+      const outcome = new ApiIdentityRepository(httpClientGetting(get)).me();
+
+      await expect(outcome).rejects.toBeInstanceOf(IdentityUnavailableError);
+      await expect(outcome).rejects.toMatchObject({ cause: boom });
+    },
+  );
+
+  it.each([HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.BAD_GATEWAY])(
+    "rethrows a %i unchanged (only a 503 means the server could not decide)",
+    async (status) => {
+      const boom = new HttpError(problem(status, "server-error"));
+      const get = vi.fn().mockRejectedValue(boom);
+
+      await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toBe(boom);
+    },
+  );
+
+  it("does not turn a malformed body into IdentityUnavailableError", async () => {
+    const outcome = new ApiIdentityRepository(httpClientGetting(guardingGet({ data: null }))).me();
+
+    await expect(outcome).rejects.toBeInstanceOf(HttpError);
+    await expect(outcome).rejects.not.toBeInstanceOf(IdentityUnavailableError);
   });
 
   it("rethrows a non-HTTP transport failure", async () => {

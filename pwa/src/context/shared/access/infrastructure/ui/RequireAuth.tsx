@@ -12,9 +12,11 @@ import { useDeparture } from "@/context/shared/navigation/application/useDepartu
  * Route protection. Identity is resolved before authorization: while the
  * provider is `hydrating` it renders nothing and does not redirect (the stored
  * session has not been read yet). Once resolved, only an `authenticated` (ACTIVE)
- * session sees the children; anything else is redirected to /login with the
- * blocked target preserved in `?next=` so login can return there. Protected
- * content therefore never flashes on the strength of a default session.
+ * session sees the children. `unavailable` (the server answered 503: it cannot
+ * tell whether anyone is signed in) is replaced by /maintenance, since /login
+ * would be refused by the same outage; anything else is redirected to /login
+ * with the blocked target preserved in `?next=` so login can return there.
+ * Protected content therefore never flashes on the strength of a default session.
  */
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
@@ -22,7 +24,7 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const departing = useDeparture() !== null;
 
   useEffect(() => {
-    if (status !== AuthStatus.UNAUTHENTICATED) return;
+    if (status !== AuthStatus.UNAUTHENTICATED && status !== AuthStatus.UNAVAILABLE) return;
     // A full-document departure already owns a navigation away from here; redirecting on top
     // of it would race two navigations against the same document. Whoever claimed it releases
     // once its own outcome is known, which re-runs this effect.
@@ -32,6 +34,10 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
     // no provider, so a context value could never have served it. Reading the claim here is
     // what keeps the fact single-owned instead of mirrored in two places that must agree.
     if (departing) return;
+    if (status === AuthStatus.UNAVAILABLE) {
+      router.replace(Routes.MAINTENANCE);
+      return;
+    }
     // Read the live location inside the effect (client-only) so the deep link is
     // preserved without pulling useSearchParams + a Suspense boundary into the
     // guard. safeInternalPath keeps a tampered target from becoming an open

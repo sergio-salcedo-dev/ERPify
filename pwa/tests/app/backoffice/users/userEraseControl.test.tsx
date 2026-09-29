@@ -27,7 +27,10 @@ vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/backoffice/users",
+}));
 
 import { UserEraseControl } from "@/app/backoffice/users/_components/UserEraseControl";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui/AuthProvider";

@@ -13,7 +13,13 @@ export interface ChangePasswordCommand {
  * never touches `fetch` / status codes.
  */
 export interface IdentityRepository {
-  /** The signed-in identity, or `null` when there is no live session (401). */
+  /**
+   * The signed-in identity, or `null` when there is no live session (401).
+   *
+   * Rejects with `IdentityUnavailableError` when the server says it cannot decide (503): that is
+   * an outage, not a missing session, and the caller must not treat it as one. Any other failure
+   * rejects with whatever the transport raised.
+   */
   me(): Promise<Identity | null>;
 
   /**
