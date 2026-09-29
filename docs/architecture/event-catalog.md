@@ -328,10 +328,10 @@ What a `DomainEvent` becomes in the `event_store` (raw DBAL; full rationale in
 | `event_id` | UUID v7, `UNIQUE` — stable identity (idempotent re-append). |
 | `aggregate_id` | the subject's id (envelope). |
 | `aggregate_type` | e.g. `Backoffice.Bank`. |
-| `aggregate_version` | per-stream `MAX+1`. The stream `UNIQUE` is **inert today** — it spans `tenant_id`, which is always written `NULL`, and PostgreSQL defaults to `NULLS DISTINCT`, so it never fires and the optimistic concurrency control it is meant to provide does not exist. Tracked in `deferred-work.md`. |
+| `aggregate_version` | per-stream `MAX+1`, **informative only** — not a concurrency control. The stream `UNIQUE` spans `tenant_id`, which is always written `NULL`, and PostgreSQL defaults to `NULLS DISTINCT`, so it never fires and two concurrent appends may record the same version. Decision: [`event-store-and-projections.md`](../adr/event-store-and-projections.md). |
 | `event_name`, `event_version` | the canonical key. |
 | `payload` | JSONB — `toPrimitives()` (domain state only). |
-| `metadata` | JSONB `{}` — reserved (`correlation_id`/`causation_id`/actor). |
+| `metadata` | JSONB object, `{}` when empty (top-level coercion only) — reserved (`correlation_id`/`causation_id`/actor). Rows written before the coercion hold `[]` and are accepted without backfill (a backfill would be another sanctioned mutation, ADR D12); a reader treating it as an object bounds by `jsonb_typeof(metadata) = 'object'`. |
 | `tenant_id` | UUID, `NULL` today — reserved for multi-tenant isolation. |
 | `occurred_on` | TIMESTAMPTZ — **domain** time (envelope). |
 | `recorded_on` | TIMESTAMPTZ — **system** time (when persisted). |

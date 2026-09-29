@@ -136,7 +136,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: G-4a — fuga de `PasswordResetCompleted` en los transportes Messenger (2026-07-30)"), 2026-09-24
 location: api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:73-77
 reason: tenant_id is always NULL so (NULL, x, 1) duplicates pass, the UniqueConstraintViolation catch is unreachable and EventStreamConcurrencyConflict is never thrown. Not fixed in G-4a because most publishers take no row lock, so NULLS NOT DISTINCT would turn silent races into 409s across ~15 paths; the owning story must decide whether stream version is a real invariant or informative.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-event-store-informative-version
+resolution-undo: e9c25f1139d58488497417fd599a52fe820e5c9fd72ca8394ff120b983635e09 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Informative: retire the promise — Retire the optimistic-concurrency claim from DbalEventStore's docblock, remove the unreachable catch and EventStreamConcurrencyConflict, and document aggregate_version as informative in the event-store ADR.
 
 **(api/Shared/Event — concurrencia) El UNIQUE de stream del `event_store` no impone nada, y el control de concurrencia optimista que su docblock promete no existe.** `event_store_stream_version_uniq` es `UNIQUE (tenant_id, aggregate_id, aggregate_version)` y `DbalEventStore:73` escribe `tenant_id` **siempre `NULL`**; PostgreSQL usa `NULLS DISTINCT` por defecto, así que dos filas `(NULL, x, 1)` entran las dos. **Verificado contra la BD viva** (`pg_indexes`, no el fichero de migración): el índice real **no** lleva la cláusula. Luego el `catch (UniqueConstraintViolationException)` de `DbalEventStore:77` es inalcanzable y `EventStreamConcurrencyConflict` no se lanza jamás — `git grep` lo encuentra **solo** en `DbalEventStore` (declaración y lanzamiento): ningún caso de uso lo captura ni reintenta.
@@ -283,7 +285,9 @@ resolution: fixed in #1026: every request-boundary security write goes through R
 origin: migrated from legacy ledger ("Deferred from: code review of the metadata-shape fix (2026-09-22)"), 2026-09-24
 location: api/src/Shared/Audit (audit_log writer), api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:73
 reason: (a) No backfill of historical [] rows — that would be a fourth sanctioned mutation on an append-only table, not the implementer's decision; object-shaped queries must keep bounding by ::text or jsonb_typeof. (b) event_store.metadata has the same defect and the ADR describes a default the migration lacks. Trigger for (b): the first query treating event_store.metadata as an object.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-event-store-informative-version
+resolution-undo: e9c25f1139d58488497417fd599a52fe820e5c9fd72ca8394ff120b983635e09 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Fix (b) only; accept (a) — Make DbalEventStore write event_store.metadata as a JSON object ({} when empty), align the ADR with the migration's actual default, and record that historical audit_log [] rows are accepted without backfill.
 
 **Dos residuos de la coacción de `metadata` a objeto, ninguno de los dos cerrado por ella.** El escritor de `audit_log` ya coacciona el nivel superior, así que **desde ese commit** toda fila nueva guarda `{}`; lo que queda abierto es lo de antes y lo de al lado. (a) **Las filas históricas siguen siendo `[]`**, y no hay backfill: hacerlo sería una cuarta mutación sancionada sobre una tabla append-only, decisión que no es del implementador. Mientras tanto la columna tiene dos formas en cualquier base desplegada, `jsonb_each` aborta sobre las viejas, y la mezcla dura años porque el tier `change` tiene un suelo de conservación de 5 años (`AuditRetentionPolicy::COMPLIANCE_RETENTION_FLOOR`). Cualquier consulta que trate `metadata` como objeto debe seguir acotando por `::text` o filtrar por `jsonb_typeof`. (b) **`event_store.metadata` tiene el defecto idéntico y sigue escribiéndose `[]`** (`DbalEventStore:73`); no rompe nada medible hoy porque su anonimizador opera por `regexp_replace` sobre `::text`, insensible a la forma, pero el ADR ya describe esa columna como `NOT NULL DEFAULT '{}'` mientras la migración no declara default alguno, o sea que el documento describe una forma que el escritor no produce. Trigger de (b): la primera consulta que trate `event_store.metadata` como objeto.
@@ -592,4 +596,20 @@ location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceM
 source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
 reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
+status: open
+
+### DW-64: event_store.payload se escribe como array JSON `[]` para eventos cuyo toPrimitives() está vacío (p.ej. BankDeletedDomainEvent).
+origin: spec-deferred 8e448123a8db
+location: api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php
+source_spec: `spec-dw-16-30-event-store-informative-version.md`
+severity: low
+reason: DbalEventStore::encode() hace json_encode de un array PHP vacío; la columna se lee como objeto. Preexistente y fuera de DW-30(b), que sólo pedía metadata.
+status: open
+
+### DW-65: RepositoryUniqueViolationTest no tiene caso para el puerto `image` de ConcurrentUniqueWrite.
+origin: spec-deferred 1ab3b10287b9
+location: api/tests/Unit/Shared/Persistence/RepositoryUniqueViolationTest.php
+source_spec: `spec-dw-16-30-event-store-informative-version.md`
+severity: low
+reason: api-error-contract.md dice que el `resource` es lo único que distingue los cuatro puertos y que se afirma por puerto; el proveedor del test sólo cubre bank, bank-account e identity-user. Preexistente.
 status: open

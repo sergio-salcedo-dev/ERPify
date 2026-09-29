@@ -722,6 +722,12 @@ actor_erased    boolean      NOT NULL — false al insertar (writer); true tras 
 occurred_on     timestamptz
 ```
 
+`metadata` se escribe como **objeto** JSON (`DbalAuditLogWriter` coerce el nivel superior con `(object)`, así
+que un mapa vacío queda `{}`). Las filas históricas que se escribieron `[]` antes de esa coerción **se aceptan
+sin backfill**: reescribirlas sería una cuarta mutación sancionada sobre `audit_log` (D4) para corregir una forma
+que nada lee como array, y se descarta. Consecuencia: una consulta que trate `metadata` como objeto acota por
+`jsonb_typeof(metadata) = 'object'` (o compara el texto con `metadata::text`), nunca asume la forma.
+
 `ip` se persiste como `varchar(45)` (cabe una IPv6) y no como `inet`: DBAL no modela el tipo `inet`
 y ninguna consulta usa operadores CIDR/subred — solo se almacena como evidencia.
 

@@ -98,14 +98,14 @@ CREATE TABLE event_store (
     event_id          UUID         NOT NULL,                -- UUID v7, identidad estable
     aggregate_id      UUID         NOT NULL,
     aggregate_type    VARCHAR(120) NOT NULL,
-    aggregate_version INT          NOT NULL,                -- per-stream (1,2,3…) — preparado, no event-sourcing
+    aggregate_version INT          NOT NULL,                -- per-stream (1,2,3…) — informativo, no event-sourcing
     event_name        VARCHAR(190) NOT NULL,
     event_version     SMALLINT     NOT NULL DEFAULT 1,
     payload           JSONB        NOT NULL,                -- toPrimitives(): SOLO dominio
-    metadata          JSONB        NOT NULL DEFAULT '{}',   -- correlation_id, causation_id (futuro), actor (futuro)
+    metadata          JSONB        NOT NULL,                -- objeto al escribir ({} vacío; filas viejas: []); correlation_id, causation_id, actor (futuros)
     tenant_id         UUID         NULL,                    -- multi-tenant SaaS: NULL hoy, NOT NULL al llegar auth
     occurred_on       TIMESTAMPTZ  NOT NULL,                -- tiempo de DOMINIO
-    recorded_on       TIMESTAMPTZ  NOT NULL DEFAULT now(),  -- tiempo de SISTEMA
+    recorded_on       TIMESTAMPTZ  NOT NULL,                -- tiempo de SISTEMA; sin default: el escritor pone clock_timestamp()
     PRIMARY KEY (sequence),
     CONSTRAINT event_store_event_id_uniq UNIQUE (event_id),
     CONSTRAINT event_store_stream_version_uniq UNIQUE (tenant_id, aggregate_id, aggregate_version)
@@ -117,9 +117,33 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
 
 - **`sequence BIGINT IDENTITY` como PK**, `event_id` UUID v7 `UNIQUE`. Para un log append-only escaneado por
   rango (checkpoint "todo después de N"), el BIGINT gap-aware gana a UUIDv7 en localidad y semántica de offset.
-- **`aggregate_version`** se computa al *append* (`MAX(version)+1` por `(tenant_id, aggregate_id)`, serializado
-  por el row-lock del agregado en la transacción de escritura); el `UNIQUE` lo hace control de concurrencia
-  optimista. Preparado ya — lo consumirán per-stream replay y agregados event-sourced futuros.
+- **`aggregate_version`** se computa al *append* (`MAX(version)+1` por `(tenant_id, aggregate_id)`) y es
+  **informativo**: ordena el stream de un agregado para quien lo lea, pero no es control de concurrencia.
+  Per-stream replay y agregados event-sourced futuros podrán consumirla, pero antes habrá que serializar el
+  *append* (ver la enmienda): hoy dos *appends* concurrentes pueden compartir versión.
+
+  *Enmienda (2026-09-28).* Este punto afirmaba que el cálculo quedaba serializado por el row-lock del agregado
+  y que el `UNIQUE` lo convertía en control de concurrencia optimista (un 409 reintentable). Ninguna de las
+  dos premisas se sostiene. El lock no está: re-medido el 2026-09-20 sobre
+  `git grep -l 'eventBus->publish(' api/src`, de 24 clases publicadoras 7 sostienen el lock del agregado por el
+  que publican, 2 son mixtas (`LoginAttemptRegistrar`, `RevokeInvitation`) y 15 no. Y `event_store_stream_version_uniq` incluye `tenant_id`, que hoy se escribe siempre `NULL` —
+  PostgreSQL trata los `NULL` como distintos (`NULLS DISTINCT`), así que el índice no impone nada y dos
+  *appends* concurrentes pueden registrar la misma versión. Se decide que la versión es informativa: el
+  escritor no captura la violación ni la traduce (si llegara a producirse, propaga sin traducir), y no existe
+  ya excepción de conflicto de stream. Descartado: recrear el índice con `NULLS NOT DISTINCT` o sin
+  `tenant_id` — sin lock en los publicadores solo cambiaría duplicados silenciosos por 409 que nadie espera.
+  Descartado también: serializar dentro de `append()` (p. ej. `pg_advisory_xact_lock` por `aggregate_id`) —
+  hoy nada consume `aggregate_version` (per-stream replay y agregados event-sourced son triggers futuros), así
+  que añadiría contención a cada publicación por un número del que ningún lector depende; es la vía a tomar
+  si algún día se quiere el invariante.
+  Si `tenant_id` llega a ser no nulo, el índice se **activa** por sí solo y esta decisión hay que retomarla
+  antes: con él activo, una carrera abortaría la transacción de escritura.
+- **`metadata`** se escribe siempre como **objeto** JSON (`{}` si está vacío). La coerción es **solo de nivel
+  superior** (`(object)`, como el escritor de `audit_log`): un valor anidado conserva la forma que traiga. La
+  columna no declara default — la migración la crea `NOT NULL` sin él — y la garantía es del escritor, no del
+  esquema. Las filas escritas antes de la coerción guardan `[]` y **se aceptan sin backfill**: reescribirlas
+  sería otra mutación sancionada (D12) para corregir una forma que nada lee como array. Quien trate
+  `metadata` como objeto acota por `jsonb_typeof(metadata) = 'object'`, nunca asume la forma.
 - **`tenant_id`** entra hoy (nullable): retro-encajar una clave de aislamiento en un log inmutable es inviable;
   es candidato a partition key y RLS. Mismo patrón que `actor_id` en `audit_log` (nullable→not-null con auth).
 - **`occurred_on`/`recorded_on` `TIMESTAMPTZ`** y **separados** (dominio vs sistema): catch-up y BI necesitan
@@ -324,7 +348,7 @@ débil.
 contradecía con la decisión de borrar **por valor** que el propio párrafo siguiente fija: enumerar claves es
 una declaración que solo se comprueba a sí misma —quedaría verde justo sobre los eventos que nadie recordó
 listar—, y ya hay dos nombres distintos (`invitedUserId`, `userId`) garantizados por un trait compartido. Se
-amplía además a `metadata`, que hoy se escribe `[]`, porque la garantía de este anonimizador está definida
+amplía además a `metadata`, que hoy se escribe vacío (`{}`), porque la garantía de este anonimizador está definida
 sobre la FILA y no sobre una lista de columnas recordada: cubrir la tercera **retira una excepción** en vez de
 añadir responsabilidad, y como el predicado es por valor, mientras la columna no guarde un id de persona la
 sentencia no reescribe nada. Coste de ejecución: cero (misma sentencia, mismo viaje). La razón **no** es que
@@ -361,11 +385,13 @@ Consecuencias que esta decisión hereda y conviene tener escritas:
   significa, y ningún upcaster puede repararlo — un upcaster transforma el `payload` y nunca ve la columna.
   **No se migran filas históricas**; siguen conteniendo selectores y esta política las alcanza igual.
 - El sujeto de esos eventos pasa a compartir el eje de `aggregate_id` con sus eventos de `Iam.Identity` y con
-  los dos revokes masivos de sesión, así que un borrado los mueve **todos al mismo seudónimo** y la unicidad
-  de `event_store_stream_version_uniq` se preserva por la misma razón que ya se enuncia arriba.
+  los dos revokes masivos de sesión, así que un borrado los mueve **todos al mismo seudónimo**: comparten una
+  sola secuencia de versiones —informativa, no garantizada por índice alguno (enmienda de 2026-09-28 en D4)—
+  bajo un único `aggregate_id`, y separarlos dispersaría un stream coherente.
 - `AcceptInvitation` publica ahora eventos claveados por el usuario mientras sostiene el lock de la fila de
-  **invitación**, no el de la identidad. Hoy es inocuo porque ese UNIQUE es inerte (`tenant_id` siempre
-  `NULL`); queda registrado en `deferred-work.md` como deuda de la historia que active el versionado real.
+  **invitación**, no el de la identidad. Es inocuo porque `aggregate_version` es informativo (enmienda de
+  2026-09-28 más arriba): ese UNIQUE es inerte con `tenant_id` siempre `NULL`, y el día que deje de serlo es
+  esa enmienda la que se retoma.
 - **El radio de explosión de ese «falla ruidosamente», dicho antes de que alguien lo descubra.**
   `ProjectionRunner::project()` llama al deserializador **sin `catch`**, y `RunProjectionsOnDomainEvent` llama
   a `catchUpAll()` también sin `catch`, disparado por *todo* `DomainEvent` y —para los eventos de `Iam` sin
@@ -535,9 +561,10 @@ observabilidad de eventos repuntado a `event_store`.
 
 ## Triggers de revisita
 
-(a) Auth/tenancy real → `tenant_id` pasa a `NOT NULL`, se evalúa partición/RLS por tenant. (b) Primer sink
+(a) Auth/tenancy real → `tenant_id` pasa a `NOT NULL`, se evalúa partición/RLS por tenant; **antes** se retoma
+la enmienda de D4, porque un `tenant_id` no nulo activa `event_store_stream_version_uniq`. (b) Primer sink
 externo (CRM/BI/DW/API pública) → relay aguas abajo del `event_store` por `sequence`. (c) Primer agregado
-event-sourced o per-stream replay → se consume `aggregate_version`. (d) Primera evolución de `eventVersion` →
+event-sourced o per-stream replay → se consume `aggregate_version`, que exige serializar antes el *append* (enmienda de D4). (d) Primera evolución de `eventVersion` →
 primer `Upcaster` real. (e) Volumen → particionado por `recorded_on`. (f) Adopción de `CommandBus` (#263) → el
 límite transaccional migra del `wrapInTransaction` al middleware (hereda el trigger del ADR anterior). (g)
 Segundo adaptador productivo de `EventBus` con excepciones nativas distintas, **o** un caller que capture el
