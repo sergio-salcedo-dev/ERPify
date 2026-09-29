@@ -117,8 +117,12 @@ not hydrate thousands of managed objects.
 
 **Schema stays known to Doctrine via a `postGenerateSchema` listener, not a mapping.** Each raw-DBAL
 table owns a `*SchemaListener` (`EventStoreSchemaListener`, `ProjectionCheckpointSchemaListener`,
-`BankCountSchemaListener`, `HandledDomainEventSchemaListener`) that injects the table + indexes into the
-in-memory schema, so `make db.diff` generates and keeps its migration. These tables are deliberately
+`BankCountSchemaListener`, `HandledDomainEventSchemaListener`, `AuditLogSchemaListener`,
+`KeystoreSchemaListener`) extending `Shared\Persistence\Infrastructure\InjectedTableSchemaListener`: the
+subclass describes the table on a `Table::editor()`, and the base hands back a new schema through
+`GenerateSchemaEventArgs::setSchema($schema->edit()->addTable(…)->create())` — the
+DBAL 4.5 mutation API (`createTable`, `addColumn`, `addIndex`) is deprecated, and the suite fails on
+deprecations — so `make db.diff` generates and keeps its migration. These tables are deliberately
 **absent** from the `config/packages/doctrine.yaml` ORM mappings — the schema tool sees them, the ORM
 does not.
 
