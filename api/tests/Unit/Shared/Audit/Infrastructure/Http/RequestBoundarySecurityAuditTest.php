@@ -132,7 +132,7 @@ final class RequestBoundarySecurityAuditTest extends TestCase
 
         $handed = $event->getThrowable();
         $this->assertWriteFailureOf($failure, $handed);
-        $this->assertSame($handed, $reported, 'the tracker receives what the event now carries');
+        $this->assertSame($reported, $handed, 'the tracker receives what the event now carries');
         $this->assertStringContainsString(self::ACTION, $handed->getMessage());
         $this->assertStringContainsString(DomainException::class, $handed->getMessage());
         $this->assertStringNotContainsString(self::PERSON_ID, $handed->getMessage());
