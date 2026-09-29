@@ -38,13 +38,15 @@ del EM cerrado y el coste de hidratación/UoW para algo que solo hace claim/rele
 
 Al no haber entidad ORM, Doctrine no conoce la tabla: `make db.diff` la vería huérfana y generaría un
 `DROP TABLE handled_domain_event`. Para evitarlo, `Shared/Event/Infrastructure/Persistence/HandledDomainEventSchemaListener`
-la inyecta en el schema en memoria en `postGenerateSchema` — Doctrine queda *ORM-unaware* (dominio
+la añade al schema en `postGenerateSchema` (construye la tabla con `Table::editor()` y devuelve un
+schema nuevo con `GenerateSchemaEventArgs::setSchema()`) — Doctrine queda *ORM-unaware* (dominio
 limpio) pero *schema-aware* (diffs limpios, sin migración manual recurrente). Es el **mismo patrón**
 que la FK física Bank/BankAccount: ver D2 de [`bank-bankaccount-modeling.md`](./bank-bankaccount-modeling.md).
 
 La PK compuesta se declara con
-`PrimaryKeyConstraint::editor()->setUnquotedColumnNames('event_id', 'handler')` (DBAL 4.4 deprecó
-`Table::setPrimaryKey()` en favor de `addPrimaryKeyConstraint()`).
+`PrimaryKeyConstraint::editor()->setUnquotedColumnNames('event_id', 'handler')` pasada a
+`TableEditor::setPrimaryKeyConstraint()` (DBAL 4.5 depreca toda la API de mutación de `Table`,
+`addPrimaryKeyConstraint()` incluida).
 
 Descartado: **`doctrine.dbal.schema_filter`** (regex que excluye la tabla del diff en vez de añadirla
 al schema). Más simple, pero (a) `doctrine:schema:validate` dejaría de detectar drift de columnas en

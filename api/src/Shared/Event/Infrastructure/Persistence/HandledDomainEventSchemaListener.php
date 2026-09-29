@@ -6,9 +6,10 @@ namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\DBAL\Types\Types;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 
 /**
  * Injects the `handled_domain_event` claim table into Doctrine's in-memory schema. The table is
@@ -17,26 +18,24 @@ use Doctrine\ORM\Tools\ToolEvents;
  * ORM entity, so without this listener `make db.diff` would generate a DROP for it.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class HandledDomainEventSchemaListener
+final class HandledDomainEventSchemaListener extends InjectedTableSchemaListener
 {
-    private const string TABLE = 'handled_domain_event';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
+        parent::__construct('handled_domain_event');
+    }
 
-        if ($schema->hasTable(self::TABLE)) {
-            return;
-        }
-
-        $table = $schema->createTable(self::TABLE);
-        $table->addColumn('event_id', Types::STRING, ['length' => 36]);
-        $table->addColumn('handler', Types::STRING, ['length' => 190]);
-        $table->addColumn('claimed_at', Types::DATETIME_IMMUTABLE);
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()
-                ->setUnquotedColumnNames('event_id', 'handler')
-                ->create(),
-        );
+    protected function define(TableEditor $table): TableEditor
+    {
+        return $table
+            ->setColumns(
+                $this->column('event_id', Types::STRING)->setLength(36)->create(),
+                $this->column('handler', Types::STRING)->setLength(190)->create(),
+                $this->column('claimed_at', Types::DATETIME_IMMUTABLE)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('event_id', 'handler')->create(),
+            )
+        ;
     }
 }

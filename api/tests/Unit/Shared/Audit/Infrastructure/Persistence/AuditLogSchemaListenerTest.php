@@ -5,69 +5,98 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Persistence;
 
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Erpify\Shared\Audit\Infrastructure\Persistence\AuditLogSchemaListener;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
+use Erpify\Tests\Support\Persistence\ColumnShape;
+use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
+ * The listener is the only source of the table's shape, so every load-bearing property is pinned here: a
+ * transcription slip would otherwise surface as a destructive migration on the next `make db.diff`.
+ *
+ * @phpstan-import-type Shape from ColumnShape
+ * @phpstan-import-type IndexShape from SchemaShape
+ *
  * @internal
  */
 #[CoversClass(AuditLogSchemaListener::class)]
+#[CoversClass(InjectedTableSchemaListener::class)]
 final class AuditLogSchemaListenerTest extends TestCase
 {
+    private const string TABLE = 'audit_log';
+
     #[Test]
     public function itInjectsTheAppendOnlyAuditLogTable(): void
     {
-        $schema = new Schema();
-
-        (new AuditLogSchemaListener())->postGenerateSchema(new GenerateSchemaEventArgs(
+        $args = new GenerateSchemaEventArgs(
             $this->createStub(EntityManagerInterface::class),
-            $schema,
-        ));
+            Schema::editor()->create(),
+        );
 
-        $this->assertTrue($schema->hasTable('audit_log'));
-        $table = $schema->getTable('audit_log');
+        (new AuditLogSchemaListener())->postGenerateSchema($args);
 
-        foreach (
-            ['id', 'level', 'action', 'actor_type', 'actor_id', 'correlation_id', 'resource_type',
-                'resource_id', 'metadata', 'ip', 'user_agent', 'actor_erased', 'occurred_on'] as $column
-        ) {
-            $this->assertTrue($table->hasColumn($column), \sprintf('expected column "%s"', $column));
-        }
+        $table = $args->getSchema()->getTable(self::TABLE);
 
-        foreach (
-            ['audit_log_actor_idx', 'audit_log_correlation_idx', 'audit_log_level_idx',
-                'audit_log_resource_idx'] as $index
-        ) {
-            $this->assertTrue($table->hasIndex($index), \sprintf('expected index "%s"', $index));
-        }
-
-        $this->assertFalse($table->getColumn('actor_id')->getNotnull(), 'actor_id is nullable');
-        $this->assertTrue($table->getColumn('correlation_id')->getNotnull(), 'correlation_id is not-null');
-        $this->assertTrue($table->getColumn('metadata')->getNotnull(), 'metadata is not-null');
-        $this->assertTrue($table->getColumn('actor_erased')->getNotnull(), 'actor_erased is not-null');
-
-        $this->assertSame(16, $table->getColumn('level')->getLength());
-        $this->assertSame(16, $table->getColumn('actor_type')->getLength());
-        $this->assertSame(100, $table->getColumn('action')->getLength());
-        $this->assertSame(100, $table->getColumn('resource_type')->getLength());
-        $this->assertSame(45, $table->getColumn('ip')->getLength());
-        $this->assertSame(512, $table->getColumn('user_agent')->getLength());
+        $this->assertSame($this->expectedColumns(), SchemaShape::columnsOf($table));
+        $this->assertSame($this->expectedIndexes(), SchemaShape::indexesOf($table));
+        $this->assertSame(['id'], SchemaShape::primaryKeyOf($table));
     }
 
     #[Test]
     public function itLeavesAnExistingTableUntouched(): void
     {
-        $schema = new Schema();
         $listener = new AuditLogSchemaListener();
-        $args = new GenerateSchemaEventArgs($this->createStub(EntityManagerInterface::class), $schema);
+        $args = new GenerateSchemaEventArgs(
+            $this->createStub(EntityManagerInterface::class),
+            Schema::editor()->create(),
+        );
 
         $listener->postGenerateSchema($args);
+        $injected = $args->getSchema();
         $listener->postGenerateSchema($args);
 
-        $this->assertTrue($schema->hasTable('audit_log'));
+        $this->assertTrue($injected->hasTable(self::TABLE));
+        $this->assertSame($injected, $args->getSchema());
+    }
+
+    /** @return array<string, Shape> */
+    private function expectedColumns(): array
+    {
+        return ColumnShape::toArrays([
+            'id' => ColumnShape::of(Types::GUID),
+            'level' => ColumnShape::of(Types::STRING)->length(16),
+            'action' => ColumnShape::of(Types::STRING)->length(100),
+            'actor_type' => ColumnShape::of(Types::STRING)->length(16),
+            'actor_id' => ColumnShape::of(Types::GUID)->nullable(),
+            'correlation_id' => ColumnShape::of(Types::GUID),
+            'resource_type' => ColumnShape::of(Types::STRING)->nullable()->length(100),
+            'resource_id' => ColumnShape::of(Types::GUID)->nullable(),
+            'metadata' => ColumnShape::of(Types::JSONB),
+            'ip' => ColumnShape::of(Types::STRING)->nullable()->length(45),
+            'user_agent' => ColumnShape::of(Types::STRING)->nullable()->length(512),
+            'actor_erased' => ColumnShape::of(Types::BOOLEAN)->defaultValue(false),
+            'resource_erased' => ColumnShape::of(Types::BOOLEAN)->defaultValue(false),
+            'occurred_on' => ColumnShape::of(Types::DATETIMETZ_IMMUTABLE),
+            'encryption_scope_id' => ColumnShape::of(Types::STRING)->nullable()->length(160),
+        ]);
+    }
+
+    /** @return array<string, IndexShape> */
+    private function expectedIndexes(): array
+    {
+        return [
+            'audit_log_actor_idx' => SchemaShape::regularIndex('actor_id', 'occurred_on'),
+            'audit_log_actor_type_idx' => SchemaShape::regularIndex('actor_type', 'occurred_on'),
+            'audit_log_correlation_idx' => SchemaShape::regularIndex('correlation_id'),
+            'audit_log_level_idx' => SchemaShape::regularIndex('level', 'occurred_on'),
+            'audit_log_resource_idx' => SchemaShape::regularIndex('resource_type', 'resource_id'),
+            'audit_log_timeline_idx' => SchemaShape::regularIndex('occurred_on', 'id'),
+        ];
     }
 }

@@ -6,9 +6,10 @@ namespace Erpify\Shared\Crypto\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\DBAL\Types\Types;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 
 /**
  * Injects the `dek_keystore` table into Doctrine's in-memory schema. It is written through plain DBAL
@@ -21,30 +22,29 @@ use Doctrine\ORM\Tools\ToolEvents;
  * (ADR D13/D17). No column default: the writer supplies every value, as in `audit_log`.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class KeystoreSchemaListener
+final class KeystoreSchemaListener extends InjectedTableSchemaListener
 {
-    private const string TABLE = 'dek_keystore';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
+        parent::__construct('dek_keystore');
+    }
 
-        if ($schema->hasTable(self::TABLE)) {
-            return;
-        }
-
-        $table = $schema->createTable(self::TABLE);
-
-        $table->addColumn('encryption_scope_id', Types::STRING, ['length' => 160]);
-        $table->addColumn('wrapped_dek', Types::TEXT, ['notnull' => false]);
-        $table->addColumn('kek_version', Types::SMALLINT);
-        $table->addColumn('created_at', Types::DATETIMETZ_IMMUTABLE);
-        $table->addColumn('destroyed_at', Types::DATETIMETZ_IMMUTABLE, ['notnull' => false]);
-
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()->setUnquotedColumnNames('encryption_scope_id')->create(),
-        );
-
-        $table->addIndex(['destroyed_at'], 'dek_keystore_destroyed_idx');
+    protected function define(TableEditor $table): TableEditor
+    {
+        return $table
+            ->setColumns(
+                $this->column('encryption_scope_id', Types::STRING)->setLength(160)->create(),
+                $this->column('wrapped_dek', Types::TEXT)->setNotNull(false)->create(),
+                $this->column('kek_version', Types::SMALLINT)->create(),
+                $this->column('created_at', Types::DATETIMETZ_IMMUTABLE)->create(),
+                $this->column('destroyed_at', Types::DATETIMETZ_IMMUTABLE)->setNotNull(false)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('encryption_scope_id')->create(),
+            )
+            ->setIndexes(
+                $this->index('dek_keystore_destroyed_idx', 'destroyed_at')->create(),
+            )
+        ;
     }
 }
