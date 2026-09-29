@@ -3,7 +3,10 @@ import { Menu, X, Wrench } from "lucide-react";
 import Link from "next/link";
 import { Logo, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/context/shared/access/application/useSession";
+import { AuthStatus } from "@/context/shared/access/infrastructure/ui/AuthProvider";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 
 interface NavbarProps {
@@ -13,13 +16,21 @@ interface NavbarProps {
 export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const showDevTools = isDevToolsAvailable();
+  const { status } = useSession();
+  // "Sign in" is offered only once the session is known not to be an active one. While
+  // hydrating it stays hidden, so an authenticated visitor never sees it flash on load;
+  // `unavailable` shows it, because the server did not confirm any session.
+  const showSignIn = status === AuthStatus.UNAUTHENTICATED || status === AuthStatus.UNAVAILABLE;
 
   return (
-    <nav className="navbar bg-card border-b border-border sticky top-0 z-50">
+    <nav
+      className="navbar bg-card border-b border-border sticky top-0 z-50"
+      data-session-status={status}
+    >
       <div className="navbar__container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="navbar__inner flex justify-between h-16 items-center">
           <Logo
-            href="/"
+            href={safeHref(Routes.HOME)}
             variant="badge"
             size="lg"
             className="navbar__logo"
@@ -30,7 +41,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
           {/* Desktop Menu */}
           <div className="navbar__menu hidden md:flex items-center space-x-8">
             <Link
-              href={Routes.STATUS}
+              href={safeHref(Routes.STATUS)}
               className="navbar__link text-muted-foreground hover:text-primary font-medium transition-colors"
               data-testid="navbar__link-status"
             >
@@ -39,7 +50,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
 
             {showDevTools ? (
               <Link
-                href={Routes.DEV_TOOLS}
+                href={safeHref(Routes.DEV_TOOLS)}
                 className="navbar__link navbar__link--dev-tools text-warning-strong hover:text-warning-strong/80 font-medium transition-colors inline-flex items-center gap-1.5"
                 title="Internal QA / engineering tools (dev/test only)"
                 data-testid="navbar__dev-tools-link"
@@ -51,13 +62,25 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
 
             <ThemeToggle testId="navbar__theme" className="navbar__theme" />
 
-            <Link
-              href={Routes.LOGIN}
-              className="navbar__link navbar__link--login text-foreground hover:text-primary font-medium transition-colors"
-              data-testid="navbar__link-login"
-            >
-              Sign in
-            </Link>
+            {showSignIn ? (
+              <Link
+                href={safeHref(Routes.LOGIN)}
+                className="navbar__link navbar__link--login text-foreground hover:text-primary font-medium transition-colors"
+                data-testid="navbar__link-login"
+              >
+                Sign in
+              </Link>
+            ) : null}
+            {status === AuthStatus.HYDRATING ? (
+              // Holds the slot "Sign in" may take once the session resolves, so the items
+              // beside it do not shift sideways when it appears for an anonymous visitor.
+              <span
+                aria-hidden="true"
+                className="navbar__link navbar__link--login invisible font-medium"
+              >
+                Sign in
+              </span>
+            ) : null}
 
             <Button
               onClick={goToBackoffice}
@@ -89,7 +112,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
       {isMenuOpen && (
         <div className="navbar__mobile-menu md:hidden bg-card border-b border-border px-4 pt-2 pb-6 space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-200">
           <Link
-            href={Routes.STATUS}
+            href={safeHref(Routes.STATUS)}
             className="navbar__link block text-muted-foreground font-medium"
             data-testid="navbar__link-status--mobile"
           >
@@ -97,7 +120,7 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
           </Link>
           {showDevTools ? (
             <Link
-              href={Routes.DEV_TOOLS}
+              href={safeHref(Routes.DEV_TOOLS)}
               className="navbar__link navbar__link--dev-tools text-warning-strong hover:text-warning-strong/80 font-medium inline-flex items-center gap-1.5"
               title="Internal QA / engineering tools (dev/test only)"
               data-testid="navbar__mobile-dev-tools-link"
@@ -106,13 +129,15 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
               Dev Tools
             </Link>
           ) : null}
-          <Link
-            href={Routes.LOGIN}
-            className="navbar__link navbar__link--login block text-foreground font-medium"
-            data-testid="navbar__link-login--mobile"
-          >
-            Sign in
-          </Link>
+          {showSignIn ? (
+            <Link
+              href={safeHref(Routes.LOGIN)}
+              className="navbar__link navbar__link--login block text-foreground font-medium"
+              data-testid="navbar__link-login--mobile"
+            >
+              Sign in
+            </Link>
+          ) : null}
           <Button
             onClick={goToBackoffice}
             size="lg"

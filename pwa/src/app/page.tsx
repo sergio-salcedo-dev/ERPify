@@ -3,13 +3,15 @@
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/app/_components/Navbar";
 import { Footer } from "@/app/_components/Footer";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
+import { Routes } from "@/context/shared/routing/domain/Routes";
 
 export default function LandingPage() {
   const router = useRouter();
 
   const goToBackOffice = () => {
     setTimeout(() => {
-      router.push("/backoffice");
+      router.push(safeHref(Routes.BACKOFFICE));
     }, 800);
   };
 
