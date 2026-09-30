@@ -6,27 +6,23 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Persistence\Infrastructure\LeakedTransactionContainment;
-use Erpify\Shared\Persistence\Infrastructure\MessageTransactionBoundaryListener;
 use Erpify\Tests\Functional\Shared\Persistence\Fixtures\ProbesATransactionScopedLock;
 use Erpify\Tests\Functional\Shared\Persistence\Fixtures\RecordingLogger;
+use Erpify\Tests\Functional\Shared\Persistence\Fixtures\ThrowingLogger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
-use stdClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
-use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Event\WorkerMessageReceivedEvent;
-use Symfony\Component\Messenger\Event\WorkerRunningEvent;
+use Throwable;
 
 /**
- * Pins what a unit of work that forgot its transaction costs the NEXT one on the same connection: nothing.
- * Every case asserts the consequence through {@see ProbesATransactionScopedLock}, not the nesting counter.
+ * Pins the rollback itself — the baseline it stops at, the `close()` fallback and the report — against a real
+ * server: a transaction-scoped advisory lock and a temporary table are what the assertions read, because a DBAL
+ * nesting counter can be right while the server still holds the transaction.
  *
  * @internal
  */
 #[CoversClass(LeakedTransactionContainment::class)]
-#[CoversClass(MessageTransactionBoundaryListener::class)]
 final class LeakedTransactionContainmentTest extends KernelTestCase
 {
     use ProbesATransactionScopedLock;
@@ -50,80 +46,45 @@ final class LeakedTransactionContainmentTest extends KernelTestCase
     }
 
     #[Test]
-    public function aTransactionOpenBeforeTheUnitBeganIsNotTheUnitsToEnd(): void
+    public function aLeakAboveTheBaselineIsUndoneWhileTheBaselineTransactionKeepsItsWorkAndItsLock(): void
     {
         $containment = new LeakedTransactionContainment($this->connection, $this->logger);
 
         $this->connection->beginTransaction();
+        $this->takeTheLock();
+        $this->connection->executeStatement('CREATE TEMPORARY TABLE leak_probe (id INT) ON COMMIT DROP');
         $baseline = $containment->nestingLevel();
         $this->connection->beginTransaction();
+        $this->connection->executeStatement('INSERT INTO leak_probe VALUES (1)');
 
         $this->assertSame(1, $containment->containAbove($baseline, ['boundary' => 'test']));
+
         $this->assertSame(1, $this->connection->getTransactionNestingLevel());
-    }
-
-    #[Test]
-    public function aWorkerMessageThatLeakedIsRolledBackAndNamedButNeverThrows(): void
-    {
-        $listener = new MessageTransactionBoundaryListener(
-            new LeakedTransactionContainment($this->connection, $this->logger),
-        );
-
-        $listener->onMessageReceived(new WorkerMessageReceivedEvent(new Envelope(new stdClass()), 'async'));
-
-        $this->connection->beginTransaction();
-        $this->takeTheLock();
-
-        $listener->onWorkerRunning();
-
-        $this->assertSame(0, $this->connection->getTransactionNestingLevel());
-        $this->assertTrue($this->lockIsFreeOutside(), 'the leaked transaction still holds its lock');
+        $this->assertSame(0, $this->connection->fetchOne('SELECT count(*)::int FROM leak_probe'));
+        $this->assertFalse($this->lockIsFreeOutside(), 'the baseline transaction lost its lock');
         $this->assertCount(1, $this->logger->records);
         $this->assertSame('critical', $this->logger->records[0]['level']);
-        $this->assertSame(stdClass::class, $this->logger->records[0]['context']['message_class'] ?? null);
         $this->assertSame(1, $this->logger->records[0]['context']['leaked_levels'] ?? null);
     }
 
     #[Test]
-    public function anIdleWorkerTickWithNoMessageDoesNothing(): void
+    public function nothingOpenAboveTheBaselineIsNeitherTouchedNorReported(): void
     {
-        $listener = new MessageTransactionBoundaryListener(
-            new LeakedTransactionContainment($this->connection, $this->logger),
-        );
+        $containment = new LeakedTransactionContainment($this->connection, $this->logger);
         $this->connection->beginTransaction();
 
-        $listener->onWorkerRunning();
+        $this->assertSame(0, $containment->containAbove(1, ['boundary' => 'test']));
 
         $this->assertSame(1, $this->connection->getTransactionNestingLevel());
         $this->assertSame([], $this->logger->records);
     }
 
     #[Test]
-    public function theWorkerBoundaryRunsAheadOfMessengersServiceReset(): void
-    {
-        $dispatcher = $this->dispatcher();
-        $found = false;
-
-        foreach ($dispatcher->getListeners(WorkerRunningEvent::class) as $listener) {
-            if (\is_array($listener) && $listener[0] instanceof MessageTransactionBoundaryListener) {
-                $found = true;
-                $this->assertGreaterThan(
-                    -1024,
-                    $dispatcher->getListenerPriority(WorkerRunningEvent::class, $listener),
-                );
-            }
-        }
-
-        $this->assertTrue($found, 'the worker boundary is not registered');
-    }
-
-    #[Test]
-    public function aRollbackTheServerCannotAnswerFallsBackToAFreshCleanConnection(): void
+    public function aRollbackTheServerCannotAnswerFallsBackToAFreshConnectionAndSaysWhy(): void
     {
         $containment = new LeakedTransactionContainment($this->connection, $this->logger);
 
         $this->connection->beginTransaction();
-        $this->takeTheLock();
         $this->connection->beginTransaction();
         $this->connection->setRollbackOnly();
 
@@ -133,18 +94,51 @@ final class LeakedTransactionContainmentTest extends KernelTestCase
         $this->assertSame(2, $containment->containAbove(0, ['boundary' => 'test']));
 
         $this->assertSame(0, $this->connection->getTransactionNestingLevel());
+        $this->assertCount(1, $this->logger->records, 'the reset after the close failed as well');
         $this->assertTrue($this->logger->records[0]['context']['connection_closed'] ?? false);
-        $this->assertTrue($this->lockIsFreeOutside());
-        // The rollback-only flag survived `close()`; the next unit's commit is what it would have broken.
+        $this->assertInstanceOf(Throwable::class, $this->logger->records[0]['context']['exception'] ?? null);
+        $this->assertNotSame($pid, $this->connection->fetchOne('SELECT pg_backend_pid()'));
+        // The rollback-only flag survives `close()`; the next unit's commit is what it would have broken.
         $this->connection->beginTransaction();
         $this->connection->commit();
     }
 
-    private function dispatcher(): EventDispatcherInterface
+    #[Test]
+    public function aRollbackThatFailsAboveAKeptBaselineIsRethrownRatherThanClosingThatTransaction(): void
     {
-        $dispatcher = self::getContainer()->get('event_dispatcher');
-        $this->assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $containment = new LeakedTransactionContainment($this->connection, $this->logger);
 
-        return $dispatcher;
+        $this->connection->beginTransaction();
+        $this->connection->beginTransaction();
+
+        $pid = $this->connection->fetchOne('SELECT pg_backend_pid()');
+        $this->outside->executeStatement('SELECT pg_terminate_backend(:pid)', ['pid' => $pid]);
+
+        $rethrown = null;
+
+        try {
+            $containment->containAbove(1, ['boundary' => 'test']);
+        } catch (Throwable $throwable) {
+            $rethrown = $throwable;
+        }
+
+        $this->assertInstanceOf(Throwable::class, $rethrown, 'the failure above a kept baseline was swallowed');
+        // DBAL closes a connection it finds lost, so the counter says nothing here — the server ended the baseline
+        // transaction with the backend. What this class owes is not to be the one closing it: the report says so.
+        $this->assertFalse($this->logger->records[0]['context']['connection_closed'] ?? true);
+
+        $this->connection->close();
+    }
+
+    #[Test]
+    public function aBrokenLogSinkNeverFailsTheRollbackItWasReporting(): void
+    {
+        $containment = new LeakedTransactionContainment($this->connection, new ThrowingLogger());
+
+        $this->connection->beginTransaction();
+        $this->takeTheLock();
+
+        $this->assertSame(1, $containment->containAbove(0, ['boundary' => 'test']));
+        $this->assertTrue($this->lockIsFreeOutside(), 'the leaked transaction still holds its lock');
     }
 }

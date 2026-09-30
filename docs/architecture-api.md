@@ -112,12 +112,18 @@ Golden rule: *contexts reference each other's identities and react to each other
   worker keep the DBAL connection across requests and messages, and DoctrineBundle's reset clears entity managers
   only — so a forgotten transaction would hold its row locks and swallow every later write on that worker until it
   recycled. `LeakedTransactionContainment` (`Shared/Persistence/Infrastructure`) rolls back whatever is open above
-  the level the unit started at and reports it at `critical` on the `observability` channel: on `kernel.terminate`
-  at priority 1024, ahead of the audit writers that run there, and on `WorkerRunningEvent` for a message — after
-  the ack, so the ack's `DELETE` rolls back with it and the message is delivered again. Under `test` in the CLI
-  the HTTP boundary also throws, so the test that leaked goes red; the worker boundary never throws. The dev/test
-  `DoctrineConnectionResetListener` still closes the connection on every `kernel.request`, which would roll a leak
-  back silently — the terminate check runs first, so it is what sees one.
+  the level the unit may keep — zero outside `test` — and reports it at `critical` on the `observability`
+  channel, naming the route or message class. HTTP (`RequestTransactionBoundaryListener`): on `kernel.terminate`
+  at priority 1024, ahead of the audit writers that run there (rows written *during* the request ran inside the
+  leak and are lost regardless), again at -2048 for a terminate listener that leaks, and outside `test` at the
+  start of the next request, for a leak `kernel.terminate` never saw. Worker (`MessageTransactionBoundaryListener`):
+  a failed message is rolled back before its retry is written, so the retry strategy still applies; a handled one
+  after its ack, so the ack rolls back with the leak and the message returns after the transport's redelivery
+  timeout — a handler that leaks every time returns every time, with a `critical` each time, and repeats any side
+  effect outside the database. Under `test` in the CLI (PHPUnit and Behat both drive the kernel browser) the HTTP
+  boundary also throws, so the test that leaked goes red; the worker boundary never throws. The dev/test
+  `DoctrineConnectionResetListener` still closes the connection on every `kernel.request`, after the terminate
+  checks have seen any leak.
 - **Doctrine 3 / DBAL 4 API caveats**: see [`project-context.md` → Runtime gotchas](./project-context.md).
 
 ## API design

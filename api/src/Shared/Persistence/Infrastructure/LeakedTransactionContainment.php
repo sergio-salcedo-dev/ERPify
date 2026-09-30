@@ -10,32 +10,37 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
 /**
- * Rolls back a transaction a unit of work left open on the shared DBAL connection when its boundary ends — a
+ * Rolls back a transaction a unit of work left open on the default DBAL connection when its boundary ends — a
  * request, or a worker message — and reports it at `critical`.
  *
  * Under FrankenPHP worker mode, and in a Messenger worker, the connection outlives the unit of work that used
  * it, and nothing between two units closes a transaction: DoctrineBundle's reset clears the entity managers
  * and leaves the connection as it is. So a transaction one request forgot keeps every row lock it took, every
- * later write on that worker lands INSIDE it, and none of it commits until the worker recycles — each audited
- * boundary served there answers 5xx on the way. Rolling back at the boundary confines the damage to the unit
- * that leaked: its own uncommitted writes are lost, which is the outcome it already had, and the next one
- * starts on a clean connection.
+ * later write on that worker lands INSIDE it, and none of it commits until the worker recycles. Rolling back at
+ * the boundary confines the damage to the unit that leaked: its own uncommitted writes are lost, which is the
+ * outcome it already had.
  *
- * **Down to a baseline, never to zero.** The caller passes the nesting level it observed when the unit began,
- * because a transaction may legitimately span the boundary — a functional test opens one around the requests
- * it makes — and that one is not this class's to end.
+ * **Down to a baseline.** The caller passes the nesting level the unit is entitled to leave open. Outside `test`
+ * that is always zero, because nothing legitimately spans a request or a message there; under `test` it is the
+ * level observed when the unit began, because a functional test may open a transaction around the requests it
+ * makes, and that one is not this class's to end.
  *
  * **A counted loop, never `while (isTransactionActive())`.** With `autoCommit` off, a top-level `rollBack()`
  * begins the next transaction itself, so a loop keyed on "still active" never ends.
  *
- * **`close()` is the fallback, not the method.** It drops the handle, which makes the server roll back, but it
- * leaves DBAL's rollback-only flag as it was, so the next unit's first commit would fail for a reason it did not
- * cause. After a close, a bare begin/rollback on the fresh handle clears that flag.
+ * **`close()` is the fallback, and only above a zero baseline.** It drops the handle, which makes the server roll
+ * back, and it zeroes the nesting level — so above a non-zero baseline it would end the transaction the caller
+ * kept, and there the failure is rethrown instead. It also leaves DBAL's rollback-only flag as it was, so the
+ * next unit's first commit would fail for a reason it did not cause; a bare begin/rollback on the fresh handle
+ * clears it. That reset assumes `autoCommit` on, as this application runs.
  *
- * **Reported on the always-on channel.** A `critical` on the default channel would activate the prod
- * `fingers_crossed` handler and flush the request's buffered records with it — the email `ContextListener`
- * writes on every authenticated request among them. The context carries the route or message class, never a
- * path or a payload.
+ * **Reported on the always-on channel, and never at the caller's expense.** A `critical` on the default channel
+ * would activate the prod `fingers_crossed` handler and flush the request's buffered records with it — the email
+ * `ContextListener` writes on every authenticated request among them. The context carries the route or message
+ * class, never a path or a payload. A logger that throws is swallowed: the worker boundary promises never to
+ * throw, and a report is worth less than the rollback it describes.
+ *
+ * Only the default connection is covered; this application maps one.
  */
 final readonly class LeakedTransactionContainment
 {
@@ -65,26 +70,29 @@ final readonly class LeakedTransactionContainment
             return 0;
         }
 
-        $closed = false;
-
         try {
             for ($level = $leaked; $level > 0; --$level) {
                 $this->connection->rollBack();
             }
         } catch (Throwable $throwable) {
-            $closed = true;
-            $this->close($throwable);
+            if ($baseline > 0) {
+                $this->report($context + ['leaked_levels' => $leaked, 'connection_closed' => false], $throwable);
+
+                throw $throwable;
+            }
+
+            $this->report($context + ['leaked_levels' => $leaked, 'connection_closed' => true], $throwable);
+            $this->close();
+
+            return $leaked;
         }
 
-        $this->logger->critical(
-            'A unit of work ended with a database transaction still open; it was rolled back.',
-            [...$context, 'leaked_levels' => $leaked, 'connection_closed' => $closed],
-        );
+        $this->report($context + ['leaked_levels' => $leaked, 'connection_closed' => false]);
 
         return $leaked;
     }
 
-    private function close(Throwable $cause): void
+    private function close(): void
     {
         $this->connection->close();
 
@@ -92,10 +100,34 @@ final readonly class LeakedTransactionContainment
             $this->connection->beginTransaction();
             $this->connection->rollBack();
         } catch (Throwable $throwable) {
-            $this->logger->critical(
+            $this->safely(fn () => $this->logger->critical(
                 'The connection could not be reset after a leaked transaction failed to roll back.',
-                ['exception' => $throwable, 'cause' => $cause],
-            );
+                ['exception' => $throwable],
+            ));
+        }
+    }
+
+    /**
+     * @param array<string, scalar|null> $context
+     */
+    private function report(array $context, ?Throwable $rollbackFailure = null): void
+    {
+        if ($rollbackFailure instanceof Throwable) {
+            $context['exception'] = $rollbackFailure;
+        }
+
+        $this->safely(fn () => $this->logger->critical(
+            'A unit of work ended with a database transaction still open; it was rolled back.',
+            $context,
+        ));
+    }
+
+    private function safely(callable $report): void
+    {
+        try {
+            $report();
+        } catch (Throwable) {
+            // The rollback already happened; losing its report must not undo that by failing the caller.
         }
     }
 }
