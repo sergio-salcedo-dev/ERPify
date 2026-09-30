@@ -122,12 +122,12 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
   Per-stream replay y agregados event-sourced futuros podrán consumirla, pero antes habrá que serializar el
   *append* (ver la enmienda): hoy dos *appends* concurrentes pueden compartir versión.
 
-  *Enmienda (2026-09-28).* La versión no la serializa nada. Ni el lock: medido el 2026-09-29 sobre
+  *Enmienda (2026-09-28).* La versión no la serializa nada. Ni el lock: medido el 2026-09-30 sobre
   `git grep -l 'eventBus->publish(' api/src` (25 clases), leyendo si cada `publish` va precedido en su
-  transacción de una lectura con bloqueo (`…ForUpdate(` o `lock…(` de un repositorio), 14 clases la toman en
+  transacción de una lectura con bloqueo (`…ForUpdate(` o `lock…(` de un repositorio), 15 clases la toman en
   todos sus caminos, 2 solo en alguno (`LoginAttemptRegistrar::clear()` y `StartSession` sin sesión previa
-  correlada) y 9 en ninguno (los siete casos de uso de `Bank`/`BankAccount`, `SendInvitation`,
-  `RevokeSession`) — y es una cota superior, porque una lectura con bloqueo no tiene por qué ser la del
+  correlada) y 8 en ninguno (los siete casos de uso de `Bank`/`BankAccount` y `SendInvitation`) — y es una
+  cota superior, porque una lectura con bloqueo no tiene por qué ser la del
   agregado cuyo stream se anexa (`AcceptInvitation` anexa al del usuario bajo el lock de la invitación). Ni el
   índice: `event_store_stream_version_uniq` incluye `tenant_id`, que hoy se escribe siempre `NULL`, y
   PostgreSQL trata los `NULL` como distintos (`NULLS DISTINCT`), así que no impone nada y dos *appends*

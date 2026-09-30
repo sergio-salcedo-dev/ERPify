@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Iam\Identity;
 
+use ArrayObject;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
@@ -15,6 +16,7 @@ use Erpify\Iam\Identity\Application\RecordLockoutNoticeAuditBestEffort;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\RecordRecoveryThrottleAuditBestEffort;
 use Erpify\Iam\Identity\Application\RecoveryThrottleAuditBudget;
+use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalIdentityRowLock;
 use Erpify\Shared\Audit\Application\AuditLogger;
@@ -22,6 +24,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Erpify\Tests\Functional\Iam\Identity\Fixtures\SubjectRowLockProbingAuditLogger;
 use Erpify\Tests\Functional\ResolvesContainerServices;
+use LogicException;
 use Monolog\Handler\TestHandler;
 use Monolog\Level;
 use Monolog\Logger;
@@ -78,6 +81,14 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
 
     private ?Connection $outside = null;
 
+    /**
+     * The holding process while it runs, so `tearDown()` can end one a failed assertion left behind — alive, it
+     * would go on to delete the subject under whatever test comes next.
+     *
+     * @var resource|null
+     */
+    private $holder;
+
     private string $subjectId;
 
     private string $subjectEmail;
@@ -109,6 +120,7 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
             return;
         }
 
+        $this->endHolder();
         $outside = $this->outsideConnection();
 
         if ($outside->isTransactionActive()) {
@@ -200,15 +212,17 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         int $resourceLessRowsWhenAbsent,
     ): void {
         $resourceLessBefore = $this->rowsWithoutSubject($action);
+        // Built before the row is held, so the time spent resolving services is not taken out of the hold.
+        $run = $this->writerFor($writer);
         $holder = $this->holdAndEraseInAnotherProcess();
 
         $started = \microtime(true);
-        $this->runWriter($writer);
+        $run();
         $waited = \microtime(true) - $started;
 
         $this->assertSame('deleted 1', $this->finish($holder), 'the other process erased the subject');
         $this->assertGreaterThan(0.25, $waited, 'the writer waited for the transaction holding the row');
-        $this->assertSame([], $this->reports->getRecords(), 'an erased subject is an outcome, not a failure');
+        $this->assertOnlyAbsenceReported($writer);
         $this->assertSame([], $this->actionsNamingTheSubject(), 'no row names the subject erased under it');
         $this->assertSame($resourceLessBefore + $resourceLessRowsWhenAbsent, $this->rowsWithoutSubject($action));
     }
@@ -233,9 +247,22 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
 
         $this->runWriter($writer);
 
-        $this->assertSame([], $this->reports->getRecords(), 'an erased subject is an outcome, not a failure');
+        $this->assertOnlyAbsenceReported($writer);
         $this->assertSame([], $this->actionsNamingTheSubject(), 'no row names the erased subject');
         $this->assertSame($resourceLessBefore + $resourceLessRowsWhenAbsent, $this->rowsWithoutSubject($action));
+    }
+
+    /**
+     * The four writers alone, the address-keyed throttle among them: its lock is taken through
+     * `whileHeldByEmail()`, a second statement the bound has to reach as well.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function writerNames(): iterable
+    {
+        foreach (self::writersAgainstAnErasedSubject() as $name => [$writer]) {
+            yield $name => [$writer];
+        }
     }
 
     /**
@@ -259,8 +286,10 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
      * that net is what would fire, with a different SQLSTATE.
      */
     #[Test]
-    public function aRowHeldPastTheBoundIsGivenUpOnAndReportedAsTheLockPhase(): void
+    #[DataProvider('writerNames')]
+    public function aRowHeldPastTheBoundIsGivenUpOnAndReportedAsTheLockPhase(string $writer): void
     {
+        $run = $this->writerFor($writer);
         $outside = $this->outsideConnection();
         $outside->beginTransaction();
         $outside->fetchOne(
@@ -273,7 +302,7 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
 
         try {
             $started = \microtime(true);
-            $this->runWriter('lockout');
+            $run();
             $waited = \microtime(true) - $started;
         } finally {
             $writers->executeStatement('RESET statement_timeout');
@@ -292,27 +321,107 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         $this->assertSame([], $this->actionsNamingTheSubject(), 'no row named the subject while it was held');
     }
 
+    /**
+     * A refused nested call is what keeps the lock's two promises — its own bound, its own commit — from both
+     * quietly becoming the caller's. The operation must not run: nothing may be written into a transaction the
+     * row would then commit with.
+     */
+    #[Test]
+    public function aLockAskedForInsideAnOpenTransactionIsRefusedAndRunsNothing(): void
+    {
+        $identityRows = $this->service(IdentityRowLock::class);
+        $connection = $this->entityManager->getConnection();
+        $ran = new ArrayObject();
+        $connection->beginTransaction();
+
+        try {
+            $this->assertRefused(fn () => $identityRows->whileHeld(
+                $this->subjectId,
+                static fn () => $ran->append('whileHeld'),
+            ));
+            $this->assertRefused(fn () => $identityRows->whileHeldByEmail(
+                Email::from($this->subjectEmail),
+                static fn () => $ran->append('whileHeldByEmail'),
+            ));
+        } finally {
+            $connection->rollBack();
+        }
+
+        $this->assertCount(0, $ran, 'no operation ran');
+        $this->assertFalse($connection->isTransactionActive(), 'the refusal opened nothing of its own');
+    }
+
+    private function assertRefused(callable $call): void
+    {
+        try {
+            $call();
+        } catch (LogicException $refusal) {
+            $this->assertStringContainsString('transaction of its own', $refusal->getMessage());
+
+            return;
+        }
+
+        $this->fail('a lock asked for inside an open transaction was accepted');
+    }
+
     private function runWriter(string $writer, ?AuditLogger $auditLogger = null): void
+    {
+        ($this->writerFor($writer, $auditLogger))();
+    }
+
+    /**
+     * @return callable(): void
+     */
+    private function writerFor(string $writer, ?AuditLogger $auditLogger = null): callable
     {
         $identityRows = $this->service(IdentityRowLock::class);
         $auditLogger ??= $this->service(AuditLogger::class);
         $logger = new Logger('late-audit-writer', [$this->reports]);
 
-        match ($writer) {
-            'lockout' => (new RecordLockoutAuditBestEffort($identityRows, $auditLogger, $logger))
+        return match ($writer) {
+            'lockout' => fn () => (new RecordLockoutAuditBestEffort($identityRows, $auditLogger, $logger))
                 ->record($this->subjectId),
-            'lockout notice' => (new RecordLockoutNoticeAuditBestEffort($identityRows, $auditLogger, $logger))
-                ->record($this->subjectId, null),
-            'recovery throttle' => (new RecordRecoveryThrottleAuditBestEffort(
+            'lockout notice' => fn () => (
+                new RecordLockoutNoticeAuditBestEffort($identityRows, $auditLogger, $logger)
+            )->record($this->subjectId, null),
+            'recovery throttle' => fn () => (new RecordRecoveryThrottleAuditBestEffort(
                 $this->alwaysGrantedBudget(),
                 $identityRows,
                 $auditLogger,
                 $logger,
             ))->record($this->subjectEmail),
-            'recovery secret' => (new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger))
-                ->recordMinted($this->subjectId),
+            'recovery secret' => fn () => (
+                new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger)
+            )->recordMinted($this->subjectId),
             default => $this->fail("unknown writer {$writer}"),
         };
+    }
+
+    /**
+     * An erased subject is an outcome, never a failure: nothing at `error`. The id-keyed writers still say, once
+     * and at `info`, that they withheld their row; the throttle does not, because an address that resolves to
+     * nobody is its ordinary case and it writes its resource-less row instead.
+     */
+    private function assertOnlyAbsenceReported(string $writer): void
+    {
+        $records = $this->reports->getRecords();
+
+        if ('recovery throttle' === $writer) {
+            $this->assertSame([], $records, 'an erased subject is an outcome, not a failure');
+
+            return;
+        }
+
+        $this->assertCount(1, $records, 'the withheld row was reported once');
+        $record = $records[0] ?? null;
+        $this->assertInstanceOf(LogRecord::class, $record);
+        $this->assertSame(Level::Info, $record->level, 'an erased subject is an outcome, not a failure');
+        $this->assertSame('subject_absent', $record->context['phase'] ?? null);
+        $this->assertStringNotContainsString(
+            $this->subjectId,
+            \json_encode([$record->message, $record->context], JSON_THROW_ON_ERROR),
+            'the report names no subject',
+        );
     }
 
     /**
@@ -359,6 +468,8 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
 
         $reported = \fgets($stdout);
 
+        $this->holder = $process;
+
         if ("locked\n" !== $reported) {
             $this->fail('the other process did not hold the subject row: ' . \stream_get_contents($stderr));
         }
@@ -377,9 +488,21 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         \fclose($stdout);
         \fclose($stderr);
 
+        $this->holder = null;
         $this->assertSame(0, \proc_close($process), 'the holding process exited cleanly: ' . $errors);
 
         return $output;
+    }
+
+    private function endHolder(): void
+    {
+        if (!\is_resource($this->holder)) {
+            return;
+        }
+
+        \proc_terminate($this->holder, 9);
+        \proc_close($this->holder);
+        $this->holder = null;
     }
 
     /**

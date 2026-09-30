@@ -39,9 +39,10 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * read and the flush — a "log out everywhere", a credential change's teardown, a single-session log-out, an
  * erasure — leaves the flush re-stamping `revoked_at` over a revocation that already happened and publishing a
  * `SessionRevoked` for it: a duplicate when the rival revoked that row alone, and after an erasure an event naming
- * the person that outlives the erasure. Locked, the rival either waits
- * for this transaction or has committed first, and then the row no longer reads as admissible and nothing is
- * published for it.
+ * the person that outlives the erasure. Locked, the rival either waits for this transaction or has committed
+ * first, and then the row no longer reads as admissible and nothing is published for it. Against an erasure
+ * that waits, the event this commits is still reached, because the erasure purges sessions before it
+ * pseudonymises the business log (`FulfilIdentityErasure`).
  *
  * Two residuals remain, both bounded the same way — an unreachable `ACTIVE` row the sweep removes once its expiry
  * is 90 days behind it, ~97 days after the login. A post-commit failure to write the new correlation leaves the

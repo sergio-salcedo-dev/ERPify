@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine;
 use Doctrine\DBAL\Connection;
 use Erpify\Iam\Identity\Application\IdentityRowLock;
 use Erpify\Iam\Identity\Domain\Email;
+use LogicException;
 use Override;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -17,13 +18,17 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * statement carries no column the caller does not need — `1` for the id form, the id for the address form — so
  * the lock reads no credential digest into this process.
  *
- * **The wait is bounded by `lock_timeout`, and only when this transaction is the outermost one.** An erasure holds
- * the subject's row from its administrator re-check to its commit, and a writer waiting on it runs on a login
- * refusal or at `kernel.terminate`, where an unbounded wait would hold the request or the worker for as long as
- * the erasure runs. On timeout Postgres raises `55P03`, the transaction rolls back and the caller reports a
- * skipped projection. `SET LOCAL` lasts until the end of the TOP-LEVEL transaction, so inside a caller's open
- * transaction — where DBAL nests this one as a savepoint — it would leak into statements this class does not own;
- * there the bound is left to whoever opened that transaction.
+ * **The wait is bounded by `lock_timeout`.** An erasure holds the subject's row from its administrator re-check
+ * to its commit, and a writer waiting on it runs on a login refusal or at `kernel.terminate`, where an unbounded
+ * wait would hold the request or the worker for as long as the erasure runs. On timeout Postgres raises `55P03`,
+ * the transaction rolls back and the caller reports a skipped projection.
+ *
+ * **A call inside an open transaction is refused, not nested.** DBAL would nest it as a savepoint, and both
+ * halves of the contract would then be false at once: `SET LOCAL` lasts until the end of the TOP-LEVEL
+ * transaction, so the bound would leak into statements this class does not own, and the row written under the
+ * lock would commit or roll back with the caller's business transaction rather than on its own. Every caller is
+ * post-commit, so an open transaction here is a wiring defect, and a `LogicException` says so — the callers
+ * swallow it into their skipped-projection report, where it is seen rather than silently rebound.
  */
 #[AsAlias(IdentityRowLock::class)]
 final readonly class DbalIdentityRowLock implements IdentityRowLock
@@ -85,12 +90,14 @@ final readonly class DbalIdentityRowLock implements IdentityRowLock
      */
     private function inOwnTransaction(callable $body): bool
     {
-        $outermost = !$this->connection->isTransactionActive();
+        if ($this->connection->isTransactionActive()) {
+            throw new LogicException(
+                'An identity row lock runs in a transaction of its own; it was called inside an open one.',
+            );
+        }
 
-        return $this->connection->transactional(function () use ($outermost, $body): bool {
-            if ($outermost) {
-                $this->connection->executeStatement(self::BOUND_THE_WAIT);
-            }
+        return $this->connection->transactional(function () use ($body): bool {
+            $this->connection->executeStatement(self::BOUND_THE_WAIT);
 
             return $body();
         });

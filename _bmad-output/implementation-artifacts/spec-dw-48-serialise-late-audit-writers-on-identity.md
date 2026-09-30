@@ -75,6 +75,8 @@ deferred:
 
 ## Spec Change Log
 
+- **Mecanismo entregado.** El *Approach* y las tareas describen el plan original (`TransactionManager` + `UserRepository::findByIdForUpdate` / `findByEmailForUpdate`). Lo que se entregó es el puerto `IdentityRowLock` (`api/src/Iam/Identity/Application/IdentityRowLock.php`) y su adaptador `DbalIdentityRowLock`, que sirven a los cuatro escritores tardíos (lockout, aviso de lockout, throttle de recuperación y secreto de recuperación, este último cerrando DW-69). La espera está acotada por `lock_timeout`, una llamada dentro de una transacción ya abierta se rechaza con `LogicException`, y un sujeto ausente bajo el lock se informa a `info` en `observability` con `phase => subject_absent`, sin id. Un gate kernel-free (`SubjectAuditWriteSerialisationGateTest`) exige que toda escritura `AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, …)` de `Iam/Identity/Application` esté serializada con la fila del sujeto.
+
 ## Review Triage Log
 
 ### 2026-09-29 — Review pass
@@ -146,7 +148,7 @@ Tras la espera, Postgres (READ COMMITTED) re-evalúa la fila bloqueada: si la er
 
 Status: done
 
-**Resumen:** `RecordLockoutAuditBestEffort` y `RecordRecoveryThrottleAuditBestEffort` escriben su fila en una transacción propia, tras tomar el bloqueo de la fila `identity_user` del sujeto (`findByIdForUpdate` / `findByEmailForUpdate`), en el orden de la erasure (`identity_user` → `audit_log`). Sin identidad: el lockout no escribe fila; el throttle la escribe sin recurso. El claim del presupuesto sigue fuera y antes; nada escapa; el informe sigue en `observability`.
+**Resumen:** `RecordLockoutAuditBestEffort` y `RecordRecoveryThrottleAuditBestEffort` escriben su fila en una transacción propia, tras tomar el bloqueo de la fila `identity_user` del sujeto a través del puerto `IdentityRowLock` (`whileHeld` / `whileHeldByEmail`, adaptador `DbalIdentityRowLock`: `SELECT … FOR UPDATE` en DBAL, sin hidratar `User` ni vaciar el entity manager, con `lock_timeout` de 2 s), en el orden de la erasure (`identity_user` → `audit_log`). Sin identidad: el lockout no escribe fila; el throttle la escribe sin recurso. El claim del presupuesto sigue fuera y antes; nada escapa; el informe sigue en `observability`.
 
 **Ficheros:**
 - `api/src/Iam/Identity/Application/RecordLockoutAuditBestEffort.php` — transacción + bloqueo + omisión si la identidad desapareció.
@@ -165,3 +167,9 @@ Status: done
 **Verificación (follow-up):** falsificación del unitario del lockout (bloqueo fuera de `transactional()`) → 1 fallo en `testTheRowIsWrittenInsideItsOwnUnitOfWorkAfterTheSubjectRowIsLocked`, fuente restaurada por bytes; filtro del spec → `OK (64 tests, 213 assertions)`, exit 0; `make php.quality` → exit 0.
 
 **Riesgos residuales:** los dos escritores hermanos siguen sin serializar (DW-69); la re-evaluación de Postgres tras la espera se argumenta, no se mide (sin pcntl para dos transacciones concurrentes en un proceso); la espera del bloqueo no tiene cota, igual que el resto de `FOR UPDATE` del camino de login.
+
+## Review record
+
+- **Revisión interna de bmad-loop:** corrió dos veces (primer pase y follow-up, arriba en *Review Triage Log*).
+- **Revisión de cuatro capas** (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance Auditor): corrió en la sesión erpify-22 en dos pases, más un pase de verificación del delta; sus parches se aplicaron en la misma rama.
+- Los riesgos residuales de arriba están superados: los escritores hermanos quedaron serializados (DW-69) la espera está acotada por `lock_timeout`, y la re-evaluación tras la espera se mide con un proceso aparte que retiene y borra la fila (`Fixtures/hold-and-erase-identity.php`).

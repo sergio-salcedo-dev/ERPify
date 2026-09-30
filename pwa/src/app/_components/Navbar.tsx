@@ -8,6 +8,7 @@ import { AuthStatus } from "@/context/shared/access/infrastructure/ui/AuthProvid
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { SessionUnavailableNotice } from "./SessionUnavailableNotice";
 
 interface NavbarProps {
   goToBackoffice: () => void;
@@ -22,8 +23,10 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
   const showSignIn = status === AuthStatus.UNAUTHENTICATED;
   // `unavailable` means the server cannot tell whether anyone is signed in, and both entries
   // lead through the same outage: the sign-in form would be refused, and the back office
-  // would bounce straight to the maintenance page. Offering neither is the honest state.
-  const showBackoffice = status !== AuthStatus.UNAVAILABLE;
+  // would bounce straight to the maintenance page. Neither is offered; a notice with a
+  // retry takes their place, so the visitor is told why and is not left without a way back.
+  const sessionUnavailable = status === AuthStatus.UNAVAILABLE;
+  const showBackoffice = !sessionUnavailable;
 
   return (
     <nav
@@ -85,6 +88,13 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
               </span>
             ) : null}
 
+            {sessionUnavailable ? (
+              <SessionUnavailableNotice
+                testId="navbar__session-unavailable"
+                retryTestId="navbar__session-unavailable-retry"
+              />
+            ) : null}
+
             {showBackoffice ? (
               <Button
                 onClick={goToBackoffice}
@@ -142,6 +152,13 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
             >
               Sign in
             </Link>
+          ) : null}
+          {sessionUnavailable ? (
+            <SessionUnavailableNotice
+              testId="navbar__session-unavailable--mobile"
+              retryTestId="navbar__session-unavailable-retry--mobile"
+              className="flex-wrap"
+            />
           ) : null}
           {showBackoffice ? (
             <Button

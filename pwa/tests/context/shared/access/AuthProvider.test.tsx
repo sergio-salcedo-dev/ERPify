@@ -55,6 +55,20 @@ function unavailable(): IdentityUnavailableError {
   return new IdentityUnavailableError();
 }
 
+function pending(): {
+  promise: Promise<Identity | null>;
+  settle: (identity: Identity | null) => void;
+  fail: (error: unknown) => void;
+} {
+  let settle!: (identity: Identity | null) => void;
+  let fail!: (error: unknown) => void;
+  const promise = new Promise<Identity | null>((resolve, reject) => {
+    settle = resolve;
+    fail = reject;
+  });
+  return { promise, settle, fail };
+}
+
 beforeEach(() => {
   nav.pathname = "/backoffice";
   me.mockReset();
@@ -267,6 +281,39 @@ describe("AuthProvider", () => {
       expect(me).toHaveBeenCalledTimes(1);
     });
 
+    it("probes again, rather than replaying the verdict, on a return to its route before the re-probe answers", async () => {
+      me.mockRejectedValueOnce(unavailable());
+      const { seen, rerender } = renderRecording();
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+
+      // The re-probe on /maintenance is slow; the visitor presses Try again before it answers.
+      const slow = pending();
+      me.mockReturnValueOnce(slow.promise);
+      nav.pathname = "/maintenance";
+      rerender();
+      expect(me).toHaveBeenCalledTimes(2);
+
+      const retried = pending();
+      me.mockReturnValueOnce(retried.promise);
+      const before = seen.length;
+      nav.pathname = "/backoffice";
+      rerender();
+
+      expect(seen.slice(before)).not.toContain(AuthStatus.UNAVAILABLE);
+      expect(seen.at(-1)).toBe(AuthStatus.HYDRATING);
+      expect(me).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        slow.fail(unavailable());
+      });
+      expect(seen.at(-1)).toBe(AuthStatus.HYDRATING);
+
+      await act(async () => {
+        retried.settle(ADMIN);
+      });
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.AUTHENTICATED));
+    });
+
     it("does not re-probe while the route stays the one the 503 was seen on", async () => {
       me.mockRejectedValue(unavailable());
       const { seen, rerender } = renderRecording();
@@ -280,20 +327,6 @@ describe("AuthProvider", () => {
   });
 
   describe("only the latest probe decides", () => {
-    function pending(): {
-      promise: Promise<Identity | null>;
-      settle: (identity: Identity | null) => void;
-      fail: (error: unknown) => void;
-    } {
-      let settle!: (identity: Identity | null) => void;
-      let fail!: (error: unknown) => void;
-      const promise = new Promise<Identity | null>((resolve, reject) => {
-        settle = resolve;
-        fail = reject;
-      });
-      return { promise, settle, fail };
-    }
-
     it("keeps a login() session when a slower cold probe answers 503 after it", async () => {
       const cold = pending();
       me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
@@ -369,7 +402,7 @@ describe("AuthProvider", () => {
       expect(result.current.session).toBeNull();
     });
 
-    it("login() resolves null, and applies nothing, when a later probe superseded it", async () => {
+    it("login() resolves the later probe's null, and applies nothing of its own, when superseded", async () => {
       me.mockResolvedValueOnce(null);
       const { result } = renderAuth();
       await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
@@ -388,6 +421,75 @@ describe("AuthProvider", () => {
       });
 
       await expect(firstLogin).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    it("login() resolves the session the later probe found when a probe superseded it", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const own = pending();
+      const later = pending();
+      me.mockReturnValueOnce(own.promise).mockReturnValueOnce(later.promise);
+      let superseded!: Promise<unknown>;
+      act(() => {
+        superseded = result.current.login();
+      });
+      act(() => {
+        void result.current.refresh();
+      });
+
+      let settledEarly = false;
+      void superseded.then(() => {
+        settledEarly = true;
+      });
+      await act(async () => {
+        own.settle(null);
+      });
+      // Its own answer is discarded, so it waits for the winner rather than resolving null.
+      expect(settledEarly).toBe(false);
+
+      await act(async () => {
+        later.settle(ADMIN);
+      });
+
+      await expect(superseded).resolves.toMatchObject({ user: { email: "admin@erpify.dev" } });
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("login() resolves null when a logout() superseded it, even if its own probe found a session", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const own = pending();
+      me.mockReturnValueOnce(own.promise);
+      let superseded!: Promise<unknown>;
+      act(() => {
+        superseded = result.current.login();
+      });
+      await act(async () => {
+        await result.current.logout();
+      });
+      await act(async () => {
+        own.settle(ADMIN);
+      });
+
+      await expect(superseded).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    it("refresh() re-probes on the route an unavailable verdict was seen on", async () => {
+      me.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      expect(me).toHaveBeenCalledTimes(2);
       expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
     });
   });

@@ -694,11 +694,13 @@ La tabla la impone también Postgres, no solo `ActorContext`: SQL crudo (DBAL, f
 `audit_log` sin pasar por él, y una fila `user` con `actor_id` NULL no la casa ninguno de los dos pases de
 borrado. Dos `CHECK` con nombre: `audit_log_actor_type_check` (`actor_type` ∈ los cuatro tokens) y
 `audit_log_actor_id_presence_check` (`(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`, igualdad
-booleana que nunca evalúa a NULL). DBAL no modela ni introspecta un `CHECK` de tabla, así que viven solo en su
-migración y `db.diff` no los ve; su guardián es `AuditLogCheckConstraintFunctionalTest`, que además falla
-si `ActorType` gana un caso que el `CHECK` de tokens no admite. La misma migración añade `audit_log_level_check`
-(`level` ∈ los tres tokens de `AuditLevel`, mismo guardián): el pruner borra `WHERE level = :level` por cada
-caso del enum, así que una fila con otro token sobreviviría a toda ventana de retención. Una fila existente que
+booleana que nunca evalúa a NULL). DBAL no modela ni introspecta un `CHECK` de tabla, así que viven solo en sus
+migraciones y `db.diff` no los ve; sus guardianes son `AuditLogCheckConstraintFunctionalTest`, que además falla
+si `ActorType` gana un caso que el `CHECK` de tokens no admite, y `AuditLogCheckEnumTokenGateTest`, que compara
+los literales de las migraciones con los enums sin base de datos. `Version20260929102251` añade esos dos; una
+migración propia, `Version20260930072817`, añade `audit_log_level_check` (`level` ∈ los tres tokens de
+`AuditLevel`, mismos guardianes), para que la reciba también una base que ya registró la anterior: el pruner
+borra `WHERE level = :level` por cada caso del enum, así que una fila con otro token sobreviviría a toda ventana de retención. Una fila existente que
 viole cualquiera de los tres aborta la migración con su recuento y la consulta que la lista; se repara a mano.
 
 `ActorContext` (en `Shared/…/Audit/Domain`, value object de dominio, sin dependencias de framework):

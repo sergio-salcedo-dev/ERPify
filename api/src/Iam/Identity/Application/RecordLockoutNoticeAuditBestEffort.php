@@ -52,6 +52,7 @@ use Throwable;
  */
 final readonly class RecordLockoutNoticeAuditBestEffort
 {
+    use ReportsAbsentSubject;
     use ReportsAuditFailureSafely;
 
     private const string NOTICE_ACTION = 'ACCOUNT_LOCKOUT_NOTIFIED';
@@ -80,7 +81,7 @@ final readonly class RecordLockoutNoticeAuditBestEffort
         $phase = self::PHASE_LOCK;
 
         try {
-            $this->identityRows->whileHeld($userId, function () use ($userId, $metadata, &$phase): void {
+            $held = $this->identityRows->whileHeld($userId, function () use ($userId, $metadata, &$phase): void {
                 $phase = self::PHASE_WRITE;
                 $this->auditLogger->log(
                     self::NOTICE_ACTION,
@@ -90,6 +91,15 @@ final readonly class RecordLockoutNoticeAuditBestEffort
                 );
                 $phase = self::PHASE_COMMIT;
             });
+
+            if (!$held) {
+                // The mail has already left: this line is the only trace that a notice was sent to an identity
+                // erased before its row could be written.
+                $this->reportSafely(fn () => $this->logger->info(
+                    'Lockout notice sent; no security audit row owed, the identity is gone.',
+                    ['phase' => self::PHASE_SUBJECT_ABSENT],
+                ));
+            }
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
                 'Lockout notice sent; security audit projection skipped.',

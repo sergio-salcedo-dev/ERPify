@@ -46,6 +46,27 @@ describe("RetryAfterOutageButton", () => {
     },
   );
 
+  it.each(["/maintenance", "/maintenance/", "/maintenance?next=%2Fbackoffice", "/maintenance#top"])(
+    "falls back to the back-office root when ?next=%s names this page, which would re-probe nothing",
+    (self) => {
+      landOnMaintenance(`?next=${encodeURIComponent(self)}`);
+      render(<RetryAfterOutageButton />);
+
+      retry();
+
+      expect(replace).toHaveBeenCalledWith("/backoffice");
+    },
+  );
+
+  it("keeps a route that merely starts with the page's name", () => {
+    landOnMaintenance(`?next=${encodeURIComponent("/maintenance-windows")}`);
+    render(<RetryAfterOutageButton />);
+
+    retry();
+
+    expect(replace).toHaveBeenCalledWith("/maintenance-windows");
+  });
+
   it("falls back to the back-office root when no ?next= was carried", () => {
     render(<RetryAfterOutageButton />);
 
@@ -69,6 +90,8 @@ describe("MaintenancePage", () => {
     render(<MaintenancePage />);
 
     expect(screen.getByTestId("maintenance__title").textContent).toBe("Service unavailable");
+    // 502 and 504 land here as well as 503, so the status line names no single code.
+    expect(screen.getByTestId("maintenance__status").textContent).not.toMatch(/\d{3}/);
     expect(screen.getByTestId("maintenance__description").textContent).not.toMatch(/scheduled/i);
     expect(screen.getByTestId("maintenance__retry-button")).toBeTruthy();
     expect(screen.getByTestId("error-actions__home-link")).toBeTruthy();

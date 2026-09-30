@@ -152,6 +152,49 @@ final class ErasureLockOrderTest extends TestCase
     }
 
     #[Test]
+    public function theSubjectsSessionsAreHeldBeforeTheBusinessLogIsAnonymised(): void
+    {
+        // A revocation locks the session row and appends a `SessionRevoked` naming the user in the same
+        // transaction. The purge waits on that lock, so only a pass that runs AFTER the purge is guaranteed to
+        // see the committed event; run before it, the event lands after the pass and names the person for ever.
+        $journal = new LockOrderJournal();
+        $sessions = new InMemorySessionRepository();
+        $sessions->lockOrderJournal = $journal;
+
+        $eventStore = new RecordingEventStoreSubjectAnonymiser();
+        $eventStore->lockOrderJournal = $journal;
+
+        $this->useCase(
+            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor()),
+            new InMemoryRecoverySecretRepository(RecoverySecretMother::mintedFor()),
+            new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID)),
+            $journal,
+            sessions: $sessions,
+            eventStore: $eventStore,
+        )->execute(UserMother::DEFAULT_ID);
+
+        $order = $journal->crossTableOrder();
+        $identity = \array_search(LockOrderJournal::IDENTITY_USER, $order, true);
+        $session = \array_search(LockOrderJournal::IAM_SESSION, $order, true);
+        $businessLog = \array_search(LockOrderJournal::EVENT_STORE, $order, true);
+        $this->assertIsInt($identity, 'the chain holds the subject row');
+        $this->assertIsInt($session, "the chain locks the subject's sessions");
+        $this->assertIsInt($businessLog, 'the chain anonymises the business log');
+        $this->assertLessThan(
+            $session,
+            $identity,
+            'The subject row must be held before the sessions, the order recovery-secret redemption already takes.',
+        );
+        $this->assertLessThan(
+            $businessLog,
+            $session,
+            'The sessions must be purged before the business log is anonymised, or a revocation already holding a '
+            . 'session row commits a SessionRevoked naming the subject after the pass that should have reached it.',
+        );
+    }
+
+    #[Test]
     public function anAdministratorIsRefusedBeforeAnyOfTheFourTablesIsReachedFor(): void
     {
         // The UNLOCKED guard is a precondition and belongs ahead of every acquisition — including the
@@ -202,6 +245,8 @@ final class ErasureLockOrderTest extends TestCase
         LockOrderJournal $journal,
         array $administrators = [self::ACTING_ADMIN_ID => true],
         ?RecordingAuditSubjectRowLock $trailLock = null,
+        ?InMemorySessionRepository $sessions = null,
+        ?RecordingEventStoreSubjectAnonymiser $eventStore = null,
     ): FulfilIdentityErasure {
         $users->lockOrderJournal = $journal;
         $tokens->lockOrderJournal = $journal;
@@ -217,9 +262,9 @@ final class ErasureLockOrderTest extends TestCase
                 new RecordingAuditActorAnonymiser(matchCount: 0),
                 new RecordingAuditResourceAnonymiser(matchCount: 0),
             ),
-            new RecordingEventStoreSubjectAnonymiser(),
+            $eventStore ?? new RecordingEventStoreSubjectAnonymiser(),
             $administratorDirectory,
-            new PurgeUserSessions(new InMemorySessionRepository()),
+            new PurgeUserSessions($sessions ?? new InMemorySessionRepository()),
             new PurgeUserMembership(new InMemoryMembershipRepository()),
             new PurgeUserInvitations($invitations),
             new RecordingAuditLogger(),

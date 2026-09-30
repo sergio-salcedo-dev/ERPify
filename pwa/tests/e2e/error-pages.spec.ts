@@ -69,10 +69,10 @@ const STATIC_PAGES: ReadonlyArray<StaticErrorPageCase> = [
     expectedHttpStatus: 200,
   },
   {
-    name: "503 — service unavailable",
+    name: "502/503/504 — service unavailable",
     url: "/maintenance",
     testId: "maintenance",
-    status: "Error 503",
+    status: "Temporary outage",
     title: "Service unavailable",
     descriptionContains: "cannot reach one of its services",
     expectedHttpStatus: 200,

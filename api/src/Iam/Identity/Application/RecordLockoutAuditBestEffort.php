@@ -64,6 +64,7 @@ use Throwable;
  */
 final readonly class RecordLockoutAuditBestEffort
 {
+    use ReportsAbsentSubject;
     use ReportsAuditFailureSafely;
 
     private const string LOCKED_ACTION = 'USER_LOCKED';
@@ -82,14 +83,15 @@ final readonly class RecordLockoutAuditBestEffort
      * caller cannot afford to have throw.
      *
      * An identity the locked read no longer finds has been erased since the lockout committed, and it is owed
-     * no row: writing one would name a subject whose erasure has already run its pass over the trail.
+     * no row: writing one would name a subject whose erasure has already run its pass over the trail. That
+     * outcome is reported at `info`, without the id, so the missing row is explained rather than silent.
      */
     public function record(string $userId): void
     {
         $phase = self::PHASE_LOCK;
 
         try {
-            $this->identityRows->whileHeld($userId, function () use ($userId, &$phase): void {
+            $held = $this->identityRows->whileHeld($userId, function () use ($userId, &$phase): void {
                 $phase = self::PHASE_WRITE;
                 $this->auditLogger->log(
                     self::LOCKED_ACTION,
@@ -98,6 +100,13 @@ final readonly class RecordLockoutAuditBestEffort
                 );
                 $phase = self::PHASE_COMMIT;
             });
+
+            if (!$held) {
+                $this->reportSafely(fn () => $this->logger->info(
+                    'Lockout committed; no security audit row owed, the identity is gone.',
+                    ['phase' => self::PHASE_SUBJECT_ABSENT],
+                ));
+            }
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
                 'Lockout committed; security audit projection skipped.',

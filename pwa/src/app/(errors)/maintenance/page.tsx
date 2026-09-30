@@ -18,7 +18,7 @@ export default function MaintenancePage() {
   return (
     <ErrorScreen
       testIdPrefix="maintenance"
-      status="Error 503"
+      status="Temporary outage"
       title="Service unavailable"
       description="Erpify cannot reach one of its services right now. This is usually brief — please try again in a moment."
       icon={CloudOff}

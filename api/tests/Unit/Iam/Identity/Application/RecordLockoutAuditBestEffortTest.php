@@ -92,7 +92,9 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
 
         $this->assertSame([UserMother::DEFAULT_ID], $identityRows->lockRequests);
         $this->assertSame([], $auditLogger->records);
-        $this->assertSame([], $logger->records, 'An erased subject is an outcome, not a failure.');
+        $this->assertCount(1, $logger->records, 'The withheld row is still explained.');
+        $this->assertSame(LogLevel::INFO, $logger->records[0]['level'], 'An erased subject is not a failure.');
+        $this->assertSame(['phase' => 'subject_absent'], $logger->records[0]['context'], 'It names no subject.');
     }
 
     public function testSwallowsAFailedAuditWriteAndLogsItAtError(): void

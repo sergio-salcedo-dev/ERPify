@@ -26,10 +26,11 @@ use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
  * carries three, because raw SQL writes it without `ActorContext` or `AuditLevel`: the actor discriminant
  * ({@see self::ACTOR_TYPE_CHECK}, {@see self::ACTOR_ID_PRESENCE_CHECK}) — a `user` row with a NULL `actor_id`
  * is one neither erasure pass can reach — and the level ({@see self::LEVEL_CHECK}) — a token outside the enum
- * is one no pass of the pruner deletes. Their definitions live only in the migration that adds them, so
+ * is one no pass of the pruner deletes. Their definitions live only in the migrations that add them, so
  * `make db.diff` never sees them in either direction. The constants below are nothing but their shared
- * names, read by `AuditLogCheckConstraintFunctionalTest` — their guardian, including against `ActorType` or
- * `AuditLevel` gaining a case the token checks do not admit; this listener applies none of them.
+ * names, read by their two guardians — `AuditLogCheckEnumTokenGateTest`, which compares the migrations'
+ * token literals with `ActorType`/`AuditLevel` without a database, and `AuditLogCheckConstraintFunctionalTest`,
+ * which asks Postgres what it enforces; this listener applies none of them.
  *
  * Column `DEFAULT` it does express, and the two erasure flags carry one. **It cannot mask a forgotten
  * erasure**, which is the objection this shape usually deserves and does not here: both flags are raised by

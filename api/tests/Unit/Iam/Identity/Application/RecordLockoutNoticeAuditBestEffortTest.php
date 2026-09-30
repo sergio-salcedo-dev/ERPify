@@ -119,7 +119,10 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         ;
 
         $this->assertSame([], $auditLogger->records);
-        $this->assertSame([], $logger->records, 'An erased subject is an outcome, not a failure.');
+        // The mail has already left, so the withheld row is explained at `info` rather than left silent.
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(LogLevel::INFO, $logger->records[0]['level'], 'An erased subject is not a failure.');
+        $this->assertSame(['phase' => 'subject_absent'], $logger->records[0]['context'], 'It names no subject.');
     }
 
     public function testALockThatFailsIsSwallowedAndReportedAsTheLockPhase(): void

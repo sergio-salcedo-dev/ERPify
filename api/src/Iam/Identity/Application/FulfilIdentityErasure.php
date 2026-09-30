@@ -29,10 +29,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * erasure ({@see EraseIdentitySubject} — its own transaction nests and joins), the audit-trail
  * anonymisation across **both** axes ({@see AuditSubjectTrailErasure} — rows the subject authored and rows
  * that name them, locked as one set before either is rewritten), whose DBAL runs on the same Connection the
- * EntityManager wraps, so they commit or roll back with the rest, the anonymisation of the reproducible
- * business log ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the
- * hard-delete of the subject's sessions ({@see PurgeUserSessions}) and of the membership that admitted them
- * ({@see PurgeUserMembership}), and the combined compliance self-audit.
+ * EntityManager wraps, so they commit or roll back with the rest, the hard-delete of the subject's sessions
+ * ({@see PurgeUserSessions}), the anonymisation of the reproducible business log
+ * ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the hard-delete of the
+ * membership that admitted them ({@see PurgeUserMembership}), and the combined compliance self-audit.
  *
  * **The invitations lead rather than joining the other two purges, and that position is load-bearing.** The
  * accept and revoke paths lock `iam_invitation` before `identity_user` and cannot do otherwise — an accept
@@ -192,8 +192,8 @@ final readonly class FulfilIdentityErasure
                 // Same pseudonym for both axes: one person must not split into two anonymous identities.
                 // It re-links nothing, because the original id is gone from both columns.
                 $anonymisedResourceRows = $this->auditTrail->completeForSubject($subject, $anonymisation);
-                $anonymisedEventRows = $this->anonymiseBusinessLog($identity, $pseudonymisation);
-                [$sessionsDeleted, $membershipsDeleted] = $this->purgeReferences($subjectId);
+                [$sessionsDeleted, $eventRows] = $this->purgeSessionsThenBusinessLog($identity, $pseudonymisation);
+                $membershipsDeleted = $this->purgeUserMembership->purge($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
@@ -201,7 +201,7 @@ final readonly class FulfilIdentityErasure
                     $identity->recoverySecretsDeleted,
                     $anonymisation->affectedRows,
                     $anonymisedResourceRows,
-                    $anonymisedEventRows,
+                    $eventRows,
                     $sessionsDeleted,
                     $membershipsDeleted,
                     $invitationsDeleted,
@@ -273,23 +273,32 @@ final readonly class FulfilIdentityErasure
     }
 
     /**
-     * The references to the subject that no constraint removes and whose position is free. Neither has a
-     * physical foreign key — sessions live in this context, the membership crosses a bounded context, so
-     * integrity is by id — and nothing cascades when the identity row goes. Without these the subject's real
-     * id survives their own erasure in the session store and in the membership that admitted them.
+     * The subject's sessions, purged BEFORE the business-log pass because a session is the one reference whose
+     * in-flight writers append to that log. `RevokeSession` and a re-login's revocation in `StartSession` lock
+     * the session row, then append a `SessionRevoked` naming its user in the same transaction. The purge locks
+     * the subject's active rows first, so it waits for such a writer to commit; the pass after it is a fresh
+     * statement under READ COMMITTED and therefore sees the event it would otherwise have missed. Run after the
+     * pass, the purge would wait for the same commit and leave that event naming the person for ever. A writer
+     * that reaches the row once the purge holds it waits until this transaction commits and then finds no row.
      *
-     * The invitations are the same kind of reference and are purged by the same chain, but not from here:
-     * their table is one end of a lock order this chain has to respect, so the statement is placed by that
-     * order rather than by the family it belongs to.
+     * The lock order is the one the other paths agree on: `identity_user` is already held here, and
+     * recovery-secret redemption also takes it before `iam_session`. A session writer at most INSERTs into
+     * `event_store` and `audit_log`, and an insert waits on no row lock the trail passes hold, so no cycle
+     * closes through where the purge sits.
      *
-     * @return array{int, int} sessions and memberships deleted, in that order
+     * Neither this table nor the membership has a physical foreign key, so nothing cascades when the identity
+     * row goes; the membership's position is free and it runs last. The invitations are purged by the same
+     * chain but placed by the lock order their table belongs to.
+     *
+     * @return array{int, int} sessions deleted and business-log rows anonymised, in that order
      */
-    private function purgeReferences(string $subjectId): array
-    {
-        return [
-            $this->purgeUserSessions->purge($subjectId),
-            $this->purgeUserMembership->purge($subjectId),
-        ];
+    private function purgeSessionsThenBusinessLog(
+        IdentityErasureResult $identity,
+        SubjectPseudonymisation $pseudonymisation,
+    ): array {
+        $sessionsDeleted = $this->purgeUserSessions->purge($pseudonymisation->subjectId);
+
+        return [$sessionsDeleted, $this->anonymiseBusinessLog($identity, $pseudonymisation)];
     }
 
     /**

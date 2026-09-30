@@ -25,7 +25,8 @@ use SensitiveParameter;
  * work. A writer that only wants the row held for the duration of one INSERT should do neither, so this port
  * locks with a bare `SELECT … FOR UPDATE`, opens its transaction on the connection rather than through the
  * entity manager, and never touches the identity map. A failure inside it rolls back only this transaction and
- * leaves the entity manager open.
+ * leaves the entity manager open. That is also why it may not be called inside a transaction already open on
+ * the connection: nested there, the row would commit with the caller's transaction, and it refuses instead.
  *
  * **The wait is bounded.** Every caller swallows its failure, so the right answer to a long-held row is a
  * reported, skipped projection — never a login refusal held open, or a worker stalled, for the whole of an

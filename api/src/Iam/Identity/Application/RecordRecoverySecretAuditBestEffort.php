@@ -58,6 +58,7 @@ use Throwable;
  */
 final readonly class RecordRecoverySecretAuditBestEffort
 {
+    use ReportsAbsentSubject;
     use ReportsAuditFailureSafely;
 
     private const string MINTED_ACTION = 'RECOVERY_SECRET_MINTED';
@@ -128,7 +129,7 @@ final readonly class RecordRecoverySecretAuditBestEffort
         $phase = self::PHASE_LOCK;
 
         try {
-            $this->identityRows->whileHeld($userId, function () use ($action, $userId, &$phase): void {
+            $held = $this->identityRows->whileHeld($userId, function () use ($action, $userId, &$phase): void {
                 $phase = self::PHASE_WRITE;
                 $this->auditLogger->log(
                     $action,
@@ -137,6 +138,13 @@ final readonly class RecordRecoverySecretAuditBestEffort
                 );
                 $phase = self::PHASE_COMMIT;
             });
+
+            if (!$held) {
+                $this->reportSafely(fn () => $this->logger->info(
+                    'Recovery-secret transition committed; no security audit row owed, the identity is gone.',
+                    ['action' => $action, 'phase' => self::PHASE_SUBJECT_ABSENT],
+                ));
+            }
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
                 'Recovery-secret transition committed; security audit projection skipped.',

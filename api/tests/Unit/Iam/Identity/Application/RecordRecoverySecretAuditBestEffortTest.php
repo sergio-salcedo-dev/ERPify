@@ -19,6 +19,7 @@ use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LogLevel;
 use RuntimeException;
 
 /**
@@ -121,7 +122,13 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $this->recorder($auditLogger, $logger, $identityRows)->{$method}(Uuid::generate());
 
         $this->assertSame([], $auditLogger->records, "no {$action} row may name an erased subject");
-        $this->assertSame([], $logger->records, 'an erased subject is an outcome, not a failure');
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(LogLevel::INFO, $logger->records[0]['level'], 'an erased subject is not a failure');
+        $this->assertSame(
+            ['action' => $action, 'phase' => 'subject_absent'],
+            $logger->records[0]['context'],
+            'the withheld row is explained, naming the transition and no subject',
+        );
     }
 
     #[Test]

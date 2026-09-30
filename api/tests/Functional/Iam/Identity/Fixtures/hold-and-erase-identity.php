@@ -9,7 +9,8 @@ declare(strict_types=1);
  * writer while the row is held, so nothing in that process could ever commit the delete it is waiting on.
  *
  * Usage: php hold-and-erase-identity.php <subject-id> <hold-microseconds>, with the connection parameters as
- * one JSON object on stdin, so the password never appears in the process list.
+ * one JSON object on stdin, so the password never appears in the process list. It exits 3, having locked and
+ * deleted nothing, when the server it reaches is not serving a test database.
  */
 
 use Doctrine\DBAL\DriverManager;
@@ -36,6 +37,18 @@ if (!is_array($params)) {
 
 /** @var array{driver: 'pdo_pgsql', host?: string, port?: int, user?: string, password?: string} $params */
 $connection = DriverManager::getConnection($params);
+
+// This script deletes an identity, so it asks the server which database it reached before it touches anything:
+// the parameters arrive on stdin, and a test run that resolved the runtime database would otherwise erase a
+// developer's identity there. The name is asked of the server, never read from the parameters it was given.
+$database = $connection->fetchOne('SELECT current_database()');
+
+if (!is_string($database) || !str_contains($database, '_test')) {
+    fwrite(STDERR, "refusing to hold or delete anything outside a test database\n");
+
+    exit(3);
+}
+
 $connection->beginTransaction();
 $locked = $connection->fetchOne(
     'SELECT id FROM identity_user WHERE id = CAST(:id AS UUID) FOR UPDATE',

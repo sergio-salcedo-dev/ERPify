@@ -22,7 +22,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * The three `CHECK` constraints of `audit_log` — the two on its actor discriminant and the one on its
  * level — asked of Postgres itself. DBAL neither models nor introspects a table-level `CHECK`, so
  * `make db.diff` cannot see them drift or vanish, and `ActorContext`/`AuditLevel` guard only the rows PHP
- * writes — raw SQL is what these constraints exist for.
+ * writes — raw SQL is what these constraints exist for. `AuditLogCheckEnumTokenGateTest` compares the same
+ * token lists with the enums at unit time, from the migrations' literals; this test is the half that sees
+ * the database actually carrying them.
  *
  * Every insert runs in a transaction that is rolled back, one row per case: a rejected statement aborts the
  * Postgres transaction it runs in, so two cases never share one.

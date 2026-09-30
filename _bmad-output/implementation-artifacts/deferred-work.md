@@ -651,7 +651,7 @@ source_spec: `spec-dw-46-audit-log-actor-check-constraints.md`
 severity: low
 reason: DbalAuditLogPruner borra por WHERE level = :level por cada AuditLevel; un token fuera del enum sobrevive para siempre. Preexistente y fuera del intent de DW-46 (solo actor_type/actor_id).
 status: done 2026-09-29
-resolution: fixed in #1035 (round-3 review): Version20260929102251 adds audit_log_level_check in the same ALTER TABLE, with a drift test against AuditLevel::cases()
+resolution: fixed in #1035 (round-3 review): Version20260930072817 adds audit_log_level_check (idempotent, with a pre-flight), guarded by AuditLogCheckEnumTokenGateTest and a drift test against AuditLevel::cases()
 
 ### DW-69: Otros dos escritores post-commit nombran al sujeto en resource_id sin bloquear identity_user: RecordLockoutNoticeAuditBestEffort y RecordRecoverySecretAuditBestEffort.
 origin: spec-deferred d63734244a81

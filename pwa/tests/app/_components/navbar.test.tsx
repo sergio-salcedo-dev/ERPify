@@ -1,10 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { AuthStatus } from "@/context/shared/access/infrastructure/ui/AuthProvider";
 
 let status: AuthStatus = AuthStatus.UNAUTHENTICATED;
+const refresh = vi.fn();
 vi.mock("@/context/shared/access/application/useSession", () => ({
-  useSession: () => ({ status }),
+  useSession: () => ({ status, refresh }),
 }));
 
 import { Navbar } from "@/app/_components/Navbar";
@@ -22,6 +23,8 @@ function openMobileMenu(): void {
 
 beforeEach(() => {
   status = AuthStatus.UNAUTHENTICATED;
+  refresh.mockReset();
+  refresh.mockResolvedValue(null);
 });
 
 describe("Navbar — Sign in follows the session", () => {
@@ -62,6 +65,66 @@ describe("Navbar — Sign in follows the session", () => {
     expect(screen.getByTestId("navbar__link-status")).toBeTruthy();
     expect(screen.getByTestId("navbar__link-status--mobile")).toBeTruthy();
   });
+});
+
+describe("Navbar — session unavailable notice", () => {
+  const CLUSTERS = [
+    ["desktop", "navbar__session-unavailable", "navbar__session-unavailable-retry"],
+    ["mobile", "navbar__session-unavailable--mobile", "navbar__session-unavailable-retry--mobile"],
+  ] as const;
+
+  it.each(CLUSTERS)(
+    "tells the visitor sign-in is unavailable, on %s",
+    (_cluster, noticeId, retryId) => {
+      status = AuthStatus.UNAVAILABLE;
+      renderNavbar();
+      openMobileMenu();
+
+      const notice = screen.getByTestId(noticeId);
+      expect(notice.getAttribute("role")).toBe("status");
+      expect(notice.textContent).toContain("Sign-in temporarily unavailable");
+      const retry = screen.getByTestId(retryId);
+      expect(retry.getAttribute("aria-label")).toBe("Try again");
+      expect(retry.getAttribute("type")).toBe("button");
+    },
+  );
+
+  it.each(CLUSTERS)(
+    "asks the session provider again on this route when Try again is pressed, on %s",
+    async (_cluster, _noticeId, retryId) => {
+      status = AuthStatus.UNAVAILABLE;
+      let settle!: () => void;
+      refresh.mockReturnValue(
+        new Promise<null>((resolve) => {
+          settle = () => resolve(null);
+        }),
+      );
+      renderNavbar();
+      openMobileMenu();
+
+      const retry = screen.getByTestId(retryId);
+      fireEvent.click(retry);
+
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect((retry as HTMLButtonElement).disabled).toBe(true);
+      await act(async () => {
+        settle();
+      });
+      expect((retry as HTMLButtonElement).disabled).toBe(false);
+    },
+  );
+
+  it.each([AuthStatus.AUTHENTICATED, AuthStatus.UNAUTHENTICATED, AuthStatus.HYDRATING])(
+    "shows no notice when the session is %s",
+    (current) => {
+      status = current;
+      renderNavbar();
+      openMobileMenu();
+
+      expect(screen.queryByTestId("navbar__session-unavailable")).toBeNull();
+      expect(screen.queryByTestId("navbar__session-unavailable--mobile")).toBeNull();
+    },
+  );
 });
 
 describe("Navbar — Backoffice entry", () => {

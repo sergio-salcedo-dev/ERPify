@@ -34,6 +34,8 @@ final class LockOrderJournal
 
     public const string AUDIT_LOG = 'audit_log';
 
+    public const string EVENT_STORE = 'event_store';
+
     /**
      * Repeats are kept rather than collapsed: a path that takes one table's lock twice around another's is a
      * different arrangement from one that takes it once, and folding them would hide the difference.

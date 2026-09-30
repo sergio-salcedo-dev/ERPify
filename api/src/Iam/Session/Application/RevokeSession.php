@@ -23,6 +23,12 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * `revoked_at` and publish: a duplicate `SessionRevoked`, or after an erasure one naming the erased person.
  * Under the lock the second caller waits, then finds the row inadmissible and does nothing.
  *
+ * Against an erasure the lock is only half of what keeps the `userId` this event carries from outliving it. An
+ * erasure that locks the row first deletes it, and this finds nothing to revoke. One that arrives while this
+ * holds the row waits in its session purge until this commits — and what makes that wait sufficient is the
+ * erasure's own order: it purges sessions BEFORE it pseudonymises the business log, so that pass reads the
+ * event this appended (`FulfilIdentityErasure`).
+ *
  * The unlocked read ahead of the transaction is not the decision, only a short-circuit, and it is kept for what
  * it guards rather than for speed: it is the first statement the store sees, and the repository converts a store
  * outage there into the domain `SessionStoreUnavailable` (503) — where an outage met first by the transaction's

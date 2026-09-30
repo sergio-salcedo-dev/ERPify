@@ -78,8 +78,11 @@ test.describe("Session unavailable — /me cannot decide", () => {
     await expect(page).toHaveURL(/\/login\?next=%2Fbackoffice%2Fbanks$/);
   });
 
-  test("the landing navbar offers neither Sign in nor the Backoffice entry", async ({ page }) => {
-    await stubMe(page, () => 503);
+  test("the landing navbar replaces Sign in and the Backoffice entry with a notice and a retry", async ({
+    page,
+  }) => {
+    let status = 503;
+    await stubMe(page, () => status);
 
     await page.goto("/");
 
@@ -89,5 +92,17 @@ test.describe("Session unavailable — /me cannot decide", () => {
     );
     await expect(page.getByTestId("navbar__link-login")).toHaveCount(0);
     await expect(page.getByTestId("navbar__go-to-backoffice-button")).toHaveCount(0);
+    await expect(page.getByTestId("navbar__session-unavailable")).toBeVisible();
+    await expect(page.getByTestId("navbar__session-unavailable")).toContainText(
+      "Sign-in temporarily unavailable",
+    );
+
+    // The outage is over: the retry re-probes on the landing itself, with no navigation.
+    status = 401;
+    await page.getByTestId("navbar__session-unavailable-retry").click();
+
+    await expect(page.getByTestId("navbar__link-login")).toBeVisible();
+    await expect(page.getByTestId("navbar__session-unavailable")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
   });
 });
