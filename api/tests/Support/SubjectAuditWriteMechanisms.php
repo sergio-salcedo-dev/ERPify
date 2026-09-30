@@ -77,8 +77,7 @@ final class SubjectAuditWriteMechanisms
             }
 
             for ($index = $open; $index < $call; ++$index) {
-                if ($tokens->isMethodCallAt($index)
-                    && \str_ends_with(\strtolower($tokens->textAt($index + 1)), 'forupdate')) {
+                if (self::isLockingReadAt($tokens, $index)) {
                     return true;
                 }
             }
@@ -90,8 +89,7 @@ final class SubjectAuditWriteMechanisms
     private static function afterAnInvite(SignificantPhpTokens $tokens, int $call): bool
     {
         for ($index = $tokens->enclosingFunctionAt($call); $index < $call; ++$index) {
-            if ('User' === $tokens->textAt($index) && T_DOUBLE_COLON === $tokens->idAt($index + 1)
-                && 0 === \strcasecmp('invite', $tokens->textAt($index + 2))) {
+            if (self::isInviteAt($tokens, $index)) {
                 return true;
             }
         }
@@ -138,6 +136,19 @@ final class SubjectAuditWriteMechanisms
                 && $tokens->isMethodCallAt($index)
                 && 0 === \strcasecmp($method, $tokens->textAt($index + 1)),
         ));
+    }
+
+    private static function isLockingReadAt(SignificantPhpTokens $tokens, int $index): bool
+    {
+        return $tokens->isMethodCallAt($index)
+            && \str_ends_with(\strtolower($tokens->textAt($index + 1)), 'forupdate');
+    }
+
+    private static function isInviteAt(SignificantPhpTokens $tokens, int $index): bool
+    {
+        return 'User' === $tokens->textAt($index)
+            && T_DOUBLE_COLON === $tokens->idAt($index + 1)
+            && 0 === \strcasecmp('invite', $tokens->textAt($index + 2));
     }
 
     private static function isSubjectWriteAt(SignificantPhpTokens $tokens, int $index): bool
