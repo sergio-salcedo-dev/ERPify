@@ -253,19 +253,6 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     }
 
     /**
-     * The four writers alone, the address-keyed throttle among them: its lock is taken through
-     * `whileHeldByEmail()`, a second statement the bound has to reach as well.
-     *
-     * @return iterable<string, array{string}>
-     */
-    public static function writerNames(): iterable
-    {
-        foreach (self::writersAgainstAnErasedSubject() as $name => [$writer]) {
-            yield $name => [$writer];
-        }
-    }
-
-    /**
      * The same four, with how many resource-less rows each writes once the subject is gone: the throttle still
      * reports the throttle, as for an address that never named anyone.
      *
@@ -286,7 +273,7 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
      * that net is what would fire, with a different SQLSTATE.
      */
     #[Test]
-    #[DataProvider('writerNames')]
+    #[DataProvider('provideARowHeldPastTheBoundIsGivenUpOnAndReportedAsTheLockPhaseCases')]
     public function aRowHeldPastTheBoundIsGivenUpOnAndReportedAsTheLockPhase(string $writer): void
     {
         $run = $this->writerFor($writer);
@@ -322,6 +309,19 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     }
 
     /**
+     * The four writers alone, the address-keyed throttle among them: its lock is taken through
+     * `whileHeldByEmail()`, a second statement the bound has to reach as well.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function provideARowHeldPastTheBoundIsGivenUpOnAndReportedAsTheLockPhaseCases(): iterable
+    {
+        foreach (self::writersAgainstAnErasedSubject() as $name => [$writer]) {
+            yield $name => [$writer];
+        }
+    }
+
+    /**
      * A refused nested call is what keeps the lock's two promises — its own bound, its own commit — from both
      * quietly becoming the caller's. The operation must not run: nothing may be written into a transaction the
      * row would then commit with.
@@ -337,11 +337,11 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         try {
             $this->assertRefused(fn () => $identityRows->whileHeld(
                 $this->subjectId,
-                static fn () => $ran->append('whileHeld'),
+                static fn (): null => $ran->append('whileHeld'),
             ));
             $this->assertRefused(fn () => $identityRows->whileHeldByEmail(
                 Email::from($this->subjectEmail),
-                static fn () => $ran->append('whileHeldByEmail'),
+                static fn (): null => $ran->append('whileHeldByEmail'),
             ));
         } finally {
             $connection->rollBack();
@@ -355,8 +355,8 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     {
         try {
             $call();
-        } catch (LogicException $refusal) {
-            $this->assertStringContainsString('transaction of its own', $refusal->getMessage());
+        } catch (LogicException $logicException) {
+            $this->assertStringContainsString('transaction of its own', $logicException->getMessage());
 
             return;
         }

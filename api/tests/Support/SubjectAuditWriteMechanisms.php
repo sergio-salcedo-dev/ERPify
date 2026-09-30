@@ -58,13 +58,15 @@ final class SubjectAuditWriteMechanisms
 
         $callers = self::callsOf($tokens, $tokens->enclosingFunctionAt($site));
 
+        $underLock = static fn (int $call): bool => self::within($call, $lockSpans);
+        $afterLockingRead = static fn (int $call): bool => self::afterALockingRead($tokens, $call);
+        $afterInvite = static fn (int $call): bool => self::afterAnInvite($tokens, $call);
+
         return match (true) {
             [] === $callers => self::UNSERIALISED,
-            \array_all($callers, static fn (int $call): bool => self::within($call, $lockSpans)) => self::ROW_LOCK,
-            \array_all($callers, static fn (int $call): bool => self::afterALockingRead($tokens, $call))
-                => self::LOCKING_READ,
-            \array_all($callers, static fn (int $call): bool => self::afterAnInvite($tokens, $call))
-                => self::CREATES_SUBJECT,
+            \array_all($callers, $underLock) => self::ROW_LOCK,
+            \array_all($callers, $afterLockingRead) => self::LOCKING_READ,
+            \array_all($callers, $afterInvite) => self::CREATES_SUBJECT,
             default => self::UNSERIALISED,
         };
     }
