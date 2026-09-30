@@ -108,6 +108,22 @@ Golden rule: *contexts reference each other's identities and react to each other
 - **Mapping**: declared as `#[ORM\…]` attributes on the entities (passive-metadata exception — see [`rules/architecture.md`](./rules/architecture.md)); repository implementations and persistence listeners live in `Infrastructure/Persistence/`.
 - **Cross-module references & persistence strategy**: an aggregate references another module's aggregate **by id** (`string` UUID v7), never via a typed `#[ORM\ManyToOne]` property to the other module's entity; read composition is an explicit DQL JOIN into a projection DTO, and the physical FK stays diff-clean via a `postGenerateSchema` listener. State-oriented persistence is the default; event sourcing is an opt-in, per-aggregate decision. ADR: [`adr/bank-bankaccount-modeling.md`](./adr/bank-bankaccount-modeling.md).
 - **Identifiers**: every entity id is an **app-assigned UUID v7** (`Uuid::generate()`, `Shared/Uuid/Domain`), mapped via the shared `Shared/Kernel/Domain/Entity/Identifiable` trait as a Doctrine *assigned* identifier — `#[ORM\Id]` + `#[ORM\Column]`, **no** `#[ORM\GeneratedValue]`. Load-bearing: the id assigned in the application layer is the persisted PK **and** the id carried by the aggregate's creation `DomainEvent`, so id-based consumers (e.g. Mercure realtime) match the create event to its row. Re-adding a Doctrine id generator makes it mint a divergent v7 PK at flush and breaks that invariant — pinned by `tests/Functional/Doctrine/IdentifiableAssignedIdentifierTest`. See [`rules/database.md`](./rules/database.md#identifiers-uuid-v7-app-assigned).
+- **A unit of work may not leave a transaction open past its boundary.** FrankenPHP worker mode and the Messenger
+  worker keep the DBAL connection across requests and messages, and DoctrineBundle's reset clears entity managers
+  only — so a forgotten transaction would hold its row locks and swallow every later write on that worker until it
+  recycled. `LeakedTransactionContainment` (`Shared/Persistence/Infrastructure`) rolls back whatever is open above
+  the level the unit may keep — zero outside `test` — and reports it at `critical` on the `observability`
+  channel, naming the route or message class. HTTP (`RequestTransactionBoundaryListener`): on `kernel.terminate`
+  at priority 1024, ahead of the audit writers that run there (rows written *during* the request ran inside the
+  leak and are lost regardless), again at -2048 for a terminate listener that leaks, and outside `test` at the
+  start of the next request, for a leak `kernel.terminate` never saw. Worker (`MessageTransactionBoundaryListener`):
+  a failed message is rolled back before its retry is written, so the retry strategy still applies; a handled one
+  after its ack, so the ack rolls back with the leak and the message returns after the transport's redelivery
+  timeout — a handler that leaks every time returns every time, with a `critical` each time, and repeats any side
+  effect outside the database. Under `test` in the CLI (PHPUnit and Behat both drive the kernel browser) the HTTP
+  boundary also throws, so the test that leaked goes red; the worker boundary never throws. The dev/test
+  `DoctrineConnectionResetListener` still closes the connection on every `kernel.request`, after the terminate
+  checks have seen any leak.
 - **Doctrine 3 / DBAL 4 API caveats**: see [`project-context.md` → Runtime gotchas](./project-context.md).
 
 ## API design

@@ -26,9 +26,12 @@ use Symfony\Component\HttpKernel\KernelEvents;
  */
 #[When(env: 'dev')]
 #[When(env: 'test')]
-#[AsEventListener(event: KernelEvents::REQUEST, priority: 256)]
+#[AsEventListener(event: KernelEvents::REQUEST, priority: self::PRIORITY)]
 final readonly class DoctrineConnectionResetListener
 {
+    /** {@see RequestTransactionBoundaryListener} reads its baseline right after this reset. */
+    public const int PRIORITY = 256;
+
     public function __construct(private ManagerRegistry $managerRegistry)
     {
     }

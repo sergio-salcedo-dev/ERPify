@@ -93,6 +93,7 @@ final class BestEffortReportChannelGateTest extends TestCase
         'FlysystemImageStorage.php',
         'InspectStoredIdentityHandler.php',
         'InterventionImageProcessor.php',
+        'LeakedTransactionContainment.php',
         'ReauthenticateDeviceBestEffort.php',
         'ReconcilePersonReferencesHandler.php',
         'ReadFailureReporter.php',
