@@ -18,7 +18,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 /**
  * Reads back an appended event through {@see DbalEventStore::stream()} and asserts the full
  * {@see StoredEvent} mapping (sequence ordering, payload decode, envelope columns). Runs inside a
- * transaction that is always rolled back, so it leaves no rows behind on the shared dev database.
+ * transaction that is always rolled back, so it leaves no rows behind in the test database.
  *
  * @internal
  */
@@ -56,7 +56,19 @@ final class DbalEventStoreStreamTest extends KernelTestCase
             $this->assertSame(1, $found->eventVersion);
             $this->assertSame('Stream Bank', $found->payload['name'] ?? null);
             $this->assertSame('STRM', $found->payload['shortName'] ?? null);
-            $this->assertNull($found->tenantId);
+            $this->assertNull(
+                $found->tenantId,
+                'the writer now stores a non-null tenant_id, which arms event_store_stream_version_uniq: revisit the '
+                . 'informative-version decision (ADR event-store-and-projections, D4 amendment) before shipping.',
+            );
+            $this->assertSame(
+                'object',
+                $connection->fetchOne(
+                    'SELECT jsonb_typeof(metadata) FROM event_store WHERE event_id = :eventId',
+                    ['eventId' => $event->eventId()],
+                ),
+                'empty envelope metadata is stored as a JSON object, never an array',
+            );
 
             $this->assertSame([], $this->collect($store->stream(0, [], 10)), 'an empty name filter streams nothing');
         } finally {

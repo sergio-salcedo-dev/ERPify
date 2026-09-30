@@ -37,6 +37,12 @@ final readonly class UnavailableSessionRepository implements SessionRepository
     }
 
     #[Override]
+    public function lockActiveById(SessionId $id): ?Session
+    {
+        throw SessionStoreUnavailable::storeUnreachable();
+    }
+
+    #[Override]
     public function findByUserId(string $userId): array
     {
         throw SessionStoreUnavailable::storeUnreachable();

@@ -61,9 +61,10 @@ const NAVIGABLE_ROUTES: ReadonlyArray<RouteCase> = [
       "`/dev-throw` server-throws and the segment-level `error.tsx` catches it. Verifies the dev-mode `error.message` block + green-check digest copy.",
   },
   {
-    label: "503 — Maintenance",
-    url: "/maintenance",
-    description: "Planned downtime / deployment window landing.",
+    label: "503 — Service unavailable",
+    url: Routes.MAINTENANCE,
+    description:
+      "Where the auth guard sends a visitor when `/me` answers 502/503/504; `Try again` returns to `?next=`.",
   },
   {
     label: "Offline (PWA)",

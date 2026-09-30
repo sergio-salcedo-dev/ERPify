@@ -13,6 +13,9 @@ namespace Erpify\Shared\Audit\Domain;
  * values are the lowercase tokens persisted verbatim in the `level` column, so the enum doubles
  * as the closed set the storage layer round-trips — lowercase, like the sibling {@see ActorType}
  * and unlike the uppercase wire enums whose tokens are a transport contract.
+ *
+ * Postgres enforces the same closed set, so adding a case also needs a migration replacing
+ * `audit_log_level_check`.
  */
 enum AuditLevel: string
 {

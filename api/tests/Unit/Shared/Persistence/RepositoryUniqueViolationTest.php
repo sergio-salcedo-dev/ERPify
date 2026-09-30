@@ -10,6 +10,9 @@ use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepos
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountRepository;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserRepository;
+use Erpify\Shared\Images\Domain\Entity\Image;
+use Erpify\Shared\Images\Domain\ImageId;
+use Erpify\Shared\Images\Infrastructure\Persistence\Doctrine\DoctrineImageRepository;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\AsciiUpperTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
@@ -44,7 +47,7 @@ use Throwable;
  * payload telling them apart, so a port left out of the provider can ship the wrong one — or start
  * carrying the driver exception as `previous` — with nothing red.
  *
- * The coupling is the three ports under test plus the collaborators their constructors demand; driving
+ * The coupling is the four ports under test plus the collaborators their constructors demand; driving
  * a persistence boundary end to end is what it costs.
  *
  * @internal
@@ -54,10 +57,13 @@ use Throwable;
 #[CoversClass(DoctrineBankAccountRepository::class)]
 #[CoversClass(DoctrineBankRepository::class)]
 #[CoversClass(DoctrineUserRepository::class)]
+#[CoversClass(DoctrineImageRepository::class)]
 #[CoversClass(ConcurrentUniqueWrite::class)]
 final class RepositoryUniqueViolationTest extends TestCase
 {
     private const string IBAN = 'DE89370400440532013000';
+
+    private const string IMAGE_ID = '0190f200-0000-7000-8000-0000000001a9';
 
     /**
      * Postgres' 23505 as DBAL hands it over; the two placeholders are the column and the value it
@@ -107,6 +113,7 @@ final class RepositoryUniqueViolationTest extends TestCase
         yield 'bank account' => ['bank-account', 'iban', self::IBAN];
         yield 'bank' => ['bank', 'short_name', 'BNK'];
         yield 'identity user' => ['identity-user', 'email', UserMother::DEFAULT_EMAIL];
+        yield 'image' => ['image', 'id', self::IMAGE_ID];
     }
 
     private function save(string $resource, EntityManagerInterface $entityManager): void
@@ -123,6 +130,12 @@ final class RepositoryUniqueViolationTest extends TestCase
             return;
         }
 
+        if ('image' === $resource) {
+            (new DoctrineImageRepository($entityManager))->save($this->image());
+
+            return;
+        }
+
         (new DoctrineBankRepository(
             $entityManager,
             $this->unconstructed(DoctrineSearchEngine::class),
@@ -134,6 +147,11 @@ final class RepositoryUniqueViolationTest extends TestCase
     private function account(): BankAccount
     {
         return BankAccountMother::create();
+    }
+
+    private function image(): Image
+    {
+        return new Image(ImageId::fromString(self::IMAGE_ID), \hash('sha256', 'image'), 'image/png', 1, 1, 1);
     }
 
     /**

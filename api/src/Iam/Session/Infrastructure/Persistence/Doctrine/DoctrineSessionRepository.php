@@ -34,7 +34,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  *     {@see DbalException}) is converted to the domain {@see SessionStoreUnavailable} (→ 503) by
  *     {@see convertingStoreFailure()}, so a store outage lets the gate fail closed instead of leaking a raw
  *     500 — except a lost lock race inside a transaction, which is handed to the transaction's owner (see
- *     there). All eight methods go through it — the two reads, the locked read, the persist/flush, the two
+ *     there). All nine methods go through it — the two reads, the two locked reads, the persist/flush, the two
  *     bulk revokes and the two hard deletes — because a single request reaches several of them: revoke-others
  *     runs a read and then an UPDATE, and the erasure path admits through `findActiveById` and then deletes through
  *     `deleteAllForUser`. Guarding a subset answers one outage with two different statuses. Every statement
@@ -89,21 +89,19 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     #[Override]
     public function findActiveById(SessionId $id): ?Session
     {
-        $result = $this->convertingStoreFailure(function () use ($id): mixed {
-            $queryBuilder = $this->entityManager->createQueryBuilder()
-                ->select('s')
-                ->from(Session::class, 's')
-                ->where('s.id = :id')
-                ->setParameter('id', $id->toString())
-            ;
+        return $this->findAdmissibleById($id, LockMode::NONE);
+    }
 
-            return $this->andWhereAdmissibleNow($queryBuilder)
-                ->getQuery()
-                ->getOneOrNullResult()
-            ;
-        });
-
-        return $result instanceof Session ? $result : null;
+    /**
+     * `SELECT … WHERE id = :id AND <admissible> FOR UPDATE`. PostgreSQL re-checks the predicate against the row
+     * a rival committed while this statement waited on it, so a row revoked or deleted in that window is dropped
+     * from the result rather than returned. The identity map cannot resurrect it either: a managed instance is
+     * handed back only when the locked statement itself matched a row.
+     */
+    #[Override]
+    public function lockActiveById(SessionId $id): ?Session
+    {
+        return $this->findAdmissibleById($id, LockMode::PESSIMISTIC_WRITE);
     }
 
     #[Override]
@@ -280,7 +278,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
      * or a serialization failure {@see RetryableException}, and the transaction manager that opened the
      * transaction turns exactly that marker into the retryable 503 `transient-transaction-failure`. Converting it
      * here first would hide the marker from the manager, so the caller would read a lock-order race — which
-     * {@see lockActiveForUser()} is the one statement here able to lose — as the session store being down.
+     * the two locked reads are the statements here able to lose — as the session store being down.
      * Outside a transaction there is no such owner, and the outage conversion stands.
      *
      * @param callable(): mixed $statement
@@ -298,6 +296,30 @@ final readonly class DoctrineSessionRepository implements SessionRepository
         } catch (DbalException $dbalException) {
             throw SessionStoreUnavailable::storeUnreachable($dbalException);
         }
+    }
+
+    /**
+     * The by-id read both {@see findActiveById()} and {@see lockActiveById()} run, so the two cannot come to
+     * disagree on which row is admissible; they differ only in the lock the statement takes.
+     */
+    private function findAdmissibleById(SessionId $id, LockMode $lockMode): ?Session
+    {
+        $result = $this->convertingStoreFailure(function () use ($id, $lockMode): mixed {
+            $queryBuilder = $this->entityManager->createQueryBuilder()
+                ->select('s')
+                ->from(Session::class, 's')
+                ->where('s.id = :id')
+                ->setParameter('id', $id->toString())
+            ;
+
+            return $this->andWhereAdmissibleNow($queryBuilder)
+                ->getQuery()
+                ->setLockMode($lockMode)
+                ->getOneOrNullResult()
+            ;
+        });
+
+        return $result instanceof Session ? $result : null;
     }
 
     /**

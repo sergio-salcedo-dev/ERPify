@@ -51,7 +51,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversNothing]
 final class LockoutNoticeAuditWriteFailureArrivalTest extends KernelTestCase
 {
-    private const string FAILURE_MESSAGE = 'Lockout notice sent; security audit projection skipped (write failed).';
+    private const string FAILURE_MESSAGE = 'Lockout notice sent; security audit projection skipped.';
 
     private const string SUBJECT_EMAIL = 'lockout-notice-arrival@erpify.test';
 

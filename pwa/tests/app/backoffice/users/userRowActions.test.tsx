@@ -24,6 +24,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
+  usePathname: () => "/backoffice/users",
 }));
 
 vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({

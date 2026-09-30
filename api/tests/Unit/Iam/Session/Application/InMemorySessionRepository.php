@@ -92,6 +92,18 @@ final class InMemorySessionRepository implements SessionRepository
      */
     public ?Closure $beforeLockActive = null;
 
+    /**
+     * Invoked inside {@see lockActiveById()} BEFORE the row is read — the position of a rival transaction that
+     * revoked or deleted the row and committed while this one waited on its lock.
+     */
+    public ?Closure $beforeLockActiveById = null;
+
+    /** @var list<string> ids passed to findActiveById */
+    public array $findActiveByIdCalls = [];
+
+    /** @var list<string> ids passed to lockActiveById */
+    public array $lockActiveByIdCalls = [];
+
     /** @var list<string> userIds passed to revokeOthersForUser */
     public array $revokeOthersCalls = [];
 
@@ -129,6 +141,30 @@ final class InMemorySessionRepository implements SessionRepository
     #[Override]
     public function findActiveById(SessionId $id): ?Session
     {
+        $this->findActiveByIdCalls[] = $id->toString();
+
+        $session = $this->byId[$id->toString()] ?? null;
+
+        if (!$session instanceof Session) {
+            return null;
+        }
+
+        return $session->isActive(SystemClock::now()) ? $session : null;
+    }
+
+    /**
+     * The same admissibility as {@see findActiveById()}, judged after the rival hook has run — which is what the
+     * adapter's `FOR UPDATE` gives: the predicate is re-checked against the row as the rival left it.
+     */
+    #[Override]
+    public function lockActiveById(SessionId $id): ?Session
+    {
+        $this->lockActiveByIdCalls[] = $id->toString();
+
+        if ($this->beforeLockActiveById instanceof Closure) {
+            ($this->beforeLockActiveById)();
+        }
+
         $session = $this->byId[$id->toString()] ?? null;
 
         if (!$session instanceof Session) {

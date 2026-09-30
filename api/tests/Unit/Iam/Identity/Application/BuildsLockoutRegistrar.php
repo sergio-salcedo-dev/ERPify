@@ -30,6 +30,9 @@ trait BuildsLockoutRegistrar
 {
     private const string REGISTRAR_NOW = '2026-07-11T12:00:00+00:00';
 
+    /** The row lock the last assembled registrar's lockout projection takes, for a test that counts it. */
+    private ?InMemoryIdentityRowLock $lockoutAuditRowLock = null;
+
     /**
      * Installs the registrar's instant as the ambient clock before any identity is built, so the rows the
      * mothers stamp and the lock the registrar computes read one clock.
@@ -53,8 +56,26 @@ trait BuildsLockoutRegistrar
             $eventBus,
             $transactionManager,
             new FixedClock(new DateTimeImmutable(self::REGISTRAR_NOW)),
-            new RecordLockoutAuditBestEffort($auditLogger ?? new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutAuditBestEffort(
+                $this->identityRowLockOver($repository),
+                $auditLogger ?? new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
         );
+    }
+
+    /**
+     * The lockout projection's row lock, over the same store and writing to the same lock journal as the
+     * registrar's own locked read, so a test can see every acquisition the failed attempt makes on the row.
+     */
+    private function identityRowLockOver(InMemoryUserRepository $repository): InMemoryIdentityRowLock
+    {
+        $identityRows = new InMemoryIdentityRowLock($repository);
+        $identityRows->lockOrderJournal = $repository->lockOrderJournal;
+
+        $this->lockoutAuditRowLock = $identityRows;
+
+        return $identityRows;
     }
 
     /**

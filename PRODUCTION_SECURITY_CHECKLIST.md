@@ -964,6 +964,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       and `identity:gdpr:reconcile-subject-references` reports any erased identity the trail still
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
+      **The pass clears what is committed when it runs**, so it is closed only together with the item below.
+- [ ] **A row naming the subject that commits after the erasure's pass is kept out by convention, not by a
+      gate.** The four post-commit writers that name a `User` in `resource_id` — the lockout, the lockout
+      notice, the recovery throttle and the recovery-secret projections — each write under the subject's
+      `identity_user` row lock (`IdentityRowLock`), which `FulfilIdentityErasure` holds from its administrator
+      re-check to its commit, ahead of the trail pass; so each row either commits first and is redacted, or
+      waits and finds no subject. Pinned against a second Postgres connection holding and deleting the row in
+      `LateAuditWriterErasureSerialisationFunctionalTest`. What stays open: **(a)** nothing enumerates the late
+      writers — a fifth one written without the lock reopens the window with every gate green, and only
+      `identity:gdpr:reconcile-subject-references` would report the row it leaves; **(b)** the wait is bounded
+      by `lock_timeout` (2 s) only when the lock opens the outermost transaction — nested inside a caller's own,
+      the bound is that caller's (no caller does that today); **(c)** a wait that exhausts the bound drops the
+      audit row and reports it on `observability` — an observability loss rather than a residue, but one a
+      long-running erasure, or anything else holding that row past the bound, can cause; **(d)** in the lockout
+      notice's race the MAIL may still reach the address of a person whose erasure is committing, since it is
+      sent before the stamp and the audit row: a notification, not a record, and nothing of it persists here.
 - [ ] **Backup object archives carry the dump's personal data and no longer expire on their own.** The
       paired backup wrote `objects-<stamp>.tar.gz` beside each dump, and its retention `find` was the only
       thing that ever deleted them. That surface was removed, so the pattern named an artifact nothing
@@ -1327,8 +1343,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       the refusal still counts against the login throttle (`OverlongPasswordTimingListenerTest`).
 - [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
       An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
-      the attempt that trips the lock); every existing identity pays the hydration of its row inside the locked
-      read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed
+      the attempt that trips the lock, and on that same attempt the lockout projection's own transaction —
+      BEGIN, a second `SELECT … FOR UPDATE` of the row and the `audit_log` INSERT, since that projection
+      serialises on the subject's row against an erasure; pinned as the only extra round trips in
+      `LoginAttemptRegistrarExistenceShapeTest`); every existing identity pays the hydration of its row inside
+      the locked read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed
       attempt against the same address, a successful login's clear, an unlock or a redemption — where a read
       over no row never waits. An attacker controls that concurrency, though each wait is short because the
       KDF runs before the transaction. All of it sits under a KDF of hundreds of milliseconds and rides the same
@@ -2029,10 +2048,10 @@ mitigated state. Accepting one means recording who accepted it and against which
 
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
-      artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
+      artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
       `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
       `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
-      closing any of the three while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
+      closing either while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
@@ -2043,7 +2062,6 @@ mitigated state. Accepting one means recording who accepted it and against which
   | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
   | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity whose lockout an attacker holding a stolen session keeps re-driving cannot get the session eviction requires unless it holds a **live recovery secret**; redeeming one evicts every other session in the transaction that consumes it, so the stolen session no longer out-races it — but the secret is then spent until re-minted, `users.unlock` holds only until ten more failures re-seal the lock, a **sole administrator** without a secret has not even that, an administrator's stolen session can plant identities and grants and demote or suspend other administrators, none of which an eviction reaches, and an administrator it planted can still suspend or demote the owner after the recovery (the stolen session can no longer change its own roles or status, so it cannot revoke the redeemed session that way itself), and a **leaked** secret now signs the owner out as well (see *A stolen session can deny the owner a credential rotation* above), and can do so repeatedly **without being spent**, through two concurrent redemptions that interrupt each other (§7 (iv)) | Before the first customer: the product gets every administrator to mint (and re-mint after redemption) a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret; or an administrator's recovery finds identities or grants they did not create, or administrators demoted or suspended | Sergio, 2026-09-28 (accepts that a leaked secret can also evict repeatedly without being spent); Sergio, 2026-09-25 (accepts that a leaked recovery secret also signs the owner out); earlier: accepted as-is 2026-07-29 naming nobody, narrowed 2026-09-24 (opened 2026-07-28) |
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
-  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` | Sergio, closing the #857 review — date not recorded (opened 2026-08-27) |
   | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
   | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
   | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |

@@ -58,13 +58,18 @@ trait BuildsLockoutNotifier
         Clock $clock,
         InMemoryLockedIdentityDirectory $directory,
         ?AuditLogger $auditLogger = null,
+        ?InMemoryIdentityRowLock $identityRows = null,
     ): NotifyLockedIdentities {
         return new NotifyLockedIdentities(
             $directory,
             $repository,
             new SendAccountLockedEmailBestEffort($sender, new NullLogger()),
             $clock,
-            new RecordLockoutNoticeAuditBestEffort($auditLogger ?? new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutNoticeAuditBestEffort(
+                $identityRows ?? new InMemoryIdentityRowLock($repository),
+                $auditLogger ?? new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
         );
     }
 

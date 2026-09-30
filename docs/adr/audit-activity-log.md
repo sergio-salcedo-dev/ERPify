@@ -171,9 +171,16 @@ como decisión abierta.
 
 **Quién queda fuera del seam, y por qué.** Los productores `security` de caso de uso escriben dentro de su
 transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffort`,
-`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`) escriben **después** del
+`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`,
+`RecordRecoverySecretAuditBestEffort`) escriben **después** del
 commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
-`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los comandos de operador
+`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los cuatro escriben en una transacción
+propia bajo el bloqueo de la fila `identity_user` del sujeto (`IdentityRowLock`: un `SELECT … FOR UPDATE` sobre
+la conexión, sin hidratar `User` ni vaciar el entity manager, con la espera acotada por `lock_timeout`), en el
+orden de la erasure (`identity_user` → `audit_log`), así que no pueden confirmar una fila que lo nombre tras la
+pasada de la erasure: o confirman antes y la pasada la redacta, o esperan y no encuentran sujeto. Una espera que
+agota su cota es una proyección omitida y reportada, no una fila escrita; lo que escape a todo ello lo señala
+`identity:gdpr:reconcile-subject-references`. Los comandos de operador
 (`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
 no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
 distingue además con su propio código de salida (`ERASED_UNRECORDED`).
@@ -683,6 +690,19 @@ ActorType  enum  anonymous | system | api_key | user
 | `api_key`    | `<api_key_uuid>` |
 | `user`       | `<user_uuid>`    |
 
+La tabla la impone también Postgres, no solo `ActorContext`: SQL crudo (DBAL, fixtures, Behat) escribe
+`audit_log` sin pasar por él, y una fila `user` con `actor_id` NULL no la casa ninguno de los dos pases de
+borrado. Dos `CHECK` con nombre: `audit_log_actor_type_check` (`actor_type` ∈ los cuatro tokens) y
+`audit_log_actor_id_presence_check` (`(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`, igualdad
+booleana que nunca evalúa a NULL). DBAL no modela ni introspecta un `CHECK` de tabla, así que viven solo en sus
+migraciones y `db.diff` no los ve; sus guardianes son `AuditLogCheckConstraintFunctionalTest`, que además falla
+si `ActorType` gana un caso que el `CHECK` de tokens no admite, y `AuditLogCheckEnumTokenGateTest`, que compara
+los literales de las migraciones con los enums sin base de datos. `Version20260929102251` añade esos dos; una
+migración propia, `Version20260930072817`, añade `audit_log_level_check` (`level` ∈ los tres tokens de
+`AuditLevel`, mismos guardianes), para que la reciba también una base que ya registró la anterior: el pruner
+borra `WHERE level = :level` por cada caso del enum, así que una fila con otro token sobreviviría a toda ventana de retención. Una fila existente que
+viole cualquiera de los tres aborta la migración con su recuento y la consulta que la lista; se repara a mano.
+
 `ActorContext` (en `Shared/…/Audit/Domain`, value object de dominio, sin dependencias de framework):
 
 ```php
@@ -707,10 +727,10 @@ frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`
 
 ```text
 id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
-level           enum         activity | security | change
+level           enum         activity | security | change — CHECK audit_log_level_check (D7)
 action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
-actor_type      enum         anonymous|system|api_key|user — obligatorio (D7)
-actor_id        uuid         NULL salvo api_key/user (D7)
+actor_type      enum         anonymous|system|api_key|user — obligatorio (D7); CHECK audit_log_actor_type_check
+actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audit_log_actor_id_presence_check
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
@@ -722,12 +742,19 @@ actor_erased    boolean      NOT NULL — false al insertar (writer); true tras 
 occurred_on     timestamptz
 ```
 
+`metadata` se escribe como **objeto** JSON (`DbalAuditLogWriter` coerce el nivel superior con `(object)`, así
+que un mapa vacío queda `{}`). Las filas históricas que se escribieron `[]` antes de esa coerción **se aceptan
+sin backfill**: reescribirlas sería una cuarta mutación sancionada sobre `audit_log` (D4) para corregir una forma
+que nada lee como array, y se descarta. Consecuencia: una consulta que trate `metadata` como objeto acota por
+`jsonb_typeof(metadata) = 'object'` (o compara el texto con `metadata::text`), nunca asume la forma.
+
 `ip` se persiste como `varchar(45)` (cabe una IPv6) y no como `inet`: DBAL no modela el tipo `inet`
 y ninguna consulta usa operadores CIDR/subred — solo se almacena como evidencia.
 
 `level` y `actor_type` se persisten como `VARCHAR` guardando el `->value` de enums PHP
 string-backed (`EnumType` es una constraint de Symfony Validator, no un Doctrine `Type`; no se usan
-enums nativos de Postgres).
+enums nativos de Postgres). El conjunto cerrado de `actor_type` lo refuerza un `CHECK` (D7); `level` no lleva
+ninguno.
 
 Índices previstos: `(actor_id, occurred_on)` (jornada), `(correlation_id)` (request), `(level,
 occurred_on)` (retención/prune), `(resource_type, resource_id)` (investigación por recurso).

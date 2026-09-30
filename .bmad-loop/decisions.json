@@ -1,40 +1,4 @@
 {
-  "DW-16": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Retire the optimistic-concurrency claim from DbalEventStore's docblock, remove the unreachable catch and EventStreamConcurrencyConflict, and document aggregate_version as informative in the event-store ADR.",
-    "key": "1",
-    "label": "Informative: retire the promise",
-    "resolution": ""
-  },
-  "DW-22": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Distinguish a 503 store-unavailable /me response in the identity adapter and AuthProvider and route it to the existing /maintenance page rather than to /login, keeping network/malformed-body failures on the current path; update Decision F/AC9's record.",
-    "key": "1",
-    "label": "Route 503 to /maintenance",
-    "resolution": ""
-  },
-  "DW-24": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "When a login mints a new session while the HTTP session already correlates a live iam_session, revoke that previous row in the same transaction, with a functional test showing no ghost device after re-login.",
-    "key": "1",
-    "label": "Revoke the prior session on re-login",
-    "resolution": ""
-  },
-  "DW-30": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Make DbalEventStore write event_store.metadata as a JSON object ({} when empty), align the ADR with the migration's actual default, and record that historical audit_log [] rows are accepted without backfill.",
-    "key": "1",
-    "label": "Fix (b) only; accept (a)",
-    "resolution": ""
-  },
   "DW-32": {
     "answered_at": "2026-09-28",
     "bundle_name": "",
@@ -42,15 +6,6 @@
     "intent": "",
     "key": "2",
     "label": "Keep open for a dedicated PR outside the sweep",
-    "resolution": ""
-  },
-  "DW-39": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Use useSession() in the public Navbar to hide 'Sign in' and show a backoffice entry for authenticated users, with unit tests for both states.",
-    "key": "1",
-    "label": "Make the access cluster session-aware",
     "resolution": ""
   },
   "DW-43": {
@@ -69,24 +24,6 @@
     "intent": "",
     "key": "1",
     "label": "Keep open for a dedicated epic",
-    "resolution": ""
-  },
-  "DW-46": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Add a migration with CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL)) and an enum-token CHECK on actor_type, mirror them in the schema listener, fix any fixture/Behat SQL that violates them, and add a functional test proving an illegal row is refused.",
-    "key": "1",
-    "label": "Add the CHECK constraints",
-    "resolution": ""
-  },
-  "DW-48": {
-    "answered_at": "2026-09-28",
-    "bundle_name": "",
-    "effect": "build",
-    "intent": "Make the late audit writers take a lock on the subject's identity_user row (or skip when absent) so none can commit inside the erasure window.",
-    "key": "2",
-    "label": "Serialise late writers on identity_user",
     "resolution": ""
   }
 }

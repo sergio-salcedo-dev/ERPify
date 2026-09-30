@@ -112,6 +112,37 @@ final class NotifyLockedIdentitiesAuditTest extends TestCase
     }
 
     /**
+     * `User` carries no version column, so an erasure committing between the sweep's read and its stamp makes the
+     * `UPDATE` affect zero rows without raising. The notice's row is what would then name a subject whose erasure
+     * had already run its pass over the trail; under the subject's row lock the identity is seen gone, and the
+     * trail is left alone.
+     */
+    public function testAnIdentityErasedBetweenTheReadAndTheStampIsOwedNoAuditRow(): void
+    {
+        $now = new DateTimeImmutable(self::NOW);
+        $repository = $this->repositoryOf($this->lockedAt($now, self::FIRST_ID));
+        $identityRows = new InMemoryIdentityRowLock($repository);
+        $repository->onSave = static function () use ($identityRows): void {
+            $identityRows->goneUnderLock = true;
+        };
+        $auditLogger = new RecordingAuditLogger();
+        $sender = new RecordingAccountLockedEmailSender();
+
+        $this->notifierWith(
+            $repository,
+            $sender,
+            new FixedClock($now),
+            new InMemoryLockedIdentityDirectory([self::FIRST_ID]),
+            $auditLogger,
+            $identityRows,
+        )->notifyLockedOwners();
+
+        $this->assertSame($this->emailsOf(self::FIRST_ID), $sender->sentTo, 'The race does not reach the mail.');
+        $this->assertSame([self::FIRST_ID], $identityRows->lockRequests, "The subject's row was asked for.");
+        $this->assertSame([], $auditLogger->records, 'No row names a subject its erasure has already passed over.');
+    }
+
+    /**
      * The audit write is best-effort exactly as the mail send is not: it runs AFTER the stamp already
      * committed, so a failure here may not look like the notification itself failed — the mail already sent
      * and the suppression window already stands, neither of which a lost trail row may undo. The swallow-and-

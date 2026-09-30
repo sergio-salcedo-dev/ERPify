@@ -187,7 +187,11 @@ trait RedeemsRecoverySecrets
         return new RedeemRecoverySecret(
             $users,
             $secrets,
-            new RecordRecoverySecretAuditBestEffort($this->auditLogger, $this->logger),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                $this->auditLogger,
+                $this->logger,
+            ),
             new RevokeCurrentSessionBestEffort(
                 $this->currentSession,
                 new RevokeSession(
