@@ -124,7 +124,9 @@ El bloque describe el esquema que aplica la migración (`Version20260616201857`)
   contador **informativo**: no serializa ni detecta escrituras concurrentes, y dos appends simultáneos al
   mismo stream pueden repetir valor (D14). El orden es `sequence`.
 - **`tenant_id`** entra hoy (nullable): retro-encajar una clave de aislamiento en un log inmutable es inviable;
-  es candidato a partition key y RLS. Mismo patrón que `actor_id` en `audit_log` (nullable→not-null con auth).
+  es candidato a partition key y RLS, y pasa a `NOT NULL` cuando exista el contexto de tenant — a diferencia de
+  `actor_id` en `audit_log`, cuya nulabilidad es contrato (`anonymous`/`system` no llevan id, y un `CHECK` lo
+  impone, [`audit-activity-log.md`](audit-activity-log.md) D7).
 - **`occurred_on`/`recorded_on` `TIMESTAMPTZ`** y **separados** (dominio vs sistema): catch-up y BI necesitan
   *cuándo se persistió*, no solo *cuándo ocurrió*. `JSONB` (no `JSON`) e indexable. `payload` ⊥ `metadata`.
 
@@ -510,7 +512,7 @@ ejecuciones), así que en Behat los eventos sembrados se borran y los escenarios
 base. La composición extremo a extremo está **medida** (tres cargas seguidas: 31 filas, 31 eventos, total 31;
 `GET /backoffice/banks/count` → `{"total":31}`), no gateada.
 
-### D14 — `aggregate_version` es **informativo**, y `metadata` es siempre un objeto JSON
+### D14 — `aggregate_version` es **informativo**, y `payload` y `metadata` son siempre objetos JSON
 
 *Decidido 2026-09-28.*
 

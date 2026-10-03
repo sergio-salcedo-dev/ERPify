@@ -58,7 +58,7 @@ transaction. Whether an event may be routed at all is governed by the persisted-
 |-------------|:---:|---------------------|---------|-----------|
 | `erpify.backoffice.bank.created` | 1 | `BankCreator` | `BankSnapshot` (full) | Mercure · email · `bank_count` (+1) |
 | `erpify.backoffice.bank.updated` | 1 | `BankUpdater` | `BankSnapshot` (full) | Mercure · email |
-| `erpify.backoffice.bank.deleted` | 1 | `BankDeleter` | *empty* `[]` (id in envelope) | Mercure · `bank_count` (−1) |
+| `erpify.backoffice.bank.deleted` | 1 | `BankDeleter` | *empty* `{}` (id in envelope) | Mercure · `bank_count` (−1) |
 
 Source: [`api/src/Backoffice/Bank/Domain/Event/`](../../api/src/Backoffice/Bank/Domain/Event/BankCreatedDomainEvent.php).
 
@@ -85,8 +85,8 @@ The consumed events today:
 
 | `eventName` | ver | Producer (use case) | Payload | Consumers |
 |-------------|:---:|---------------------|---------|-----------|
-| `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `[]` (user id in envelope — **not** PII-free: the id is the subject) | password-changed email, sent in process |
-| `erpify.iam.identity.password-changed` | 1 | `ChangeMyPassword` (recorded by `User::changePassword()`) | *empty* `[]` (same envelope shape, same subject id) | password-changed email, sent in process |
+| `erpify.iam.identity.password-reset-completed` | 1 | `CompletePasswordReset` (recorded by `User::resetPassword()`) | *empty* `{}` (user id in envelope — **not** PII-free: the id is the subject) | password-changed email, sent in process |
+| `erpify.iam.identity.password-changed` | 1 | `ChangeMyPassword` (recorded by `User::changePassword()`) | *empty* `{}` (same envelope shape, same subject id) | password-changed email, sent in process |
 
 Recorded, with no consumer today. They are not a lesser tier: the three recovery-secret lifecycle events in
 particular are the **durable** record of their transitions, and the `audit_log` rows beside them are prunable
@@ -104,15 +104,15 @@ naming no cause, so the audit row is the only record attributing that eviction t
 
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|
-| `erpify.iam.identity.password-reset-requested` | 1 | `RequestPasswordReset` (recorded by `PasswordResetToken::issue()`) | *empty* `[]` |
-| `erpify.iam.identity.recovery-secret-minted` | 1 | `MintRecoverySecret` (recorded by `RecoverySecret::mint()`) | *empty* `[]` |
-| `erpify.iam.identity.recovery-secret-redeemed` | 1 | `RedeemRecoverySecret` (recorded by `RecoverySecret::redeem()`) | *empty* `[]` |
-| `erpify.iam.identity.recovery-secret-revoked` | 1 | `RevokeRecoverySecret` (recorded by `RecoverySecret::revoke()`) | *empty* `[]` |
+| `erpify.iam.identity.password-reset-requested` | 1 | `RequestPasswordReset` (recorded by `PasswordResetToken::issue()`) | *empty* `{}` |
+| `erpify.iam.identity.recovery-secret-minted` | 1 | `MintRecoverySecret` (recorded by `RecoverySecret::mint()`) | *empty* `{}` |
+| `erpify.iam.identity.recovery-secret-redeemed` | 1 | `RedeemRecoverySecret` (recorded by `RecoverySecret::redeem()`) | *empty* `{}` |
+| `erpify.iam.identity.recovery-secret-revoked` | 1 | `RevokeRecoverySecret` (recorded by `RecoverySecret::revoke()`) | *empty* `{}` |
 | `erpify.iam.identity.locked` | 1 | `LoginAttemptRegistrar` (recorded by `User::recordFailedAttempt()`) | `lockedUntil` |
-| `erpify.iam.identity.suspended` | 1 | `ChangeUserStatus` (recorded by `User::suspend()`) | *empty* `[]` |
-| `erpify.iam.identity.deactivated` | 1 | `ChangeUserStatus` (recorded by `User::deactivate()`) | *empty* `[]` |
+| `erpify.iam.identity.suspended` | 1 | `ChangeUserStatus` (recorded by `User::suspend()`) | *empty* `{}` |
+| `erpify.iam.identity.deactivated` | 1 | `ChangeUserStatus` (recorded by `User::deactivate()`) | *empty* `{}` |
 | `erpify.iam.identity.roles-changed` | 1 | `ChangeUserRoles` (recorded by `User::changeRoles()`) | `roles` (the resulting set) |
-| `erpify.iam.identity.invitation-revoked` | 1 | `RevokeInvitation` (`Iam/Invitation`, recorded by `User::revokeInvitation()`) | *empty* `[]` |
+| `erpify.iam.identity.invitation-revoked` | 1 | `RevokeInvitation` (`Iam/Invitation`, recorded by `User::revokeInvitation()`) | *empty* `{}` |
 
 **None of the three recovery-secret events carries the selector, and that is an invariant rather than an
 omission.** The selector is the row's primary key and therefore a denial capability — whoever learns one can
@@ -136,7 +136,7 @@ aggregate, because their revocations are directed UPDATEs that hydrate no row.
 |-------------|:---:|---------------------|---------|
 | `erpify.iam.session.started` | 1 | `StartSession` (recorded by `Session::start()`) | `userId` |
 | `erpify.iam.session.revoked` | 1 | `RevokeSession`; `StartSession` when a login replaces the live session of the same identity its browser already correlated (recorded by `Session::revoke()`) | `userId` |
-| `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `[]` |
+| `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `{}` |
 | `erpify.iam.session.others-revoked` | 1 | `RevokeOtherSessions` (sign out my other devices); `EvictOtherSessions` on every completed recovery redemption | `keptSessionId` |
 
 Neither bulk event names its cause, so `…others-revoked` from a recovery redemption and from the owner's own
@@ -330,7 +330,7 @@ What a `DomainEvent` becomes in the `event_store` (raw DBAL; full rationale in
 | `aggregate_type` | e.g. `Backoffice.Bank`. |
 | `aggregate_version` | per-stream `MAX+1`, **informative only** — no concurrency guarantee: concurrent appends to one stream may record the same version ([ADR D14](../adr/event-store-and-projections.md)). Order by `sequence`. |
 | `event_name`, `event_version` | the canonical key. |
-| `payload` | JSONB — `toPrimitives()` (domain state only). |
+| `payload` | JSONB object — `toPrimitives()` (domain state only), `{}` when empty (rows written before ADR D14 may hold `[]`). |
 | `metadata` | JSONB object, `{}` when empty (rows written before ADR D14 may hold `[]`) — reserved (`correlation_id`/`causation_id`/actor). |
 | `tenant_id` | UUID, `NULL` today — reserved for multi-tenant isolation. |
 | `occurred_on` | TIMESTAMPTZ — **domain** time (envelope). |

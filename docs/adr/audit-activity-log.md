@@ -530,16 +530,23 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
+  **En la tabla, `metadata` se escribe como objeto** —`DbalAuditLogWriter` convierte el nivel superior, así
+  que una fila nueva sin claves guarda `{}`—. Las filas anteriores a esa conversión guardan `[]` y **no se
+  reescriben**: sería una mutación más sobre un log append-only, y ningún lector actual deconstruye la columna
+  (el mapper decodifica con `json_decode(…, true)` y el reconciliador lee con `->>`). Un lector futuro que use
+  `jsonb_each`/`jsonb_object_keys` filtra por `jsonb_typeof(metadata) = 'object'`. Mismo criterio y misma
+  decisión para `event_store` ([`event-store-and-projections.md`](event-store-and-projections.md), D14(b)).
   **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
   `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
-  históricas. Tres formas se sirven tal cual, y ninguna la produce el capturador: una **lista no vacía**, a
-  propósito —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
-  `null` o un escalar. El mapper sella una forma y nunca la fabrica ni la borra, así que ninguna de las tres
-  se reescribe en el cable. El cliente no las trata igual: la lista (y un mapa con un par `{old,new}` mal
-  formado) sigue rechazando el sobre entero, porque puede llevar pares `{old,new}` reales que perdieron el
-  nombre de campo —un fallo del constructor del diff— y degradarla tiraría en silencio datos de cambio
-  reales; un `null` o un escalar no lleva ningún par que perder, así que el cliente admite el sobre, retira
+  históricas. Tres formas que el capturador nunca produce conservan su **forma** en el cable: una **lista no
+  vacía** —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
+  `null` o un escalar. El mapper no las convierte en mapa ni las borra, así que la señal de corrupción llega
+  intacta (su contenido no, ver abajo). El cliente no las trata igual: la lista (y un mapa con un par
+  `{old,new}` mal formado) sigue rechazando el sobre entero, porque una lista en esa posición es un fallo del
+  constructor del diff —pares que perdieron el nombre de campo— y degradarla a «diff ilegible» presentaría
+  como dato menor una fila cuya forma ya no se puede creer; un `null` o un escalar no lleva ningún par, así
+  que el cliente admite el sobre, retira
   `changes` del slot tipado y marca el detalle como **diff ilegible** (`changesUnreadable`), que el drawer
   pinta con un aviso propio y nunca como «No changes recorded» —eso afirmaría que la escritura no cambió
   nada, y para un diff desconocido es falso—. **Ninguna de las tres sirve su contenido:** sólo un mapa se

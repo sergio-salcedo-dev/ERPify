@@ -31,17 +31,17 @@ dev URL is a one-line change in
 
 If you'd rather hit each surface directly:
 
-| Surface                 | URL                                         | Trigger               |
-| ----------------------- | ------------------------------------------- | --------------------- |
-| 404 — Page not found    | `https://localhost/this-does-not-exist`     | unmatched route       |
-| 401 — Sign in required  | `https://localhost/unauthenticated`         | direct navigation     |
-| 403 — Access denied     | `https://localhost/unauthorized`            | direct navigation     |
-| 503 — Maintenance       | `https://localhost/maintenance`             | direct navigation     |
-| 429 — Too many requests | `https://localhost/rate-limited`            | direct navigation     |
-| Offline (PWA)           | `https://localhost/offline`                 | direct navigation     |
-| 500 — Boundary          | `https://localhost/dev-throw`               | dev/test-only fixture |
-| Dev Tools hub           | `https://localhost/dev-tools`               | dev/test-only         |
-| QA gallery (all of ↑)   | `https://localhost/dev-tools/error-gallery` | dev/test-only         |
+| Surface                 | URL                                         | Trigger                                                                              |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 404 — Page not found    | `https://localhost/this-does-not-exist`     | unmatched route                                                                      |
+| 401 — Sign in required  | `https://localhost/unauthenticated`         | direct navigation                                                                    |
+| 403 — Access denied     | `https://localhost/unauthorized`            | direct navigation                                                                    |
+| 503 — Maintenance       | `https://localhost/maintenance`             | direct navigation; `RequireAuth` on a 503 `service-unavailable` `/me`, with `?next=` |
+| 429 — Too many requests | `https://localhost/rate-limited`            | direct navigation                                                                    |
+| Offline (PWA)           | `https://localhost/offline`                 | direct navigation                                                                    |
+| 500 — Boundary          | `https://localhost/dev-throw`               | dev/test-only fixture                                                                |
+| Dev Tools hub           | `https://localhost/dev-tools`               | dev/test-only                                                                        |
+| QA gallery (all of ↑)   | `https://localhost/dev-tools/error-gallery` | dev/test-only                                                                        |
 
 For the BackOffice context (primary CTA flips to `Return to BackOffice`),
 prefix the URL with `/backoffice` — e.g. `/backoffice/anything`.
@@ -64,6 +64,7 @@ src/app/
 └── (errors)/
     ├── dev-throw/page.tsx               ← dev-only 500 trigger
     ├── maintenance/page.tsx           ← /maintenance
+    ├── maintenance/_components/MaintenanceActions.tsx ← return to a validated `next` once `/me` answers
     ├── offline/page.tsx               ← /offline
     ├── rate-limited/page.tsx          ← /rate-limited
     ├── unauthenticated/page.tsx       ← /unauthenticated

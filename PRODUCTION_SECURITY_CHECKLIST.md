@@ -2006,14 +2006,30 @@ mitigated state. Accepting one means recording who accepted it and against which
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
 
-- [ ] **An access-log row of the subject's own in-flight request can commit inside their erasure window —
-      accepted 2026-10-03 by the product owner.** The late audit writers of `Iam/Identity` are serialised on the
-      subject's `identity_user` row (§6); `AccessLogAuditListener` is not: it writes at `kernel.terminate` from
-      `Shared/Audit`, which cannot lock `identity_user` without crossing a context, so a request the subject
-      started before the erasure can commit `actor_id`, `ip` and `user_agent` after the actor pass, and the
-      reconciler does not read `actor_id`, so nothing reports it (`docs/adr/audit-activity-log.md`). The window
-      is one in-flight request wide; closing it costs a row lock on `identity_user` for every audited request with
-      a user actor, serialising each user's concurrent requests. Re-affirm or close before the first customer.
+- [ ] **A row written by the subject's own in-flight request can commit inside their erasure window.** The
+      late audit writers of `Iam/Identity` that run after their own commit are serialised on the subject's
+      `identity_user` row (§6); the writers below run inside a request the subject started before the erasure,
+      take no such lock, and can therefore commit after the pass that would have rewritten them:
+      - **actor-axis audit rows** (`actor_id`, `ip`, `user_agent`) written at the request boundary —
+        `AccessLogAuditListener` at `kernel.terminate`, and the four `RequestBoundarySecurityAudit` callers:
+        `InvalidCurrentPasswordAuditListener`, `SelfTargetedActRefusalAuditListener`,
+        `AccessDeniedAuditListener`, `AuditTrailReadAuditListener`. The reconciler does not read `actor_id`, so
+        nothing reports such a row (`docs/adr/audit-activity-log.md`);
+      - **the subject's own sign-in** — `StartSession` appends `SessionStarted`, and `SessionRevoked` for a
+        replaced row of the same identity, to `event_store`; a sign-in racing the erasure can append them after
+        its anonymising pass, and no reconciler source covers `event_store`.
+      Each window is one in-flight request of the subject's own. Closing it costs a row lock on `identity_user`
+      on every audited request with a user actor and on every sign-in, serialising each user's concurrent
+      requests. **Accepted 2026-10-03 by Sergio (product owner) for the access-log row; the other writers share
+      the window and were recorded after that acceptance, so the acceptance is to be re-affirmed for the whole
+      list** before the first customer.
+- [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
+      subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
+      nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
+      covered the fields the classifier marks, written through `PiiDiffSealer`. A row written by raw SQL, or
+      before sealing existed, can therefore keep a person's data in clear for as long as the row is retained.
+      Telling such a map apart needs the field classification at read time. Nothing in this deployment writes
+      one today; close it (re-seal or redact by classification) or accept it before the first customer.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
