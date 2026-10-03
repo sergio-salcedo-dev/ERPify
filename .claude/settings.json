@@ -85,6 +85,16 @@
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.bmad-loop/bmad_loop_hook.py Notification"
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
