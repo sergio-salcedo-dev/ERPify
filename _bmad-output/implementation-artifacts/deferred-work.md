@@ -601,3 +601,10 @@ severity: low
 reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
 status: done 2026-10-03
 resolution: verified a real gap and fixed on branch ccr-19f35fd1-elkaj0: neither anonymiser nor crypto-shredding reaches a non-map metadata.changes, so AuditEventDetailResourceMapper withholds its content (scalar → '[unsealed value withheld]', list → same-length list) while keeping the shape; a map with clear-text personal fields is still served as stored (stated in the mapper)
+
+### DW-64: `.bmad-loop/decisions.json` still lists DW-16/22/24/30/39/46/48 as pending builds, and the batch closed in #1037 is not archived
+origin: code review of #1037 (bmad-code-review), 2026-10-03
+location: .bmad-loop/decisions.json, _bmad-output/implementation-artifacts/deferred-work.md
+severity: low
+reason: #1037 closes the last `effect: build` decisions of the 2026-09-28 batch, but their `resolution` fields in `decisions.json` are still empty and the closed entries (with those closed 2026-09-28) are not archived; both are written by bmad-loop, which is not installed in the session that closed them. Run `bmad-loop sweep --archive` and let the orchestrator record the resolutions where it is installed; never hand-edit either.
+status: open
