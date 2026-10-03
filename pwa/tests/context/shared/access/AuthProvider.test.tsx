@@ -33,7 +33,12 @@ import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { IdentityServiceUnavailableError } from "@/context/shared/access/domain/IdentityServiceUnavailableError";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
-import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
+import {
+  MALFORMED_RESPONSE_ENVELOPE,
+  NETWORK_ERROR,
+  REQUEST_TIMEOUT,
+} from "@/context/shared/http-client/domain/HttpClient";
+import type { Session } from "@/context/shared/access/domain/Session";
 
 function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
@@ -88,6 +93,20 @@ async function advance(ms: number): Promise<void> {
 
 function setVisibility(state: DocumentVisibilityState): void {
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
+}
+
+function setOnline(online: boolean): void {
+  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => online });
+}
+
+function problem(type: string, status: number): HttpError {
+  return new HttpError({
+    type,
+    title: "The request failed",
+    status,
+    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
+  });
 }
 
 describe("AuthProvider", () => {
@@ -317,8 +336,9 @@ describe("AuthProvider", () => {
     });
 
     afterEach(() => {
-      // Drop the own-property override so the prototype's getter is visible again.
+      // Drop the own-property overrides so the prototypes' getters are visible again.
       Reflect.deleteProperty(document, "visibilityState");
+      Reflect.deleteProperty(navigator, "onLine");
     });
 
     it("re-probes /me after the first delay and authenticates once the server answers", async () => {
@@ -445,6 +465,127 @@ describe("AuthProvider", () => {
 
       expect(me).toHaveBeenCalledTimes(2);
       expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    // A re-probe that got no answer proves nothing about the session, so it must not be read as
+    // "signed out": that would send a visitor who is still signed in to the sign-in form.
+    it.each([
+      ["a network failure", new TypeError("Failed to fetch")],
+      ["a transport error with no response", problem(NETWORK_ERROR, 0)],
+      ["a client timeout", problem(REQUEST_TIMEOUT, 0)],
+      ["a proxy's 502", problem("about:blank", 502)],
+      ["a malformed body", problem(MALFORMED_RESPONSE_ENVELOPE, HttpStatus.OK)],
+    ])(
+      "stays unavailable and keeps re-probing when a re-probe gets %s",
+      async (_label, failure) => {
+        me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+          .mockRejectedValueOnce(failure)
+          .mockResolvedValueOnce(ADMIN);
+
+        const { result } = renderAuth();
+        await advance(0);
+        await advance(REPROBE_INITIAL_DELAY_MS);
+
+        expect(me).toHaveBeenCalledTimes(2);
+        expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+        expect(vi.getTimerCount()).toBe(1);
+
+        await advance(2 * REPROBE_INITIAL_DELAY_MS);
+        expect(me).toHaveBeenCalledTimes(3);
+        expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+      },
+    );
+
+    it("stays unavailable when the tab wakes before the network does", async () => {
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+        .mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await advance(0);
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+
+      await act(async () => {
+        globalThis.dispatchEvent(new Event("online"));
+      });
+      await advance(0);
+      expect(me).toHaveBeenCalledTimes(3);
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("skips a tick while the browser is offline and re-probes when it comes back", async () => {
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      setOnline(false);
+      await advance(REPROBE_INITIAL_DELAY_MS);
+      expect(me).toHaveBeenCalledTimes(1);
+      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+      // The skipped tick leaves the next one scheduled, in case `online` never fires.
+      expect(vi.getTimerCount()).toBe(1);
+
+      setOnline(true);
+      await act(async () => {
+        globalThis.dispatchEvent(new Event("online"));
+      });
+      await advance(0);
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    // A sign-in keeps the cold-probe mapping: it is not the loop, and a failure there is reported
+    // by the form rather than waited out.
+    it("lets a sign-in that gets no answer leave the unavailable state", async () => {
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockRejectedValueOnce(
+        new TypeError("Failed to fetch"),
+      );
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      let resolved: unknown = "unset";
+      await act(async () => {
+        resolved = await result.current.login();
+      });
+
+      expect(resolved).toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("resolves login() to null when an outage re-probe answering 503 supersedes it", async () => {
+      const signInProbe = deferred<Identity | null>();
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockReturnValueOnce(signInProbe.promise)
+        .mockRejectedValueOnce(new IdentityServiceUnavailableError());
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      let pending!: Promise<Session | null>;
+      act(() => {
+        pending = result.current.login();
+      });
+      await advance(REPROBE_INITIAL_DELAY_MS);
+      expect(me).toHaveBeenCalledTimes(3);
+
+      let resolved: unknown = "unset";
+      await act(async () => {
+        signInProbe.resolve(ADMIN);
+        resolved = await pending;
+      });
+
+      // The sign-in's own answer was superseded, so the caller hears what the provider holds.
+      expect(resolved).toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
     });
 
     it("does not stack a second probe on one still in flight", async () => {
@@ -581,11 +722,14 @@ describe("AuthProvider", () => {
       await act(async () => {
         await result.current.logout();
       });
+      let resolved: unknown = "unset";
       await act(async () => {
         signIn.resolve(ADMIN);
-        await pending;
+        resolved = await pending;
       });
 
+      // The caller must not announce a sign-in the provider dropped.
+      expect(resolved).toBeNull();
       expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
       expect(result.current.session).toBeNull();
     });

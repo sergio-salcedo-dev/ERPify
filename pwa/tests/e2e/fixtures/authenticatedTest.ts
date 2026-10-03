@@ -28,7 +28,7 @@ import { apiBaseURL } from "./api";
  * frontoffice theme toggle) import from `@playwright/test` directly for a fresh,
  * unauthenticated context. Specs that reach a gated `/backoffice` surface import this
  * fixture — including the signed-in half of `landing.spec` (its CTA lands on `/backoffice`,
- * and the navbar offers it only to a session; the anonymous half uses a fresh context) and
+ * and the navbar offers it only to a session; the anonymous half empties its storage state) and
  * `rate-limit` (it opens the `/backoffice` dev-tools error gallery).
  */
 type AuthWorkerFixtures = {

@@ -25,6 +25,9 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
   const showDevTools = isDevToolsAvailable();
   const { status } = useSession();
   const signedIn = status === AuthStatus.AUTHENTICATED;
+  // Offered while `unavailable` too: unlike a back-office visitor the guard parks on the maintenance
+  // page, a visitor on a public page has chosen nothing yet, the sign-in form reports a failed attempt
+  // as retryable on its own, and the provider leaves `unavailable` by itself once the server answers.
   const offerSignIn = status !== AuthStatus.HYDRATING && !signedIn;
 
   return (

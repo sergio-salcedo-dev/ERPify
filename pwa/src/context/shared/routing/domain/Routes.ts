@@ -38,8 +38,9 @@ export const Routes = {
   STATUS: "/status",
   /**
    * Public maintenance page (503). Where a guarded route sends the user when `/me` answered
-   * 503 `service-unavailable` — a sign-in form would answer the same outage. The guard carries
-   * the blocked target in `?next=` so the page can return there once the server answers again.
+   * 503 `service-unavailable` — a visitor who may still be signed in gains nothing from a sign-in
+   * form that would answer the same outage. The guard carries the blocked target in `?next=` so
+   * the page can return there once the server answers again.
    * It must stay outside every guard, or that redirect would loop.
    */
   MAINTENANCE: "/maintenance",
