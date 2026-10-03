@@ -2020,9 +2020,8 @@ mitigated state. Accepting one means recording who accepted it and against which
         its anonymising pass, and no reconciler source covers `event_store`.
       Each window is one in-flight request of the subject's own. Closing it costs a row lock on `identity_user`
       on every audited request with a user actor and on every sign-in, serialising each user's concurrent
-      requests. **Accepted 2026-10-03 by Sergio (product owner) for the access-log row; the other writers share
-      the window and were recorded after that acceptance, so the acceptance is to be re-affirmed for the whole
-      list** before the first customer.
+      requests. **Accepted 2026-10-03 by Sergio (product owner) for every writer listed** — re-affirm or close
+      before the first customer.
 - [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
       subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
       nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
