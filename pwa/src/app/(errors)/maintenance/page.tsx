@@ -1,6 +1,7 @@
 import { Wrench } from "lucide-react";
-import { ErrorActions, ErrorScreen } from "@/context/shared/error/infrastructure/ui";
+import { ErrorScreen } from "@/context/shared/error/infrastructure/ui";
 import { IconTone } from "@/context/shared/error/domain/IconTone";
+import { MaintenanceActions } from "./_components/MaintenanceActions";
 
 export const metadata = {
   title: "Scheduled maintenance · Erpify",
@@ -16,7 +17,7 @@ export default function MaintenancePage() {
       description="Erpify is temporarily offline. We'll be back shortly — thank you for your patience."
       icon={Wrench}
       iconTone={IconTone.WARNING}
-      actions={<ErrorActions />}
+      actions={<MaintenanceActions />}
     />
   );
 }

@@ -97,6 +97,8 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
             $this->assertSame($pseudonym, $this->columnOf($connection, $identityEvent, 'aggregate_id'));
             // The guarantee is not bought by deleting history: the row survives with its stream position.
             $this->assertSame('1', $this->columnOf($connection, $identityEvent, 'aggregate_version'));
+            // The `metadata::text` round trip keeps the object shape the store writes; it is not re-cast to `[]`.
+            $this->assertSame('{}', $this->columnOf($connection, $identityEvent, 'metadata'));
 
             $invitationAggregate = $this->columnOf($connection, $invitationEvent, 'aggregate_id');
             $this->assertSame(self::INVITATION_ID, $invitationAggregate, 'the column is not its axis');
@@ -237,7 +239,7 @@ final class EventStoreSubjectAnonymiserFunctionalTest extends KernelTestCase
             'INSERT INTO event_store (event_id, aggregate_id, aggregate_type, aggregate_version, event_name, '
             . 'event_version, payload, metadata, tenant_id, occurred_on, recorded_on) '
             . 'VALUES (CAST(:event_id AS UUID), CAST(:aggregate_id AS UUID), :aggregate_type, 1, :event_name, '
-            . "1, CAST(:payload AS JSONB), CAST('[]' AS JSONB), NULL, :occurred_on, :occurred_on)",
+            . "1, CAST(:payload AS JSONB), CAST('{}' AS JSONB), NULL, :occurred_on, :occurred_on)",
             [
                 'event_id' => $eventId,
                 'aggregate_id' => $aggregateId,

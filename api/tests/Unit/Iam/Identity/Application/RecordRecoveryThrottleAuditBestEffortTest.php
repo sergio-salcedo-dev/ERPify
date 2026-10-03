@@ -119,6 +119,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             new ThrowingRecoveryThrottleAuditBudget(),
             new InMemoryUserRepository(UserMother::create()),
             $auditLogger,
+            new InlineTransactionManager(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
 
@@ -136,6 +137,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
             new FailingAuditLogger($failure),
+            new InlineTransactionManager(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
 
@@ -156,6 +158,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
             new FailingAuditLogger(),
+            new InlineTransactionManager(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
 
@@ -180,6 +183,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
             new FailingAuditLogger(),
+            new InlineTransactionManager(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
     }
@@ -192,6 +196,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             $budget ?? new FixedRecoveryThrottleAuditBudget(granted: true),
             new InMemoryUserRepository(UserMother::create()),
             $auditLogger,
+            new InlineTransactionManager(),
             new RecordingLogger(),
         );
     }

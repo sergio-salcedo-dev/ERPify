@@ -28,7 +28,12 @@ use RuntimeException;
  * would leave that suite green — the failure mode of a best-effort projection is silence, and nothing else in
  * the suite could see it.
  *
+ * One collaborator over the threshold, and it is the recorder's own: the serialiser behind which it writes,
+ * so the erasure window it closes is pinned beside the swallow it shares that catch with.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(RecordLockoutNoticeAuditBestEffort::class)]
 #[CoversTrait(ReportsAuditFailureSafely::class)]
@@ -41,7 +46,11 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort($auditLogger, $logger))->record($subjectId, $lockedUntil);
+        (new RecordLockoutNoticeAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->record($subjectId, $lockedUntil);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
@@ -56,11 +65,36 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $this->assertSame([], $logger->records, 'A successful projection must not log.');
     }
 
+    public function testASubjectErasedSinceTheSendGetsNoRowAndNoReport(): void
+    {
+        // The tick holds nothing on the subject by the time it writes, so an erasure can land between the
+        // stamp and this row; the lock is what makes the row see it.
+        $subjectId = Uuid::generate();
+        $rows = new InMemoryIdentityRowLock();
+        $rows->gone[] = $subjectId;
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        (new RecordLockoutNoticeAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser($rows),
+            $logger,
+        ))->record($subjectId, new DateTimeImmutable('2026-08-11T12:15:00+00:00'));
+
+        $this->assertSame([$subjectId], $rows->locked);
+        $this->assertSame([], $auditLogger->records);
+        $this->assertSame([], $logger->records);
+    }
+
     public function testANullExpiryCarriesNoMetadata(): void
     {
         $auditLogger = new RecordingAuditLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort($auditLogger, new RecordingLogger()))
+        (new RecordLockoutNoticeAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser(),
+            new RecordingLogger(),
+        ))
             ->record(Uuid::generate(), null)
         ;
 
@@ -73,7 +107,11 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger($failure), $logger))
+        (new RecordLockoutNoticeAuditBestEffort(
+            new FailingAuditLogger($failure),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))
             ->record(Uuid::generate(), null)
         ;
 
@@ -94,7 +132,11 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $subjectId = Uuid::generate();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))->record($subjectId, null);
+        (new RecordLockoutNoticeAuditBestEffort(
+            new FailingAuditLogger(),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->record($subjectId, null);
 
         $this->assertCount(1, $logger->records);
         $record = $logger->records[0];
@@ -112,7 +154,11 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $logger = $this->createStub(LoggerInterface::class);
         $logger->method('error')->willThrowException(new RuntimeException('stderr pipe closed'));
 
-        (new RecordLockoutNoticeAuditBestEffort(new FailingAuditLogger(), $logger))
+        (new RecordLockoutNoticeAuditBestEffort(
+            new FailingAuditLogger(),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))
             ->record(Uuid::generate(), null)
         ;
     }

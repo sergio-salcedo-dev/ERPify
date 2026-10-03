@@ -12,9 +12,13 @@ import { useDeparture } from "@/context/shared/navigation/application/useDepartu
  * Route protection. Identity is resolved before authorization: while the
  * provider is `hydrating` it renders nothing and does not redirect (the stored
  * session has not been read yet). Once resolved, only an `authenticated` (ACTIVE)
- * session sees the children; anything else is redirected to /login with the
- * blocked target preserved in `?next=` so login can return there. Protected
- * content therefore never flashes on the strength of a default session.
+ * session sees the children. An `unavailable` provider (the server answered 503
+ * `service-unavailable`, typically because it cannot reach its session store) is
+ * sent to /maintenance, because /login would answer the same outage; anything
+ * else is redirected to /login. Both keep the blocked target in `?next=`, so the
+ * sign-in form, or the maintenance page once the server answers again, can return
+ * there. Protected content therefore never flashes on the strength of a default
+ * session.
  */
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
@@ -22,7 +26,7 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const departing = useDeparture() !== null;
 
   useEffect(() => {
-    if (status !== AuthStatus.UNAUTHENTICATED) return;
+    if (status !== AuthStatus.UNAUTHENTICATED && status !== AuthStatus.UNAVAILABLE) return;
     // A full-document departure already owns a navigation away from here; redirecting on top
     // of it would race two navigations against the same document. Whoever claimed it releases
     // once its own outcome is known, which re-runs this effect.
@@ -40,7 +44,8 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
       `${globalThis.location.pathname}${globalThis.location.search}`,
       Routes.BACKOFFICE,
     );
-    router.replace(`${Routes.LOGIN}?next=${encodeURIComponent(target)}`);
+    const destination = status === AuthStatus.UNAVAILABLE ? Routes.MAINTENANCE : Routes.LOGIN;
+    router.replace(`${destination}?next=${encodeURIComponent(target)}`);
   }, [status, departing, router]);
 
   if (status !== AuthStatus.AUTHENTICATED) return null;

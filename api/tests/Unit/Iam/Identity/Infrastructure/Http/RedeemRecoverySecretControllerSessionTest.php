@@ -22,6 +22,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
@@ -199,7 +200,11 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
         $useCase = new RedeemRecoverySecret(
             new InMemoryUserRepository(UserMother::create()),
             $secrets,
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new RecordingAuditLogger(),
+                InMemoryIdentityRowLock::serialiser(),
+                new NullLogger(),
+            ),
             new RevokeCurrentSessionBestEffort(
                 $this->correlation,
                 new RevokeSession($this->sessions, new RecordingEventBus(), new InlineTransactionManager()),

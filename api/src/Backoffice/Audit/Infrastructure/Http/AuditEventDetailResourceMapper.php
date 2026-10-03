@@ -24,13 +24,34 @@ use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
  * when empty or keyed: forcing every nested array into an object would turn a legitimate list inside a
  * value into `{"0": …}`, and a list-shaped `changes` is drift the client must still see as a list.
  *
- * A `changes` stored as `null` or a scalar is served verbatim too — neither wrapped into a map nor deleted,
- * because either would hide the corruption from every consumer of the wire. The client degrades it to an
- * unreadable diff rather than refusing the envelope; why a list is not degraded the same way is recorded in
- * the audit ADR (D4).
+ * **A `changes` that is not a map keeps its SHAPE on the wire and loses its CONTENT.** A scalar becomes
+ * {@see self::WITHHELD}, a non-empty list becomes a list of as many of them, and `null` stays `null`. Sealing
+ * only ever reached a map: `PiiDiffSealer` encrypts the classified fields of a map, so a value that is not
+ * keyed by field name reached storage in clear whatever it holds, and nothing on the erasure path reaches it
+ * afterwards — both anonymisers rewrite columns and never `metadata`, and crypto-shredding destroys a key,
+ * which only matters to a value that was encrypted under it. Serving it verbatim would therefore hand out,
+ * for as long as the row is retained, whatever personal data a corrupt row happens to carry, past the erasure
+ * of the person it names.
+ * The shape is what the corruption signal needs and it survives: neither wrapped into a map nor deleted, so
+ * the client still degrades a scalar to an unreadable diff and still refuses a list (why the two differ is
+ * recorded in the audit ADR, D4). What is spent is the raw value on the wire; whoever investigates a corrupt
+ * row reads it from the table, under the access that table already demands.
+ *
+ * The test is shape, not provenance, and that bounds what it proves. A map is served as stored, so a map whose
+ * personal field holds clear text — written by raw SQL, or before sealing existed — still reaches the wire:
+ * telling it apart needs the field classification, which this mapper does not hold. And `json_decode()` reads
+ * an object keyed `"0"`, `"1"`, … as a list, so such a map is withheld as one; it was never a shape the writer
+ * produces.
  */
 final readonly class AuditEventDetailResourceMapper
 {
+    /**
+     * What a `changes` that is not a map serves in place of each value it held. A string, so a scalar stays a
+     * scalar and a list stays a list; and not the erasure sentinel, because nothing was erased — the value
+     * still sits in the row, withheld by the read side.
+     */
+    public const string WITHHELD = '[unsealed value withheld]';
+
     /** ISO-8601 with the microsecond fraction `occurred_on` (TIMESTAMPTZ(6)) carries. */
     private const string TIMESTAMP_FORMAT = 'Y-m-d\TH:i:s.uP';
 
@@ -65,6 +86,14 @@ final readonly class AuditEventDetailResourceMapper
         // accepts and renders as a field named "0", hiding the drift its guard would otherwise refuse.
         if (\is_array($changes) && ([] === $changes || !\array_is_list($changes))) {
             $metadata['changes'] = new ArrayObject($changes);
+
+            return $metadata;
+        }
+
+        if (\is_array($changes)) {
+            $metadata['changes'] = \array_fill(0, \count($changes), self::WITHHELD);
+        } elseif (null !== $changes) {
+            $metadata['changes'] = self::WITHHELD;
         }
 
         return $metadata;

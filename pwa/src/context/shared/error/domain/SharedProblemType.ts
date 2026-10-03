@@ -16,6 +16,13 @@ export const SharedProblemType = {
    * then, so the pre-check sees it and answers with the precise 422 this response could not.
    */
   CONCURRENT_UNIQUE_WRITE: "concurrent-unique-write",
+  /**
+   * The `ServiceUnavailable` marker's default (503): a dependency the request needs is unreachable,
+   * so the server could not decide it. The session admission gate raises it when the session store
+   * is down, before any controller runs — which is why it reaches every gated route, `/me` included,
+   * and why it means "cannot tell whether you are signed in", never "you are not".
+   */
+  SERVICE_UNAVAILABLE: "service-unavailable",
 } as const;
 
 export type SharedProblemType = (typeof SharedProblemType)[keyof typeof SharedProblemType];
