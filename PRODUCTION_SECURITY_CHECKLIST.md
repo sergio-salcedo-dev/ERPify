@@ -388,6 +388,11 @@ you change anything here.
       candidate is a heuristic (does the address match one the subject has held on an
       `iam_session`?) bought by making the audit writer read a second context's PII at
       capture time. Weighed and not taken — not impossible.
+      Those writers run **post-commit**, outside any transaction holding the subject, so
+      each takes the subject's `identity_user` row `FOR UPDATE` before writing and writes no
+      row naming a subject whose row is gone (`IdentityRowSerialiser`; the throttle resolves
+      its address under the same lock). Without it a row committed after the pass would keep
+      the real id and the address with `resource_erased = FALSE`.
       **The accepted cost, stated rather than hidden:** where the
       requester was a stranger — an attacker locking a victim out — that attacker's address
       is destroyed too. The **fact** survives even though the value does not, though not for

@@ -48,6 +48,11 @@ use Throwable;
  * discarded line into a flush of every record the request accumulated, on a request that is a person's own
  * authenticated session. The report call is itself real I/O, so it is wrapped by
  * {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that nothing escapes may not throw.
+ *
+ * **Each write runs behind a lock on the subject's `identity_user` row, via {@see IdentityRowSerialiser}, and
+ * is skipped when the row is gone**, for the reason {@see RecordLockoutAuditBestEffort} gives. The compensated
+ * redemption is where that is more than a race on paper: one of the refusals it answers is the identity
+ * vanishing under the locked pass, so the row it would write is precisely one about an erasure in flight.
  */
 final readonly class RecordRecoverySecretAuditBestEffort
 {
@@ -65,6 +70,7 @@ final readonly class RecordRecoverySecretAuditBestEffort
 
     public function __construct(
         private AuditLogger $auditLogger,
+        private IdentityRowSerialiser $identityRows,
         private LoggerInterface $logger,
     ) {
     }
@@ -118,11 +124,13 @@ final readonly class RecordRecoverySecretAuditBestEffort
     private function record(string $action, string $userId): void
     {
         try {
-            $this->auditLogger->log(
-                $action,
-                AuditLevel::SECURITY,
-                AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
-            );
+            $this->identityRows->whileLive($userId, function () use ($action, $userId): void {
+                $this->auditLogger->log(
+                    $action,
+                    AuditLevel::SECURITY,
+                    AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
+                );
+            });
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
                 'Recovery-secret transition committed; security audit projection skipped (write failed).',

@@ -20,7 +20,9 @@ use Throwable;
  * {@see StartSession}, so the session subsystem stays unaware of `SecurityUser` and of `Organization`.
  *
  * Priority is below every built-in `LoginSuccessEvent` subscriber (the session-id `migrate` runs at 0), so the
- * `iamSessionId` written into the bag is set after the anti-fixation regeneration and survives it.
+ * `iamSessionId` written into the bag is set after the anti-fixation regeneration and survives it. The one it
+ * replaces is still readable at that point — `migrate()` changes the native id and keeps the attributes — which
+ * is what lets {@see StartSession} revoke the registry row this browser is giving up.
  * {@see LoginController} still answers 204 — minting neither couples to nor rewrites the login response.
  *
  * Fail-closed: if minting or the membership lookup throws, there is no live session, so the native cookie

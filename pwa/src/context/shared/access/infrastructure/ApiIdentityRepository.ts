@@ -2,10 +2,12 @@ import { inject, injectable } from "inversify";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { SharedProblemType } from "@/context/shared/error/domain/SharedProblemType";
 import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/domain/HttpClient";
 import { UserStatus } from "../domain/UserStatus";
 import { ALL_PERMISSIONS, type HeldPermission, type Permission } from "../domain/Permission";
 import type { Identity } from "../domain/Identity";
+import { SessionStoreUnavailableError } from "../domain/SessionStoreUnavailableError";
 import type { ChangePasswordCommand, IdentityRepository } from "../domain/IdentityRepository";
 
 interface MeResponse {
@@ -51,6 +53,14 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
   );
 }
 
+function isSessionStoreOutage(error: unknown): boolean {
+  return (
+    error instanceof HttpError &&
+    error.problem.status === HttpStatus.SERVICE_UNAVAILABLE &&
+    error.problem.type === SharedProblemType.SERVICE_UNAVAILABLE
+  );
+}
+
 /**
  * HTTP adapter over the signed-in identity: reads it from the gated `/me` endpoint and
  * changes its credential through `POST /me/password`.
@@ -62,9 +72,13 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
  *    verbatim; permissions are the set the API derives from them, narrowed to the
  *    ones this client declares (anything else — the wildcard included — is dropped).
  *  - 401 (`session-expired`) → no live session → null.
+ *  - 503 `service-unavailable` → the admission gate could not reach the session store, so the
+ *    server cannot tell whether a session is live → {@link SessionStoreUnavailableError}. Both
+ *    the status and the `type` must match: a 503 without that problem body (a proxy's own page)
+ *    did not come from the gate and proves nothing about the store.
  *
- * A non-401 failure (network / malformed body) propagates so the caller can
- * distinguish "no session" from "could not reach the server".
+ * Any other failure (network, malformed body, another status) propagates as the transport's
+ * error, so the caller can still tell "no session" from "could not reach the server".
  *
  * The set is a rendering convenience only: every route enforces its own authorization server-side, so a
  * tampered session gains nothing beyond seeing controls that then fail.
@@ -86,6 +100,9 @@ export class ApiIdentityRepository implements IdentityRepository {
     } catch (error) {
       if (error instanceof HttpError && error.problem.status === HttpStatus.UNAUTHORIZED) {
         return null;
+      }
+      if (isSessionStoreOutage(error)) {
+        throw new SessionStoreUnavailableError();
       }
       throw error;
     }

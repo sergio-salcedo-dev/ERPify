@@ -10,6 +10,7 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Psr\Log\LoggerInterface;
 use SensitiveParameter;
 use Throwable;
@@ -42,8 +43,7 @@ use Throwable;
  * such floor, because the throttle is precisely what is being reported.
  *
  * THE ROW NAMES THE SUBJECT WHEN THE ADDRESS RESOLVES, AND NOTHING WHEN IT DOES NOT. Naming it costs one
- * indexed read that the served branch already performs ({@see RequestPasswordReset}), so the two branches
- * converge rather than diverge, and it mints no new obligation: `User` is already the registry's person type
+ * indexed read, and it mints no new obligation: `User` is already the registry's person type
  * with an erasure owner, and `audit_log.resource_id` is already inside the reconciler's reach. What may never
  * appear, in `metadata` or anywhere else, is the ADDRESS — in clear, hashed or encoded. It is a person datum
  * whose erasure nothing owns: the anonymisers rewrite `actor_id` and `resource_id` and never touch
@@ -71,6 +71,16 @@ use Throwable;
  *
  * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
  * nothing escapes may not throw, and the report call is real I/O.
+ *
+ * **The address is resolved under `FOR UPDATE`, in the transaction that writes the row.** This runs from
+ * `kernel.terminate`, outside anything that holds the subject, so an unlocked read would let an erasure
+ * complete its trail passes between the lookup and the insert and would leave the row naming an identity that no
+ * longer exists. Under the lock the lookup either commits its row before the erasure's passes run, which then
+ * rewrite it, or waits for the erasure to commit and finds nobody — and an address that names nobody is
+ * already the resource-less row this class writes for an unknown address, so an erased subject leaves nothing
+ * an observer could tell apart from one that never existed. The lock is the same one
+ * {@see LoginAttemptRegistrar} takes on its address-keyed path, and the transaction sits behind the budget
+ * claim, so it is paid at most once per address per window.
  */
 final readonly class RecordRecoveryThrottleAuditBestEffort
 {
@@ -82,6 +92,7 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
         private RecoveryThrottleAuditBudget $auditBudget,
         private UserRepository $users,
         private AuditLogger $auditLogger,
+        private TransactionManager $transactionManager,
         private LoggerInterface $logger,
     ) {
     }
@@ -93,7 +104,9 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
                 return;
             }
 
-            $this->auditLogger->log(self::THROTTLED_ACTION, AuditLevel::SECURITY, $this->subjectOf($email));
+            $this->transactionManager->transactional(function () use ($email): void {
+                $this->auditLogger->log(self::THROTTLED_ACTION, AuditLevel::SECURITY, $this->subjectOf($email));
+            });
         } catch (Throwable $throwable) {
             // The only signal that an observation was owed and not made: the claim is already spent, so this
             // address stays silent for the rest of the window. No id and no address in the line — this runs
@@ -110,7 +123,8 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
      * The actor is `anonymous` by construction — no token exists at a forgot-password request — so the target
      * rides in the resource columns, which the erasure chain rewrites alongside `actor_id`. A malformed
      * address and an address matching no identity are the same answer here: no resource, no metadata, and in
-     * particular no record of what was typed.
+     * particular no record of what was typed. Called inside the writing transaction only: the lookup is what
+     * holds the subject's row until the row naming it commits.
      */
     private function subjectOf(#[SensitiveParameter] string $email): ?AuditResource
     {
@@ -120,7 +134,7 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
             return null;
         }
 
-        $user = $this->users->findByEmail($canonicalEmail);
+        $user = $this->users->findByEmailForUpdate($canonicalEmail);
 
         if (!$user instanceof User) {
             return null;

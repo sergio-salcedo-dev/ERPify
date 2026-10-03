@@ -6,6 +6,7 @@ import type { Identity } from "../../domain/Identity";
 import type { IdentityRepository } from "../../domain/IdentityRepository";
 import type { SessionsRepository } from "../../domain/SessionsRepository";
 import { UserStatus } from "../../domain/UserStatus";
+import { SessionStoreUnavailableError } from "../../domain/SessionStoreUnavailableError";
 import { AccessContext } from "../../domain/AccessContext";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { telemetry } from "@/context/shared/observability/infrastructure";
@@ -19,13 +20,23 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * Identity must be resolved before authorization is evaluated. Until the cold
  * `/me` probe resolves, the provider is `hydrating` and guards render nothing —
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
- * session is `authenticated`; no live session (401) or any failure is
- * `unauthenticated`. There is no seeded default and no auto-admin.
+ * session is `authenticated`; a server that answered it cannot reach its session
+ * store is `unavailable`; no live session (401) or any other failure (offline, a
+ * body that does not parse) is `unauthenticated`. There is no seeded default and
+ * no auto-admin.
+ *
+ * `unavailable` is kept apart from `unauthenticated` because the two send the user
+ * to different places: a sign-in form cannot help while the store is down — the
+ * login route answers the same 503 — so the guard sends that case to the
+ * maintenance page instead. The failures that stay `unauthenticated` do so because
+ * neither proves the server is up and undecided, and the sign-in form is where a
+ * transient blip recovers on its own.
  */
 export const AuthStatus = {
   HYDRATING: "hydrating",
   AUTHENTICATED: "authenticated",
   UNAUTHENTICATED: "unauthenticated",
+  UNAVAILABLE: "unavailable",
 } as const;
 export type AuthStatus = (typeof AuthStatus)[keyof typeof AuthStatus];
 
@@ -39,9 +50,9 @@ export interface AuthContextValue {
    *
    * It resolves to the session the probe produced, because the caller cannot
    * otherwise tell an authenticated provider from one the probe never
-   * confirmed. `null` conflates "no live session" with "could not tell", and
-   * deliberately so: neither is grounds to announce a sign-in, so the caller's
-   * move is the same for both.
+   * confirmed. `null` conflates "no live session" with "could not tell" (an
+   * unreachable session store included), and deliberately so: neither is grounds
+   * to announce a sign-in, so the caller's move is the same for both.
    */
   login: () => Promise<Session | null>;
   /**
@@ -61,6 +72,12 @@ export interface AuthContextValue {
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
+
+/** What one `/me` probe established: the session, or why there is none. */
+interface ProbeResult {
+  session: Session | null;
+  storeUnavailable: boolean;
+}
 
 /**
  * Build the session from a resolved identity. A 200 from the gated `/me`
@@ -90,37 +107,42 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // no protected content can flash before `/me` resolves. `hydrated` flips once
   // the probe (or a login re-probe) has settled.
   const [session, setSession] = useState<Session | null>(null);
+  const [storeUnavailable, setStoreUnavailable] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  const resolveSession = useCallback(async (): Promise<Session | null> => {
+  const resolveSession = useCallback(async (): Promise<ProbeResult> => {
     try {
       const identity = await identityRepository.me();
-      return identity ? sessionFromIdentity(identity) : null;
-    } catch {
-      // The adapter already maps 401 to null; any other failure (network,
-      // malformed body) is treated as "no live session" too.
-      return null;
+      return { session: identity ? sessionFromIdentity(identity) : null, storeUnavailable: false };
+    } catch (error) {
+      // The adapter already maps 401 to null and a session-store outage to its own error; any
+      // other failure (network, malformed body) is treated as "no live session".
+      return { session: null, storeUnavailable: error instanceof SessionStoreUnavailableError };
     }
   }, [identityRepository]);
 
+  const apply = useCallback((result: ProbeResult): void => {
+    setSession(result.session);
+    setStoreUnavailable(result.storeUnavailable);
+    setHydrated(true);
+  }, []);
+
   useEffect(() => {
     let active = true;
-    resolveSession().then((resolved) => {
+    resolveSession().then((result) => {
       if (!active) return;
-      setSession(resolved);
-      setHydrated(true);
+      apply(result);
     });
     return () => {
       active = false;
     };
-  }, [resolveSession]);
+  }, [resolveSession, apply]);
 
   const login = useCallback(async (): Promise<Session | null> => {
-    const resolved = await resolveSession();
-    setSession(resolved);
-    setHydrated(true);
-    return resolved;
-  }, [resolveSession]);
+    const result = await resolveSession();
+    apply(result);
+    return result.session;
+  }, [resolveSession, apply]);
 
   const logout = useCallback(
     async (budgetMs?: number): Promise<void> => {
@@ -135,6 +157,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         });
       } finally {
         setSession(null);
+        setStoreUnavailable(false);
         setHydrated(true);
       }
     },
@@ -160,10 +183,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const status = useMemo<AuthStatus>(() => {
     if (!hydrated) return AuthStatus.HYDRATING;
+    if (storeUnavailable) return AuthStatus.UNAVAILABLE;
     return session?.user.status === UserStatus.ACTIVE
       ? AuthStatus.AUTHENTICATED
       : AuthStatus.UNAUTHENTICATED;
-  }, [hydrated, session]);
+  }, [hydrated, storeUnavailable, session]);
 
   const value = useMemo<AuthContextValue>(
     () => ({ status, session, login, logout, override }),

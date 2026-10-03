@@ -42,7 +42,11 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
 
-        (new RecordRecoverySecretAuditBestEffort($auditLogger, $logger))->{$method}($subjectId);
+        (new RecordRecoverySecretAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->{$method}($subjectId);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
@@ -59,6 +63,31 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $this->assertSame([], $logger->records, 'a successful projection must not log');
     }
 
+    /**
+     * Every transition runs post-commit, so an erasure can complete between its commit and the row; the
+     * compensated redemption is the transition that answers exactly that interleaving.
+     */
+    #[Test]
+    #[DataProvider('transitions')]
+    public function aSubjectErasedBeforeTheLockGetsNoRowAndNoReport(string $method, string $action): void
+    {
+        $subjectId = Uuid::generate();
+        $rows = new InMemoryIdentityRowLock();
+        $rows->gone[] = $subjectId;
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        (new RecordRecoverySecretAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser($rows),
+            $logger,
+        ))->{$method}($subjectId);
+
+        $this->assertSame([$subjectId], $rows->locked);
+        $this->assertSame([], $auditLogger->records, $action . ' may not name an erased subject');
+        $this->assertSame([], $logger->records);
+    }
+
     #[Test]
     #[DataProvider('transitions')]
     public function everyTransitionSwallowsAFailedWriteAndReportsItAtError(string $method, string $action): void
@@ -69,7 +98,11 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
 
-        (new RecordRecoverySecretAuditBestEffort(new FailingAuditLogger($failure), $logger))
+        (new RecordRecoverySecretAuditBestEffort(
+            new FailingAuditLogger($failure),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))
             ->{$method}(Uuid::generate())
         ;
 
@@ -91,7 +124,11 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $subjectId = Uuid::generate();
         $logger = new RecordingLogger();
 
-        (new RecordRecoverySecretAuditBestEffort(new FailingAuditLogger(), $logger))->{$method}($subjectId);
+        (new RecordRecoverySecretAuditBestEffort(
+            new FailingAuditLogger(),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->{$method}($subjectId);
 
         $this->assertCount(1, $logger->records);
 

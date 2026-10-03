@@ -9,11 +9,17 @@ export interface ChangePasswordCommand {
 /**
  * Port for the signed-in identity: resolving it from the gated `who-am-i`
  * endpoint and changing its own credential. The adapter owns the HTTP calls and
- * the 401 mapping, so the access layer depends on this domain contract (DIP) and
+ * the 401 and 503 mappings, so the access layer depends on this domain contract (DIP) and
  * never touches `fetch` / status codes.
  */
 export interface IdentityRepository {
-  /** The signed-in identity, or `null` when there is no live session (401). */
+  /**
+   * The signed-in identity, or `null` when there is no live session (401). Rejects with
+   * `SessionStoreUnavailableError` when the server answered that it cannot reach its
+   * session store, and with the transport's own error for anything else (offline, a body that
+   * does not parse, any other status) — so "not signed in", "the server cannot tell" and "could
+   * not ask" stay three different answers.
+   */
   me(): Promise<Identity | null>;
 
   /**

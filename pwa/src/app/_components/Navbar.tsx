@@ -5,14 +5,27 @@ import { Logo, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { useSession } from "@/context/shared/access/application/useSession";
+import { AuthStatus } from "@/context/shared/access/infrastructure/ui/AuthProvider";
 
 interface NavbarProps {
   goToBackoffice: () => void;
 }
 
+/**
+ * The public navigation bar. Its access cluster follows the session: a signed-in visitor is
+ * offered the way into the back-office, anyone else is offered "Sign in", and a visitor whose
+ * `/me` probe has not settled yet is offered neither. Showing one of the two on a guess would
+ * flash the wrong call to action for the length of the probe — and the server render is always
+ * a guess, since it never holds the session. On desktop the slot keeps its width while empty, so
+ * the links beside it do not move when the probe settles.
+ */
 export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const showDevTools = isDevToolsAvailable();
+  const { status } = useSession();
+  const signedIn = status === AuthStatus.AUTHENTICATED;
+  const offerSignIn = status !== AuthStatus.HYDRATING && !signedIn;
 
   return (
     <nav className="navbar bg-card border-b border-border sticky top-0 z-50">
@@ -51,22 +64,27 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
 
             <ThemeToggle testId="navbar__theme" className="navbar__theme" />
 
-            <Link
-              href={Routes.LOGIN}
-              className="navbar__link navbar__link--login text-foreground hover:text-primary font-medium transition-colors"
-              data-testid="navbar__link-login"
-            >
-              Sign in
-            </Link>
-
-            <Button
-              onClick={goToBackoffice}
-              size="default"
-              className="navbar__button rounded-full"
-              data-testid="navbar__go-to-backoffice-button"
-            >
-              Backoffice
-            </Button>
+            <div className="navbar__access flex min-w-28 justify-end" data-testid="navbar__access">
+              {signedIn ? (
+                <Button
+                  onClick={goToBackoffice}
+                  size="default"
+                  className="navbar__button rounded-full"
+                  data-testid="navbar__go-to-backoffice-button"
+                >
+                  Backoffice
+                </Button>
+              ) : null}
+              {offerSignIn ? (
+                <Link
+                  href={Routes.LOGIN}
+                  className="navbar__link navbar__link--login text-foreground hover:text-primary font-medium transition-colors"
+                  data-testid="navbar__link-login"
+                >
+                  Sign in
+                </Link>
+              ) : null}
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -106,21 +124,25 @@ export function Navbar({ goToBackoffice }: Readonly<NavbarProps>) {
               Dev Tools
             </Link>
           ) : null}
-          <Link
-            href={Routes.LOGIN}
-            className="navbar__link navbar__link--login block text-foreground font-medium"
-            data-testid="navbar__link-login--mobile"
-          >
-            Sign in
-          </Link>
-          <Button
-            onClick={goToBackoffice}
-            size="lg"
-            className="navbar__button w-full rounded-xl"
-            data-testid="navbar__go-to-backoffice-button--mobile"
-          >
-            Backoffice
-          </Button>
+          {offerSignIn ? (
+            <Link
+              href={Routes.LOGIN}
+              className="navbar__link navbar__link--login block text-foreground font-medium"
+              data-testid="navbar__link-login--mobile"
+            >
+              Sign in
+            </Link>
+          ) : null}
+          {signedIn ? (
+            <Button
+              onClick={goToBackoffice}
+              size="lg"
+              className="navbar__button w-full rounded-xl"
+              data-testid="navbar__go-to-backoffice-button--mobile"
+            >
+              Backoffice
+            </Button>
+          ) : null}
         </div>
       )}
     </nav>

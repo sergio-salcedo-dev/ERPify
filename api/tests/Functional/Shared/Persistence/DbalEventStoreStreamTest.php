@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankSnapshot;
+use Erpify\Shared\Event\Application\DomainEventSerializer;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\StoredEvent;
 use Erpify\Shared\Event\Infrastructure\Persistence\DbalEventStore;
@@ -17,8 +18,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * Reads back an appended event through {@see DbalEventStore::stream()} and asserts the full
- * {@see StoredEvent} mapping (sequence ordering, payload decode, envelope columns). Runs inside a
- * transaction that is always rolled back, so it leaves no rows behind on the shared dev database.
+ * {@see StoredEvent} mapping (sequence ordering, payload decode, envelope columns) and the stored shape of
+ * `metadata`, which is always a JSON object. Each test runs inside a transaction that is always rolled
+ * back, so it leaves no rows behind on the shared dev database.
  *
  * @internal
  */
@@ -57,8 +59,50 @@ final class DbalEventStoreStreamTest extends KernelTestCase
             $this->assertSame('Stream Bank', $found->payload['name'] ?? null);
             $this->assertSame('STRM', $found->payload['shortName'] ?? null);
             $this->assertNull($found->tenantId);
+            $this->assertSame([], $found->metadata);
+            $this->assertSame('{}', $this->metadataOf($connection, $event->eventId()), 'an empty envelope: {}');
 
             $this->assertSame([], $this->collect($store->stream(0, [], 10)), 'an empty name filter streams nothing');
+        } finally {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+        }
+    }
+
+    /**
+     * The envelope is empty for every event the application writes today, so a non-empty one is handed to the
+     * store through its own serializer port: what is asserted is that Postgres keeps an object with its keys.
+     */
+    public function testANonEmptyMetadataEnvelopeIsStoredAsAnObjectWithItsKeys(): void
+    {
+        self::bootKernel();
+        $entityManager = self::getContainer()->get(EntityManagerInterface::class);
+        $this->assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        $connection = $entityManager->getConnection();
+        $serializer = $this->createStub(DomainEventSerializer::class);
+        $serializer->method('serialize')->willReturn([
+            'payload' => ['name' => 'Envelope Bank'],
+            'metadata' => ['correlationId' => 'c-1', 'causes' => ['e-0']],
+        ]);
+        $store = new DbalEventStore($connection, $serializer);
+
+        $connection->beginTransaction();
+
+        try {
+            $occurredOn = '2026-06-06T08:00:00+00:00';
+            $event = new BankCreatedDomainEvent(
+                Uuid::generate(),
+                new BankSnapshot('Envelope Bank', 'ENVL', $occurredOn, $occurredOn),
+            );
+
+            $store->append($event);
+
+            $this->assertSame(
+                '{"causes": ["e-0"], "correlationId": "c-1"}',
+                $this->metadataOf($connection, $event->eventId()),
+            );
         } finally {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
@@ -94,6 +138,20 @@ final class DbalEventStoreStreamTest extends KernelTestCase
         }
 
         $this->fail(\sprintf('The appended event "%s" was not streamed back.', $eventId));
+    }
+
+    /**
+     * Rendered by Postgres (`::text`), so the assertion reads the stored JSONB rather than the driver's view.
+     */
+    private function metadataOf(Connection $connection, string $eventId): string
+    {
+        $metadata = $connection->fetchOne(
+            'SELECT metadata::text FROM event_store WHERE event_id = :eventId',
+            ['eventId' => $eventId],
+        );
+        $this->assertIsString($metadata);
+
+        return $metadata;
     }
 
     private function sequenceOf(Connection $connection, string $eventId): int

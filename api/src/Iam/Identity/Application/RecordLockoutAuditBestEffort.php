@@ -55,6 +55,12 @@ use Throwable;
  *
  * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
  * nothing escapes may not throw, and the report call is real I/O.
+ *
+ * **The write runs behind a lock on the subject's `identity_user` row, via {@see IdentityRowSerialiser}, and is
+ * skipped when the row is gone.** Post-commit means outside every transaction that holds the subject, so an
+ * erasure could otherwise complete its trail passes between the lockout's commit and this insert and leave
+ * the row naming an identity that no longer exists. The lock and the skip are inside the swallow: a lock
+ * timeout is one more way for the projection to be lost, never a reason for the refusal to become a 500.
  */
 final readonly class RecordLockoutAuditBestEffort
 {
@@ -64,6 +70,7 @@ final readonly class RecordLockoutAuditBestEffort
 
     public function __construct(
         private AuditLogger $auditLogger,
+        private IdentityRowSerialiser $identityRows,
         private LoggerInterface $logger,
     ) {
     }
@@ -77,11 +84,13 @@ final readonly class RecordLockoutAuditBestEffort
     public function record(string $userId): void
     {
         try {
-            $this->auditLogger->log(
-                self::LOCKED_ACTION,
-                AuditLevel::SECURITY,
-                AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
-            );
+            $this->identityRows->whileLive($userId, function () use ($userId): void {
+                $this->auditLogger->log(
+                    self::LOCKED_ACTION,
+                    AuditLevel::SECURITY,
+                    AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
+                );
+            });
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
                 'Lockout committed; security audit projection skipped (write failed).',

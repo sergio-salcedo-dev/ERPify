@@ -28,6 +28,10 @@ import {
 import type { Identity } from "@/context/shared/access/domain/Identity";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
+import { SessionStoreUnavailableError } from "@/context/shared/access/domain/SessionStoreUnavailableError";
+import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
+import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
 
 function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
@@ -103,6 +107,75 @@ describe("AuthProvider", () => {
 
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
     expect(result.current.session).toBeNull();
+  });
+
+  it("is unauthenticated when the /me body is malformed (not a store outage)", async () => {
+    me.mockRejectedValue(
+      new HttpError({
+        type: MALFORMED_RESPONSE_ENVELOPE,
+        title: "API response did not match the expected shape",
+        status: HttpStatus.OK,
+        instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
+        "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
+      }),
+    );
+
+    const { result } = renderAuth();
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+    expect(result.current.session).toBeNull();
+  });
+
+  it("is unavailable, not unauthenticated, when the session store is unreachable", async () => {
+    me.mockRejectedValue(new SessionStoreUnavailableError());
+
+    const { result } = renderAuth();
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+    expect(result.current.session).toBeNull();
+  });
+
+  it("login() leaves the unavailable state once the store answers again", async () => {
+    me.mockRejectedValueOnce(new SessionStoreUnavailableError()).mockResolvedValueOnce(ADMIN);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    let resolved: unknown;
+    await act(async () => {
+      resolved = await result.current.login();
+    });
+
+    expect(resolved).not.toBeNull();
+    expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+  });
+
+  it("login() resolves null and reports unavailable while the store is down", async () => {
+    me.mockResolvedValueOnce(null).mockRejectedValueOnce(new SessionStoreUnavailableError());
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+    let resolved: unknown = "unset";
+    await act(async () => {
+      resolved = await result.current.login();
+    });
+
+    expect(resolved).toBeNull();
+    expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+  });
+
+  it("logout() clears an unavailable state to unauthenticated", async () => {
+    me.mockRejectedValue(new SessionStoreUnavailableError());
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
   });
 
   it("login() re-hydrates from /me (never accepts a fabricated identity)", async () => {

@@ -64,7 +64,11 @@ trait BuildsLockoutNotifier
             $repository,
             new SendAccountLockedEmailBestEffort($sender, new NullLogger()),
             $clock,
-            new RecordLockoutNoticeAuditBestEffort($auditLogger ?? new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutNoticeAuditBestEffort(
+                $auditLogger ?? new RecordingAuditLogger(),
+                InMemoryIdentityRowLock::serialiser(),
+                new NullLogger(),
+            ),
         );
     }
 

@@ -6,14 +6,12 @@ namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\Types\Types;
 use Erpify\Shared\Event\Application\DomainEventSerializer;
 use Erpify\Shared\Event\Application\EventStore;
 use Erpify\Shared\Event\Application\StoredEvent;
 use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Event\Domain\Exception\CorruptEventStoreRow;
-use Erpify\Shared\Event\Domain\Exception\EventStreamConcurrencyConflict;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -24,9 +22,17 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * connection, so {@see append()} joins the use-case write transaction (aggregate row + this row +
  * outbox commit atomically). It is a log of infrastructure with no domain invariants and no ORM
  * entity — the `IDENTITY` sequence and the `aggregate_version` sub-select sit outside the ORM unit of
- * work (ADR D4). `tenant_id` is reserved and written `NULL`; `metadata` carries the serializer's
- * envelope metadata (empty today). A concurrent append to the same stream loses the version race on
- * the stream UNIQUE and surfaces as {@see EventStreamConcurrencyConflict} (a 409, not a 500).
+ * work (ADR D4). `tenant_id` is reserved and written `NULL`.
+ *
+ * `aggregate_version` is an **informative** per-stream counter, not a concurrency control (ADR D14). The
+ * stream UNIQUE spans `tenant_id`, which is always `NULL` here, and PostgreSQL compares nulls as distinct,
+ * so it refuses nothing; and most publishers hold no row lock on the aggregate they publish for. Two
+ * concurrent appends to one stream can therefore record the same version, both commit, and nothing is
+ * raised. Order is `sequence`, never this column.
+ *
+ * `metadata` carries the serializer's envelope metadata (empty today) and is cast to an object before
+ * encoding, so an empty envelope stores `{}` rather than `[]` — the same top-level cast, for the same reason,
+ * as `audit_log` ({@see \Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter}).
  */
 #[AsAlias(EventStore::class)]
 final readonly class DbalEventStore implements EventStore
@@ -44,44 +50,37 @@ final readonly class DbalEventStore implements EventStore
     {
         $envelope = $this->serializer->serialize($event);
 
-        // aggregate_version = MAX(version)+1 per (tenant_id, aggregate_id), serialised by the row lock
-        // the write transaction already holds on the aggregate; the UNIQUE on the stream makes it
-        // optimistic concurrency control. `sequence`/identity is assigned by the database.
+        // aggregate_version = MAX(version)+1 per (tenant_id, aggregate_id). The read takes no lock of its
+        // own, so a concurrent append to the same stream may compute the same value (class docblock).
+        // `sequence`/identity is assigned by the database.
         //
         // ON CONFLICT (event_id) DO NOTHING makes a re-append a silent no-op: the persist middleware
         // also runs when the worker re-dispatches the message on consume, and at-least-once redelivery
         // can replay it — neither must write a second row nor abort the surrounding transaction.
-        try {
-            $this->connection->executeStatement(
-                'INSERT INTO event_store '
-                . '(event_id, aggregate_id, aggregate_type, aggregate_version, event_name, event_version, '
-                . 'payload, metadata, tenant_id, occurred_on, recorded_on) '
-                . 'SELECT CAST(:event_id AS UUID), CAST(:aggregate_id AS UUID), :aggregate_type, '
-                . 'COALESCE(MAX(aggregate_version), 0) + 1, :event_name, CAST(:event_version AS SMALLINT), '
-                . 'CAST(:payload AS JSONB), CAST(:metadata AS JSONB), CAST(:tenant_id AS UUID), '
-                . 'CAST(:occurred_on AS TIMESTAMPTZ), clock_timestamp() '
-                . 'FROM event_store '
-                . 'WHERE aggregate_id = CAST(:aggregate_id AS UUID) '
-                . 'AND tenant_id IS NOT DISTINCT FROM CAST(:tenant_id AS UUID) '
-                . 'ON CONFLICT (event_id) DO NOTHING',
-                [
-                    'event_id' => $event->eventId(),
-                    'aggregate_id' => $event->aggregateId(),
-                    'aggregate_type' => $event::aggregateType(),
-                    'event_name' => $event::eventName(),
-                    'event_version' => $event::eventVersion(),
-                    'payload' => $this->encode($envelope['payload']),
-                    'metadata' => $this->encode($envelope['metadata']),
-                    'tenant_id' => null,
-                    'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
-                ],
-            );
-        } catch (UniqueConstraintViolationException) {
-            // event_id conflicts are absorbed by ON CONFLICT above, so the only unique that can still
-            // be violated is the per-stream (aggregate_id, aggregate_version) — a concurrent append
-            // computed the same next version and lost the race. Surface it as a retryable 409.
-            throw EventStreamConcurrencyConflict::forAggregate($event->aggregateId(), $event::aggregateType());
-        }
+        $this->connection->executeStatement(
+            'INSERT INTO event_store '
+            . '(event_id, aggregate_id, aggregate_type, aggregate_version, event_name, event_version, '
+            . 'payload, metadata, tenant_id, occurred_on, recorded_on) '
+            . 'SELECT CAST(:event_id AS UUID), CAST(:aggregate_id AS UUID), :aggregate_type, '
+            . 'COALESCE(MAX(aggregate_version), 0) + 1, :event_name, CAST(:event_version AS SMALLINT), '
+            . 'CAST(:payload AS JSONB), CAST(:metadata AS JSONB), CAST(:tenant_id AS UUID), '
+            . 'CAST(:occurred_on AS TIMESTAMPTZ), clock_timestamp() '
+            . 'FROM event_store '
+            . 'WHERE aggregate_id = CAST(:aggregate_id AS UUID) '
+            . 'AND tenant_id IS NOT DISTINCT FROM CAST(:tenant_id AS UUID) '
+            . 'ON CONFLICT (event_id) DO NOTHING',
+            [
+                'event_id' => $event->eventId(),
+                'aggregate_id' => $event->aggregateId(),
+                'aggregate_type' => $event::aggregateType(),
+                'event_name' => $event::eventName(),
+                'event_version' => $event::eventVersion(),
+                'payload' => $this->encode($envelope['payload']),
+                'metadata' => \json_encode((object) $envelope['metadata'], JSON_THROW_ON_ERROR),
+                'tenant_id' => null,
+                'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
+            ],
+        );
     }
 
     #[Override]

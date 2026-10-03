@@ -452,6 +452,19 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   para no reescribir un valor jamás capturado como evidencia de una redacción que no ocurrió. Y **no-nulo no
   basta**: `SealedAuditEntryFactory` solo comprueba `null`, así que una cabecera `User-Agent:` vacía sella
   `''`; la guarda es por tanto no-nulo **y** no-vacío.
+  **Los escritores tardíos se serializan sobre `identity_user`.** Este paso, como el bloqueo de ejes,
+  alcanza las filas que existen cuando corre; una fila que nombre al sujeto y se confirme entre el `UPDATE`
+  y el commit del borrado conservaría el id real con `resource_erased = FALSE`. Las proyecciones `security`
+  de `Iam/Identity` que escriben post-commit (bloqueo, aviso de bloqueo, transiciones del secreto de
+  recuperación, throttle de recuperación) toman antes, en su propia transacción, la fila `identity_user`
+  del sujeto `FOR UPDATE` —la que el borrado retiene desde su comprobación de administrador hasta el
+  commit— y no escriben fila con recurso si ya no existe. O confirman antes de que corran los pases, que
+  las reescriben, o esperan al commit del borrado y no encuentran a nadie. Toman una sola fila de esa tabla
+  y no esperan nada más mientras la retienen, así que no pueden cerrar un ciclo con el borrado. Las filas
+  del log de acceso escritas en `kernel.terminate` quedan fuera: ninguna ruta declara un tipo-persona como
+  recurso, pero una petición del propio sujeto en vuelo durante el borrado puede confirmar su fila de
+  actor tras el pase de actor, y `Shared/Audit` no puede tomar `identity_user` sin cruzar de contexto. Ese
+  residuo ni se cierra ni se detecta: el reconciliador no lee `actor_id`.
   **Lo que este paso no alcanza, dicho para que no se lea como cobertura total:** el throttle de recuperación
   también emite filas anónimas **sin recurso** cuando la dirección no resuelve a nadie, igual que toda fila
   anónima del log de acceso. Ningún statement del eje de recurso puede casarlas —no hay sujeto al que
@@ -529,8 +542,14 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   reales; un `null` o un escalar no lleva ningún par que perder, así que el cliente admite el sobre, retira
   `changes` del slot tipado y marca el detalle como **diff ilegible** (`changesUnreadable`), que el drawer
   pinta con un aviso propio y nunca como «No changes recorded» —eso afirmaría que la escritura no cambió
-  nada, y para un diff desconocido es falso—. Coste declarado: el valor crudo no se muestra en la UI; sigue
-  en el cable para quien investigue.
+  nada, y para un diff desconocido es falso—. **Ninguna de las tres sirve su contenido:** sólo un mapa se
+  sella por campo y ningún paso de borrado reescribe `metadata` (los anonimizadores tocan columnas; el
+  crypto-shredding sólo alcanza un valor cifrado), así que un valor guardado fuera de un mapa sobreviviría
+  en claro al borrado de la persona que nombra. El mapper conserva la **forma** —el escalar sigue escalar,
+  la lista sigue lista con la misma longitud, `null` sigue `null`— y sustituye cada valor por
+  `AuditEventDetailResourceMapper::WITHHELD`, que no es el centinela de borrado porque nada se borró.
+  Coste declarado: el valor crudo no está en el cable; quien investigue una fila corrupta la lee de la
+  tabla.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
@@ -703,14 +722,24 @@ Descartado: derivar el tipo de `actor_id IS NULL` + heurística de ruta — no e
 frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`, `webhook`) hoy —
 `system` los cubre; se expande cuando un caso real lo exija (YAGNI).
 
+**La tabla lo impone también, no solo `ActorContext`.** `audit_log` lleva dos `CHECK`:
+`actor_type IN (<tokens de ActorType>)` y `(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`.
+`ActorContext` hace irrepresentable el estado ilegal en PHP, pero la tabla también se escribe con SQL crudo
+(seeds de Behat, fixtures funcionales, `psql`), y una fila `user` con `actor_id` nulo conserva `ip`/`user_agent`
+tras ambos pases de borrado: el de actor casa por `actor_id` y el de recurso solo redacta filas `anonymous`.
+El borrado de actor es compatible por construcción — reacuña `actor_id`, nunca lo anula. Las listas de tokens se
+derivan de `ActorType` (`isIdentified()`) en `AuditLogSchemaListener::checkConstraints()`; DBAL no modela `CHECK`,
+así que `make db.diff` no las genera ni detecta su ausencia, y `AuditLogActorCheckConstraintFunctionalTest`
+compara esa declaración con el catálogo de Postgres. Un caso nuevo de `ActorType` exige migración a mano.
+
 ## Esbozo de esquema (`audit_log`)
 
 ```text
 id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
 level           enum         activity | security | change
 action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
-actor_type      enum         anonymous|system|api_key|user — obligatorio (D7)
-actor_id        uuid         NULL salvo api_key/user (D7)
+actor_type      enum         anonymous|system|api_key|user — obligatorio, CHECK de tokens (D7)
+actor_id        uuid         NULL salvo api_key/user, CHECK de presencia (D7)
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
@@ -753,7 +782,8 @@ resto son ejemplos, algunos de módulos futuros, marcados con \*).
 
 ## Triggers de revisita
 
-(a) Auth real / multirrol → `actor_id` pasa a `NOT NULL` y entra `audit_session` si hay caso. (b)
+(a) Auth real / multirrol → entra `audit_session` si hay caso; `actor_id` no pasa a `NOT NULL`, porque
+`anonymous`/`system` no nombran a nadie y el `CHECK` de D7 lo exige nulo para ellos. (b)
 Volumen de `activity` que exija particionado temporal o un *sink* externo (deja de ser PostgreSQL).
 (c) Necesidad de exponer la auditoría a un contexto cliente (hoy solo Backoffice la consume). (d)
 **Eje de clasificación estable**: cuando el read model de `Backoffice/Audit` necesite dashboards,

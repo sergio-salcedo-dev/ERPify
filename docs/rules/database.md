@@ -124,7 +124,11 @@ subclass describes the table on a `Table::editor()`, and the base hands back a n
 DBAL 4.5 mutation API (`createTable`, `addColumn`, `addIndex`) is deprecated, and the suite fails on
 deprecations — so `make db.diff` generates and keeps its migration. These tables are deliberately
 **absent** from the `config/packages/doctrine.yaml` ORM mappings — the schema tool sees them, the ORM
-does not.
+does not. **A `CHECK` is the one shape this cannot carry**: DBAL neither declares nor introspects one, so
+`make db.diff` never writes it and never reports it missing. The listener declares it as data (derived from
+the PHP enum it guards, e.g. `AuditLogSchemaListener::checkConstraints()` from `ActorType`), a hand-written
+migration adds it, and a functional test compares the declaration with `pg_constraint` — without that test
+the constraint is unwatched.
 
 **`auto_mapping: false` is intentional — the mapping list is an allowlist of what the ORM owns.**
 `config/packages/doctrine.yaml` declares each ORM tree by hand (`Backoffice`, `Iam`, `Organization`,

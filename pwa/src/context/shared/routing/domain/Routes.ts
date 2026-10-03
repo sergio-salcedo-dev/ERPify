@@ -37,6 +37,12 @@ export const Routes = {
   /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
   STATUS: "/status",
   /**
+   * Public maintenance page (503). Where a guarded route sends the user when the server
+   * answered that it cannot reach its session store — a sign-in form would answer the same
+   * outage. It must stay outside every guard, or that redirect would loop.
+   */
+  MAINTENANCE: "/maintenance",
+  /**
    * Dev / QA tools hub. Cross-referenced from the frontoffice navbar
    * and the backoffice sidebar (and from inside the dev-tools module
    * itself) so the literal `/dev-tools` doesn't drift across files.

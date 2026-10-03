@@ -135,7 +135,7 @@ aggregate, because their revocations are directed UPDATEs that hydrate no row.
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|
 | `erpify.iam.session.started` | 1 | `StartSession` (recorded by `Session::start()`) | `userId` |
-| `erpify.iam.session.revoked` | 1 | `RevokeSession` (recorded by `Session::revoke()`) | `userId` |
+| `erpify.iam.session.revoked` | 1 | `RevokeSession`; `StartSession` when a login replaces the live session its browser already correlated (recorded by `Session::revoke()`) | `userId` |
 | `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `[]` |
 | `erpify.iam.session.others-revoked` | 1 | `RevokeOtherSessions` (sign out my other devices); `EvictOtherSessions` on every completed recovery redemption | `keptSessionId` |
 
@@ -328,10 +328,10 @@ What a `DomainEvent` becomes in the `event_store` (raw DBAL; full rationale in
 | `event_id` | UUID v7, `UNIQUE` — stable identity (idempotent re-append). |
 | `aggregate_id` | the subject's id (envelope). |
 | `aggregate_type` | e.g. `Backoffice.Bank`. |
-| `aggregate_version` | per-stream `MAX+1`. The stream `UNIQUE` is **inert today** — it spans `tenant_id`, which is always written `NULL`, and PostgreSQL defaults to `NULLS DISTINCT`, so it never fires and the optimistic concurrency control it is meant to provide does not exist. Tracked in `deferred-work.md`. |
+| `aggregate_version` | per-stream `MAX+1`, **informative only** — no concurrency guarantee: concurrent appends to one stream may record the same version ([ADR D14](../adr/event-store-and-projections.md)). Order by `sequence`. |
 | `event_name`, `event_version` | the canonical key. |
 | `payload` | JSONB — `toPrimitives()` (domain state only). |
-| `metadata` | JSONB `{}` — reserved (`correlation_id`/`causation_id`/actor). |
+| `metadata` | JSONB object, `{}` when empty (rows written before ADR D14 may hold `[]`) — reserved (`correlation_id`/`causation_id`/actor). |
 | `tenant_id` | UUID, `NULL` today — reserved for multi-tenant isolation. |
 | `occurred_on` | TIMESTAMPTZ — **domain** time (envelope). |
 | `recorded_on` | TIMESTAMPTZ — **system** time (when persisted). |
