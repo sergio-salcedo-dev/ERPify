@@ -17,6 +17,7 @@ use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalIdentityRowLock;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
+use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -144,6 +145,19 @@ final class LateAuditWriterIdentityLockFunctionalTest extends KernelTestCase
         $this->recorder()->record($this->subjectId);
 
         $this->assertSame(0, $this->rowsNamingTheSubject());
+    }
+
+    #[Test]
+    public function theLockRefusesToRunOutsideATransaction(): void
+    {
+        $this->seedCommittedSubject();
+        $lock = new DbalIdentityRowLock($this->entityManager->getConnection());
+
+        // Postgres releases a statement-level FOR UPDATE as the statement ends, so an answer given here would
+        // be true and hold nothing by the time the caller wrote.
+        $this->expectException(LogicException::class);
+
+        $lock->lockIfLive($this->subjectId);
     }
 
     private function recorder(): RecordLockoutAuditBestEffort

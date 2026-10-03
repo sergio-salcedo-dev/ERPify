@@ -101,11 +101,10 @@ final class ReLoginRevokesReplacedSessionFunctionalTest extends WebTestCase
     }
 
     /**
-     * Two people on one browser. The first person's row is unreachable once the second signs in over it — the
-     * bag that named it now names the second person's session — so leaving it `ACTIVE` would show its owner a
-     * device they can no longer use.
+     * Two people on one browser. The second sign-in takes the browser over but writes nothing about the first
+     * person: their row stays live for them to retire, and no revocation event names them.
      */
-    public function testASignInOverAnotherIdentitysSessionRevokesThatSession(): void
+    public function testASignInOverAnotherIdentitysSessionLeavesThatSessionToItsOwner(): void
     {
         [$firstUserId, $firstEmail] = $this->seedMember('first');
         [$secondUserId, $secondEmail] = $this->seedMember('second');
@@ -116,12 +115,11 @@ final class ReLoginRevokesReplacedSessionFunctionalTest extends WebTestCase
         $this->login($secondEmail);
         $minted = $this->soleActiveSession($secondUserId);
 
-        $this->assertSame(0, $this->activeSessionCount($firstUserId));
-        $this->assertSame('REVOKED', $this->statusOf($replaced));
-        $this->assertSame(1, $this->revokedEventCount($replaced));
+        $this->assertSame('ACTIVE', $this->statusOf($replaced));
+        $this->assertSame(0, $this->revokedEventCount($replaced));
 
         $listed = $this->mySessions();
-        $this->assertCount(1, $listed);
+        $this->assertCount(1, $listed, 'my sessions belongs to the identity now signed in');
         $this->assertSame($minted, $listed[0]['id'] ?? null);
     }
 

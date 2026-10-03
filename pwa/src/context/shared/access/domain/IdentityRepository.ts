@@ -15,10 +15,11 @@ export interface ChangePasswordCommand {
 export interface IdentityRepository {
   /**
    * The signed-in identity, or `null` when there is no live session (401). Rejects with
-   * `SessionStoreUnavailableError` when the server answered that it cannot reach its
-   * session store, and with the transport's own error for anything else (offline, a body that
-   * does not parse, any other status) — so "not signed in", "the server cannot tell" and "could
-   * not ask" stay three different answers.
+   * `IdentityServiceUnavailableError` when the server answered 503 `service-unavailable` (a
+   * dependency it needs to decide the request, typically its session store, is unreachable), and
+   * with the transport's own error for anything else (offline, a body that does not parse, any
+   * other status) — so "not signed in", "the server cannot tell" and "could not ask" stay three
+   * different answers.
    */
   me(): Promise<Identity | null>;
 

@@ -37,9 +37,10 @@ export const Routes = {
   /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
   STATUS: "/status",
   /**
-   * Public maintenance page (503). Where a guarded route sends the user when the server
-   * answered that it cannot reach its session store — a sign-in form would answer the same
-   * outage. It must stay outside every guard, or that redirect would loop.
+   * Public maintenance page (503). Where a guarded route sends the user when `/me` answered
+   * 503 `service-unavailable` — a sign-in form would answer the same outage. The guard carries
+   * the blocked target in `?next=` so the page can return there once the server answers again.
+   * It must stay outside every guard, or that redirect would loop.
    */
   MAINTENANCE: "/maintenance",
   /**

@@ -125,6 +125,12 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
      * address and an address matching no identity are the same answer here: no resource, no metadata, and in
      * particular no record of what was typed. Called inside the writing transaction only: the lookup is what
      * holds the subject's row until the row naming it commits.
+     *
+     * It hydrates, where {@see \Erpify\Iam\Identity\Domain\Repository\IdentityRowLock} deliberately does not,
+     * because this writer holds an address rather than an id and only the aggregate lookup resolves one to the
+     * other under a lock. It is safe here for the reason that port gives for avoiding it elsewhere: this runs at
+     * `kernel.terminate`, after the request's own unit of work is finished, so there is no instance of the
+     * caller's for the refresh to overwrite.
      */
     private function subjectOf(#[SensitiveParameter] string $email): ?AuditResource
     {

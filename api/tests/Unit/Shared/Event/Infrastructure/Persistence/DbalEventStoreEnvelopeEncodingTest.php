@@ -14,14 +14,14 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
- * `metadata` has one JSON shape, an object. PHP's empty array encodes as `[]`, which would give the column
- * two shapes, and `jsonb_each('[]')` raises where `->>'key'` on `{}` merely answers NULL. The functional
+ * `payload` and `metadata` each have one JSON shape, an object. PHP's empty array encodes as `[]`, which would
+ * give a column two shapes, and `jsonb_each('[]')` raises where `->>'key'` on `{}` merely answers NULL. The functional
  * half — what Postgres actually stores — is `DbalEventStoreStreamTest`.
  *
  * @internal
  */
 #[CoversClass(DbalEventStore::class)]
-final class DbalEventStoreMetadataEncodingTest extends TestCase
+final class DbalEventStoreEnvelopeEncodingTest extends TestCase
 {
     public function testAnEmptyEnvelopeIsEncodedAsAJsonObject(): void
     {
@@ -46,6 +46,11 @@ final class DbalEventStoreMetadataEncodingTest extends TestCase
             '{"roles":["a","b"],"none":[]}',
             $this->metadataWrittenFor(['roles' => ['a', 'b'], 'none' => []]),
         );
+    }
+
+    public function testAnEmptyPayloadIsEncodedAsAJsonObject(): void
+    {
+        $this->assertSame('{}', $this->parametersWrittenFor([], [])['payload']);
     }
 
     public function testThePayloadIsEncodedUnchanged(): void

@@ -855,7 +855,11 @@ you change anything here.
       (never a fail-open pass-through). **Sign-out revokes server-side:** `POST /sessions/revoke-current` (this
       device) revokes the current registry row **and** invalidates the native session so the cookie is dropped, and
       `POST /sessions/revoke-others` revokes every other row — so "log out" leaves no resumable session behind on a
-      shared machine (the client never relies on merely clearing its own state). `iam_session` stores
+      shared machine (the client never relies on merely clearing its own state). A sign-in over a browser whose native
+      session already correlates a live row **of the same identity** revokes that row in the minting transaction — the
+      id comes from server-side session storage, never from the client — so a re-login leaves no ghost device; another
+      identity's row on a shared browser is left to its owner, so no request writes about a person who did not make
+      it, and another browser's sessions are untouched. `iam_session` stores
       **operational PII** — `ip` (plaintext, short-lived) and
       `device` (**normalised server-side** from the `User-Agent` to a bounded label, **never** the raw client string,
       closing stored-injection + free-text PII). The table is **not** an `AuditedEntity`, so the IP never enters the
@@ -2002,6 +2006,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
 
+- [ ] **An access-log row of the subject's own in-flight request can commit inside their erasure window —
+      accepted 2026-10-03 by the product owner.** The late audit writers of `Iam/Identity` are serialised on the
+      subject's `identity_user` row (§6); `AccessLogAuditListener` is not: it writes at `kernel.terminate` from
+      `Shared/Audit`, which cannot lock `identity_user` without crossing a context, so a request the subject
+      started before the erasure can commit `actor_id`, `ip` and `user_agent` after the actor pass, and the
+      reconciler does not read `actor_id`, so nothing reports it (`docs/adr/audit-activity-log.md`). The window
+      is one in-flight request wide; closing it costs a row lock on `identity_user` for every audited request with
+      a user actor, serialising each user's concurrent requests. Re-affirm or close before the first customer.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
@@ -2034,10 +2046,10 @@ mitigated state. Accepting one means recording who accepted it and against which
 
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
-      artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
+      artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
       `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
       `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
-      closing any of the three while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
+      closing either of the two while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
@@ -2048,7 +2060,6 @@ mitigated state. Accepting one means recording who accepted it and against which
   | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
   | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity whose lockout an attacker holding a stolen session keeps re-driving cannot get the session eviction requires unless it holds a **live recovery secret**; redeeming one evicts every other session in the transaction that consumes it, so the stolen session no longer out-races it — but the secret is then spent until re-minted, `users.unlock` holds only until ten more failures re-seal the lock, a **sole administrator** without a secret has not even that, an administrator's stolen session can plant identities and grants and demote or suspend other administrators, none of which an eviction reaches, and an administrator it planted can still suspend or demote the owner after the recovery (the stolen session can no longer change its own roles or status, so it cannot revoke the redeemed session that way itself), and a **leaked** secret now signs the owner out as well (see *A stolen session can deny the owner a credential rotation* above), and can do so repeatedly **without being spent**, through two concurrent redemptions that interrupt each other (§7 (iv)) | Before the first customer: the product gets every administrator to mint (and re-mint after redemption) a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret; or an administrator's recovery finds identities or grants they did not create, or administrators demoted or suspended | Sergio, 2026-09-28 (accepts that a leaked secret can also evict repeatedly without being spent); Sergio, 2026-09-25 (accepts that a leaked recovery secret also signs the owner out); earlier: accepted as-is 2026-07-29 naming nobody, narrowed 2026-09-24 (opened 2026-07-28) |
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
-  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` | Sergio, closing the #857 review — date not recorded (opened 2026-08-27) |
   | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
   | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
   | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
@@ -2060,3 +2071,8 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
+- [ ] Before the migration that adds the `audit_log` actor CHECKs (`Version20261003101500`) reaches a database
+      holding real rows, count the rows it would refuse: `SELECT count(*) FROM audit_log WHERE actor_type NOT IN
+      ('anonymous','api_key','system','user') OR (actor_type IN ('anonymous','system')) <> (actor_id IS NULL)`.
+      The migration validates existing rows on purpose and fails on the first violation, so a non-zero count is
+      a decision to take before the deploy, not during it.

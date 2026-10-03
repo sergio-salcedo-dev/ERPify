@@ -4,7 +4,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
-import { SessionStoreUnavailableError } from "@/context/shared/access/domain/SessionStoreUnavailableError";
+import { IdentityServiceUnavailableError } from "@/context/shared/access/domain/IdentityServiceUnavailableError";
 import { SharedProblemType } from "@/context/shared/error/domain/SharedProblemType";
 import { MALFORMED_RESPONSE_ENVELOPE } from "@/context/shared/http-client/domain/HttpClient";
 import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/domain/HttpClient";
@@ -150,7 +150,7 @@ describe("ApiIdentityRepository.me", () => {
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toBe(boom);
   });
 
-  it("rejects with SessionStoreUnavailableError on a 503 service-unavailable (store outage)", async () => {
+  it("rejects with IdentityServiceUnavailableError on a 503 service-unavailable", async () => {
     const get = vi
       .fn()
       .mockRejectedValue(
@@ -160,13 +160,13 @@ describe("ApiIdentityRepository.me", () => {
       );
 
     await expect(new ApiIdentityRepository(httpClientGetting(get)).me()).rejects.toBeInstanceOf(
-      SessionStoreUnavailableError,
+      IdentityServiceUnavailableError,
     );
   });
 
-  // The admission gate is the only thing that answers `service-unavailable` for a store outage. A
-  // 503 without that body (a proxy's own error page, synthesised as `about:blank`) proves nothing
-  // about the store, so it stays the transport's error.
+  // `service-unavailable` is a problem type only the API mints. A 503 without that body (a proxy's
+  // own error page, synthesised as `about:blank`) did not come from the API and proves nothing
+  // about it, so it stays the transport's error.
   it("rethrows a 503 that does not carry the service-unavailable problem type", async () => {
     const boom = new HttpError(problem(HttpStatus.SERVICE_UNAVAILABLE, "about:blank"));
     const get = vi.fn().mockRejectedValue(boom);

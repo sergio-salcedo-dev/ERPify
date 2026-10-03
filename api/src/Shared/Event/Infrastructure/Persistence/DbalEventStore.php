@@ -76,7 +76,7 @@ final readonly class DbalEventStore implements EventStore
                 'event_name' => $event::eventName(),
                 'event_version' => $event::eventVersion(),
                 'payload' => $this->encode($envelope['payload']),
-                'metadata' => \json_encode((object) $envelope['metadata'], JSON_THROW_ON_ERROR),
+                'metadata' => $this->encode($envelope['metadata']),
                 'tenant_id' => null,
                 'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
             ],
@@ -165,11 +165,14 @@ final readonly class DbalEventStore implements EventStore
     }
 
     /**
+     * Both columns hold a map, and a map has one JSON shape: PHP's empty array would otherwise encode as `[]`.
+     * Only the top level is cast, so a list nested inside a value stays a list.
+     *
      * @param array<string, mixed> $data
      */
     private function encode(array $data): string
     {
-        return \json_encode($data, JSON_THROW_ON_ERROR);
+        return \json_encode((object) $data, JSON_THROW_ON_ERROR);
     }
 
     /**

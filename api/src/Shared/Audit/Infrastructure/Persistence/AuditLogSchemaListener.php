@@ -11,6 +11,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Tools\ToolEvents;
 use Erpify\Shared\Audit\Domain\ActorType;
 use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
+use LogicException;
 
 /**
  * Injects the permanent, append-only `audit_log` table into Doctrine's in-memory schema. The table is
@@ -123,6 +124,11 @@ final class AuditLogSchemaListener extends InjectedTableSchemaListener
      */
     private static function tokenList(array $types): string
     {
+        // `IN ()` is not SQL: an enum with no unidentified case would need the predicate rewritten, not emptied.
+        if ([] === $types) {
+            throw new LogicException('An audit_log CHECK cannot be built over an empty set of actor types.');
+        }
+
         $tokens = \array_map(static fn (ActorType $type): string => $type->value, $types);
         \sort($tokens);
 

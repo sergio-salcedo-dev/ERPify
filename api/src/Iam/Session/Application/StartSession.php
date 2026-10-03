@@ -26,12 +26,13 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * is retired through {@see Session::revoke()}, publishing the same
  * {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} a single "log out this device" does.
  *
- * It is revoked whoever owns it, and that is deliberate rather than a missing check. The id is read from the
- * server-side bag, which only this use case writes, never from anything the client sends, so the row it names
- * is exactly the one THIS browser is giving up — another identity's included, when two people share a browser
- * and the second signs in over the first. That row is just as unreachable afterwards, and leaving it live would
- * show its owner a device they can no longer use. Nor does the revocation take away anything the overwrite has
- * not already taken: the bag is the only handle on that row, so no browser could have used it again either way.
+ * **Only the signing-in identity's own row is revoked.** Two people sharing a browser leave the first one's row
+ * live when the second signs in over it: the bag no longer names it, so that browser cannot present it again,
+ * but its owner still sees it among their sessions and can retire it there, and it expires on its own. Revoking
+ * it would publish a {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} naming a person from a request
+ * that person did not make and whose erasure it does not serialise against — an event that, racing that erasure,
+ * reaches the event store after its anonymising pass and keeps the real id. A writer about a person here is
+ * always a request of that person's.
  *
  * The correlation is written through {@see CurrentSessionReference} only AFTER the transaction commits, so a
  * failed persist never leaves an `iamSessionId` pointing at a session that does not exist — and never leaves
@@ -62,9 +63,9 @@ final readonly class StartSession
         $expiresAt = $this->clock->now()->add(new DateInterval(self::TTL_SPEC));
         $session = Session::start($sessionId->toString(), $userId, $organizationId, $device, $ip, $expiresAt);
 
-        $this->transactionManager->transactional(function () use ($replaced, $session): void {
+        $this->transactionManager->transactional(function () use ($replaced, $session, $userId): void {
             if ($replaced instanceof SessionId) {
-                $this->revokeReplaced($replaced);
+                $this->revokeReplaced($replaced, $userId);
             }
 
             $this->sessions->save($session);
@@ -76,11 +77,11 @@ final readonly class StartSession
         return $sessionId;
     }
 
-    private function revokeReplaced(SessionId $replaced): void
+    private function revokeReplaced(SessionId $replaced, string $userId): void
     {
         $previous = $this->sessions->findActiveById($replaced);
 
-        if (!$previous instanceof Session) {
+        if (!$previous instanceof Session || 0 !== \strcasecmp($previous->userId(), $userId)) {
             return;
         }
 

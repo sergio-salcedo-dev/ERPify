@@ -12,11 +12,13 @@ import { useDeparture } from "@/context/shared/navigation/application/useDepartu
  * Route protection. Identity is resolved before authorization: while the
  * provider is `hydrating` it renders nothing and does not redirect (the stored
  * session has not been read yet). Once resolved, only an `authenticated` (ACTIVE)
- * session sees the children. An `unavailable` provider (the server cannot reach
- * its session store) is sent to /maintenance, because /login would answer the
- * same outage; anything else is redirected to /login with the blocked target
- * preserved in `?next=` so login can return there. Protected content therefore
- * never flashes on the strength of a default session.
+ * session sees the children. An `unavailable` provider (the server answered 503
+ * `service-unavailable`, typically because it cannot reach its session store) is
+ * sent to /maintenance, because /login would answer the same outage; anything
+ * else is redirected to /login. Both keep the blocked target in `?next=`, so the
+ * sign-in form, or the maintenance page once the server answers again, can return
+ * there. Protected content therefore never flashes on the strength of a default
+ * session.
  */
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();
@@ -34,10 +36,6 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
     // no provider, so a context value could never have served it. Reading the claim here is
     // what keeps the fact single-owned instead of mirrored in two places that must agree.
     if (departing) return;
-    if (status === AuthStatus.UNAVAILABLE) {
-      router.replace(Routes.MAINTENANCE);
-      return;
-    }
     // Read the live location inside the effect (client-only) so the deep link is
     // preserved without pulling useSearchParams + a Suspense boundary into the
     // guard. safeInternalPath keeps a tampered target from becoming an open
@@ -46,7 +44,8 @@ export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
       `${globalThis.location.pathname}${globalThis.location.search}`,
       Routes.BACKOFFICE,
     );
-    router.replace(`${Routes.LOGIN}?next=${encodeURIComponent(target)}`);
+    const destination = status === AuthStatus.UNAVAILABLE ? Routes.MAINTENANCE : Routes.LOGIN;
+    router.replace(`${destination}?next=${encodeURIComponent(target)}`);
   }, [status, departing, router]);
 
   if (status !== AuthStatus.AUTHENTICATED) return null;

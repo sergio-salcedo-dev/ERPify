@@ -78,15 +78,34 @@ describe("RequireAuth", () => {
   });
 
   // The sign-in form answers the same outage, so bouncing there would only show a second failure.
-  it("sends the user to /maintenance when the session store is unavailable, never to /login", () => {
+  it("sends the user to /maintenance when the server cannot answer, never to /login", () => {
     auth.status = AuthStatus.UNAVAILABLE;
 
     renderGuarded();
 
     expect(screen.queryByTestId("require-auth-test__protected")).toBeNull();
     expect(routerReplace).toHaveBeenCalledTimes(1);
-    expect(routerReplace).toHaveBeenCalledWith(Routes.MAINTENANCE);
+    expect(routerReplace).toHaveBeenCalledWith(
+      `${Routes.MAINTENANCE}?next=${encodeURIComponent("/backoffice/users?page=2")}`,
+    );
   });
+
+  // The guard writes the live location, so a tampered one must not survive into either redirect.
+  it.each([AuthStatus.UNAUTHENTICATED, AuthStatus.UNAVAILABLE])(
+    "falls back to the back-office root when the live location is not an in-app path (%s)",
+    (status) => {
+      auth.status = status;
+      // Same-origin URL whose PATH reads as protocol-relative once taken on its own.
+      globalThis.history.replaceState(null, "", `${globalThis.location.origin}//evil.com/x`);
+
+      renderGuarded();
+
+      const destination = status === AuthStatus.UNAVAILABLE ? Routes.MAINTENANCE : Routes.LOGIN;
+      expect(routerReplace).toHaveBeenCalledWith(
+        `${destination}?next=${encodeURIComponent(Routes.BACKOFFICE)}`,
+      );
+    },
+  );
 
   it("does not redirect on top of a full-document departure already in flight", () => {
     auth.status = AuthStatus.UNAVAILABLE;

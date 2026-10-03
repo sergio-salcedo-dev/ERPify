@@ -25,16 +25,23 @@ use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
  * value into `{"0": …}`, and a list-shaped `changes` is drift the client must still see as a list.
  *
  * **A `changes` that is not a map keeps its SHAPE on the wire and loses its CONTENT.** A scalar becomes
- * {@see self::WITHHELD}, a non-empty list becomes a list of as many of them, and `null` stays `null`. Only a
- * map was ever sealed: `PiiDiffSealer` encrypts per FIELD, so a value that is not keyed by field name reached
- * storage in clear whatever it holds, and nothing on the erasure path reaches it afterwards — both anonymisers
- * rewrite columns and never `metadata`, and crypto-shredding destroys a key, which only matters to a value
- * that was encrypted under it. Serving it verbatim would therefore hand out, for as long as the row is
- * retained, whatever personal data a corrupt row happens to carry, past the erasure of the person it names.
+ * {@see self::WITHHELD}, a non-empty list becomes a list of as many of them, and `null` stays `null`. Sealing
+ * only ever reached a map: `PiiDiffSealer` encrypts the classified fields of a map, so a value that is not
+ * keyed by field name reached storage in clear whatever it holds, and nothing on the erasure path reaches it
+ * afterwards — both anonymisers rewrite columns and never `metadata`, and crypto-shredding destroys a key,
+ * which only matters to a value that was encrypted under it. Serving it verbatim would therefore hand out,
+ * for as long as the row is retained, whatever personal data a corrupt row happens to carry, past the erasure
+ * of the person it names.
  * The shape is what the corruption signal needs and it survives: neither wrapped into a map nor deleted, so
  * the client still degrades a scalar to an unreadable diff and still refuses a list (why the two differ is
  * recorded in the audit ADR, D4). What is spent is the raw value on the wire; whoever investigates a corrupt
  * row reads it from the table, under the access that table already demands.
+ *
+ * The test is shape, not provenance, and that bounds what it proves. A map is served as stored, so a map whose
+ * personal field holds clear text — written by raw SQL, or before sealing existed — still reaches the wire:
+ * telling it apart needs the field classification, which this mapper does not hold. And `json_decode()` reads
+ * an object keyed `"0"`, `"1"`, … as a list, so such a map is withheld as one; it was never a shape the writer
+ * produces.
  */
 final readonly class AuditEventDetailResourceMapper
 {

@@ -28,7 +28,12 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * **The lock is taken before the write, never after**, and inside the same transaction: taken after, the row
  * would already be inserted by the time the erasure could be seen, and taken in another transaction it would
  * be released before the insert committed. A failure anywhere — the lock, the write, the commit — is the
- * caller's to swallow, exactly as a failed write was before it ran under a lock.
+ * caller's to swallow, exactly as a failed write is.
+ *
+ * **Call it with no transaction open.** Every caller today runs after its own work has committed, which is
+ * what makes the write "late" in the first place. Nested inside a caller's transaction, a failure in here
+ * closes the entity manager that transaction shares, and swallowing it would not save the caller's unit of
+ * work; the transactional wrapper also flushes whatever that unit of work left dirty.
  */
 final readonly class IdentityRowSerialiser
 {

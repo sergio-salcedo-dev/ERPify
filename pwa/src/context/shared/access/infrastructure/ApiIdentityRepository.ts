@@ -7,7 +7,7 @@ import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/dom
 import { UserStatus } from "../domain/UserStatus";
 import { ALL_PERMISSIONS, type HeldPermission, type Permission } from "../domain/Permission";
 import type { Identity } from "../domain/Identity";
-import { SessionStoreUnavailableError } from "../domain/SessionStoreUnavailableError";
+import { IdentityServiceUnavailableError } from "../domain/IdentityServiceUnavailableError";
 import type { ChangePasswordCommand, IdentityRepository } from "../domain/IdentityRepository";
 
 interface MeResponse {
@@ -53,7 +53,7 @@ function knownPermissionsOf(permissions: string[]): HeldPermission[] {
   );
 }
 
-function isSessionStoreOutage(error: unknown): boolean {
+function isServiceUnavailable(error: unknown): boolean {
   return (
     error instanceof HttpError &&
     error.problem.status === HttpStatus.SERVICE_UNAVAILABLE &&
@@ -72,10 +72,12 @@ function isSessionStoreOutage(error: unknown): boolean {
  *    verbatim; permissions are the set the API derives from them, narrowed to the
  *    ones this client declares (anything else — the wildcard included — is dropped).
  *  - 401 (`session-expired`) → no live session → null.
- *  - 503 `service-unavailable` → the admission gate could not reach the session store, so the
- *    server cannot tell whether a session is live → {@link SessionStoreUnavailableError}. Both
- *    the status and the `type` must match: a 503 without that problem body (a proxy's own page)
- *    did not come from the gate and proves nothing about the store.
+ *  - 503 `service-unavailable` → a dependency the server needs to decide the request is
+ *    unreachable (on this route, typically the admission gate failing to reach the session
+ *    store; the type is the API's generic 503, so it is not proof of which one), so the server
+ *    cannot tell whether a session is live → {@link IdentityServiceUnavailableError}. Both the
+ *    status and the `type` must match: a 503 without that problem body (a proxy's own page) did
+ *    not come from the API and proves nothing about it.
  *
  * Any other failure (network, malformed body, another status) propagates as the transport's
  * error, so the caller can still tell "no session" from "could not reach the server".
@@ -101,8 +103,8 @@ export class ApiIdentityRepository implements IdentityRepository {
       if (error instanceof HttpError && error.problem.status === HttpStatus.UNAUTHORIZED) {
         return null;
       }
-      if (isSessionStoreOutage(error)) {
-        throw new SessionStoreUnavailableError();
+      if (isServiceUnavailable(error)) {
+        throw new IdentityServiceUnavailableError();
       }
       throw error;
     }

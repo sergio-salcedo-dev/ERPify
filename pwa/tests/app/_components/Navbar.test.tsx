@@ -83,9 +83,9 @@ describe("Navbar access cluster", () => {
     expect(slot.className).toContain("min-w-28");
   });
 
-  // The store being down is not a session; the sign-in form is where that visitor would go, and it
-  // reports the outage itself.
-  it("treats an unavailable session store as signed out", () => {
+  // A server that cannot answer is not a session; the sign-in form is where that visitor would go,
+  // and it reports the outage itself.
+  it("treats an unavailable identity service as signed out", () => {
     auth.status = AuthStatus.UNAVAILABLE;
 
     renderNavbar();

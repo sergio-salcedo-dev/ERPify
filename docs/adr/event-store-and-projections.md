@@ -528,17 +528,20 @@ versiones repetidas, y sin traducción eso es un 500 — ese trigger reabre esta
 
 *Descartado:* `NULLS NOT DISTINCT` (o un índice sin `tenant_id`) **más** lock o reintento en cada publicador.
 Activar el índice sin la segunda mitad no da exclusión, solo cambia el síntoma: las carreras que hoy pasan en
-silencio serían 409 en ~15 rutas de publicación que ni las esperan ni las reintentan — y ningún consumidor
+silencio serían 409 en los 17 publicadores restantes (15 sin lock y 2 que lo toman solo en uno de sus caminos), que ni los esperan ni los reintentan — y ningún consumidor
 necesita hoy la garantía. Se reabre con el trigger (c).
 
-**(b) `metadata` se escribe como objeto.** Un array PHP vacío se codifica `[]`, así que la columna tenía dos
-formas y solo una es deconstruible (`jsonb_each('[]')` lanza; `->>'clave'` responde `NULL` en ambas). El append
-convierte el envelope a objeto **en el nivel superior** antes de codificar — el mismo idiom que
+**(b) `metadata` y `payload` se escriben como objeto.** Un array PHP vacío se codifica `[]`, así que cada columna
+tenía dos formas y solo una es deconstruible (`jsonb_each('[]')` lanza; `->>'clave'` responde `NULL` en ambas). El
+append convierte los dos mapas del envelope a objeto **en el nivel superior** antes de codificar — el mismo idiom que
 `DbalAuditLogWriter` aplica a `audit_log.metadata` —: vacío es `{}`, las claves se conservan y una lista anidada
-sigue siendo array. La forma la garantiza el escritor, no el esquema (la columna no tiene `DEFAULT`, D4).
+sigue siendo array. `payload` entra por la misma razón aunque la decisión original nombrara solo `metadata`: una
+decena de eventos (`BankDeletedDomainEvent`, `UserDeactivated`, `PasswordChanged`…) devuelven `toPrimitives()` vacío,
+y ambos mapas están tipados `array<string, mixed>`, así que el cast no puede convertir una lista en `{"0": …}`. La
+forma la garantiza el escritor, no el esquema (las columnas no tienen `DEFAULT`, D4).
 **Las filas `[]` ya escritas no se migran**, ni en `event_store` ni en `audit_log` (las anteriores al cast de
 su escritor): hoy ningún lector las deconstruye — `decode()` devuelve `[]` para ambas formas, el anonimizador de D12
-opera sobre `metadata::text` y el reconciliador de `audit_log` lee con `->>` —, así que el coste aceptado recae
+opera sobre `payload::text` y `metadata::text` y el reconciliador de `audit_log` lee con `->>` —, así que el coste aceptado recae
 en un lector futuro que use `jsonb_each`/`jsonb_object_keys`: debe tolerar `[]` o filtrar por
 `jsonb_typeof(metadata) = 'object'`.
 

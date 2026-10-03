@@ -136,27 +136,29 @@ final class StartSessionTest extends TestCase
     }
 
     /**
-     * Two people on one browser: the second sign-in replaces the first person's correlation, so the first
-     * person's row is as unreachable as a same-identity one would be and is retired the same way.
+     * Two people on one browser: the second sign-in replaces the first person's correlation but never writes
+     * about the first person, so their row stays live — theirs to retire — and no event names them.
      */
-    public function testTheReplacedSessionIsRevokedEvenWhenItBelongsToAnotherIdentity(): void
+    public function testAReplacedSessionOfAnotherIdentityIsLeftLive(): void
     {
         $replaced = $this->settled(SessionMother::active(id: self::REPLACED_ID, userId: self::OTHER_USER_ID));
         $sessions = new InMemorySessionRepository($replaced);
         $eventBus = new RecordingEventBus();
+        $currentSession = new RecordingCurrentSessionReference(SessionId::fromString(self::REPLACED_ID));
 
-        $this->startSession(
-            $sessions,
-            new RecordingCurrentSessionReference(SessionId::fromString(self::REPLACED_ID)),
-            $eventBus,
-        )->start(SessionMother::DEFAULT_USER_ID, SessionMother::DEFAULT_ORG_ID, 'Chrome on macOS', null);
+        $minted = $this->startSession($sessions, $currentSession, $eventBus)
+            ->start(SessionMother::DEFAULT_USER_ID, SessionMother::DEFAULT_ORG_ID, 'Chrome on macOS', null)
+        ;
 
-        $this->assertSame(SessionStatus::REVOKED, $replaced->status());
-        $this->assertSame([], $sessions->findByUserId(self::OTHER_USER_ID));
-        $revoked = $eventBus->publishedEvents[0] ?? null;
-        $this->assertInstanceOf(SessionRevoked::class, $revoked);
-        $this->assertSame(self::REPLACED_ID, $revoked->aggregateId());
-        $this->assertSame(self::OTHER_USER_ID, $revoked->userId());
+        $this->assertSame(SessionStatus::ACTIVE, $replaced->status());
+
+        foreach ($eventBus->publishedEvents as $event) {
+            $this->assertNotInstanceOf(SessionRevoked::class, $event, 'nothing is published about the other person');
+        }
+
+        $reference = $currentSession->get();
+        $this->assertInstanceOf(SessionId::class, $reference);
+        $this->assertTrue($minted->equals($reference), 'the correlation still moves to the minted session');
     }
 
     public function testWithNoCorrelationNothingIsRevoked(): void
