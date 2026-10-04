@@ -37,11 +37,8 @@ use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
  * recorded in the audit ADR, D4). What is spent is the raw value on the wire; whoever investigates a corrupt
  * row reads it from the table, under the access that table already demands.
  *
- * The test is shape, not provenance, and that bounds what it proves. A map is served as stored, so a map whose
- * personal field holds clear text — written by raw SQL, or before sealing existed — still reaches the wire:
- * telling it apart needs the field classification, which this mapper does not hold. And `json_decode()` reads
- * an object keyed `"0"`, `"1"`, … as a list, so such a map is withheld as one; it was never a shape the writer
- * produces.
+ * The test is the decoded shape: `json_decode()` reads an object keyed `"0"`, `"1"`, … as a list, so such a map
+ * is withheld as one — a shape the writer never produces.
  */
 final readonly class AuditEventDetailResourceMapper
 {

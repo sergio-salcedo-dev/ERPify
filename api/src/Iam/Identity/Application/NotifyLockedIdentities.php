@@ -93,10 +93,6 @@ final readonly class NotifyLockedIdentities
      * locks the subject's `identity_user` row — the row the erasure holds `FOR UPDATE` until it commits — and
      * skips the write once the row is gone. Either the erasure commits first and nothing is written, or the
      * notice row commits first and the erasure's resource pass redacts it with every other row it finds.
-     *
-     * What the lock does not serialise is the mail: an owner erased between the send and the erasure's
-     * commit has still been told their account was locked, which is the notice doing its job one moment
-     * before the account stopped existing, not a record outliving its subject.
      */
     private function notifyOwner(string $userId, DateTimeImmutable $now, DateTimeImmutable $staleFrom): void
     {

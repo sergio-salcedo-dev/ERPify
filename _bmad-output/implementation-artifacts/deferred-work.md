@@ -615,4 +615,6 @@ origin: split from DW-24 part (a) in the #1037 code review, 2026-10-03
 location: api/src/Iam/Session/Application/StartSession.php (`currentSession->set()` after `transactional()`)
 severity: low
 reason: StartSession writes the correlation (`currentSession->set()`) only after the row and its outbox commit, so a failing `set()` (no native session to write to) leaves an ACTIVE row no request can present: a ghost device in "my sessions" until PruneRetiredSessions removes it ~97 days after login. Deliberate ordering (a correlation must never name a row that does not exist) and low probability; the #1037 decision covered only the re-login half of DW-24. Fix options: compensate (revoke the minted row) when `set()` throws, or accept and state it in the StartSession docblock.
-status: open
+status: done 2026-10-04
+decision: 2026-10-04 Accept, do not compensate — set() cannot throw under the stateful firewall and the reachable orphan (native session failing to persist) happens after StartSession returns; reopen with a PENDING-until-first-admission row if orphans are measured in production
+resolution: accepted in #1037 and recorded as a consequence in docs/adr/identity-invitation-lifecycle.md (session registry, D8); bounded by PruneRetiredSessions
