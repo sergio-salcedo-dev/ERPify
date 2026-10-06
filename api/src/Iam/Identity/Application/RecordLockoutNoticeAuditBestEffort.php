@@ -41,6 +41,11 @@ use Throwable;
  * nothing escapes may not throw, and the report call is real I/O. Left unguarded, a failing sink would abort
  * {@see NotifyLockedIdentities::notifyLockedOwners()}'s whole tick — every remaining locked identity in that
  * run goes unreported, not just this one.
+ *
+ * **The write runs behind a lock on the subject's `identity_user` row, via {@see IdentityRowSerialiser}, and is
+ * skipped when the row is gone** — the same reason {@see RecordLockoutAuditBestEffort} gives: nothing else
+ * this tick holds is still holding the subject when the row is written, so an erasure in between would leave
+ * it naming an identity that no longer exists.
  */
 final readonly class RecordLockoutNoticeAuditBestEffort
 {
@@ -50,6 +55,7 @@ final readonly class RecordLockoutNoticeAuditBestEffort
 
     public function __construct(
         private AuditLogger $auditLogger,
+        private IdentityRowSerialiser $identityRows,
         private LoggerInterface $logger,
     ) {
     }
@@ -66,14 +72,16 @@ final readonly class RecordLockoutNoticeAuditBestEffort
     public function record(string $userId, ?DateTimeImmutable $lockedUntil): void
     {
         try {
-            $this->auditLogger->log(
-                self::NOTICE_ACTION,
-                AuditLevel::SECURITY,
-                AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
-                $lockedUntil instanceof DateTimeImmutable
-                    ? ['lockedUntil' => $lockedUntil->format(DateTimeInterface::ATOM)]
-                    : [],
-            );
+            $this->identityRows->whileLive($userId, function () use ($userId, $lockedUntil): void {
+                $this->auditLogger->log(
+                    self::NOTICE_ACTION,
+                    AuditLevel::SECURITY,
+                    AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
+                    $lockedUntil instanceof DateTimeImmutable
+                        ? ['lockedUntil' => $lockedUntil->format(DateTimeInterface::ATOM)]
+                        : [],
+                );
+            });
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
                 'Lockout notice sent; security audit projection skipped (write failed).',

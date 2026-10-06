@@ -200,6 +200,7 @@ final class RequestPasswordResetControllerTest extends TestCase
                     new RateLimiterRecoveryThrottleAuditBudget($limiter('audit', 1)),
                     $users,
                     $auditLogger,
+                    new InlineTransactionManager(),
                     new NullLogger(),
                 ),
                 new RequestStack(),

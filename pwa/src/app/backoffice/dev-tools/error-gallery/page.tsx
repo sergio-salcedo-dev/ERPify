@@ -193,7 +193,7 @@ const PROBLEM_FIXTURES: ReadonlyArray<ProblemCase> = [
     label: "503 — service unavailable",
     description: "Wrench icon, warning tone — used during deploys.",
     problem: makeProblem({
-      type: "service-unavailable",
+      type: SharedProblemType.SERVICE_UNAVAILABLE,
       title: "Service temporarily unavailable",
       status: 503,
       detail: "We're deploying improvements — back shortly.",

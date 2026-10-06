@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use Erpify\Iam\Identity\Domain\Entity\ErasureResweep;
 use Erpify\Iam\Identity\Domain\Exception\AdministratorErasureRequiresDemotion;
 use Erpify\Iam\Identity\Domain\Exception\SelfErasureForbidden;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
+use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
@@ -32,7 +34,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * EntityManager wraps, so they commit or roll back with the rest, the anonymisation of the reproducible
  * business log ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the
  * hard-delete of the subject's sessions ({@see PurgeUserSessions}) and of the membership that admitted them
- * ({@see PurgeUserMembership}), and the combined compliance self-audit.
+ * ({@see PurgeUserMembership}), the combined compliance self-audit, and the scheduling of the re-sweep
+ * ({@see ResweepErasedSubjects}) that repeats the anonymising passes for one window afterwards — a request
+ * already in flight when this runs can still commit a row naming the subject, and nothing inside this
+ * transaction can reach a row that does not exist yet.
  *
  * **The invitations lead rather than joining the other two purges, and that position is load-bearing.** The
  * accept and revoke paths lock `iam_invitation` before `identity_user` and cannot do otherwise — an accept
@@ -97,11 +102,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * Its object coupling sits above the default threshold and stays there. Every collaborator is one link of
  * the single atomic act this orchestrates — refuse an administrator, erase the identity, anonymise both
  * trail axes, anonymise the business log, purge sessions, purge the membership, purge the invitations, seal
- * the actor, own the transaction — and the two types the resource axis speaks in are that seam's vocabulary,
- * not extra
- * responsibilities. Splitting the chain would hide, from the one place a reader looks, that every place the
- * subject's id is persisted is erased together; that atomicity is the property the whole design rests on,
- * and the list grows by one every time a new context comes to hold a person's id.
+ * the actor, schedule the re-sweep, own the transaction — and the two types the resource axis speaks in are
+ * that seam's vocabulary, not extra responsibilities. Splitting the chain would hide, from the one place a
+ * reader looks, that every place the subject's id is persisted is erased together; that atomicity is the
+ * property the whole design rests on, and the list grows by one every time a new context comes to hold a
+ * person's id.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -137,6 +142,7 @@ final readonly class FulfilIdentityErasure
         private AuditLogger $auditLogger,
         private ActorContextFactory $actorContext,
         private TransactionManager $transactionManager,
+        private ErasureResweepRepository $erasureResweeps,
     ) {
     }
 
@@ -201,6 +207,7 @@ final readonly class FulfilIdentityErasure
                 );
 
                 $this->recordCombinedErasure($result, $anonymisation->pseudonym);
+                $this->scheduleResweep($identity, $subjectId);
 
                 return $result;
             },
@@ -311,6 +318,24 @@ final readonly class FulfilIdentityErasure
             'memberships_deleted' => $result->membershipsDeleted,
             'invitations_deleted' => $result->invitationsDeleted,
         ]);
+    }
+
+    /**
+     * Schedules the re-sweep under the same condition as the business-log pass, and for the same reason: the
+     * re-sweep repeats that pass, which matches by value across every kind of aggregate, so it may only ever
+     * be handed an id the database has just shown to denote a person. A subject with no live identity also
+     * has no request in flight that loaded them, so there is nothing for a re-sweep to catch.
+     *
+     * Inside the transaction, so a rolled-back erasure schedules nothing and a committed one cannot lose its
+     * re-sweep to a crash between the two.
+     */
+    private function scheduleResweep(IdentityErasureResult $identity, string $subjectId): void
+    {
+        if (!$identity->identityErased) {
+            return;
+        }
+
+        $this->erasureResweeps->save(ErasureResweep::scheduleFor($subjectId));
     }
 
     private function refuseSelfErasure(string $subjectId): void

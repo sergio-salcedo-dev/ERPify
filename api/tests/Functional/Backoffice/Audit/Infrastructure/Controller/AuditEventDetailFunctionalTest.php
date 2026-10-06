@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Backoffice\Audit\Infrastructure\Controller;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
+use Erpify\Backoffice\Audit\Infrastructure\Http\AuditEventDetailResourceMapper;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
@@ -214,15 +215,16 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     }
 
     /**
-     * A `changes` stored as `null` or a scalar is served verbatim — neither sealed into a map nor deleted —
-     * and the client degrades it to an unreadable diff; the reasoning lives in the audit ADR (D4, `changes`
-     * on the wire). Asserted over the DECODED body: an identical value under the key rules out both an
-     * invented `{}` and a dropped key.
+     * A `changes` that is not a map was never sealed per field, so its content is withheld while its shape
+     * reaches the wire: `null` as `null`, a scalar as a scalar, a list as a list of the same length. The
+     * client keys its degradation on the shape alone; the reasoning lives in the audit ADR (D4, `changes` on
+     * the wire). Asserted over the DECODED body and over the raw bytes, so the stored value is proven absent
+     * rather than merely replaced at one key.
      *
      * @throws JsonException
      */
-    #[DataProvider('provideANullOrScalarChangesIsServedVerbatimCases')]
-    public function testANullOrScalarChangesIsServedVerbatim(mixed $changes): void
+    #[DataProvider('provideANonMapChangesKeepsItsShapeAndLosesItsContentCases')]
+    public function testANonMapChangesKeepsItsShapeAndLosesItsContent(mixed $changes, mixed $served): void
     {
         $id = $this->seedChangeRow(['changes' => $changes, 'operation' => 'UPDATED']);
 
@@ -232,22 +234,26 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
         $this->assertArrayHasKey('metadata', $data);
         $this->assertIsArray($data['metadata']);
         $this->assertArrayHasKey('changes', $data['metadata']);
-        $this->assertSame($changes, $data['metadata']['changes']);
+        $this->assertSame($served, $data['metadata']['changes']);
+        $this->assertStringNotContainsString('jane.doe', (string) $this->client->getResponse()->getContent());
     }
 
     /**
-     * @return iterable<string, array{mixed}>
+     * @return iterable<string, array{mixed, mixed}>
      */
-    public static function provideANullOrScalarChangesIsServedVerbatimCases(): iterable
+    public static function provideANonMapChangesKeepsItsShapeAndLosesItsContentCases(): iterable
     {
-        yield 'null' => [null];
-        yield 'string' => ['corrupt'];
-        yield 'empty string' => [''];
-        yield 'int' => [7];
-        yield 'zero' => [0];
-        yield 'float' => [1.5];
-        yield 'true' => [true];
-        yield 'false' => [false];
+        $withheld = AuditEventDetailResourceMapper::WITHHELD;
+
+        yield 'null' => [null, null];
+        yield 'string' => ['jane.doe@example.test', $withheld];
+        yield 'empty string' => ['', $withheld];
+        yield 'int' => [7, $withheld];
+        yield 'zero' => [0, $withheld];
+        yield 'float' => [1.5, $withheld];
+        yield 'true' => [true, $withheld];
+        yield 'false' => [false, $withheld];
+        yield 'list' => [[['old' => 'jane.doe@example.test', 'new' => 'x'], 'jane.doe'], [$withheld, $withheld]];
     }
 
     /**

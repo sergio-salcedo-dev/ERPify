@@ -37,7 +37,11 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutAuditBestEffort($auditLogger, $logger))->record($subjectId);
+        (new RecordLockoutAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->record($subjectId);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
@@ -52,12 +56,63 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $this->assertSame([], $logger->records, 'A successful projection must not log.');
     }
 
+    public function testWritesBehindTheSubjectsRowLock(): void
+    {
+        $subjectId = Uuid::generate();
+        $rows = new InMemoryIdentityRowLock();
+        $auditLogger = new RecordingAuditLogger();
+
+        $this->recorder($auditLogger, $rows, new RecordingLogger())->record($subjectId);
+
+        $this->assertSame([$subjectId], $rows->locked);
+        $this->assertCount(1, $auditLogger->records);
+    }
+
+    public function testASubjectErasedBeforeTheLockGetsNoRowAndNoReport(): void
+    {
+        // The erasure committed while the lock waited, or before it was asked for: the row would name an
+        // identity that no longer exists, outside every pass that could rewrite it. Not a failure either —
+        // there is nothing an operator could act on.
+        $subjectId = Uuid::generate();
+        $rows = new InMemoryIdentityRowLock();
+        $rows->gone[] = $subjectId;
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        $this->recorder($auditLogger, $rows, $logger)->record($subjectId);
+
+        $this->assertSame([], $auditLogger->records);
+        $this->assertSame([], $logger->records);
+    }
+
+    public function testALockThatFailsIsSwallowedAndLoggedLikeAFailedWrite(): void
+    {
+        // A lock timeout is one more way to lose the projection; on the login path it may never become a 500.
+        $failure = new RuntimeException('lock timeout');
+        $rows = new InMemoryIdentityRowLock();
+        $rows->onLock = static function () use ($failure): never {
+            throw $failure;
+        };
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        $this->recorder($auditLogger, $rows, $logger)->record(Uuid::generate());
+
+        $this->assertSame([], $auditLogger->records);
+        $this->assertCount(1, $logger->records);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
+    }
+
     public function testSwallowsAFailedAuditWriteAndLogsItAtError(): void
     {
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
 
-        (new RecordLockoutAuditBestEffort(new FailingAuditLogger($failure), $logger))->record(Uuid::generate());
+        (new RecordLockoutAuditBestEffort(
+            new FailingAuditLogger($failure),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->record(Uuid::generate());
 
         $this->assertCount(
             1,
@@ -76,7 +131,11 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $subjectId = Uuid::generate();
         $logger = new RecordingLogger();
 
-        (new RecordLockoutAuditBestEffort(new FailingAuditLogger(), $logger))->record($subjectId);
+        (new RecordLockoutAuditBestEffort(
+            new FailingAuditLogger(),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->record($subjectId);
 
         $this->assertCount(1, $logger->records);
         $record = $logger->records[0];
@@ -95,6 +154,22 @@ final class RecordLockoutAuditBestEffortTest extends TestCase
         $logger = $this->createStub(LoggerInterface::class);
         $logger->method('error')->willThrowException(new RuntimeException('stderr pipe closed'));
 
-        (new RecordLockoutAuditBestEffort(new FailingAuditLogger(), $logger))->record(Uuid::generate());
+        (new RecordLockoutAuditBestEffort(
+            new FailingAuditLogger(),
+            InMemoryIdentityRowLock::serialiser(),
+            $logger,
+        ))->record(Uuid::generate());
+    }
+
+    private function recorder(
+        RecordingAuditLogger $auditLogger,
+        InMemoryIdentityRowLock $rows,
+        RecordingLogger $logger,
+    ): RecordLockoutAuditBestEffort {
+        return new RecordLockoutAuditBestEffort(
+            $auditLogger,
+            InMemoryIdentityRowLock::serialiser($rows),
+            $logger,
+        );
     }
 }

@@ -174,6 +174,10 @@ final class UserEraseFunctionalTest extends WebTestCase
             'DELETE FROM identity_user WHERE email = :email',
             ['email' => self::TARGET_EMAIL],
         );
+        $connection->executeStatement(
+            'DELETE FROM identity_erasure_resweep WHERE subject_id = CAST(:id AS uuid)',
+            ['id' => self::TARGET_ID],
+        );
     }
 
     private function persistSubject(): void

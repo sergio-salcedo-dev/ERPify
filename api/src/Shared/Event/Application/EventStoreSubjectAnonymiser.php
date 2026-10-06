@@ -25,17 +25,19 @@ namespace Erpify\Shared\Event\Application;
  *
  * **One pseudonym for every row of one subject, and the reason is NOT the stream UNIQUE.** That constraint
  * spans `(tenant_id, aggregate_id, aggregate_version)`, `tenant_id` is written `NULL` on every row, and
- * Postgres compares nulls as distinct — so it imposes nothing today, measured against `pg_indexes` rather
- * than the migration and recorded in `deferred-work.md`. The reasons that do hold are two: one person must
- * not split into several anonymous identities, which is why the pseudonym is the one the actor pass already
- * minted for the audit axes; and a subject's events share one version sequence under a single `aggregate_id`
+ * Postgres compares nulls as distinct — so it imposes nothing, measured against `pg_indexes` rather than the
+ * migration; `aggregate_version` is an informative counter and nothing more (event-store ADR D14). The
+ * reasons that do hold are two: one person must not split into several anonymous identities, which is why
+ * the pseudonym is the one the actor pass already minted for the audit axes; and a subject's events share
+ * one version sequence under a single `aggregate_id`
  * — the identity events and the two bulk session revokes alike — so moving them apart would scatter a
  * coherent stream even while no constraint complained.
  *
  * Idempotent by construction: a second pass matches nothing, because the value it searched for is gone. That
  * is not the same as saying nothing can reintroduce it — a transaction that loaded the subject before this
- * ran can still append afterwards, which is a known asynchronous-resurrection defect of the erasure chain
- * and not something this statement can close.
+ * ran can still append afterwards, and no single statement can reach a row that does not exist yet. The
+ * idempotence is what lets the erasing context repeat the pass for a window after the erasure instead
+ * (`docs/adr/audit-activity-log.md` D4.2).
  *
  * **It never learns which identifiers denote people, and the caller must.** Matching by value is what makes
  * it reach every event, and equally what makes it reach every aggregate: handed an identifier that denotes a

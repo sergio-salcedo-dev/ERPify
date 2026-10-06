@@ -12,6 +12,20 @@ namespace Erpify\Shared\Audit\Domain;
  */
 enum ActorType: string
 {
+    /**
+     * Whether an actor of this type is named by an id. `anonymous` and `system` name nobody, so they never
+     * carry one; an `api_key` or a `user` is nothing without it. This is the rule {@see ActorContext}'s
+     * factories encode and the `audit_log` CHECK constraints store, so the storage side derives its token
+     * lists from here rather than restating them.
+     */
+    public function isIdentified(): bool
+    {
+        return match ($this) {
+            self::ANONYMOUS, self::SYSTEM => false,
+            self::API_KEY, self::USER => true,
+        };
+    }
+
     case ANONYMOUS = 'anonymous';
     case SYSTEM = 'system';
     case API_KEY = 'api_key';

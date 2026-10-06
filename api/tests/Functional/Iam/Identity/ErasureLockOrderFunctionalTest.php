@@ -15,6 +15,7 @@ use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
+use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
@@ -138,6 +139,11 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             'DELETE FROM identity_user WHERE id = CAST(:id AS UUID)',
             ['id' => $this->subjectId],
         );
+        // The committed erasure also scheduled its re-sweep, which holds the subject's id.
+        $connection->executeStatement(
+            'DELETE FROM identity_erasure_resweep WHERE subject_id = CAST(:id AS UUID)',
+            ['id' => $this->subjectId],
+        );
         $connection->close();
 
         $this->outside = null;
@@ -239,6 +245,7 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             new RecordingAuditLogger(),
             $this->service(ActorContextFactory::class),
             $this->service(TransactionManager::class),
+            $this->service(ErasureResweepRepository::class),
         );
     }
 

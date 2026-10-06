@@ -53,7 +53,11 @@ trait BuildsLockoutRegistrar
             $eventBus,
             $transactionManager,
             new FixedClock(new DateTimeImmutable(self::REGISTRAR_NOW)),
-            new RecordLockoutAuditBestEffort($auditLogger ?? new RecordingAuditLogger(), new NullLogger()),
+            new RecordLockoutAuditBestEffort(
+                $auditLogger ?? new RecordingAuditLogger(),
+                InMemoryIdentityRowLock::serialiser(),
+                new NullLogger(),
+            ),
         );
     }
 

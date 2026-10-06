@@ -80,32 +80,42 @@ final class AuditEventDetailResourceMapperTest extends TestCase
     }
 
     /**
-     * A `changes` stored as `null` or a scalar is served verbatim: neither wrapped into a map nor deleted,
-     * so the corruption stays visible to every consumer of the wire (why: the audit ADR, D4). The decoded
-     * wire is asserted in the functional test.
+     * Only a map was ever sealed per field, so a scalar `changes` reached storage in clear and no erasure path
+     * reaches it: it keeps its shape — still a scalar, so the corruption stays visible and the client still
+     * degrades it — and never its value. The decoded wire is asserted in the functional test.
      */
-    #[DataProvider('provideToResourceServesANullOrScalarChangesVerbatimCases')]
-    public function testToResourceServesANullOrScalarChangesVerbatim(mixed $changes): void
+    #[DataProvider('provideToResourceWithholdsAScalarChangesButKeepsItAScalarCases')]
+    public function testToResourceWithholdsAScalarChangesButKeepsItAScalar(mixed $changes): void
     {
         $metadata = $this->mapper()->toResource($this->detail(['changes' => $changes]))->metadata;
 
         $this->assertArrayHasKey('changes', $metadata);
-        $this->assertSame($changes, $metadata['changes']);
+        $this->assertSame(AuditEventDetailResourceMapper::WITHHELD, $metadata['changes']);
     }
 
     /**
      * @return iterable<string, array{mixed}>
      */
-    public static function provideToResourceServesANullOrScalarChangesVerbatimCases(): iterable
+    public static function provideToResourceWithholdsAScalarChangesButKeepsItAScalarCases(): iterable
     {
-        yield 'null' => [null];
-        yield 'string' => ['corrupt'];
+        yield 'string' => ['jane.doe@example.test'];
         yield 'empty string' => [''];
         yield 'int' => [7];
         yield 'zero' => [0];
         yield 'float' => [1.5];
         yield 'true' => [true];
         yield 'false' => [false];
+    }
+
+    /**
+     * A stored `null` carries nothing to withhold, and is not turned into a value that would read as one.
+     */
+    public function testToResourceServesANullChangesAsNull(): void
+    {
+        $metadata = $this->mapper()->toResource($this->detail(['changes' => null]))->metadata;
+
+        $this->assertArrayHasKey('changes', $metadata);
+        $this->assertNull($metadata['changes']);
     }
 
     public function testToResourcePassesNullableFieldsAndEmptyMetadataThrough(): void
@@ -137,16 +147,20 @@ final class AuditEventDetailResourceMapperTest extends TestCase
 
     /**
      * A non-empty LIST is not a diff: wrapping it would serve `{"0": {…}}`, which the client's guard admits
-     * and renders as a field named "0". Left as a list, it reaches the wire as one and the guard refuses it.
+     * and renders as a field named "0". Left as a list, it reaches the wire as one and the guard refuses it —
+     * but as a list of withheld values, because a list was never sealed per field either.
      */
-    public function testToResourceLeavesAListShapedChangesUnwrapped(): void
+    public function testToResourceLeavesAListShapedChangesAListWithItsValuesWithheld(): void
     {
-        $list = [['old' => 'BBVA', 'new' => 'BBVA S.A.']];
+        $list = [['old' => 'jane.doe@example.test', 'new' => 'jane@example.test'], 'loose'];
 
         $changes = $this->mapper()->toResource($this->detail(['changes' => $list]))->metadata['changes'];
 
         $this->assertNotInstanceOf(ArrayObject::class, $changes);
-        $this->assertSame($list, $changes);
+        $this->assertSame(
+            [AuditEventDetailResourceMapper::WITHHELD, AuditEventDetailResourceMapper::WITHHELD],
+            $changes,
+        );
     }
 
     /**

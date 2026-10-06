@@ -388,6 +388,11 @@ you change anything here.
       candidate is a heuristic (does the address match one the subject has held on an
       `iam_session`?) bought by making the audit writer read a second context's PII at
       capture time. Weighed and not taken — not impossible.
+      Those writers run **post-commit**, outside any transaction holding the subject, so
+      each takes the subject's `identity_user` row `FOR UPDATE` before writing and writes no
+      row naming a subject whose row is gone (`IdentityRowSerialiser`; the throttle resolves
+      its address under the same lock). Without it a row committed after the pass would keep
+      the real id and the address with `resource_erased = FALSE`.
       **The accepted cost, stated rather than hidden:** where the
       requester was a stranger — an attacker locking a victim out — that attacker's address
       is destroyed too. The **fact** survives even though the value does not, though not for
@@ -421,8 +426,9 @@ you change anything here.
       defeated by an in-flight write:** `activity` entries are written synchronously (ADR
       D3.1), so audit PII never sits queued in `messenger_messages` (nor in the shared
       `failed` transport) where a later consume could re-insert an already-anonymised
-      `actor_id` after the erasure `UPDATE` (issue #376). The only residual is the
-      request-duration window a request already in flight shares with `security`/`change`.
+      `actor_id` after the erasure `UPDATE` (issue #376). What a request already in flight
+      can still commit afterwards — shared with `security`/`change` — is rewritten by the
+      erasure re-sweep (§7, ADR D4.2).
       Retention by level
       (`activity` vs `security`, the scheduled prune — the table's only `DELETE`) is
       tracked separately; the `change` level carries a 5-year floor. A live PII table must
@@ -850,7 +856,11 @@ you change anything here.
       (never a fail-open pass-through). **Sign-out revokes server-side:** `POST /sessions/revoke-current` (this
       device) revokes the current registry row **and** invalidates the native session so the cookie is dropped, and
       `POST /sessions/revoke-others` revokes every other row — so "log out" leaves no resumable session behind on a
-      shared machine (the client never relies on merely clearing its own state). `iam_session` stores
+      shared machine (the client never relies on merely clearing its own state). A sign-in over a browser whose native
+      session already correlates a live row **of the same identity** revokes that row in the minting transaction — the
+      id comes from server-side session storage, never from the client — so a re-login leaves no ghost device; another
+      identity's row on a shared browser is left to its owner, so no request writes about a person who did not make
+      it, and another browser's sessions are untouched. `iam_session` stores
       **operational PII** — `ip` (plaintext, short-lived) and
       `device` (**normalised server-side** from the `User-Agent` to a bounded label, **never** the raw client string,
       closing stored-injection + free-text PII). The table is **not** an `AuditedEntity`, so the IP never enters the
@@ -1997,6 +2007,37 @@ mitigated state. Accepting one means recording who accepted it and against which
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
 
+- [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
+      within five minutes — unless it commits more than an hour after the erasure.** The erasure's passes reach
+      the rows that exist when they run, and a request that loaded the subject before the identity row went can
+      commit one afterwards. Three review rounds each found more writers able to: the access log and the four
+      request-boundary security audit listeners on the actor axis, `StartSession` and the three session
+      revocations in `event_store` and `iam_session` — the last also after an administrator's role or status
+      change. An enumeration that failed three times is not a control, so the class is closed by mechanism
+      instead: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
+      `ResweepErasedSubjects` re-runs the actor, resource, business-log and session passes for every subject
+      erased in the last hour, every five minutes on the `identity_maintenance` schedule, whoever wrote the row
+      (`docs/adr/audit-activity-log.md` D4.2). The late writers of `Iam/Identity` that run after their own
+      commit stay serialised on `identity_user` (§6), which closes their window outright rather than bounding
+      it. What remains, **accepted by Sergio (product owner) on 2026-10-06 together with the mechanism**:
+      - **a row committed more than an hour after the erasure is not reached.** Nothing bounds how long a
+        request runs — `max_execution_time` does not count time spent waiting on the database, and neither
+        Caddy nor Postgres sets a timeout — so the hour is a margin chosen far above any sane request, not a
+        guarantee;
+      - **the subject's real id stays in `identity_erasure_resweep` for up to an hour and five minutes** after
+        the erasure reported it gone. The column has a named owner of its erasure (the re-sweep deletes the row
+        on the tick that closes its window) and a detective source that reports a row that outlived it;
+      - **a late row gets the tick's own fresh pseudonym**, not the erasure's, so it does not link to the rest
+        of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
+        vetoes.
+      Re-affirm or close before the first customer.
+- [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
+      subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
+      nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
+      covered the fields the classifier marks, written through `PiiDiffSealer`. A row written by raw SQL, or
+      before sealing existed, can therefore keep a person's data in clear for as long as the row is retained.
+      Telling such a map apart needs the field classification at read time. Nothing in this deployment writes
+      one today; close it (re-seal or redact by classification) or accept it before the first customer.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
@@ -2029,10 +2070,10 @@ mitigated state. Accepting one means recording who accepted it and against which
 
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
-      artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
+      artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
       `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
       `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
-      closing any of the three while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
+      closing either of the two while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
@@ -2043,7 +2084,6 @@ mitigated state. Accepting one means recording who accepted it and against which
   | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
   | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity whose lockout an attacker holding a stolen session keeps re-driving cannot get the session eviction requires unless it holds a **live recovery secret**; redeeming one evicts every other session in the transaction that consumes it, so the stolen session no longer out-races it — but the secret is then spent until re-minted, `users.unlock` holds only until ten more failures re-seal the lock, a **sole administrator** without a secret has not even that, an administrator's stolen session can plant identities and grants and demote or suspend other administrators, none of which an eviction reaches, and an administrator it planted can still suspend or demote the owner after the recovery (the stolen session can no longer change its own roles or status, so it cannot revoke the redeemed session that way itself), and a **leaked** secret now signs the owner out as well (see *A stolen session can deny the owner a credential rotation* above), and can do so repeatedly **without being spent**, through two concurrent redemptions that interrupt each other (§7 (iv)) | Before the first customer: the product gets every administrator to mint (and re-mint after redemption) a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret; or an administrator's recovery finds identities or grants they did not create, or administrators demoted or suspended | Sergio, 2026-09-28 (accepts that a leaked secret can also evict repeatedly without being spent); Sergio, 2026-09-25 (accepts that a leaked recovery secret also signs the owner out); earlier: accepted as-is 2026-07-29 naming nobody, narrowed 2026-09-24 (opened 2026-07-28) |
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
-  | [#860](https://github.com/sergio-salcedo-dev/ERPify/issues/860) | A GDPR erasure racing `NotifyLockedIdentities::notifyOwner()` writes an `ACCOUNT_LOCKOUT_NOTIFIED` row naming the erased subject; the daily reconciler reports it | The reconciler reports that divergence close to a `NotifyLockedIdentitiesMessage` tick (compatible with, not proof of), or a second job adopts the same read → save → audit shape on `User` | Sergio, closing the #857 review — date not recorded (opened 2026-08-27) |
   | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
   | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
   | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
@@ -2055,3 +2095,8 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
+- [ ] Before the migration that adds the `audit_log` actor CHECKs (`Version20261003101500`) reaches a database
+      holding real rows, count the rows it would refuse: `SELECT count(*) FROM audit_log WHERE actor_type NOT IN
+      ('anonymous','api_key','system','user') OR (actor_type IN ('anonymous','system')) <> (actor_id IS NULL)`.
+      The migration validates existing rows on purpose and fails on the first violation, so a non-zero count is
+      a decision to take before the deploy, not during it.
