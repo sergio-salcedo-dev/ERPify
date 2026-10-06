@@ -30,9 +30,11 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
  * session is `authenticated`; a server that answered 503 `service-unavailable`
  * (it could not reach a dependency it needs to decide, typically its session
- * store) is `unavailable`; no live session (401) or any other failure (offline, a
- * body that does not parse) is `unauthenticated`. There is no seeded default and
- * no auto-admin.
+ * store) is `unavailable`; no live session (401) is `unauthenticated`, and so is
+ * a probe that got no answer. "No answer" is any failure other than those two —
+ * offline, a timeout, a proxy's 5xx, a body that does not parse — because none of
+ * them carries a decision from the server. There is no seeded default and no
+ * auto-admin.
  *
  * `unavailable` is kept apart from `unauthenticated` because the guard sends the
  * two to different places: a back-office visitor who may well still be signed in
@@ -45,13 +47,14 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * `unavailable` is the one status that clears itself: while in it the provider
  * re-probes `/me` with a bounded backoff, and at once when the tab becomes visible
  * or the browser comes back online, so the user leaves the maintenance page when
- * the server can answer again rather than at the next hard reload. Only an ANSWER
- * moves it off a re-probe — a 200, a 401, or another 503 — never a re-probe that got
- * none (offline, timed out, a proxy error, a body that does not parse): leaving on
- * one of those would send a visitor who is still signed in to the sign-in form for
- * want of a network, which is exactly the moment a laptop waking from sleep
- * produces. A sign-in's own probe keeps the mapping above, because its failure is
- * reported by the form rather than waited out.
+ * the server can answer again rather than at the next hard reload. Only an answer
+ * is applied from a re-probe — a 200, a 401, or another 503 `service-unavailable`,
+ * the last leaving it `unavailable` — and a re-probe that got none changes nothing,
+ * so the status stays `unavailable`: leaving on one would send a visitor who is
+ * still signed in to the sign-in form for want of a network, which is exactly the
+ * moment a laptop waking from sleep produces. The cold probe and a sign-in's probe
+ * keep the mapping above and read no answer as `unauthenticated`, because a sign-in
+ * reports its failure through the form rather than waiting it out.
  */
 export const AuthStatus = {
   HYDRATING: "hydrating",
@@ -71,9 +74,12 @@ export interface AuthContextValue {
    *
    * It resolves to the session the provider holds once the probe settles, because
    * the caller cannot otherwise tell an authenticated provider from one the probe
-   * never confirmed. That is the probe's own session when it was applied, and
-   * whatever superseded it (a sign-out, a later probe) when it was not — so a caller
-   * never announces a sign-in the provider does not hold. `null` conflates "no live
+   * never confirmed. That is the probe's own session when it was applied. When it
+   * was not, something superseded it (a sign-out, a later probe), and the call waits
+   * until that has written too — a second sign-in still in flight would otherwise
+   * leave the caller holding the state from before either — then resolves to what
+   * it wrote. So a caller never announces a sign-in the provider does not hold, and
+   * never misses one it is about to. `null` conflates "no live
    * session" with "could not tell" (a 503 `service-unavailable` included), and
    * deliberately so: neither is grounds to announce a sign-in, so the caller's move
    * is the same for both.
@@ -102,17 +108,22 @@ interface ProbeResult {
   session: Session | null;
   serviceUnavailable: boolean;
   /**
-   * Whether the server decided anything: a 200, a 401, or a 503 `service-unavailable`. False for a
-   * failure that carries no decision at all (network, timeout, a proxy's 5xx, a malformed body),
-   * which the re-probe loop refuses to apply — see {@link AuthStatus}.
+   * Whether the server decided anything: a 200, a 401 (resolved as no identity), or the 503
+   * `service-unavailable` error. False for every other failure (network, timeout, a proxy's 5xx, a
+   * malformed body), which carries no decision: the outage re-probe never applies it, while the cold
+   * probe and a sign-in read it as "no live session" — see {@link AuthStatus}.
    */
   answered: boolean;
 }
 
-interface ProbeOptions {
-  /** Leave the state as it is when the probe got no answer, instead of reading that as "signed out". */
-  keepStateWithoutAnswer?: boolean;
+/** One probe's result, and whether it was the one allowed to write the state. */
+interface ProbeOutcome {
+  result: ProbeResult;
+  applied: boolean;
 }
+
+/** Stands in for the latest probe once whatever advanced the generation has already written. */
+const ALREADY_WRITTEN: Promise<unknown> = Promise.resolve();
 
 /** First re-probe delay while `unavailable`; each further attempt doubles it. */
 export const REPROBE_INITIAL_DELAY_MS = 5_000;
@@ -153,12 +164,19 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [session, setSession] = useState<Session | null>(null);
   const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  // Generation of the latest probe. Several can be in flight at once (the cold probe, a sign-in
-  // re-probe, an outage re-probe) and they may settle in any order, so only the most recently
-  // STARTED one may write the state: a slow cold probe settling after a fast sign-in must not
-  // overwrite the session that sign-in just confirmed. Sign-out and unmount advance it too, so a
-  // probe they outlive is dropped.
+  // Several probes can be in flight at once (the cold probe, a sign-in re-probe, an outage
+  // re-probe) and they may settle in any order. The invariant: a probe writes the state only if
+  // nothing has advanced this generation since it started — so no result ever overwrites one from a
+  // probe that started after it, and a slow cold probe settling after a fast sign-in cannot
+  // overwrite the session that sign-in confirmed. The cold probe and a sign-in advance it when they
+  // start; sign-out and unmount advance it too, so a probe they outlive is dropped. An outage
+  // re-probe advances it only at the moment it writes, and writes only an answer: one that got no
+  // answer supersedes nothing, so it can never cost a sign-in that did get one.
   const probeGeneration = useRef(0);
+  // Settles once whatever last advanced the generation has written, or declined to: the probe that
+  // advanced it, or `ALREADY_WRITTEN` for a sign-out, an unmount or an outage re-probe, which advance
+  // it only as they write. `login()` waits on it when its own probe was superseded.
+  const latestProbe = useRef<Promise<unknown>>(ALREADY_WRITTEN);
   // The session last written to the state, readable without waiting for a render: `login()`
   // answers with it when its own probe was superseded. Every write goes through `holdSession`.
   const heldSession = useRef<Session | null>(null);
@@ -178,49 +196,71 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       };
     } catch (error) {
       // The adapter already maps 401 to null and a 503 `service-unavailable` to its own error;
-      // any other failure (network, malformed body) is "no live session" to whoever applies it.
+      // any other failure (network, timeout, malformed body) carries no decision from the server.
       const serviceUnavailable = error instanceof IdentityServiceUnavailableError;
       return { session: null, serviceUnavailable, answered: serviceUnavailable };
     }
   }, [identityRepository]);
 
-  /**
-   * Run one probe and apply its result unless a later probe, a sign-out or the unmount has
-   * superseded it — or, with `keepStateWithoutAnswer`, unless it got no answer. `applied` tells
-   * the caller whether it was written.
-   */
-  const probe = useCallback(
-    async ({ keepStateWithoutAnswer = false }: ProbeOptions = {}): Promise<{
-      result: ProbeResult;
-      applied: boolean;
-    }> => {
-      probeGeneration.current += 1;
-      const generation = probeGeneration.current;
-      const result = await resolveSession();
-      const applied =
-        generation === probeGeneration.current && (result.answered || !keepStateWithoutAnswer);
-      if (applied) {
-        holdSession(result.session);
-        setServiceUnavailable(result.serviceUnavailable);
-        setHydrated(true);
-      }
-      return { result, applied };
+  const applyResult = useCallback(
+    (result: ProbeResult): void => {
+      holdSession(result.session);
+      setServiceUnavailable(result.serviceUnavailable);
+      setHydrated(true);
     },
-    [resolveSession, holdSession],
+    [holdSession],
   );
+
+  /**
+   * The cold probe and a sign-in's: supersede every probe in flight, then apply the result, answer
+   * or not, unless a later probe, a sign-out or the unmount has superseded this one in turn.
+   * Returns the very promise it records as the latest probe, so `login()` can tell whether anything
+   * started after it.
+   */
+  const probe = useCallback((): Promise<ProbeOutcome> => {
+    probeGeneration.current += 1;
+    const generation = probeGeneration.current;
+    const outcome = resolveSession().then((result): ProbeOutcome => {
+      const applied = generation === probeGeneration.current;
+      if (applied) applyResult(result);
+      return { result, applied };
+    });
+    latestProbe.current = outcome;
+    return outcome;
+  }, [resolveSession, applyResult]);
+
+  /**
+   * The outage loop's: supersede nothing while in flight, and only at the end — when the server
+   * answered and nothing advanced the generation meanwhile — supersede what is still in flight and
+   * apply. Getting no answer, or being overtaken, leaves everything as it was.
+   */
+  const reprobeDuringOutage = useCallback(async (): Promise<ProbeOutcome> => {
+    const observed = probeGeneration.current;
+    const result = await resolveSession();
+    const applied = result.answered && observed === probeGeneration.current;
+    if (applied) {
+      probeGeneration.current += 1;
+      latestProbe.current = ALREADY_WRITTEN;
+      applyResult(result);
+    }
+    return { result, applied };
+  }, [resolveSession, applyResult]);
 
   useEffect(() => {
     void probe();
     return () => {
       probeGeneration.current += 1;
+      latestProbe.current = ALREADY_WRITTEN;
     };
   }, [probe]);
 
   useEffect(() => {
     if (!serviceUnavailable) return;
+    // Probes the loop has sent; the backoff grows with it, so a tick skipped while offline does not.
     let attempt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let inFlight = false;
+    let pendingReprobe = false;
     let stopped = false;
 
     // Leaving `unavailable` re-runs this effect and stops the loop; a result that is still
@@ -231,7 +271,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     function schedule(): void {
       clearTimeout(timer);
       timer = setTimeout(tick, reprobeDelayMs(attempt));
-      attempt += 1;
     }
     // A probe sent while the browser knows it is offline cannot be answered; the `online` listener
     // re-probes the moment that changes, and the next tick stays scheduled in case it never fires.
@@ -242,13 +281,29 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       }
       reprobe();
     }
+    // A request arriving while a probe is in flight is held rather than dropped: a tab waking from
+    // sleep sends one on `visibilitychange` before the network is back, and the `online` that
+    // follows lands while it is still failing. When that probe settles without an answer, the held
+    // request runs at once instead of waiting out the backoff; when it got one, it is already as
+    // fresh as the held request could be, and the backoff stands.
     function reprobe(): void {
-      if (inFlight || stopped) return;
+      if (stopped) return;
+      if (inFlight) {
+        pendingReprobe = true;
+        return;
+      }
       clearTimeout(timer);
       inFlight = true;
-      void probe({ keepStateWithoutAnswer: true }).then(({ result, applied }) => {
+      attempt += 1;
+      void reprobeDuringOutage().then(({ result, applied }) => {
         inFlight = false;
+        const runHeldRequest = pendingReprobe && !result.answered;
+        pendingReprobe = false;
         if (stopped || (applied && !result.serviceUnavailable)) return;
+        if (runHeldRequest) {
+          reprobe();
+          return;
+        }
         schedule();
       });
     }
@@ -265,12 +320,19 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       globalThis.document.removeEventListener("visibilitychange", reprobeWhenVisible);
       globalThis.removeEventListener("online", reprobe);
     };
-  }, [serviceUnavailable, probe]);
+  }, [serviceUnavailable, reprobeDuringOutage]);
 
   // The held session rather than the probe's own: when a sign-out or a later probe superseded
-  // this one, its result was never applied, and announcing it would contradict the provider.
+  // this one, its result was never applied, and announcing it would contradict the provider. The
+  // loop waits out every probe that superseded it in turn, so the answer is what the latest one
+  // wrote rather than the state before it.
   const login = useCallback(async (): Promise<Session | null> => {
-    await probe();
+    let awaited: Promise<unknown> = probe();
+    await awaited;
+    while (awaited !== latestProbe.current) {
+      awaited = latestProbe.current;
+      await awaited;
+    }
     return heldSession.current;
   }, [probe]);
 
@@ -287,6 +349,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         });
       } finally {
         probeGeneration.current += 1;
+        latestProbe.current = ALREADY_WRITTEN;
         holdSession(null);
         setServiceUnavailable(false);
         setHydrated(true);

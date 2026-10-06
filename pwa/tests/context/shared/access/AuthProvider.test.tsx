@@ -588,6 +588,156 @@ describe("AuthProvider", () => {
       expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
     });
 
+    // The loop's probe started after the sign-in's, so had it superseded the sign-in on starting,
+    // its own failure would have discarded the sign-in's answer: nothing would write, the provider
+    // would stay unavailable and `login()` would report failure over a cookie the server had set.
+    it("keeps a sign-in's answer when an outage re-probe started after it gets none", async () => {
+      const signInProbe = deferred<Identity | null>();
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockReturnValueOnce(signInProbe.promise)
+        .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      let pending!: Promise<Session | null>;
+      act(() => {
+        pending = result.current.login();
+      });
+      await advance(REPROBE_INITIAL_DELAY_MS);
+      expect(me).toHaveBeenCalledTimes(3);
+      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+
+      let resolved: Session | null = null;
+      await act(async () => {
+        signInProbe.resolve(ADMIN);
+        resolved = await pending;
+      });
+
+      expect(resolved).toEqual(result.current.session);
+      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it.each([
+      ["before", true],
+      ["after", false],
+    ])(
+      "drops an outage re-probe's answer arriving %s a sign-in started after it",
+      async (_label, loopSettlesFirst) => {
+        const loopProbe = deferred<Identity | null>();
+        const signInProbe = deferred<Identity | null>();
+        me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+          .mockReturnValueOnce(loopProbe.promise)
+          .mockReturnValueOnce(signInProbe.promise);
+
+        const { result } = renderAuth();
+        await advance(0);
+        await advance(REPROBE_INITIAL_DELAY_MS);
+        expect(me).toHaveBeenCalledTimes(2);
+
+        let pending!: Promise<Session | null>;
+        act(() => {
+          pending = result.current.login();
+        });
+        expect(me).toHaveBeenCalledTimes(3);
+
+        if (loopSettlesFirst) {
+          await act(async () => {
+            loopProbe.resolve(null);
+          });
+          // Applied, this answer would have signed the visitor out.
+          expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+        }
+        let resolved: Session | null = null;
+        await act(async () => {
+          signInProbe.resolve(ADMIN);
+          resolved = await pending;
+        });
+        await act(async () => {
+          loopProbe.resolve(null);
+        });
+
+        expect(resolved).not.toBeNull();
+        expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+        expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+      },
+    );
+
+    // A tab waking from sleep: `visibilitychange` sends a probe before the network is back, and the
+    // `online` that follows arrives while that probe is still failing.
+    it("re-probes as soon as a probe that got no answer settles when `online` arrived meanwhile", async () => {
+      const asleep = deferred<Identity | null>();
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockReturnValueOnce(asleep.promise)
+        .mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(async () => {
+        globalThis.dispatchEvent(new Event("online"));
+      });
+      expect(me).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        asleep.reject(new TypeError("Failed to fetch"));
+      });
+      await advance(0);
+
+      expect(me).toHaveBeenCalledTimes(3);
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("keeps the backoff when the probe `online` waited on got an answer", async () => {
+      const inFlight = deferred<Identity | null>();
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockReturnValueOnce(inFlight.promise)
+        .mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(async () => {
+        globalThis.dispatchEvent(new Event("online"));
+      });
+      await act(async () => {
+        inFlight.reject(new IdentityServiceUnavailableError());
+      });
+      await advance(0);
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+
+      await advance(2 * REPROBE_INITIAL_DELAY_MS);
+      expect(me).toHaveBeenCalledTimes(3);
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("does not grow the backoff for ticks skipped while offline", async () => {
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      setOnline(false);
+      for (let skipped = 0; skipped < 3; skipped += 1) {
+        await advance(REPROBE_INITIAL_DELAY_MS);
+        expect(me).toHaveBeenCalledTimes(1);
+      }
+
+      // Back online with no `online` event: the next tick is still the first delay away.
+      setOnline(true);
+      await advance(REPROBE_INITIAL_DELAY_MS);
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
     it("does not stack a second probe on one still in flight", async () => {
       const slow = deferred<Identity | null>();
       me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockReturnValueOnce(
@@ -702,6 +852,74 @@ describe("AuthProvider", () => {
       await act(async () => {
         signIn.resolve(null);
         resolved = await pending;
+      });
+
+      expect(resolved).toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    it("resolves a superseded sign-in to the session the sign-in after it applied", async () => {
+      const first = deferred<Identity | null>();
+      const second = deferred<Identity | null>();
+      me.mockResolvedValueOnce(null)
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      let firstLogin!: Promise<Session | null>;
+      act(() => {
+        firstLogin = result.current.login();
+        void result.current.login();
+      });
+      let firstResolved: Session | null | "pending" = "pending";
+      void firstLogin.then((session) => {
+        firstResolved = session;
+      });
+
+      await act(async () => {
+        first.resolve(null);
+      });
+      // Its own probe was superseded, and the one that superseded it has not written yet.
+      expect(firstResolved).toBe("pending");
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+
+      await act(async () => {
+        second.resolve(ADMIN);
+        await firstLogin;
+      });
+
+      expect(firstResolved).toEqual(result.current.session);
+      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("resolves a superseded sign-in to null when a sign-out supersedes the sign-in after it", async () => {
+      const first = deferred<Identity | null>();
+      const second = deferred<Identity | null>();
+      me.mockResolvedValueOnce(null)
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      let firstLogin!: Promise<Session | null>;
+      act(() => {
+        firstLogin = result.current.login();
+        void result.current.login();
+      });
+      await act(async () => {
+        first.resolve(ADMIN);
+      });
+      await act(async () => {
+        await result.current.logout();
+      });
+      let resolved: unknown = "unset";
+      await act(async () => {
+        second.resolve(ADMIN);
+        resolved = await firstLogin;
       });
 
       expect(resolved).toBeNull();
