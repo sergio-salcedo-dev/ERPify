@@ -122,9 +122,9 @@ Feature: Erase an identity (GDPR right to erasure)
     # assumed: it is one directed DELETE beside the reset-token one, it costs +1 whether it matches a row or
     # none, and it sits last among the identity module's own deletes because nothing else reaches both that
     # table and the reset tokens — its only fixed constraint is that it follows the identity row. The re-sweep
-    # scheduling is the last term, measured at +3: one INSERT into identity_erasure_resweep wrapped in the
-    # SAVEPOINT/RELEASE pair the ORM flush emits inside the erasure's transaction, whatever the subject held.
-    And 26 requests got executed for doctrine connection "default"
+    # scheduling is the last term, measured at +1: one upsert into identity_erasure_resweep, written through the
+    # connection so no flush adds a SAVEPOINT/RELEASE pair, whatever the subject held.
+    And 24 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change

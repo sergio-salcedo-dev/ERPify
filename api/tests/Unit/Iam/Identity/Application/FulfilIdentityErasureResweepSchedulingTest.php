@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use ArrayObject;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
@@ -11,6 +12,7 @@ use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -60,9 +62,29 @@ final class FulfilIdentityErasureResweepSchedulingTest extends TestCase
         $this->assertSame([], $resweeps->scheduledSubjectIds());
     }
 
+    public function testTheResweepIsScheduledInsideTheErasuresTransaction(): void
+    {
+        // Outside it, a crash between the erasure's commit and the schedule would lose the re-sweep while the
+        // erasure stood, and a rolled-back erasure could leave a pending row naming a subject still alive.
+        $transactions = new DepthRecordingTransactionManager();
+        $resweeps = new InMemoryErasureResweepRepository();
+        /** @var ArrayObject<int, int> $depthsAtSave */
+        $depthsAtSave = new ArrayObject();
+        $resweeps->onSave = static function () use ($transactions, $depthsAtSave): void {
+            $depthsAtSave[] = $transactions->depth;
+        };
+
+        $this->useCase(new InMemoryUserRepository(UserMother::create()), $resweeps, $transactions)
+            ->execute(UserMother::DEFAULT_ID)
+        ;
+
+        $this->assertSame([1], $depthsAtSave->getArrayCopy());
+    }
+
     private function useCase(
         InMemoryUserRepository $users,
         InMemoryErasureResweepRepository $resweeps,
+        ?TransactionManager $transactions = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject(
@@ -83,7 +105,7 @@ final class FulfilIdentityErasureResweepSchedulingTest extends TestCase
             new PurgeUserInvitations(new InMemoryInvitationRepository()),
             new RecordingAuditLogger(),
             new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
-            new InlineTransactionManager(),
+            $transactions ?? new InlineTransactionManager(),
             $resweeps,
         );
     }

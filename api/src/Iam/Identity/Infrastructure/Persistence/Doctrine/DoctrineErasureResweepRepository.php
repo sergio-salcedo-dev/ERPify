@@ -22,11 +22,28 @@ final readonly class DoctrineErasureResweepRepository implements ErasureResweepR
     {
     }
 
+    /**
+     * An upsert on the subject rather than a persist, and the conflict is reachable: an identity recreated under
+     * the same id — a fixture or seed with fixed ids — and erased again inside the window would otherwise fail
+     * the erasure on the unique index, with the subject's id in the driver's `DETAIL` line and so in the error
+     * response and the log. A second erasure restarts the window, because it is owed one of its own. Written
+     * through the connection rather than a flush, which also spares the erasure the savepoint pair a nested
+     * flush emits.
+     */
     #[Override]
     public function save(ErasureResweep $resweep): void
     {
-        $this->entityManager->persist($resweep);
-        $this->entityManager->flush();
+        $this->entityManager->getConnection()->executeStatement(
+            'INSERT INTO identity_erasure_resweep (id, subject_id, created_at, updated_at) '
+            . 'VALUES (CAST(:id AS UUID), CAST(:subject_id AS UUID), :scheduled_at, :scheduled_at) '
+            . 'ON CONFLICT (subject_id) DO UPDATE SET created_at = EXCLUDED.created_at, '
+            . 'updated_at = EXCLUDED.updated_at',
+            [
+                'id' => $resweep->getId(),
+                'subject_id' => $resweep->subjectId(),
+                'scheduled_at' => $resweep->getCreatedAt()->format('Y-m-d H:i:s'),
+            ],
+        );
     }
 
     #[Override]
@@ -46,9 +63,14 @@ final readonly class DoctrineErasureResweepRepository implements ErasureResweepR
     }
 
     #[Override]
-    public function delete(ErasureResweep $resweep): void
+    public function deleteForSubject(string $subjectId): void
     {
-        $this->entityManager->remove($resweep);
-        $this->entityManager->flush();
+        $this->entityManager->createQueryBuilder()
+            ->delete(ErasureResweep::class, 'r')
+            ->where('r.subjectId = :subjectId')
+            ->setParameter('subjectId', $subjectId)
+            ->getQuery()
+            ->execute()
+        ;
     }
 }

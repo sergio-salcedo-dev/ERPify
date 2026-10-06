@@ -40,10 +40,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 final class ErasureResweep extends AggregateRoot
 {
     /**
-     * How long after an erasure its subject is re-swept, and so how long the subject's real id survives in
-     * this row. It bounds what the mechanism covers: a row a late writer commits more than one window after
-     * the erasure is not reached. Chosen by the product owner on 2026-10-06, together with the five-minute
-     * tick that sweeps it.
+     * How long after its scheduling a subject is re-swept, and so how long its real id survives in this row.
+     * What that leaves uncovered is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7 (ADR D4.2 of
+     * `docs/adr/audit-activity-log.md`).
      */
     public const string WINDOW = 'PT1H';
 
@@ -73,7 +72,8 @@ final class ErasureResweep extends AggregateRoot
 
     /**
      * Whether this row's window has closed at `$now`. Strictly later than one window, so a row scheduled
-     * exactly one window ago still gets a tick that does not forget it.
+     * exactly one window ago still gets a tick that does not forget it — to the second, since `created_at`
+     * is stored without fractions; a five-minute tick never notices the difference.
      */
     public function windowClosedAt(DateTimeImmutable $now): bool
     {

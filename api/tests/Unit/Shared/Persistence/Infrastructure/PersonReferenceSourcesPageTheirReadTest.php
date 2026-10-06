@@ -27,7 +27,12 @@ use PHPUnit\Framework\TestCase;
  * built with a page size of one over a connection that answers `a`, `b` and then nothing, so a source that
  * stopped paging would issue one statement, bind no limit, and return whatever that single answer held.
  *
+ * Its object coupling is the number of sources it covers, plus the clock one of them reads: every new source
+ * adds a class here by design, which is what the coverage case below demands.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(DbalMembershipPersonReferences::class)]
 #[CoversClass(DbalSessionPersonReferences::class)]

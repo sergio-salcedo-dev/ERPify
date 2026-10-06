@@ -139,6 +139,11 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             'DELETE FROM identity_user WHERE id = CAST(:id AS UUID)',
             ['id' => $this->subjectId],
         );
+        // The committed erasure also scheduled its re-sweep, which holds the subject's id.
+        $connection->executeStatement(
+            'DELETE FROM identity_erasure_resweep WHERE subject_id = CAST(:id AS UUID)',
+            ['id' => $this->subjectId],
+        );
         $connection->close();
 
         $this->outside = null;

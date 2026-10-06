@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
+use ArrayObject;
 use DateInterval;
+use Erpify\Iam\Identity\Application\ErasureResweepIncomplete;
 use Erpify\Iam\Identity\Application\ResweepErasedSubjects;
 use Erpify\Iam\Identity\Domain\Entity\ErasureResweep;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
@@ -13,6 +15,9 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
+use Erpify\Shared\Event\Application\SubjectPseudonymisation;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -21,8 +26,10 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 /**
  * The re-sweep's control flow over in-memory doubles: which passes run for which subject, under which
@@ -38,6 +45,7 @@ use PHPUnit\Framework\TestCase;
  */
 #[CoversClass(ResweepErasedSubjects::class)]
 #[CoversClass(ErasureResweep::class)]
+#[CoversClass(ErasureResweepIncomplete::class)]
 final class ResweepErasedSubjectsTest extends TestCase
 {
     private const string SUBJECT_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a11';
@@ -136,6 +144,82 @@ final class ResweepErasedSubjectsTest extends TestCase
         $this->assertSame([self::OTHER_SUBJECT_ID], $resweeps->scheduledSubjectIds());
     }
 
+    public function testTheClosingTickForgetsTheSubjectInsideTheTransactionThatSweptIt(): void
+    {
+        $transactions = new DepthRecordingTransactionManager();
+        $resweeps = new InMemoryErasureResweepRepository($this->scheduledAgo(self::SUBJECT_ID, 'PT1H1S'));
+        /** @var ArrayObject<int, int> $depthsAtDelete */
+        $depthsAtDelete = new ArrayObject();
+        $resweeps->onDelete = static function () use ($transactions, $depthsAtDelete): void {
+            $depthsAtDelete[] = $transactions->depth;
+        };
+
+        $this->useCase(
+            $resweeps,
+            new RecordingAuditActorAnonymiser(matchCount: 0),
+            new RecordingAuditResourceAnonymiser(matchCount: 0),
+            new RecordingEventStoreSubjectAnonymiser(),
+            new InMemorySessionRepository(),
+            new RecordingAuditLogger(),
+            $transactions,
+        )->resweep();
+
+        // Outside it, a failure between the sweep and the delete would forget a subject whose last pass rolled
+        // back.
+        $this->assertSame([1], $depthsAtDelete->getArrayCopy());
+    }
+
+    public function testASubjectWhosePassFailsNeitherHoldsBackTheOthersNorIsForgotten(): void
+    {
+        $failing = $this->scheduledAgo(self::SUBJECT_ID, 'PT2H');
+        $healthy = $this->scheduledAgo(self::OTHER_SUBJECT_ID, 'PT1H1S');
+        $resweeps = new InMemoryErasureResweepRepository($failing, $healthy);
+        $events = new class implements EventStoreSubjectAnonymiser {
+            /** @var list<string> */
+            public array $subjects = [];
+
+            public string $failsFor = '';
+
+            #[Override]
+            public function anonymise(SubjectPseudonymisation $pseudonymisation): int
+            {
+                if ($pseudonymisation->subjectId === $this->failsFor) {
+                    throw new RuntimeException(\sprintf('Key (id)=(%s) is poisoned', $this->failsFor));
+                }
+
+                $this->subjects[] = $pseudonymisation->subjectId;
+
+                return 0;
+            }
+        };
+
+        $events->failsFor = self::SUBJECT_ID;
+
+        try {
+            $this->useCase(
+                $resweeps,
+                new RecordingAuditActorAnonymiser(matchCount: 0),
+                new RecordingAuditResourceAnonymiser(matchCount: 0),
+                $events,
+                new InMemorySessionRepository(),
+                new RecordingAuditLogger(),
+            )->resweep();
+            $this->fail('A failed subject must leave the tick visible.');
+        } catch (ErasureResweepIncomplete $erasureResweepIncomplete) {
+            // The failure is raised after the rest were swept, and it carries the cause's class, never its text:
+            // a driver message quoting a value would put the subject's id in the log the re-sweep keeps it out of.
+            $this->assertStringContainsString('1 of 2', $erasureResweepIncomplete->getMessage());
+            $this->assertStringContainsString(RuntimeException::class, $erasureResweepIncomplete->getMessage());
+            $this->assertStringNotContainsString(self::SUBJECT_ID, $erasureResweepIncomplete->getMessage());
+            $this->assertNull($erasureResweepIncomplete->getPrevious());
+        }
+
+        // The older subject failed first; the newer one was swept and, its window closed, forgotten anyway.
+        $this->assertSame([self::OTHER_SUBJECT_ID], $events->subjects);
+        $this->assertSame([self::OTHER_SUBJECT_ID], $resweeps->deletedSubjectIds);
+        $this->assertSame([self::SUBJECT_ID], $resweeps->scheduledSubjectIds());
+    }
+
     public function testARowScheduledExactlyOneWindowAgoIsStillSwept(): void
     {
         $resweeps = new InMemoryErasureResweepRepository($this->scheduledAgo(self::SUBJECT_ID, 'PT1H'));
@@ -173,9 +257,10 @@ final class ResweepErasedSubjectsTest extends TestCase
         InMemoryErasureResweepRepository $resweeps,
         RecordingAuditActorAnonymiser $actor,
         RecordingAuditResourceAnonymiser $resource,
-        RecordingEventStoreSubjectAnonymiser $events,
+        EventStoreSubjectAnonymiser $events,
         InMemorySessionRepository $sessions,
         RecordingAuditLogger $audit,
+        ?TransactionManager $transactions = null,
     ): ResweepErasedSubjects {
         return new ResweepErasedSubjects(
             $resweeps,
@@ -183,7 +268,7 @@ final class ResweepErasedSubjectsTest extends TestCase
             $events,
             new PurgeUserSessions($sessions),
             $audit,
-            new InlineTransactionManager(),
+            $transactions ?? new InlineTransactionManager(),
             new FixedClock(SystemClock::now()),
         );
     }

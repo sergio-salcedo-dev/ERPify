@@ -31,7 +31,8 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * but its owner still sees it among their sessions and can retire it there, and it expires on its own. Revoking
  * it would publish a {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} naming a person from a request
  * that person did not make and whose erasure it does not serialise against — an event that, racing that erasure,
- * reaches the event store after its anonymising pass and keeps the real id. A writer about a person here is
+ * reaches the event store after its anonymising pass and keeps the real id until the erasure re-sweep reaches it
+ * (`docs/adr/audit-activity-log.md` D4.2). A writer about a person here is
  * always a request of that person's.
  *
  * The correlation is written through {@see CurrentSessionReference} only AFTER the transaction commits, so a

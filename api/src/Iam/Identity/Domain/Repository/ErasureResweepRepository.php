@@ -10,7 +10,8 @@ interface ErasureResweepRepository
 {
     /**
      * Joins the caller's transaction: the erasure schedules its re-sweep inside the transaction that erases,
-     * so a rolled-back erasure leaves nothing to re-sweep.
+     * so a rolled-back erasure leaves nothing to re-sweep. A subject already scheduled has its window
+     * restarted rather than raising.
      */
     public function save(ErasureResweep $resweep): void;
 
@@ -21,5 +22,9 @@ interface ErasureResweepRepository
      */
     public function findAll(): array;
 
-    public function delete(ErasureResweep $resweep): void;
+    /**
+     * By the subject's id rather than by the entity, so a row read before an earlier transaction of the same
+     * tick rolled back — and the EntityManager was reset under it — can still be deleted.
+     */
+    public function deleteForSubject(string $subjectId): void;
 }

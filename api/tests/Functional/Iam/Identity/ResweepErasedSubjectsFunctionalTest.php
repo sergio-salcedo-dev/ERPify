@@ -36,8 +36,9 @@ use Symfony\Component\Clock\MockClock;
  * which writer it was. The erasure is the real use case, because what is under test is that it schedules the
  * re-sweep in the transaction it commits.
  *
- * Everything runs inside one rolled-back transaction; ids are per run, so the shared test database's own rows
- * can decide nothing either way.
+ * Everything runs inside one rolled-back transaction; ids are per run, and the pending table is emptied inside
+ * that transaction, because the re-sweep reads it whole and a subject another test committed would otherwise
+ * add its own rewrites to the totals asserted here.
  *
  * Its object coupling is the re-sweep's own: building it names every pass the erasure runs, and a double or
  * an adapter for each.
@@ -63,6 +64,7 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
 
         $this->connection = $this->service(EntityManagerInterface::class)->getConnection();
         $this->connection->beginTransaction();
+        $this->connection->executeStatement('DELETE FROM identity_erasure_resweep');
 
         $this->subjectId = Uuid::generate();
     }
@@ -85,7 +87,7 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
         $scheduled = $this->rowsNamingTheSubject('identity_erasure_resweep', 'subject_id');
         $this->assertSame(1, $scheduled, 'the erasure scheduled it');
 
-        $this->insertLateActorRow();
+        $lateActorRow = $this->insertLateActorRow();
         $this->insertLateResourceRow();
         $this->insertLateEvent();
         $this->insertLateSession();
@@ -98,18 +100,19 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
         $this->assertSame(0, $this->rowsNamingTheSubject('event_store', 'aggregate_id'), 'business log');
         $this->assertSame(0, $this->rowsNamingTheSubject('iam_session', 'user_id'), 'session store');
 
-        // One pseudonym for the whole tick, and a compliance entry carrying it (D4.1) — never the subject.
+        // One pseudonym for the whole tick, read off the late row itself, and a compliance entry carrying it
+        // (D4.1) — never the subject.
         $pseudonym = $this->connection->fetchOne(
-            "SELECT metadata->>'anonymized_actor_id' FROM audit_log "
-            . "WHERE action = 'GDPR_ERASURE_EXECUTED' AND metadata->>'resweep' = 'true' "
-            . 'AND actor_type = :system',
-            ['system' => 'system'],
+            'SELECT actor_id FROM audit_log WHERE id = CAST(:id AS UUID) AND actor_erased',
+            ['id' => $lateActorRow],
         );
         $this->assertIsString($pseudonym);
         $this->assertSame(
             1,
             $this->rowCount(
-                'SELECT COUNT(*) FROM audit_log WHERE actor_id = CAST(:p AS UUID) AND actor_erased',
+                "SELECT COUNT(*) FROM audit_log WHERE action = 'GDPR_ERASURE_EXECUTED' "
+                . "AND actor_type = 'system' AND metadata->>'resweep' = 'true' "
+                . "AND metadata->>'anonymized_actor_id' = :p",
                 ['p' => $pseudonym],
             ),
         );
@@ -146,7 +149,29 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
 
         $this->assertSame(1, $this->resweep()->resweep(), 'the closing tick still sweeps');
         $this->assertSame(0, $this->rowsNamingTheSubject('audit_log', 'actor_id'));
-        $this->assertSame(0, $this->rowsNamingTheSubject('identity_erasure_resweep', 'subject_id'), 'and then forgets');
+        $forgotten = $this->rowsNamingTheSubject('identity_erasure_resweep', 'subject_id');
+        $this->assertSame(0, $forgotten, 'and then forgets');
+
+        // Forgotten means outside the mechanism: a row committed after the window is not reached, which is the
+        // residual the product owner accepted rather than an accident.
+        $this->insertLateActorRow();
+        $this->assertSame(0, $this->resweep()->resweep());
+        $this->assertSame(1, $this->rowsNamingTheSubject('audit_log', 'actor_id'));
+    }
+
+    #[Test]
+    public function aSubjectErasedAgainInsideItsWindowRestartsItInsteadOfFailingTheErasure(): void
+    {
+        // An identity recreated under the same id — a fixture or seed with fixed ids — and erased again. On the
+        // unique index this used to fail the erasure, with the subject's id in the driver's DETAIL line.
+        $this->eraseALiveSubject();
+        $first = $this->scheduledAt();
+        $this->travel('PT30M');
+
+        $this->eraseALiveSubject();
+
+        $this->assertSame(1, $this->rowsNamingTheSubject('identity_erasure_resweep', 'subject_id'));
+        $this->assertGreaterThan($first, $this->scheduledAt(), 'the second erasure owns a window of its own');
     }
 
     #[Test]
@@ -180,6 +205,17 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
         $entityManager->clear();
     }
 
+    private function scheduledAt(): string
+    {
+        $scheduledAt = $this->connection->fetchOne(
+            'SELECT created_at FROM identity_erasure_resweep WHERE subject_id = CAST(:id AS UUID)',
+            ['id' => $this->subjectId],
+        );
+        $this->assertIsString($scheduledAt);
+
+        return $scheduledAt;
+    }
+
     private function resweep(): ResweepErasedSubjects
     {
         return $this->service(ResweepErasedSubjects::class);
@@ -197,9 +233,9 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
         SymfonyClockFacade::set(new MockClock($later));
     }
 
-    private function insertLateActorRow(): void
+    private function insertLateActorRow(): string
     {
-        $this->insertAuditRow(actorId: $this->subjectId, resourceType: 'Bank', resourceId: Uuid::generate());
+        return $this->insertAuditRow(actorId: $this->subjectId, resourceType: 'Bank', resourceId: Uuid::generate());
     }
 
     private function insertLateResourceRow(): void
@@ -211,8 +247,9 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
         );
     }
 
-    private function insertAuditRow(?string $actorId, string $resourceType, string $resourceId): void
+    private function insertAuditRow(?string $actorId, string $resourceType, string $resourceId): string
     {
+        $id = Uuid::generate();
         $this->connection->executeStatement(
             'INSERT INTO audit_log '
             . '(id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, '
@@ -220,7 +257,7 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
             . 'VALUES (CAST(:id AS UUID), :level, :action, :actorType, CAST(:actorId AS UUID), :correlationId, '
             . ':resourceType, :resourceId, :metadata, FALSE, FALSE, :occurredOn)',
             [
-                'id' => Uuid::generate(),
+                'id' => $id,
                 'level' => 'activity',
                 'action' => 'API_REQUEST',
                 'actorType' => null === $actorId ? 'anonymous' : 'user',
@@ -232,6 +269,8 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
                 'occurredOn' => SystemClock::now()->format('Y-m-d H:i:sP'),
             ],
         );
+
+        return $id;
     }
 
     private function insertLateEvent(): void

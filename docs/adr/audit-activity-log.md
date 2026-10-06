@@ -675,7 +675,11 @@ propia transacción, y sólo si su identidad estaba viva —la misma condición 
 casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
 `identity_maintenance`, repite para cada sujeto de la última **hora** los pases de actor, recurso, log de negocio
 y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado. El tick que cierra la ventana barre
-una última vez y borra la fila en la misma transacción. Cubre la **clase**, no una lista: da igual quién
+una última vez y borra la fila en la misma transacción. Un sujeto que falla no detiene a los demás: el fallo se
+captura por sujeto, el tick sigue y al final lanza una excepción que cuenta los fallos sin citar su texto —un
+mensaje del driver podría llevar el id—; el sujeto que falló conserva su fila y se reintenta en el siguiente tick.
+Si el fallo terminara el tick, como los sujetos van del más antiguo al más reciente, uno persistente dejaría sin
+barrer a todos los posteriores y sus ids sobrevivirían a la ventana. Cubre la **clase**, no una lista: da igual quién
 escribió la fila.
 
 - **No añade mutaciones.** Los pases son los de D4 y D12, sin cambios e idempotentes —un segundo pase sobre
@@ -684,17 +688,27 @@ escribió la fila.
   la tabla de mapeo que D4 prohíbe aunque viva una hora. Coste aceptado: una fila tardía no enlaza con el resto
   del rastro anonimizado del sujeto.
 - **Evidencia (D4.1).** Un tick que reescribe algo escribe `GDPR_ERASURE_EXECUTED` con
-  `anonymized_actor_id` y `resweep: true`; uno que no reescribe nada no escribe nada.
+  `anonymized_actor_id` y `resweep: true`; uno que no reescribe nada no escribe nada. Como en el borrado de un
+  sujeto que nunca actuó, ese pseudónimo puede no figurar en ninguna fila `actor_erased` —un tick que sólo borró
+  sesiones o reescribió eventos—: D4.1 se cumple en el sentido fila → evidencia, no en el inverso.
 - **La fila pendiente guarda el id real** hasta 1 h 5 min después del borrado. Es una referencia a persona con
   dueño de su borrado (el re-barrido) en `api/.person-reference-policy`, y su fuente detectiva sólo lista las
   filas que superan dos ventanas: una fila en ventana es el instrumento del propio borrado, y listarla daría una
   falsa divergencia por cada borrado.
+- **Un segundo borrado del mismo id reinicia la ventana** (`ON CONFLICT (subject_id) DO UPDATE`) en vez de fallar
+  sobre el índice único: una identidad recreada con un id fijo —fixtures, seeds— y borrada otra vez dentro de la
+  hora tumbaba el borrado con el id del sujeto en la línea `DETAIL` del driver, es decir, en la respuesta y en el log.
 - **Programado, nunca encolado.** El mensaje no lleva payload; un id de persona en un transporte es lo que
   `api/.persistent-transport-policy` prohíbe.
 
-**Lo que no cubre:** una fila confirmada más de una hora después del borrado. Ni Caddy, ni Postgres ni
-`max_execution_time` (que no cuenta la espera en base de datos) acotan una petición, así que la hora es un
-margen, no una garantía. Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+**Lo que no cubre:** una fila confirmada más de una hora después del borrado —la hora cuenta desde que la fila
+pendiente se construye dentro de la transacción del borrado, no desde su commit—. Ni Caddy, ni Postgres ni
+`max_execution_time` (que no cuenta la espera en base de datos) acotan una petición, y un timeout de Postgres
+tampoco lo arreglaría: los escritores de `kernel.terminate` insertan en autocommit tras responder, fuera de toda
+transacción, así que la hora es un margen, no una garantía. Tampoco repite las purgas de tokens de reset,
+secretos de recuperación, membresías e invitaciones: sus escritores contienden con el borrado sobre
+`identity_user` o `iam_invitation`, y cada una de esas columnas tiene su propia fuente detectiva. Registrado en
+`PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
 **Revierte** el «Descartado: barrido periódico que re-anonimiza» de D3.1, sólo para esta clase. Allí había una
 cola que retirar, y retirarla cerraba la ventana. Aquí no hay cola: la alternativa era aceptar sin límite una

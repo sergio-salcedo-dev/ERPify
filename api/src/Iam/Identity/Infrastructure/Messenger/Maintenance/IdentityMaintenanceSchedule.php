@@ -23,12 +23,13 @@ use Symfony\Contracts\Cache\CacheInterface;
  *
  * Each tick joins this schedule rather than minting one of its own, and the boundary argument below is what
  * decides it: a separate provider per job would buy a transport to wire, a pairing for the compose gate to
- * check and a way to ship dead — each multiplied by five, for no isolation anyone needs. They do not share a
- * table: the reconciliation aggregates four sources across three contexts, two of the others read
- * `identity_user`, and the prune touches `iam_session` alone.
+ * check and a way to ship dead — each multiplied by five, for no isolation anyone needs. Only two share a
+ * table — the session prune and the re-sweep both delete from `iam_session`, each by its own independent
+ * predicate — while the reconciliation reads every person-reference source and two of the others read
+ * `identity_user`.
  *
  * A schedule of its own rather than more messages on the audit one, and the reason is a boundary rather
- * than the framework's one-provider-per-name rule: three of these controls are `Iam/Identity`'s — it is the
+ * than the framework's one-provider-per-name rule: four of these controls are `Iam/Identity`'s — it is the
  * context that can say whether an id still names a live person, the one that owns the lockout, and the one
  * that knows what a readable identity row looks like — and hanging them off `Shared/Audit`'s schedule would
  * make a shared capability the owner of an identity concern.
