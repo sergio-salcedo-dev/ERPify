@@ -260,7 +260,9 @@ ser más barato que un write a BD y la absorción de picos deja de ser gratis �
 `activity` (y, con ella, la pregunta del tombstone). Hoy, con transporte Doctrine, la cola era coste neto.
 
 Descartado: *tombstone* consultado en la escritura (reintroduce la tabla de mapeo que D4 rompe). Descartado: barrido
-periódico que re-anonimiza (convierte un invariante en convergencia eventual gobernada por la frecuencia de un cron).
+periódico que re-anonimiza (convierte un invariante en convergencia eventual gobernada por la frecuencia de un cron)
+— para la cola que aquí se retira; D4.2 lo adopta para lo que una petición en vuelo confirma tras el borrado, donde
+no había invariante que perder.
 Descartado: documentar la ventana async como riesgo residual (no sustituye a cerrarla).
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
@@ -461,10 +463,11 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   commit— y no escriben fila con recurso si ya no existe. O confirman antes de que corran los pases, que
   las reescriben, o esperan al commit del borrado y no encuentran a nadie. Toman una sola fila de esa tabla
   y no esperan nada más mientras la retienen, así que no pueden cerrar un ciclo con el borrado. Las filas
-  del log de acceso escritas en `kernel.terminate` quedan fuera: ninguna ruta declara un tipo-persona como
-  recurso, pero una petición del propio sujeto en vuelo durante el borrado puede confirmar su fila de
-  actor tras el pase de actor, y `Shared/Audit` no puede tomar `identity_user` sin cruzar de contexto. Ese
-  residuo ni se cierra ni se detecta: el reconciliador no lee `actor_id`.
+  del log de acceso escritas en `kernel.terminate` quedan fuera de ese bloqueo: ninguna ruta declara un
+  tipo-persona como recurso, pero una petición del propio sujeto en vuelo durante el borrado puede confirmar
+  su fila de actor tras el pase de actor, y `Shared/Audit` no puede tomar `identity_user` sin cruzar de
+  contexto. Esa fila la reescribe el re-barrido de D4.2 en el siguiente tick, si se confirma dentro de la
+  hora que sigue al borrado.
   **Lo que este paso no alcanza, dicho para que no se lea como cobertura total:** el throttle de recuperación
   también emite filas anónimas **sin recurso** cuando la dirección no resuelve a nadie, igual que toda fila
   anónima del log de acceso. Ningún statement del eje de recurso puede casarlas —no hay sujeto al que
@@ -657,6 +660,54 @@ vida», justo la mezcla de ejes que D7 evita.
 **Trigger de revisita.** Cuando aparezca un **segundo** evento de cumplimiento
 (`GDPR_EXPORT_COMPLETED`, `GDPR_ERASURE_FAILED`, …), introducir una **estructura tipada** para esos
 eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo evento de cumplimiento).
+
+### D4.2 — Re-barrido diferido de los pases de borrado (enmienda D3.1 y D4)
+
+**Contexto.** Los pases del borrado (D4, D4.1 y el del log de negocio de
+[`event-store-and-projections.md`](event-store-and-projections.md), D12) reescriben las filas que **existen**
+cuando corren. Una petición que cargó al sujeto antes de que desapareciera su fila de identidad puede confirmar
+otra después: el log de acceso y los cuatro escritores de auditoría del borde de la petición en el eje de actor,
+y `StartSession` con las tres revocaciones de sesión en `event_store` e `iam_session`. Tres rondas de revisión
+encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de ser un control.
+
+**Decisión** (Sergio, 2026-10-06). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
+propia transacción, y sólo si su identidad estaba viva —la misma condición que el pase de `event_store`, que
+casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
+`identity_maintenance`, repite para cada sujeto de la última **hora** los pases de actor, recurso, log de negocio
+y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado. El tick que cierra la ventana barre
+una última vez y borra la fila en la misma transacción. Cubre la **clase**, no una lista: da igual quién
+escribió la fila.
+
+- **No añade mutaciones.** Los pases son los de D4 y D12, sin cambios e idempotentes —un segundo pase sobre
+  tablas limpias no casa nada—, así que el conjunto cerrado de `SanctionedLogMutationGateTest` no crece.
+- **Pseudónimo nuevo por tick**, nunca el del borrado: arrastrarlo exigiría guardarlo junto al id real, que es
+  la tabla de mapeo que D4 prohíbe aunque viva una hora. Coste aceptado: una fila tardía no enlaza con el resto
+  del rastro anonimizado del sujeto.
+- **Evidencia (D4.1).** Un tick que reescribe algo escribe `GDPR_ERASURE_EXECUTED` con
+  `anonymized_actor_id` y `resweep: true`; uno que no reescribe nada no escribe nada.
+- **La fila pendiente guarda el id real** hasta 1 h 5 min después del borrado. Es una referencia a persona con
+  dueño de su borrado (el re-barrido) en `api/.person-reference-policy`, y su fuente detectiva sólo lista las
+  filas que superan dos ventanas: una fila en ventana es el instrumento del propio borrado, y listarla daría una
+  falsa divergencia por cada borrado.
+- **Programado, nunca encolado.** El mensaje no lleva payload; un id de persona en un transporte es lo que
+  `api/.persistent-transport-policy` prohíbe.
+
+**Lo que no cubre:** una fila confirmada más de una hora después del borrado. Ni Caddy, ni Postgres ni
+`max_execution_time` (que no cuenta la espera en base de datos) acotan una petición, así que la hora es un
+margen, no una garantía. Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+
+**Revierte** el «Descartado: barrido periódico que re-anonimiza» de D3.1, sólo para esta clase. Allí había una
+cola que retirar, y retirarla cerraba la ventana. Aquí no hay cola: la alternativa era aceptar sin límite una
+enumeración que ya falló tres veces. La convergencia eventual acotada a una cadencia sustituye a esa aceptación;
+no sustituye a ningún invariante que existiera.
+
+Descartado: **bloquear en el sumidero** (cada escritor toma `identity_user`). El escritor llega al sumidero
+reteniendo filas de sesión mientras el borrado bloquea primero `identity_user`, así que el orden se invierte y se
+abre un interbloqueo; además serializa cada petición de cada usuario. Descartado: **sólo un gate de
+completitud** sobre la lista de escritores. Prueba que la lista está escrita, no que esté completa, y su
+incompletitud es justo el defecto. Descartado: **una huella del id** en la tabla pendiente. El espacio de ids es
+enumerable, así que es un oráculo de re-identificación (D3.1). Descartado: **un mensaje diferido** por sujeto.
+Pondría un id de persona en `messenger_messages`, con reintento y transporte `failed` incluidos.
 
 ### D5 — Ubicación: backbone en `Shared/`, consulta en `Backoffice/Audit/`
 

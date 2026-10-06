@@ -318,6 +318,10 @@ identificador del sujeto con **un UUID aleatorio nuevo acuñado en el borrado** 
 mapeo, sin derivación determinista—, **en la columna y en el TEXTO SERIALIZADO de `payload` y `metadata`,
 por coincidencia de valor y sin distinguir mayúsculas**, dentro de la transacción que
 `FulfilIdentityErasure` ya posee. Es idempotente por construcción: una segunda pasada no encuentra nada.
+Esa idempotencia es lo que permite repetirlo: durante la hora siguiente al borrado, `ResweepErasedSubjects`
+vuelve a pasar el mismo `UPDATE` cada cinco minutos, con un pseudónimo propio de cada tick, para reescribir lo
+que una petición en vuelo haya añadido tras el borrado (`audit-activity-log.md`, D4.2). No es una mutación
+nueva: el conjunto sancionado no cambia.
 
 **Por qué el borrado es por coincidencia de valor y no por enumeración de eventos.** Un `WHERE` sobre el id del
 sujeto alcanza **todo evento** que lo contenga, presente y futuro, sin que ningún productor tenga que acordarse

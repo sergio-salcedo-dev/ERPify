@@ -148,6 +148,11 @@ src/Iam/Identity/Application/KeepOnlyCurrentSession.php => Erpify\Iam\Session\Do
 # reset seams — a use case, never a reach into Session internals.
 src/Iam/Identity/Application/FulfilIdentityErasure.php => Erpify\Iam\Session\Application\PurgeUserSessions
 
+# GDPR erasure re-sweep → the same session purge, for one window after the erasure. ResweepErasedSubjects
+# (Iam/Identity Application) repeats the erasure's passes for a subject whose late request may still have
+# committed a session row after the purge above ran; it consumes the same published use case for the same reason.
+src/Iam/Identity/Application/ResweepErasedSubjects.php => Erpify\Iam\Session\Application\PurgeUserSessions
+
 # GDPR erasure → the two references with no physical foreign key. FulfilIdentityErasure (Iam/Identity
 # Application) consumes the published PurgeUserMembership (Organization/Membership) and PurgeUserInvitations
 # (Iam/Invitation) use cases to hard-delete, inside the same transaction, the membership that admitted the

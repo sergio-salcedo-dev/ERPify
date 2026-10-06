@@ -447,6 +447,7 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
+            - Vendor.PhpNativeSort
         Iam.Invitation.Infrastructure:
             - Iam.Invitation.Domain
             - Iam.Invitation.Application
@@ -614,5 +615,7 @@ deptrac:
             - Erpify\Iam\Session\Application\PurgeUserSessions
             - Erpify\Organization\Membership\Application\PurgeUserMembership
             - Erpify\Iam\Invitation\Application\PurgeUserInvitations
+        Erpify\Iam\Identity\Application\ResweepErasedSubjects:
+            - Erpify\Iam\Session\Application\PurgeUserSessions
         Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSessionsHandler:
             - Erpify\Iam\Session\Application\PruneRetiredSessions

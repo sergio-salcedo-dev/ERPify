@@ -426,8 +426,9 @@ you change anything here.
       defeated by an in-flight write:** `activity` entries are written synchronously (ADR
       D3.1), so audit PII never sits queued in `messenger_messages` (nor in the shared
       `failed` transport) where a later consume could re-insert an already-anonymised
-      `actor_id` after the erasure `UPDATE` (issue #376). The only residual is the
-      request-duration window a request already in flight shares with `security`/`change`.
+      `actor_id` after the erasure `UPDATE` (issue #376). What a request already in flight
+      can still commit afterwards — shared with `security`/`change` — is rewritten by the
+      erasure re-sweep (§7, ADR D4.2).
       Retention by level
       (`activity` vs `security`, the scheduled prune — the table's only `DELETE`) is
       tracked separately; the `change` level carries a 5-year floor. A live PII table must
@@ -2006,26 +2007,30 @@ mitigated state. Accepting one means recording who accepted it and against which
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
 
-- [ ] **A row naming the subject, written by a request already in flight, can commit inside their erasure window.** The
-      late audit writers of `Iam/Identity` that run after their own commit are serialised on the subject's
-      `identity_user` row (§6); the writers below run inside a request already in flight when the erasure starts,
-      take no such lock, and can therefore commit after the pass that would have rewritten them:
-      - **actor-axis audit rows** (`actor_id`, `ip`, `user_agent`) written at the request boundary —
-        `AccessLogAuditListener` at `kernel.terminate`, and the four `RequestBoundarySecurityAudit` callers:
-        `InvalidCurrentPasswordAuditListener`, `SelfTargetedActRefusalAuditListener`,
-        `AccessDeniedAuditListener`, `AuditTrailReadAuditListener`. The reconciler does not read `actor_id`, so
-        nothing reports such a row (`docs/adr/audit-activity-log.md`);
-      - **session events naming the subject** — `StartSession` appends `SessionStarted` (and `SessionRevoked` for a
-        replaced row of the same identity); `RevokeSession`, `RevokeOtherSessions` and `RevokeAllSessions` append
-        `SessionRevoked`, `OtherSessionsRevoked` and `AllSessionsRevoked`. They run from the subject's own sign-in,
-        sign-out, password change or reset, and `RevokeAllSessions` also after an administrator's role or status
-        change commits. None takes the identity lock, so one racing the erasure can append to `event_store` after
-        its anonymising pass, and no reconciler source covers `event_store`.
-      Each window is one in-flight request wide. Closing it costs a row lock on `identity_user`
-      on every audited request with a user actor and on every session write, serialising each user's concurrent
-      requests. **Accepted by Sergio (product owner) for every writer listed** — 2026-10-03 for the audit rows and the sign-in,
-      2026-10-06 for the session revocations — re-affirm or close
-      before the first customer.
+- [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
+      within five minutes — unless it commits more than an hour after the erasure.** The erasure's passes reach
+      the rows that exist when they run, and a request that loaded the subject before the identity row went can
+      commit one afterwards. Three review rounds each found more writers able to: the access log and the four
+      request-boundary security audit listeners on the actor axis, `StartSession` and the three session
+      revocations in `event_store` and `iam_session` — the last also after an administrator's role or status
+      change. An enumeration that failed three times is not a control, so the class is closed by mechanism
+      instead: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
+      `ResweepErasedSubjects` re-runs the actor, resource, business-log and session passes for every subject
+      erased in the last hour, every five minutes on the `identity_maintenance` schedule, whoever wrote the row
+      (`docs/adr/audit-activity-log.md` D4.2). The late writers of `Iam/Identity` that run after their own
+      commit stay serialised on `identity_user` (§6), which closes their window outright rather than bounding
+      it. What remains, **accepted by Sergio (product owner) on 2026-10-06 together with the mechanism**:
+      - **a row committed more than an hour after the erasure is not reached.** Nothing bounds how long a
+        request runs — `max_execution_time` does not count time spent waiting on the database, and neither
+        Caddy nor Postgres sets a timeout — so the hour is a margin chosen far above any sane request, not a
+        guarantee;
+      - **the subject's real id stays in `identity_erasure_resweep` for up to an hour and five minutes** after
+        the erasure reported it gone. The column has a named owner of its erasure (the re-sweep deletes the row
+        on the tick that closes its window) and a detective source that reports a row that outlived it;
+      - **a late row gets the tick's own fresh pseudonym**, not the erasure's, so it does not link to the rest
+        of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
+        vetoes.
+      Re-affirm or close before the first customer.
 - [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
       subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
       nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever

@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Persistence\Infrastructure;
 
 use Doctrine\DBAL\Connection;
+use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalErasureResweepPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalRecoverySecretPersonReferences;
 use Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DbalInvitationPersonReferences;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DbalSessionPersonReferences;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DbalMembershipPersonReferences;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalPersonResourceReferences;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Infrastructure\KeysetDistinctIds;
 use Erpify\Shared\Privacy\Application\PersonReferenceSource;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\ApiSourceFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,6 +34,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DbalInvitationPersonReferences::class)]
 #[CoversClass(DbalPasswordResetTokenPersonReferences::class)]
 #[CoversClass(DbalRecoverySecretPersonReferences::class)]
+#[CoversClass(DbalErasureResweepPersonReferences::class)]
 #[CoversClass(DbalPersonResourceReferences::class)]
 #[CoversClass(KeysetDistinctIds::class)]
 final class PersonReferenceSourcesPageTheirReadTest extends TestCase
@@ -101,6 +105,15 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
             DbalRecoverySecretPersonReferences::class,
             static fn (Connection $connection): array => (new DbalRecoverySecretPersonReferences($connection, 1))
                 ->retainedPersonIds(),
+        ];
+
+        yield 'erasure resweep' => [
+            DbalErasureResweepPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalErasureResweepPersonReferences(
+                $connection,
+                new FixedClock(SystemClock::now()),
+                1,
+            ))->retainedPersonIds(),
         ];
 
         yield 'audit resource' => [

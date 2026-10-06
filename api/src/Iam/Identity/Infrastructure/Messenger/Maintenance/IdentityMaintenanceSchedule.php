@@ -13,16 +13,17 @@ use Symfony\Component\Scheduler\ScheduleProviderInterface;
 use Symfony\Contracts\Cache\CacheInterface;
 
 /**
- * Identity-owned maintenance schedule, carrying four recurring jobs: a reconciliation of the places that hold
+ * Identity-owned maintenance schedule, carrying five recurring jobs: a reconciliation of the places that hold
  * a person's id against the identities still alive, the sweep that tells the owner of a locked identity that
- * it is locked, an inspection of the identity rows the authentication path reads without complaint, and the
- * retention sweep over the session registry. It gets its own `scheduler_identity_maintenance` transport —
+ * it is locked, an inspection of the identity rows the authentication path reads without complaint, the
+ * retention sweep over the session registry, and the re-sweep of recently erased subjects. It gets its own
+ * `scheduler_identity_maintenance` transport —
  * wired into the `scheduler_worker` (prod) and folded into the `messenger_worker` (dev) `messenger:consume`
  * commands.
  *
  * Each tick joins this schedule rather than minting one of its own, and the boundary argument below is what
  * decides it: a separate provider per job would buy a transport to wire, a pairing for the compose gate to
- * check and a way to ship dead — each multiplied by four, for no isolation anyone needs. They do not share a
+ * check and a way to ship dead — each multiplied by five, for no isolation anyone needs. They do not share a
  * table: the reconciliation aggregates four sources across three contexts, two of the others read
  * `identity_user`, and the prune touches `iam_session` alone.
  *
@@ -53,16 +54,21 @@ use Symfony\Contracts\Cache\CacheInterface;
  * lockout only by coincidence and would usually report nothing about an attack that had already run its
  * course. The session prune is daily for a third reason again — not what it observes but what it removes: its
  * windows are 30 and 90 days, so the finest cadence that changes any outcome is a day, and anything shorter
- * would re-run a DELETE that matched nothing.
+ * would re-run a DELETE that matched nothing. The erasure re-sweep is the one whose period is a product
+ * decision rather than a derivation: it bounds how long a row a late writer committed can name an erased
+ * subject, and it was set at five minutes together with the window
+ * ({@see \Erpify\Iam\Identity\Domain\Entity\ErasureResweep::WINDOW}) it ticks through.
  *
  * A missed tick is caught up rather than dropped (the generator yields one message per elapsed period), so an
  * outage is followed by a burst of sweeps. That is harmless for each of them and deliberately not
  * special-cased, though for different reasons: the lockout sweep carries no payload and its suppression stamp
  * is persisted, so replaying it produces candidate queries and no additional mail, while the reconciliation
  * and the stored-identity inspection are read-only and idempotent — a replay repeats their queries and, if
- * the finding still stands, its log line. The prune is the one that writes, and it is idempotent in the
- * stronger sense: its second run at the same instant matches nothing, because the first already deleted
- * everything the thresholds select.
+ * the finding still stands, its log line. The prune and the re-sweep are the two that write, and both are
+ * idempotent in the stronger sense: a second run at the same instant matches nothing, because the first
+ * already deleted or rewrote everything it selects. An outage longer than the re-sweep window loses nothing
+ * either — a subject's row is forgotten only by the tick that sweeps it, so a closed window still gets its
+ * last pass.
  *
  * **`stateful()` is what makes "daily" true, and without it the period is a claim the deployment cannot
  * keep.** A schedule with no persisted state builds its checkpoint in process memory, so the first run date
@@ -107,6 +113,7 @@ final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInte
             ->add(RecurringMessage::every('5 minutes', new NotifyLockedIdentitiesMessage()))
             ->add(RecurringMessage::every(self::DURABLE_STATE_PERIOD, new InspectStoredIdentityMessage()))
             ->add(RecurringMessage::every('1 day', new PruneRetiredSessionsMessage()))
+            ->add(RecurringMessage::every('5 minutes', new ResweepErasedSubjectsMessage()))
         ;
     }
 }

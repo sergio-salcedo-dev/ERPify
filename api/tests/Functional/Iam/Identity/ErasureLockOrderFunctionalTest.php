@@ -15,6 +15,7 @@ use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
+use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
@@ -239,6 +240,7 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             new RecordingAuditLogger(),
             $this->service(ActorContextFactory::class),
             $this->service(TransactionManager::class),
+            $this->service(ErasureResweepRepository::class),
         );
     }
 
