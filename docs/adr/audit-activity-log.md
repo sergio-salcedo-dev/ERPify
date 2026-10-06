@@ -530,12 +530,9 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
-  **En la tabla, `metadata` se escribe como objeto** —`DbalAuditLogWriter` convierte el nivel superior, así
-  que una fila nueva sin claves guarda `{}`—. Las filas anteriores a esa conversión guardan `[]` y **no se
-  reescriben**: sería una mutación más sobre un log append-only, y ningún lector actual deconstruye la columna
-  (el mapper decodifica con `json_decode(…, true)` y el reconciliador lee con `->>`). Un lector futuro que use
-  `jsonb_each`/`jsonb_object_keys` filtra por `jsonb_typeof(metadata) = 'object'`. Mismo criterio y misma
-  decisión para `event_store` ([`event-store-and-projections.md`](event-store-and-projections.md), D14(b)).
+  **En la tabla, `metadata` se escribe como objeto** —`DbalAuditLogWriter` convierte el nivel superior—; las
+  filas anteriores que guardan `[]` no se reescriben, decisión registrada en
+  [`event-store-and-projections.md`](event-store-and-projections.md), D14(b), junto con la de `event_store`.
   **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
   `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las

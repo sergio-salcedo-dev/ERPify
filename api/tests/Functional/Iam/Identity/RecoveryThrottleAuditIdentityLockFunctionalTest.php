@@ -169,8 +169,7 @@ final class RecoveryThrottleAuditIdentityLockFunctionalTest extends KernelTestCa
     #[Test]
     public function anAddressNamingNobodyGetsAResourceLessRowThatDoesNotCarryIt(): void
     {
-        // Never seeded: the shape a writer meets for an unknown address, and once an erasure it waited on has
-        // committed its DELETE.
+        // Never seeded: the shape a writer meets for an address that names no identity.
         $this->recorder()->record($this->email);
 
         $this->assertSame([['resource_type' => null, 'resource_id' => null]], $this->resourcesOfNewRows());

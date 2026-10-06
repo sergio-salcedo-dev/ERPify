@@ -2006,21 +2006,25 @@ mitigated state. Accepting one means recording who accepted it and against which
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
 
-- [ ] **A row written by the subject's own in-flight request can commit inside their erasure window.** The
+- [ ] **A row naming the subject, written by a request already in flight, can commit inside their erasure window.** The
       late audit writers of `Iam/Identity` that run after their own commit are serialised on the subject's
-      `identity_user` row (§6); the writers below run inside a request the subject started before the erasure,
+      `identity_user` row (§6); the writers below run inside a request already in flight when the erasure starts,
       take no such lock, and can therefore commit after the pass that would have rewritten them:
       - **actor-axis audit rows** (`actor_id`, `ip`, `user_agent`) written at the request boundary —
         `AccessLogAuditListener` at `kernel.terminate`, and the four `RequestBoundarySecurityAudit` callers:
         `InvalidCurrentPasswordAuditListener`, `SelfTargetedActRefusalAuditListener`,
         `AccessDeniedAuditListener`, `AuditTrailReadAuditListener`. The reconciler does not read `actor_id`, so
         nothing reports such a row (`docs/adr/audit-activity-log.md`);
-      - **the subject's own sign-in** — `StartSession` appends `SessionStarted`, and `SessionRevoked` for a
-        replaced row of the same identity, to `event_store`; a sign-in racing the erasure can append them after
+      - **session events naming the subject** — `StartSession` appends `SessionStarted` (and `SessionRevoked` for a
+        replaced row of the same identity); `RevokeSession`, `RevokeOtherSessions` and `RevokeAllSessions` append
+        `SessionRevoked`, `OtherSessionsRevoked` and `AllSessionsRevoked`. They run from the subject's own sign-in,
+        sign-out, password change or reset, and `RevokeAllSessions` also after an administrator's role or status
+        change commits. None takes the identity lock, so one racing the erasure can append to `event_store` after
         its anonymising pass, and no reconciler source covers `event_store`.
-      Each window is one in-flight request of the subject's own. Closing it costs a row lock on `identity_user`
-      on every audited request with a user actor and on every sign-in, serialising each user's concurrent
-      requests. **Accepted 2026-10-03 by Sergio (product owner) for every writer listed** — re-affirm or close
+      Each window is one in-flight request wide. Closing it costs a row lock on `identity_user`
+      on every audited request with a user actor and on every session write, serialising each user's concurrent
+      requests. **Accepted by Sergio (product owner) for every writer listed** — 2026-10-03 for the audit rows and the sign-in,
+      2026-10-06 for the session revocations — re-affirm or close
       before the first customer.
 - [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
       subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
