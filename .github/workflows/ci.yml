@@ -136,7 +136,7 @@ jobs:
         run: make php.unit.coverage
 
       - name: Upload PHP coverage (clover)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: php-coverage
           path: api/var/coverage/clover.xml
@@ -309,7 +309,7 @@ jobs:
       - run: make pwa.production.build
 
       - name: Upload PWA coverage (lcov)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pwa-coverage
           path: pwa/coverage/lcov.info
@@ -407,7 +407,7 @@ jobs:
 
       - name: Upload blob report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: blob-report-${{ matrix.shard }}
           path: pwa/blob-report/
@@ -470,7 +470,7 @@ jobs:
           cd pwa && npx playwright merge-reports --reporter html ./all-blob-reports
 
       - name: Upload merged HTML report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report--attempt-${{ github.run_attempt }}
           path: pwa/playwright-report/
@@ -553,7 +553,7 @@ jobs:
 
       - name: Upload burn-in artifacts
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: burn-in-report--attempt-${{ github.run_attempt }}
           path: |
