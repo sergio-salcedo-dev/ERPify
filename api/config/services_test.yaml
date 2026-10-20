@@ -33,6 +33,10 @@ services:
         exclude: '../tests/Functional/Shared/ErrorContract/Infrastructure/Http/EventListener/Fixtures/ForceHealthFailureSubscriber.php'
         tags: ['controller.service_arguments']
 
+    # test-only controller that leaves a transaction open, behind the `test_leak_transaction` route.
+    Erpify\Tests\Functional\Shared\Persistence\Fixtures\LeakTransactionController:
+        tags: ['controller.service_arguments']
+
     # test-only kernel.controller subscriber that throws on the two `/health`
     # endpoints when `?_force_failure=1` is present. Lets the integration + Behat tests
     # prove the RFC 9457 contract applies retroactively without modifying the

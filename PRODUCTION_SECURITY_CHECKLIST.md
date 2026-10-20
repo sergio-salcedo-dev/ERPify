@@ -2027,6 +2027,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       retired the gate was itself exactly that shape. **Re-assess before the first customer**:
       decide whether an unenforced convention is the control you want over auth, erasure and audit code.
 
+- [ ] **A request or worker message that leaks a transaction loses the audit rows written inside it.**
+      `RequestTransactionBoundaryListener` and `MessageTransactionBoundaryListener` roll back a transaction a
+      unit of work left open and report it at `critical` on the `observability` channel, naming the route or
+      message class. The `kernel.terminate` writers (`AccessLogAuditListener`, `RecoveryThrottleAuditListener`)
+      run after that rollback and keep their rows. What the unit wrote **inside** the leak does not: a use case's
+      `AuditLogger` row (a module's `activity` row among them) is rolled back with the work it describes, so the
+      trail has no entry for an action that, consistently, did not commit either. A request-boundary security
+      row is not lost but refused — `RequestBoundarySecurityAudit` will not write inside an open transaction and
+      answers 5xx. **Detection:** the `critical` line is the only record that the unit ran; nothing correlates it
+      with the missing row. **Residuals:** a handled message whose handler leaks is redelivered after the
+      transport's redelivery timeout and repeats any side effect outside the database each time (accepted by
+      the owner on #1036); a batch handler, and a leak after the worker's running tick, are not contained (none
+      exists today); only the default connection is covered.
+
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. Two of them (#860, #870) carry an `@accepted-risk` tag under
