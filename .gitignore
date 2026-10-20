@@ -97,6 +97,10 @@ pnpm-debug.log*
 /.agent/skills/
 /.agents/skills/
 /.claude/skills/bmad-*/
+# The wds module writes outside the bmad-* namespace: its wds-* skills plus two tools.
+/.claude/skills/wds-*/
+/.claude/skills/memory/
+/.claude/skills/sync/
 # .qwen/ is no longer an install target; ignored so a stray regeneration stays out.
 /.qwen/
 
