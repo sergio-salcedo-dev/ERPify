@@ -13,7 +13,7 @@ deferred:
   - summary: >-
       Otros dos escritores post-commit nombran al sujeto en resource_id sin bloquear identity_user: RecordLockoutNoticeAuditBestEffort y RecordRecoverySecretAuditBestEffort.
     evidence: |-
-      RecordRecoverySecretAuditBestEffort::record() (L118-127) escribe AuditResource::of(User, $userId) tras el commit de Mint/Redeem/RevokeRecoverySecret sin transacción ni bloqueo; RecordLockoutNoticeAuditBestEffort igual tras NotifyLockedIdentities::save(). Mismo defecto que DW-48 pero fuera de los dos escritores que nombra el intent; el del aviso es riesgo aceptado (@accepted-risk #860, cuyo razonamiento "aggregate-wide concurrency policy" conviene reabrir ahora que el mecanismo existe). Su residuo lo señala identity:gdpr:reconcile-subject-references; el docblock de DbalAuditSubjectRowLock y el ADR ya los nombran como NO serializados.
+      RecordRecoverySecretAuditBestEffort::record() (L118-127) escribe AuditResource::of(User, $userId) tras el commit de Mint/Redeem/RevokeRecoverySecret sin transacción ni bloqueo; RecordLockoutNoticeAuditBestEffort igual tras NotifyLockedIdentities::save(). Mismo defecto que DW-48 pero fuera de los dos escritores que nombra el intent; el del aviso es riesgo aceptado (issue #860, cuyo razonamiento "aggregate-wide concurrency policy" conviene reabrir ahora que el mecanismo existe). Su residuo lo señala identity:gdpr:reconcile-subject-references; el docblock de DbalAuditSubjectRowLock y el ADR ya los nombran como NO serializados.
     location: >-
       api/src/Iam/Identity/Application/RecordRecoverySecretAuditBestEffort.php:118; api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort.php
     severity: medium
@@ -83,7 +83,7 @@ deferred:
 - verdicts: 23 findings — high 0, medium 7, low 11, false 4, maybe-false 1
 - findings:
   - `[medium]` `[defer]` (Blind) Dos escritores post-commit hermanos (aviso de lockout, recovery secret) siguen sin bloqueo — verificado en el árbol; fuera de los dos escritores que nombra el intent → `deferred`.
-  - `[low]` `[defer]` (Blind) El razonamiento de @accepted-risk #860 queda debilitado por este mecanismo — es una decisión registrada en la issue; agrupado con el anterior.
+  - `[low]` `[defer]` (Blind) El razonamiento del riesgo aceptado de la issue #860 queda debilitado por este mecanismo — es una decisión registrada en la issue; agrupado con el anterior.
   - `[low]` `[patch]` (Blind) El ADR audit-activity-log no menciona la serialización — añadida una frase al párrafo «Quién queda fuera del seam».
   - `[false]` `[reject]` (Blind) Espera de bloqueo sin cota en prod — `LoginAttemptRegistrar::commitUnderLock` ya espera sin `lock_timeout` sobre la MISMA fila en el mismo camino; ningún `FOR UPDATE` del árbol fija cota; no introduce un modo de fallo nuevo.
   - `[false]` `[reject]` (Blind) Efectos de `transactional()` (cierre/reset del EM, «rolls back only this projection» exagerado) — el reset ocurre sin transacción abierta y nada usa el EM después en ninguno de los dos caminos; `LockoutAuditWriteFailureArrivalTest` (fallo real de escritura → 401 intacto) pasa.

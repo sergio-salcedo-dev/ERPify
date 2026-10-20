@@ -32,9 +32,11 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
     /**
      * Deliberately not 1.0: an array cast to float yields exactly 1.0 and 1.0 sits inside the accepted
      * range, so a bound of 1.0 would make the `?timeout[]=` case assert its own failure value and pass
-     * whether or not the option is validated at all.
+     * whether or not the option is validated at all. It may not go below the factory's 1.0 floor either,
+     * where `factory()` throws, and it sits just above it because the hung-server case waits the whole bound
+     * on the wall clock.
      */
-    private const float BOUND = 2.5;
+    private const float BOUND = 1.25;
 
     /**
      * `EsmtpTransportFactory` reads no `timeout` option, and `SocketStream::getTimeout()` falls back to
@@ -210,6 +212,13 @@ final class TimeBoundedSmtpTransportFactoryTest extends TestCase
             \fclose($server);
         }
 
+        // A failure that arrives before the bound proves nothing about it: a refused connect or a
+        // near-zero timeout raises the same exception at once.
+        $this->assertGreaterThanOrEqual(
+            self::BOUND * 0.9,
+            $elapsed,
+            \sprintf('the send gave up after %ss, before its bound of %ss was ever reached', $elapsed, self::BOUND),
+        );
         $this->assertLessThan(
             self::BOUND * 2,
             $elapsed,
