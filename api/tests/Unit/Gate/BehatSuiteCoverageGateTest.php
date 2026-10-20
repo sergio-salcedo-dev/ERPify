@@ -26,8 +26,8 @@ use SplFileInfo;
  *   (2) A filter on the default profile excludes scenarios by tag. An exclusion is invisible in the
  *       summary line and invites parking a red scenario behind a tag.
  *
- * Textual rather than by loading the config: `Behat\Config\*` is a prerelease API this repo pins at
- * `^4.0@alpha`, so introspecting the object would couple the gate to a shape upstream may still change.
+ * Textual rather than by loading the config: a Behat minor may still change the `Behat\Config\*` API, so
+ * introspecting the object would couple the gate to a shape upstream may still change.
  *
  * @internal
  */

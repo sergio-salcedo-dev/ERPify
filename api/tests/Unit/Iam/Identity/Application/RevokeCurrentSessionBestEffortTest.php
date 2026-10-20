@@ -138,7 +138,7 @@ final class RevokeCurrentSessionBestEffortTest extends TestCase
         $this->assertCount(2, $logger->records, 'a reporting branch went unexercised, so this asserts nothing');
 
         foreach ($logger->records as $record) {
-            $encoded = \json_encode($record, JSON_THROW_ON_ERROR | JSON_PARTIAL_OUTPUT_ON_ERROR);
+            $encoded = \json_encode($record, JSON_THROW_ON_ERROR);
             $this->assertStringNotContainsString(self::USER_ID, $encoded);
             $this->assertStringNotContainsString($sessionId->toString(), $encoded);
         }

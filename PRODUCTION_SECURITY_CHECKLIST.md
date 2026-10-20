@@ -162,9 +162,13 @@ you change anything here.
       carries no such `ENV`; only its builder stage did). With
       `SENTRY_REPOSITORY` empty, nothing is associated: the plugin's `auto`
       fallback reads a `.git` the build context does not contain.
-- [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a
-      `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
-      (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
+- [ ] Sentry events are scrubbed before send: every `dataCollection` category set
+      explicitly to its restrictive value (an unset one is a grant in SDK 11), the
+      identity axes filtered from query params at the source, a `beforeSend`
+      denylist scrub in parity with the API's `SentryEventScrubber` and the same
+      scrub over streamed spans in `beforeSendSpan` (`scrubSentryEvent` /
+      `scrubSentrySpan`, shared `redaction` keys), with `traceLifecycle: "stream"`
+      pinned so `SENTRY_TRACE_LIFECYCLE` cannot switch that hook off; deliberate `telemetry.*`
       causes pass through `serializeCause` (PII-scrubbed). No replay enabled.
 - [ ] The public `/monitoring` Sentry tunnel (`tunnelRoute`, relays anonymous
       browser POSTs to ingest) is rate-limited per client IP in `pwa/src/proxy.ts`
@@ -1189,6 +1193,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       requirement to `symfony/mercure ^0.6.1|^0.7`, so staying on it would have coupled the tree to
       the abandoned 0.4/0.7 pair and put a future advisory in Mercure's JWT-minting path out of
       reach. The bundle keeps `protocol_version: 0.x` by default, so the hub contract is unchanged.
+      **Superseded 2026-10-20:** mercure-bundle 0.6 defaults to protocol 1.0, which the embedded 0.x
+      hub refuses, so `config/packages/mercure.yaml` pins `protocol_version: '0.x'` explicitly and
+      `MercureHubProtocolFunctionalTest` asserts it on the container's own hub.
       Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
       **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
       cache `v0.4.2` exits 1 with `Deprecations: 1` naming
@@ -1858,9 +1865,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       `""`, so every request this transport issues starts with `/`, and nothing here uses hash
       routing — but a third-party script or a future relative fetch would leak. Leading whitespace is
       a third, hand-authored only.
+      **Moved 2026-10-20 (Sentry SDK 11):** spans are streamed and never pass through `beforeSend` or
+      `beforeSendTransaction` (the latter no-ops), and the query arrives as a bare `url.query` with
+      no `?`, which the shape rule cannot recognise — measured passing in clear on every traced fetch
+      and every outgoing-request breadcrumb. Spans are now scrubbed by `scrubSentrySpan` in
+      `beforeSendSpan`, a key naming a query is scrubbed as one, and the identity axes are also
+      filtered at the source through `dataCollection.urlQueryParams`. That hook fails OPEN in the
+      SDK (a throw sends the span unscrubbed), so `scrubSentrySpan` catches and empties the span.
       **Residual four — a green proves the transformation, never the sink.** These are unit rows over
       synthetic events; nothing here observes what a running SDK attaches, and `beforeSend` /
-      `beforeSendTransaction` are the only interception points, so an SDK field outside the surfaces
+      `beforeSendSpan` are the only interception points, so an SDK field outside the surfaces
       enumerated above is untouched by construction.
       **Accepted 2026-08-21 (Sergio):** residuals one to four, on the same basis as the access-log
       residuals above — no production deployment and no customer — and on the narrower fact that all

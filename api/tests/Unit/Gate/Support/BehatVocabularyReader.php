@@ -14,9 +14,9 @@ use SplFileInfo;
  * Reads the Behat step vocabulary out of the tree: what the contexts declare, what the features write,
  * and which of the first each of the second resolves to.
  *
- * Textual rather than by booting Behat, like the gates it serves: `Behat\Config\*` is a prerelease API
- * this repo pins at `^4.0@alpha`, so introspecting it would couple the reading to a shape upstream may
- * still change.
+ * Textual rather than by booting Behat, like the gates it serves: a Behat minor may still change the
+ * `Behat\Config\*` API, so introspecting it would couple the reading to a shape upstream may still
+ * change.
  *
  * It refuses rather than approximates. A pattern it cannot reconstruct exactly — an attribute argument
  * that is not a concatenation of string literals and this file's own constants — throws instead of

@@ -42,7 +42,7 @@ final class ProjectContextManifestRulesGateTest extends TestCase
     {
         yield 'caret' => ['^8.5', '8.5'];
         yield 'wildcard, as Symfony Flex writes it' => ['8.1.*', '8.1'];
-        yield 'stability flag, as behat/behat carries it' => ['^4.0@alpha', '4'];
+        yield 'stability flag' => ['^4.0@alpha', '4'];
         yield 'major claimed against a full patch constraint' => ['^13.3.0', '13'];
         yield 'exact' => ['3.9.6', '3.9'];
         yield 'tilde' => ['~0.2.2', '0.2'];
