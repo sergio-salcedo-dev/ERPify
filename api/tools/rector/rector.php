@@ -72,9 +72,16 @@ return RectorConfig::configure()
         CommandHelpToAttributeRector::class,
         // It does not resolve an import alias: on `use SortDirection as NativeSortDirection` it
         // rewrites an already-native argument to `\SortDirection::…`, leaving the alias unused
-        // and the call no longer spelled the way the ORM sort-direction rule names it. The
-        // string-argument case it exists for is held by `make php.lint.orm-sort-direction`.
-        DoctrineQueryBuilderSortDirectionRector::class,
+        // and the call no longer spelled the way the ORM sort-direction rule names it. Skipped
+        // only where that alias is imported, so it still converts a string direction elsewhere;
+        // a new file importing the alias reds `php.rector.dry-run` and belongs on this list.
+        DoctrineQueryBuilderSortDirectionRector::class => [
+            __DIR__ . '/../../src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php',
+            __DIR__ . '/../../src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php',
+            __DIR__ . '/../../src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSortDirection.php',
+            __DIR__ . '/../../tests/Behat/Support/Tool/EntityManagerToolTrait.php',
+            __DIR__ . '/../../tests/Unit/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSortDirectionTest.php',
+        ],
         // Do not simplify (new Class())->method()
         NewMethodCallWithoutParenthesesRector::class,
         RenameParamToMatchTypeRector::class,

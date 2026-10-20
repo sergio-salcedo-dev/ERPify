@@ -89,8 +89,8 @@ class Json implements Stringable
      */
     private function decode(string $content): array|stdClass
     {
-        // JSON_THROW_ON_ERROR leaves json_last_error() untouched, so reading it here would report whatever
-        // the application's own last non-throwing decode left behind in this same process.
+        // The thrown JsonException is the only failure signal: JSON_THROW_ON_ERROR leaves json_last_error()
+        // holding whatever the application's own last non-throwing decode set in this same process.
         return \json_decode($content, false, 512, JSON_THROW_ON_ERROR);
     }
 }

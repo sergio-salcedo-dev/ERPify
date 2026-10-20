@@ -18,7 +18,7 @@
 
 ### `pwa/` — Next.js PWA (web)
 
-- **Tech stack:** Next.js 16.3 (App Router, Turbopack), React 19.3, TypeScript 6, Tailwind 4, Shadcn, Inversify 8, Vitest 5, Playwright 1.63.
+- **Tech stack:** Next.js 16 (App Router, Turbopack), React 19, TypeScript 6, Tailwind 4, Shadcn, Inversify 8, Vitest 5, Playwright 1 — exact versions in [`project-context.md`](project-context.md).
 - **Root:** `pwa/`
 - **Entry point:** `pwa/src/app/layout.tsx` + `pwa/src/app/page.tsx`
 - **Bounded contexts:** `backoffice/{health}`, `frontoffice/{health}`, `shared/{domain, infrastructure}`
