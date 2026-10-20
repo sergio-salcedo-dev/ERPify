@@ -35,8 +35,8 @@ final class IdentifiableAssignedIdentifierTest extends KernelTestCase
 
         $identifiableEntities = [];
 
-        foreach ($entityManager->getMetadataFactory()->getAllMetadata() as $classMetadatum) {
-            $entityClass = $classMetadatum->getName();
+        foreach ($entityManager->getMetadataFactory()->getAllMetadata() as $classMetadata) {
+            $entityClass = $classMetadata->getName();
 
             if (!$this->usesIdentifiableTrait($entityClass)) {
                 continue;
@@ -46,7 +46,7 @@ final class IdentifiableAssignedIdentifierTest extends KernelTestCase
 
             $this->assertSame(
                 ClassMetadata::GENERATOR_TYPE_NONE,
-                $classMetadatum->generatorType,
+                $classMetadata->generatorType,
                 \sprintf('%s must use an app-assigned id (no Doctrine GeneratedValue).', $entityClass),
             );
         }

@@ -61,8 +61,8 @@ final readonly class EntityClassResolver
     {
         $matches = [];
 
-        foreach ($this->entityManager->getMetadataFactory()->getAllMetadata() as $classMetadatum) {
-            $fqcn = $classMetadatum->getName();
+        foreach ($this->entityManager->getMetadataFactory()->getAllMetadata() as $classMetadata) {
+            $fqcn = $classMetadata->getName();
 
             if ($name === $this->classBasename($fqcn)) {
                 $matches[] = $fqcn;

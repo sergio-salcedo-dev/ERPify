@@ -180,7 +180,7 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
 
         $this->assertCount(1, $logger->records);
 
-        $encoded = \json_encode($logger->records[0], JSON_THROW_ON_ERROR | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $encoded = \json_encode($logger->records[0], JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString($subjectId, $encoded);
         // And the action still is there, so this is asserting an absence beside a presence rather than over
         // a record that carries nothing at all.
