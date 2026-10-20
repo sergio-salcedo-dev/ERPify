@@ -18,18 +18,30 @@ test.describe("FrontOffice - Landing Page", () => {
     await expect(page).toHaveURL("/backoffice");
   });
 
-  test("navigates to login from the Sign in CTA", async ({ page }) => {
-    await page.getByTestId("navbar__link-login").click();
-    await expect(page).toHaveURL("/login");
-    await expect(page.getByTestId("login-form")).toBeVisible();
-  });
+  test("offers no Sign in to an authenticated visitor, on desktop or mobile", async ({ page }) => {
+    // The link is also absent while the session hydrates, so absence only means something
+    // once the probe has answered and the navbar has committed the resolved status.
+    const sessionProbe = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith("/me"),
+    );
+    await page.reload();
+    expect((await sessionProbe).status()).toBe(200);
+    await expect(page.locator("nav.navbar")).toHaveAttribute(
+      "data-session-status",
+      "authenticated",
+    );
 
-  test("navigates to login from the mobile Sign in CTA", async ({ page }) => {
+    await expect(page.getByTestId("navbar__go-to-backoffice-button")).toBeVisible();
+    await expect(page.getByTestId("navbar__link-login")).toHaveCount(0);
+
     await page.setViewportSize({ width: 375, height: 812 });
     await page.getByTestId("navbar__mobile-menu-toggle").click();
-    await page.getByTestId("navbar__link-login--mobile").click();
-    await expect(page).toHaveURL("/login");
-    await expect(page.getByTestId("login-form")).toBeVisible();
+    await expect(page.locator("nav.navbar")).toHaveAttribute(
+      "data-session-status",
+      "authenticated",
+    );
+    await expect(page.getByTestId("navbar__go-to-backoffice-button--mobile")).toBeVisible();
+    await expect(page.getByTestId("navbar__link-login--mobile")).toHaveCount(0);
   });
 
   test("navigates to the public status page from the navbar", async ({ page }) => {

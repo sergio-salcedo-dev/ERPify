@@ -18,6 +18,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
@@ -156,7 +157,11 @@ final class RevokeMyRecoverySecretControllerTest extends TestCase
             $users,
             $secrets,
             new ProveCurrentPassword(),
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
             new RecordingEventBus(),
             new InlineTransactionManager(),
         );

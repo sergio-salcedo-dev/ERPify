@@ -88,6 +88,11 @@ src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Er
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Organization\Membership\Application\FindUserOrganizationId
 
+# Session minting holds the identity it names. StartSession (Iam/Session) declares the SessionSubjectLock port it
+# needs and Iam/Identity implements it, because identity_user is Identity's table: the session context learns only
+# whether the row is there, and the lock is taken in the same order the erasure takes it (identity, then sessions).
+src/Iam/Identity/Infrastructure/Persistence/Doctrine/DbalSessionSubjectLock.php => Erpify\Iam\Session\Application\SessionSubjectLock
+
 # Invitation flow → Identity + Organization seams (II-4). The onboarding orchestration is inherently
 # cross-context: SendInvitation provisions an INVITED identity via the published InviteUser use case, funnels
 # it through GrantMembership (so a user never exists without a membership), and mints the Invitation; on accept,

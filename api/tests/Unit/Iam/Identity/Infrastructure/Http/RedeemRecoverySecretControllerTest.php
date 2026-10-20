@@ -21,6 +21,7 @@ use Erpify\Iam\Session\Application\RevokeSession;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
@@ -209,7 +210,11 @@ final class RedeemRecoverySecretControllerTest extends TestCase
         $useCase = new RedeemRecoverySecret(
             $users,
             $secrets,
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
             new RevokeCurrentSessionBestEffort(
                 new RecordingCurrentSessionReference(),
                 new RevokeSession(

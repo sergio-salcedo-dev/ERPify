@@ -16,6 +16,8 @@ use Override;
  * devices" from another session looks like to a redemption that has just minted its own and not yet locked the
  * set — the redeemed session is gone when the eviction looks for it. Every later call is the real store
  * untouched, so the retry that follows meets the ordinary path.
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") the port it implements fixes the method set
  */
 final class RevokingOnFirstLockSessionRepository implements SessionRepository
 {
@@ -36,6 +38,12 @@ final class RevokingOnFirstLockSessionRepository implements SessionRepository
     public function findActiveById(SessionId $id): ?Session
     {
         return $this->inner->findActiveById($id);
+    }
+
+    #[Override]
+    public function lockActiveById(SessionId $id): ?Session
+    {
+        return $this->inner->lockActiveById($id);
     }
 
     #[Override]

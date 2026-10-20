@@ -50,6 +50,8 @@ final class RevokeMyRecoverySecretFunctionalTest extends WebTestCase
 
     private const string ENDPOINT = '/api/v1/me/recovery-secret/revoke';
 
+    private const string MINT_ENDPOINT = '/api/v1/me/recovery-secret';
+
     /**
      * The seeded row's primary key, which is also the selector half of a presented secret. Fixed rather than
      * drawn so {@see purgeIdentity} can sweep it even when the identity that owned it is already gone.
@@ -79,6 +81,37 @@ final class RevokeMyRecoverySecretFunctionalTest extends WebTestCase
             (string) $client->getResponse()->getContent(),
         );
         $this->assertSame(0, $this->storedSecretCount(), 'the secret survived a revocation that reported success');
+        $this->assertSame(
+            1,
+            $this->auditRowCount('RECOVERY_SECRET_REVOKED'),
+            'the revocation left no security row: its projection is post-commit and refuses an open transaction, '
+            . 'so a caller that reaches it inside one loses the row with every unit test green',
+        );
+    }
+
+    /**
+     * The mint's projection rests on the same post-commit placement as the revocation's, and nothing else reads
+     * the row it writes.
+     */
+    public function testAMintThroughItsRouteLeavesItsSecurityRow(): void
+    {
+        $client = self::createClient();
+        $this->purgeIdentity();
+        $this->authenticateAs($client, self::EMAIL, [Role::VIEWER->value]);
+
+        $client->request(
+            Request::METHOD_POST,
+            self::MINT_ENDPOINT,
+            server: ['CONTENT_TYPE' => 'application/json'],
+            content: (string) \json_encode(['currentPassword' => self::CURRENT_PASSWORD]),
+        );
+
+        $this->assertSame(
+            Response::HTTP_CREATED,
+            $client->getResponse()->getStatusCode(),
+            (string) $client->getResponse()->getContent(),
+        );
+        $this->assertSame(1, $this->auditRowCount('RECOVERY_SECRET_MINTED'));
     }
 
     /**
@@ -205,6 +238,17 @@ final class RevokeMyRecoverySecretFunctionalTest extends WebTestCase
         $this->assertIsString($id);
 
         return $id;
+    }
+
+    private function auditRowCount(string $action): int
+    {
+        $count = $this->functionalConnection()->fetchOne(
+            'SELECT count(*) FROM audit_log WHERE action = :action AND resource_id = CAST(:id AS uuid)',
+            ['action' => $action, 'id' => $this->identityId()],
+        );
+        $this->assertIsNumeric($count);
+
+        return (int) $count;
     }
 
     private function storedSecretCount(): int

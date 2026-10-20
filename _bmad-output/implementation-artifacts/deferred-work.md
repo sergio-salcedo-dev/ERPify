@@ -136,7 +136,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: G-4a — fuga de `PasswordResetCompleted` en los transportes Messenger (2026-07-30)"), 2026-09-24
 location: api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:73-77
 reason: tenant_id is always NULL so (NULL, x, 1) duplicates pass, the UniqueConstraintViolation catch is unreachable and EventStreamConcurrencyConflict is never thrown. Not fixed in G-4a because most publishers take no row lock, so NULLS NOT DISTINCT would turn silent races into 409s across ~15 paths; the owning story must decide whether stream version is a real invariant or informative.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-event-store-informative-version (#1035)
+resolution-undo: e9c25f1139d58488497417fd599a52fe820e5c9fd72ca8394ff120b983635e09 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Informative: retire the promise — Retire the optimistic-concurrency claim from DbalEventStore's docblock, remove the unreachable catch and EventStreamConcurrencyConflict, and document aggregate_version as informative in the event-store ADR.
 
 **(api/Shared/Event — concurrencia) El UNIQUE de stream del `event_store` no impone nada, y el control de concurrencia optimista que su docblock promete no existe.** `event_store_stream_version_uniq` es `UNIQUE (tenant_id, aggregate_id, aggregate_version)` y `DbalEventStore:73` escribe `tenant_id` **siempre `NULL`**; PostgreSQL usa `NULLS DISTINCT` por defecto, así que dos filas `(NULL, x, 1)` entran las dos. **Verificado contra la BD viva** (`pg_indexes`, no el fichero de migración): el índice real **no** lleva la cláusula. Luego el `catch (UniqueConstraintViolationException)` de `DbalEventStore:77` es inalcanzable y `EventStreamConcurrencyConflict` no se lanza jamás — `git grep` lo encuentra **solo** en `DbalEventStore` (declaración y lanzamiento): ningún caso de uso lo captura ni reintenta.
@@ -205,7 +207,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
 location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx:70
 reason: Half (a) closed by 31423b68; (b) a store outage 503 still presents as 'session required' and bounces to /login. Deferred, not a bug: ratified Decision F/AC9; routing 503 to /maintenance would be a UX-resilience improvement to the spec.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-pwa-me-503-to-maintenance (#1035)
+resolution-undo: 1e34e2bec4d8fa80f5ba5ab6505a9700c856b8d10a86062670180f7c1dc50c0d 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Route 503 to /maintenance — Distinguish a 503 store-unavailable /me response in the identity adapter and AuthProvider and route it to the existing /maintenance page rather than to /login, keeping network/malformed-body failures on the current path; update Decision F/AC9's record.
 
 **(pwa/access — resiliencia UX) El PWA colapsa todo fallo no-401 de `/me` a «unauthenticated».** `AuthProvider.resolveSession` captura red/cuerpo-malformado/**503** → `null` → `UNAUTHENTICATED`. (a) **cerrada** — medido el 2026-09-20, `LoginForm.tsx:54-60` guarda hoy el `await login()` antes del toast y del `router.push`, así que un blip tras el login deja al usuario en el formulario con un error reintentable en vez de anunciar «Signed in» y rebotar; el arreglo entró el 2026-08-31 (`31423b68`), dos meses después de escribirse esta bala. (b) En un outage de store, `/me` 503 se presenta como «sesión requerida» y manda a `/login` (que también 503); se descarta la distinción 503/401 que el backend construyó (existe `/maintenance`). **Diferido, NO bug:** es la **Decisión F/AC9 ratificada** (`/me` KO → unauthenticated → B1 `/login`, para evitar el spinner infinito). Enrutar 503→`/maintenance` y no rebotar en un blip post-login sería una *mejora* del spec (pase de resiliencia UX), no un defecto. Ref: `pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx:70`, `pwa/src/app/(auth)/_components/LoginForm.tsx:53`.
@@ -224,7 +228,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
 location: api/src/Iam/Session/Application/StartSession.php:52
 reason: Conscious trade-off documented in StartSession; PruneRetiredSessions now bounds such rows at ~97 days after login, so they are bounded, not avoided, and show as a 'ghost device' for the whole ACTIVE window.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-revoke-prior-session-on-relogin (#1035)
+resolution-undo: dea7356760358eced66f116cc50b7f0295b0a1ea9d640115599edf4ea64806dd 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Revoke the prior session on re-login — When a login mints a new session while the HTTP session already correlates a live iam_session, revoke that previous row in the same transaction, with a functional test showing no ghost device after re-login.
 
 **(api/Iam/Session — higiene de datos) Filas `iam_session` `ACTIVE` huérfanas.** (a) `StartSession` escribe la correlación (`currentSession->set()`) DESPUÉS del commit del row+outbox; si `set()` lanza (p. ej. `getSession()` sin sesión) queda una fila `ACTIVE` sin `iamSessionId` que la referencie. (b) Un re-login con sesión viva acuña una fila nueva y sobrescribe `iamSessionId` sin revocar la previa → la anterior queda `ACTIVE` correlación-huérfana. Tradeoff consciente (documentado en el docblock de `StartSession`: correlación post-commit para no dejar un `iamSessionId` colgando), baja probabilidad; aparece como «dispositivo fantasma» en «mis sesiones». **La poda que esta bala esperaba ya no es futuro** (medido el 2026-09-20): `PruneRetiredSessions` existe, con `REVOKED_RETENTION` de `P30D` y `EXPIRED_RETENTION` de `P90D`, y su segundo disyuntor (`expiresAt < :expiredBefore`, que ignora el estado) **sí** barre una fila ACTIVE huérfana — pero a los ~97 días del login que la acuñó (7d de TTL + 90d de ventana). O sea que la fila está **acotada, no evitada**, y es visible como dispositivo fantasma durante toda la ventana ACTIVE. Ref: `api/src/Iam/Session/Application/StartSession.php:52`.
@@ -283,7 +289,9 @@ resolution: fixed in #1026: every request-boundary security write goes through R
 origin: migrated from legacy ledger ("Deferred from: code review of the metadata-shape fix (2026-09-22)"), 2026-09-24
 location: api/src/Shared/Audit (audit_log writer), api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php:73
 reason: (a) No backfill of historical [] rows — that would be a fourth sanctioned mutation on an append-only table, not the implementer's decision; object-shaped queries must keep bounding by ::text or jsonb_typeof. (b) event_store.metadata has the same defect and the ADR describes a default the migration lacks. Trigger for (b): the first query treating event_store.metadata as an object.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-event-store-informative-version (#1035)
+resolution-undo: e9c25f1139d58488497417fd599a52fe820e5c9fd72ca8394ff120b983635e09 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Fix (b) only; accept (a) — Make DbalEventStore write event_store.metadata as a JSON object ({} when empty), align the ADR with the migration's actual default, and record that historical audit_log [] rows are accepted without backfill.
 
 **Dos residuos de la coacción de `metadata` a objeto, ninguno de los dos cerrado por ella.** El escritor de `audit_log` ya coacciona el nivel superior, así que **desde ese commit** toda fila nueva guarda `{}`; lo que queda abierto es lo de antes y lo de al lado. (a) **Las filas históricas siguen siendo `[]`**, y no hay backfill: hacerlo sería una cuarta mutación sancionada sobre una tabla append-only, decisión que no es del implementador. Mientras tanto la columna tiene dos formas en cualquier base desplegada, `jsonb_each` aborta sobre las viejas, y la mezcla dura años porque el tier `change` tiene un suelo de conservación de 5 años (`AuditRetentionPolicy::COMPLIANCE_RETENTION_FLOOR`). Cualquier consulta que trate `metadata` como objeto debe seguir acotando por `::text` o filtrar por `jsonb_typeof`. (b) **`event_store.metadata` tiene el defecto idéntico y sigue escribiéndose `[]`** (`DbalEventStore:73`); no rompe nada medible hoy porque su anonimizador opera por `regexp_replace` sobre `::text`, insensible a la forma, pero el ADR ya describe esa columna como `NOT NULL DEFAULT '{}'` mientras la migración no declara default alguno, o sea que el documento describe una forma que el escritor no produce. Trigger de (b): la primera consulta que trate `event_store.metadata` como objeto.
@@ -370,7 +378,9 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of landing-login-cta (2026-07-15)"), 2026-09-24
 location: pwa/src/app/_components/Navbar.tsx:54-69
 reason: Neither CTA consults the session, so 'Sign in' is meaningless for a logged-in user. Out of the landing slice's scope; making the access cluster session-aware (useSession()) is a product + UX decision (consult the access spine).
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-public-navbar-session-aware (#1035)
+resolution-undo: 86daafc5a5042e9f52f2a9dd054271b9d896c4cb2cf567ee0828e525a5e59e9d 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Make the access cluster session-aware — Use useSession() in the public Navbar to hide 'Sign in' and show a backoffice entry for authenticated users, with unit tests for both states.
 
 **(pwa/frontoffice · UX · low) El `<Navbar>` público no es auth-aware: un usuario ya autenticado que visita `/` o `/status` sigue viendo el CTA «Sign in» (y «Backoffice»).** El nuevo enlace «Sign in» → `/login` se renderiza incondicionalmente, igual que el botón «Backoffice» preexistente — ninguno de los dos consulta la sesión. Para un usuario logueado, «Sign in» es un CTA sin sentido (aterriza en el formulario de login en vez de entrar al ERP). Fuera de alcance de este slice (que solo añade el punto de entrada de acceso); el redirect/consciencia de sesión ya estaba listado como follow-up. Follow-up: hacer el cluster de acceso del navbar consciente de la sesión (ocultar «Sign in» y/o mostrar «Entrar»/menú de usuario cuando `useSession()` está autenticado), decisión de producto + UX (consultar espina de acceso de Sally). Ref: `pwa/src/app/_components/Navbar.tsx:54-69`.
@@ -438,7 +448,9 @@ decision: 2026-09-28 Keep open for a dedicated epic
 origin: migrated from legacy ledger ("Deferred from: code review of br-4c-602-observabilidad-del-throttle-de-recuperacion (2026-08-12)"), 2026-09-24
 location: audit_log schema (api/migrations), api/src/Shared/Audit
 reason: Illegal rows are unrepresentable in PHP but not in the plain VARCHAR/nullable UUID columns written by raw DBAL, fixtures and Behat SQL; a user row with NULL actor_id escapes both erasure passes silently. Pre-existing; a schema CHECK plus enum-token CHECK is its own migration and decision.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-audit-log-actor-check-constraints (#1035)
+resolution-undo: 616f89c8d7dc406a646d9c76ded067eb47fc34773f56778663cd395af56352ca 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Add the CHECK constraints — Add a migration with CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL)) and an enum-token CHECK on actor_type, mirror them in the schema listener, fix any fixture/Behat SQL that violates them, and add a functional test proving an illegal row is refused.
 
 **`audit_log` has no CHECK tying `actor_type` to `actor_id` nullability, so illegal rows are representable.** `ActorContext` makes `anonymous`/`system` with an id — and `user`/`api_key` without one — unrepresentable in PHP, but the column is plain `VARCHAR(16)`/nullable `UUID` and the table is written by raw DBAL, fixtures and Behat SQL. A `user` row carrying a NULL `actor_id` is matched by neither erasure pass (the actor pass matches on `actor_id`; the resource pass's metadata guard requires `actor_type = anonymous`), so a person's request metadata would survive both silently. Surfaced by the adversarial pass on the anonymous-actor redaction; pre-existing, and a schema-level fix (`CHECK ((actor_type IN ('anonymous','system')) = (actor_id IS NULL))` plus an enum-token CHECK) is its own migration and its own decision.
@@ -459,7 +471,9 @@ resolution-undo: 4f8d06267155660d82fb4f59b2fae8eafa007099e63530253ebb124e4c9c484
 origin: migrated from legacy ledger ("Deferred from: code review of br-4c-602-observabilidad-del-throttle-de-recuperacion (2026-08-12)"), 2026-09-24
 location: api/src/Shared/Audit (AuditSubjectRowLock), RecordLockoutAuditBestEffort, RecordRecoveryThrottleAuditBestEffort
 reason: Neither late writer contends on identity_user, so the window is closed by nothing; it is recoverable (reconciler surfaces it and re-running the idempotent resource pass redacts it) but nothing re-runs it automatically.
-status: open
+status: done 2026-09-29
+resolution: resolved by sweep bundle dw-serialise-late-audit-writers-on-identity (#1035)
+resolution-undo: 9d428fdb4548d84211b380e0baaa40b44b90e5117b8cbfc08e1afa77869fc35f 2026-09-29 7374617475733a206f70656e
 decision: 2026-09-28 Serialise late writers on identity_user — Make the late audit writers take a lock on the subject's identity_user row (or skip when absent) so none can commit inside the erasure window.
 
 **A row committed between the resource-axis `UPDATE` and the erasure's commit keeps its request metadata, and nothing serialises the two.** `AuditSubjectRowLock` scopes its guarantee to the rows existing when it ran, so a `USER_LOCKED` landing after the pass keeps the requester's ip with `resource_erased = FALSE`. **Neither writer of that shape contends on `identity_user`:** `RecordLockoutAuditBestEffort` runs post-commit with the subject id already in hand, and `RecordRecoveryThrottleAuditBestEffort::subjectOf()` resolves the subject with a plain unlocked `findByEmail` from a `kernel.terminate` listener — so the window is closed by nothing, not merely narrow. What makes it *recoverable* rather than permanent is that the late row keeps `resource_id` at the real id with `resource_erased = FALSE`: the reconciler surfaces it, and re-running the erasure's resource pass against that id redacts both columns, because the statement is idempotent by predicate rather than by flag. The residue is therefore narrower than "unhandled" — nothing re-runs it **automatically**, and an operator has to be told by the reconciler first.
@@ -593,3 +607,57 @@ source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
 reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
 status: open
+
+### DW-64: event_store.payload se escribe como array JSON `[]` para eventos cuyo toPrimitives() está vacío (p.ej. BankDeletedDomainEvent).
+origin: spec-deferred 8e448123a8db
+location: api/src/Shared/Event/Infrastructure/Persistence/DbalEventStore.php
+source_spec: `spec-dw-16-30-event-store-informative-version.md`
+severity: low
+reason: DbalEventStore::encode() hace json_encode de un array PHP vacío; la columna se lee como objeto. Preexistente y fuera de DW-30(b), que sólo pedía metadata.
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): DbalEventStore writes an empty payload as a JSON object {}, like metadata; readers decode both shapes to the same array
+
+### DW-65: RepositoryUniqueViolationTest no tiene caso para el puerto `image` de ConcurrentUniqueWrite.
+origin: spec-deferred 1ab3b10287b9
+location: api/tests/Unit/Shared/Persistence/RepositoryUniqueViolationTest.php
+source_spec: `spec-dw-16-30-event-store-informative-version.md`
+severity: low
+reason: api-error-contract.md dice que el `resource` es lo único que distingue los cuatro puertos y que se afirma por puerto; el proveedor del test sólo cubre bank, bank-account e identity-user. Preexistente.
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): RepositoryUniqueViolationTest covers the image port
+
+### DW-66: La sonda en frío de /me que se resuelve después de un login() puede pisar la sesión recién obtenida.
+origin: spec-deferred 3ae2cbd0cfb3
+location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
+source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
+severity: low
+reason: AuthProvider aplica el resultado de la sonda inicial sin secuenciar contra login(); la forma es previa a DW-22 (antes pisaba con null, ahora también con unavailable). Solo ocurre si la sonda en frío tarda más que un login completo.
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): AuthProvider sequences every probe (cold, per-route, login) with a ticket; only the latest applies
+
+### DW-67: Un re-sondeo de /me disparado por navegación puede pisar el resultado de un login() o logout() posterior.
+origin: spec-deferred 64a9c85297cc
+location: pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx
+source_spec: `spec-dw-22-pwa-me-503-to-maintenance.md`
+severity: low
+reason: Misma causa raíz que la entrada anterior: AuthProvider no secuencia sus sondas (el efecto de ruta cancela solo la suya). Con UNAVAILABLE/HYDRATING RequireAuth no monta los controles de logout; el caso requiere un login() que resuelva antes que el re-sondeo lanzado al llegar a /login.
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): same probe sequencing; logout() also invalidates probes in flight
+
+### DW-68: audit_log.level no tiene CHECK; una fila escrita por SQL crudo con un level desconocido o mal capitalizado no la casa ninguna pasada del pruner.
+origin: spec-deferred 473433d709dd
+location: api/src/Shared/Audit/Infrastructure/Persistence/AuditLogSchemaListener.php
+source_spec: `spec-dw-46-audit-log-actor-check-constraints.md`
+severity: low
+reason: DbalAuditLogPruner borra por WHERE level = :level por cada AuditLevel; un token fuera del enum sobrevive para siempre. Preexistente y fuera del intent de DW-46 (solo actor_type/actor_id).
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): Version20260930072817 adds audit_log_level_check (idempotent, with a pre-flight), guarded by AuditLogCheckEnumTokenGateTest and a drift test against AuditLevel::cases()
+
+### DW-69: Otros dos escritores post-commit nombran al sujeto en resource_id sin bloquear identity_user: RecordLockoutNoticeAuditBestEffort y RecordRecoverySecretAuditBestEffort.
+origin: spec-deferred d63734244a81
+location: api/src/Iam/Identity/Application/RecordRecoverySecretAuditBestEffort::record(); api/src/Iam/Identity/Application/RecordLockoutNoticeAuditBestEffort::record()
+source_spec: `spec-dw-48-serialise-late-audit-writers-on-identity.md`
+severity: medium
+reason: RecordRecoverySecretAuditBestEffort::record() (L118-127) escribe AuditResource::of(User, $userId) tras el commit de Mint/Redeem/RevokeRecoverySecret sin transacción ni bloqueo; RecordLockoutNoticeAuditBestEffort igual tras NotifyLockedIdentities::save(). Mismo defecto que DW-48 pero fuera de los dos escritores que nombra el intent; el del aviso es riesgo aceptado (@accepted-risk #860, cuyo razonamiento "aggregate-wide concurrency policy" conviene reabrir ahora que el mecanismo existe). Su residuo lo señala identity:gdpr:reconcile-subject-references; el docblock de DbalAuditSubjectRowLock y el ADR ya los nombran como NO serializados.
+status: done 2026-09-29
+resolution: fixed in #1035 (round-3 review): every late audit writer, lockout notice and recovery secret included, writes under IdentityRowLock (lock-only DBAL port); accepted risk #860 closed
