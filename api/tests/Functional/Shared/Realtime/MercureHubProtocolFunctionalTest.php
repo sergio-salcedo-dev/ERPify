@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Mercure\HubRegistry;
 use Symfony\Component\Mercure\Jwt\Grant;
+use Symfony\Component\Mercure\Jwt\TokenFactoryInterface;
 use Symfony\Component\Mercure\ProtocolVersion;
 
 /**
@@ -43,7 +44,11 @@ final class MercureHubProtocolFunctionalTest extends KernelTestCase
         self::bootKernel();
 
         $factory = $this->service(HubRegistry::class)->getHub()->getFactory();
-        $this->assertNotNull($factory, 'the hub is configured with a JWT secret, so it mints tokens');
+        $this->assertInstanceOf(
+            TokenFactoryInterface::class,
+            $factory,
+            'the hub is configured with a JWT secret, so it mints tokens',
+        );
 
         $claims = $this->payload($factory->create([new Grant([Grant::ACTION_SUBSCRIBE], ['urn:test:topic'])]));
 
