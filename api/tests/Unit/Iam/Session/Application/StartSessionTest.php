@@ -16,7 +16,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
+ * Every collaborator of the use case is doubled here — the store, the correlation, the bus, the transaction, the
+ * clock and the identity it holds — which is what puts the collaborator count at the threshold.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(StartSession::class)]
 final class StartSessionTest extends TestCase
@@ -41,6 +46,7 @@ final class StartSessionTest extends TestCase
             $eventBus,
             new InlineTransactionManager(),
             $clock,
+            new RecordingSessionSubjectLock(),
         );
 
         $sessionId = $startSession->start(
@@ -77,6 +83,7 @@ final class StartSessionTest extends TestCase
             new RecordingEventBus(),
             new InlineTransactionManager(),
             FixedClock::at(self::NOW),
+            new RecordingSessionSubjectLock(),
         );
 
         $sessionId = $startSession->start(

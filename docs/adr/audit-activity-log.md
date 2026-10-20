@@ -175,8 +175,9 @@ transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffo
 `RecordRecoverySecretAuditBestEffort`) escriben **después** del
 commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
 `event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los cuatro escriben en una transacción
-propia bajo el bloqueo de la fila `identity_user` del sujeto (`IdentityRowLock`: un `SELECT … FOR UPDATE` sobre
-la conexión, sin hidratar `User` ni vaciar el entity manager, con la espera acotada por `lock_timeout`), en el
+propia bajo el bloqueo de la fila `identity_user` del sujeto (`IdentityRowLock`: un `SELECT … FOR KEY SHARE` sobre
+la conexión —el modo más débil que aún espera al `FOR UPDATE` y al `DELETE` de la erasure, sin hacer esperar a
+otro escritor tardío ni a un `UPDATE` que no toca la clave—, sin hidratar `User` ni vaciar el entity manager, con la espera acotada por `lock_timeout`), en el
 orden de la erasure (`identity_user` → `audit_log`), así que no pueden confirmar una fila que lo nombre tras la
 pasada de la erasure: o confirman antes y la pasada la redacta, o esperan y no encuentran sujeto. Una espera que
 agota su cota es una proyección omitida y reportada, no una fila escrita; lo que escape a todo ello lo señala
@@ -753,8 +754,7 @@ y ninguna consulta usa operadores CIDR/subred — solo se almacena como evidenci
 
 `level` y `actor_type` se persisten como `VARCHAR` guardando el `->value` de enums PHP
 string-backed (`EnumType` es una constraint de Symfony Validator, no un Doctrine `Type`; no se usan
-enums nativos de Postgres). El conjunto cerrado de `actor_type` lo refuerza un `CHECK` (D7); `level` no lleva
-ninguno.
+enums nativos de Postgres). Los conjuntos cerrados de `actor_type` y de `level` los refuerza cada uno un `CHECK` (D7).
 
 Índices previstos: `(actor_id, occurred_on)` (jornada), `(correlation_id)` (request), `(level,
 occurred_on)` (retención/prune), `(resource_type, resource_id)` (investigación por recurso).

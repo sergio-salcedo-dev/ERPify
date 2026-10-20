@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Logo, ThemeToggle } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/context/shared/access/application/useSession";
-import { AuthStatus } from "@/context/shared/access/infrastructure/ui/AuthProvider";
+import { AuthStatus } from "@/context/shared/access/infrastructure/ui";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { Routes } from "@/context/shared/routing/domain/Routes";

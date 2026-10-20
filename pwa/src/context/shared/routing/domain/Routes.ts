@@ -35,8 +35,9 @@ export const Routes = {
    */
   PROFILE: "/backoffice/profile",
   /**
-   * Public maintenance screen. Where a guarded route goes when the server answers that it cannot
-   * resolve the session (503) — distinct from {@link LOGIN}, which the same outage would refuse.
+   * Public "Service unavailable" page. Where a guarded route goes when the server — or a gateway in
+   * front of it — answers that it cannot resolve the session (502/503/504) — distinct from
+   * {@link LOGIN}, which the same outage would refuse.
    */
   MAINTENANCE: "/maintenance",
   /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */

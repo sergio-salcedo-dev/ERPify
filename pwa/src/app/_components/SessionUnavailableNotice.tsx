@@ -37,7 +37,6 @@ export function SessionUnavailableNotice({
 
   return (
     <div
-      role="status"
       className={cn("navbar__session-unavailable flex items-center gap-2", className)}
       data-testid={testId}
     >

@@ -21,6 +21,8 @@ final class TransactionSnapshottingManager implements TransactionManager
 
     public int $publishedWithin = 0;
 
+    public bool $open = false;
+
     public function __construct(
         private readonly InMemorySessionRepository $sessions,
         private readonly RecordingEventBus $eventBus,
@@ -34,7 +36,13 @@ final class TransactionSnapshottingManager implements TransactionManager
         $saved = \count($this->sessions->saved);
         $published = \count($this->eventBus->publishedEvents);
 
-        $result = $operation();
+        $this->open = true;
+
+        try {
+            $result = $operation();
+        } finally {
+            $this->open = false;
+        }
 
         $this->savedWithin += \count($this->sessions->saved) - $saved;
         $this->publishedWithin += \count($this->eventBus->publishedEvents) - $published;

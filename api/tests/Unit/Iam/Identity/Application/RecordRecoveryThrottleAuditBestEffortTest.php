@@ -150,6 +150,29 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
+    public function testACommitThatFailsIsSwallowedAndReportedAsTheCommitPhase(): void
+    {
+        // The row is written and only the COMMIT fails — a serialization failure, a lost connection — so the
+        // report has to say the write got that far rather than blaming the INSERT.
+        $failure = new RuntimeException('could not serialize access');
+        $identityRows = new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create()));
+        $identityRows->onRelease = static fn () => throw $failure;
+
+        $logger = new RecordingLogger();
+
+        (new RecordRecoveryThrottleAuditBestEffort(
+            new FixedRecoveryThrottleAuditBudget(granted: true),
+            $identityRows,
+            new RecordingAuditLogger(),
+            $logger,
+        ))->record(UserMother::DEFAULT_EMAIL);
+
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('commit', $logger->records[0]['context']['phase'] ?? null);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
+    }
+
     public function testTheLogLineNamesNeitherTheAddressNorTheSubject(): void
     {
         $logger = new RecordingLogger();

@@ -13,10 +13,18 @@ use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
- * {@see IdentityRowLock} over plain DBAL: a `SELECT … FOR UPDATE` on `identity_user` inside a transaction the
+ * {@see IdentityRowLock} over plain DBAL: a `SELECT … FOR KEY SHARE` on `identity_user` inside a transaction the
  * connection opens itself, so no `User` is hydrated and nothing pending in the entity manager is flushed. The
  * statement carries no column the caller does not need — `1` for the id form, the id for the address form — so
  * the lock reads no credential digest into this process.
+ *
+ * **`FOR KEY SHARE` is the weakest mode that still serialises against the erasure**, which is all the port owes.
+ * It conflicts with the erasure's `FOR UPDATE` and with its `DELETE`, and once the erasure commits Postgres
+ * re-reads the row and finds none. It does not conflict with another writer holding the same mode, nor with a
+ * plain `UPDATE` that leaves the key alone, so two late writers for one subject never queue behind each other;
+ * what still makes one wait is a transaction that took the row `FOR UPDATE` — the erasure, and the locked reads
+ * the login and administration paths decide on. A wait that exhausts the bound costs an audit row, so every wait
+ * the guarantee does not need is one fewer row lost.
  *
  * **The wait is bounded by `lock_timeout`.** An erasure holds the subject's row from its administrator re-check
  * to its commit, and a writer waiting on it runs on a login refusal or at `kernel.terminate`, where an unbounded
@@ -34,8 +42,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 final readonly class DbalIdentityRowLock implements IdentityRowLock
 {
     /**
-     * Long enough to outlast the ordinary contention on one identity's row — another failed attempt's counter
-     * write, an administrator's status change — and short enough that a request never waits out a whole erasure.
+     * Long enough to outlast the ordinary `FOR UPDATE` holders of one identity's row — a failed attempt's locked
+     * read and counter write, an administrator's status change — and short enough that a request never waits out
+     * a whole erasure.
      */
     private const string BOUND_THE_WAIT = "SET LOCAL lock_timeout = '2s'";
 
@@ -52,7 +61,7 @@ final readonly class DbalIdentityRowLock implements IdentityRowLock
                     SELECT 1
                     FROM identity_user
                     WHERE id = CAST(:userId AS UUID)
-                    FOR UPDATE
+                    FOR KEY SHARE
                     SQL,
                 ['userId' => $userId],
             );
@@ -74,7 +83,7 @@ final readonly class DbalIdentityRowLock implements IdentityRowLock
                     SELECT id::text
                     FROM identity_user
                     WHERE email = :email
-                    FOR UPDATE
+                    FOR KEY SHARE
                     SQL,
                 ['email' => $email->toString()],
             );

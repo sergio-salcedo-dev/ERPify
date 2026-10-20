@@ -144,6 +144,23 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
+    public function testACommitThatFailsIsSwallowedAndReportedAsTheCommitPhase(): void
+    {
+        // The row is written and only the COMMIT fails — a serialization failure, a lost connection — so the
+        // report has to say the write got that far rather than blaming the INSERT.
+        $failure = new RuntimeException('could not serialize access');
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->onRelease = static fn () => throw $failure;
+
+        $logger = new RecordingLogger();
+
+        $this->recorder(new RecordingAuditLogger(), $logger, $identityRows)->record(Uuid::generate(), null);
+
+        $this->assertCount(1, $logger->records);
+        $this->assertSame('commit', $logger->records[0]['context']['phase'] ?? null);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
+    }
+
     public function testTheLogLineNamesNoSubject(): void
     {
         // The id is the personal datum this control handles. The sweep drives this path once per lockout

@@ -187,6 +187,7 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
             $this->eventBus,
             $transactions ?? new TransactionSnapshottingManager($sessions, $this->eventBus),
             new FixedClock(SystemClock::now()),
+            new RecordingSessionSubjectLock(),
         );
 
         return $startSession->start(

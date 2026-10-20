@@ -19,6 +19,7 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Iam\Session\Application\RecordingCurrentSessionReference;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingSessionSubjectLock;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -183,6 +184,7 @@ final class StartSessionPriorSessionRaceFunctionalTest extends KernelTestCase
             $this->service(EventBus::class),
             $this->service(TransactionManager::class),
             $this->service(Clock::class),
+            new RecordingSessionSubjectLock(),
         );
 
         return $startSession->start($this->userId, Uuid::generate(), 'test-device', null)->toString();

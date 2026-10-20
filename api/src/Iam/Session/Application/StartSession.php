@@ -6,6 +6,7 @@ namespace Erpify\Iam\Session\Application;
 
 use DateInterval;
 use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
@@ -44,6 +45,13 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * that waits, the event this commits is still reached, because the erasure purges sessions before it
  * pseudonymises the business log (`FulfilIdentityErasure`).
  *
+ * The identity itself is held first, through {@see SessionSubjectLock}, so a login racing that identity's erasure
+ * either commits before the erasure purges sessions and pseudonymises the business log — and is then purged and
+ * rewritten with the rest — or finds the identity gone and mints nothing. Without it a login admitted an instant
+ * before the erasure would leave a session row and a `SessionStarted` naming a person who no longer exists. A
+ * login that arrives second is refused like a store failure: the caller already turns any throw into a dropped
+ * cookie and a 503, and an identity erased mid-login has no session to fall back on either way.
+ *
  * Two residuals remain, both bounded the same way — an unreachable `ACTIVE` row the sweep removes once its expiry
  * is 90 days behind it, ~97 days after the login. A post-commit failure to write the new correlation leaves the
  * NEW row unreachable. A mint the store refuses rolls the revocation back with it, while the minting listener
@@ -62,9 +70,13 @@ final readonly class StartSession
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private SessionSubjectLock $subjectLock,
     ) {
     }
 
+    /**
+     * @throws SessionStoreUnavailable when the identity no longer exists once its row is held
+     */
     public function start(string $userId, string $organizationId, string $device, ?string $ip): SessionId
     {
         $sessionId = SessionId::generate();
@@ -73,7 +85,11 @@ final readonly class StartSession
 
         $previousId = $this->currentSession->get();
 
-        $this->transactionManager->transactional(function () use ($session, $previousId): void {
+        $this->transactionManager->transactional(function () use ($userId, $session, $previousId): void {
+            if (!$this->subjectLock->holdsLive($userId)) {
+                throw SessionStoreUnavailable::storeUnreachable();
+            }
+
             $revoked = $this->revokePrevious($previousId);
 
             $this->sessions->save($session);

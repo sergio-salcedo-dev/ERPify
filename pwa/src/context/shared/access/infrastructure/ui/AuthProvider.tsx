@@ -33,11 +33,11 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * (network, client timeout, malformed body, another 5xx) is `unauthenticated`.
  * There is no seeded default and no auto-admin.
  *
- * `unavailable` is the server, or a gateway in front of it, saying it cannot decide
- * (502/503/504): the session store is unreachable, so sending the user to sign
- * in would land them on a form the same outage refuses. The verdict holds only for the route it was observed on — the provider
- * outlives client navigations, so on the next route it reads `hydrating` again
- * until a fresh probe answers.
+ * `unavailable` is the server, or a gateway in front of it, saying it cannot decide (502/503/504):
+ * the session store is unreachable, so sending the user to sign in would land them on a form the
+ * same outage refuses. The verdict holds only for the route it was observed on — the provider
+ * outlives client navigations, so on the next route it reads `hydrating` again until a fresh probe
+ * answers.
  *
  * Probes are sequenced: the cold probe, a per-route re-probe and `login()`/`refresh()` each take a
  * ticket when they START, and only the most recently started one may apply its answer.
@@ -69,7 +69,8 @@ export interface AuthContextValue {
    * re-probe) supersedes this one, its own answer is discarded and it resolves to the
    * session the winning probe produced instead — the provider's status is the winner's
    * to decide, and the caller must read that decision rather than a stale `null` it
-   * would take for a failed sign-in. Only a `logout()` winning resolves it `null`.
+   * would take for a failed sign-in. That session may itself be `null` — the winning probe
+   * found no live session, or could not tell — and a winning `logout()` always yields `null`.
    */
   login: () => Promise<Session | null>;
   /**
@@ -145,9 +146,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [session, setSession] = useState<Session | null>(null);
   const [hydrated, setHydrated] = useState(false);
   // The route an unavailable verdict was observed on (or VERDICT_BEING_REPROBED once a re-probe
-  // for it started elsewhere), or null when the last probe decided. Bound to the route rather than a boolean because this provider is mounted once for the
-  // whole app and its cold probe runs only on mount: a boolean would outlive the
-  // outage and bounce every later client navigation back to maintenance.
+  // for it started elsewhere), or null when the last probe decided. Bound to the route rather than
+  // a boolean because this provider is mounted once for the whole app and its cold probe runs only
+  // on mount: a boolean would outlive the outage and bounce every later client navigation back to
+  // maintenance.
   const [unavailableAt, setUnavailableAt] = useState<string | null>(null);
 
   // Outside the App Router `usePathname()` is null; that is still one route.

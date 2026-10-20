@@ -23,7 +23,7 @@ use SensitiveParameter;
  * aggregate of the same identity holds in the request's entity manager, and they need a transaction that
  * {@see \Erpify\Shared\Persistence\Application\TransactionManager} opens by flushing the whole pending unit of
  * work. A writer that only wants the row held for the duration of one INSERT should do neither, so this port
- * locks with a bare `SELECT … FOR UPDATE`, opens its transaction on the connection rather than through the
+ * locks with a bare locking read, opens its transaction on the connection rather than through the
  * entity manager, and never touches the identity map. A failure inside it rolls back only this transaction and
  * leaves the entity manager open. That is also why it may not be called inside a transaction already open on
  * the connection: nested there, the row would commit with the caller's transaction, and it refuses instead.

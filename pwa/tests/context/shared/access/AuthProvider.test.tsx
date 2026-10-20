@@ -480,6 +480,111 @@ describe("AuthProvider", () => {
       expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
     });
 
+    it("login() resolves null when a logout() starts after the winner it waits on", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const own = pending();
+      const later = pending();
+      me.mockReturnValueOnce(own.promise).mockReturnValueOnce(later.promise);
+      let superseded!: Promise<unknown>;
+      act(() => {
+        superseded = result.current.login();
+      });
+      act(() => {
+        void result.current.refresh();
+      });
+      // Its own answer is discarded, so it is now waiting on the refresh that superseded it.
+      await act(async () => {
+        own.settle(null);
+      });
+
+      await act(async () => {
+        await result.current.logout();
+      });
+      await act(async () => {
+        later.settle(ADMIN);
+      });
+
+      await expect(superseded).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    describe("while the sign-out revoke is still in flight", () => {
+      function revokeInFlight(): { finish: () => void } {
+        let finish!: () => void;
+        revokeCurrent.mockReturnValueOnce(
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+        );
+        return { finish: () => finish() };
+      }
+
+      it("a login() started before the sign-out cannot sign the user in", async () => {
+        me.mockResolvedValueOnce(null);
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+        const own = pending();
+        me.mockReturnValueOnce(own.promise);
+        const revoke = revokeInFlight();
+        let superseded!: Promise<unknown>;
+        act(() => {
+          superseded = result.current.login();
+        });
+        let signingOut!: Promise<void>;
+        act(() => {
+          signingOut = result.current.logout();
+        });
+
+        await act(async () => {
+          own.settle(ADMIN);
+        });
+
+        await expect(superseded).resolves.toBeNull();
+        expect(result.current.status).not.toBe(AuthStatus.AUTHENTICATED);
+        expect(result.current.session).toBeNull();
+
+        await act(async () => {
+          revoke.finish();
+          await signingOut;
+        });
+        expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+      });
+
+      it("a refresh() started during the sign-out cannot sign the user back in", async () => {
+        me.mockResolvedValueOnce(null);
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+        const revoke = revokeInFlight();
+        let signingOut!: Promise<void>;
+        act(() => {
+          signingOut = result.current.logout();
+        });
+        const probe = pending();
+        me.mockReturnValueOnce(probe.promise);
+        let refreshed!: Promise<unknown>;
+        act(() => {
+          refreshed = result.current.refresh();
+        });
+
+        await act(async () => {
+          revoke.finish();
+          await signingOut;
+        });
+        await act(async () => {
+          probe.settle(ADMIN);
+        });
+
+        await expect(refreshed).resolves.toBeNull();
+        expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+        expect(result.current.session).toBeNull();
+      });
+    });
+
     it("refresh() re-probes on the route an unavailable verdict was seen on", async () => {
       me.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce(null);
       const { result } = renderAuth();

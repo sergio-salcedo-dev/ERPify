@@ -173,3 +173,29 @@ Status: done
 - **Revisión interna de bmad-loop:** corrió dos veces (primer pase y follow-up, arriba en *Review Triage Log*).
 - **Revisión de cuatro capas** (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance Auditor): corrió en la sesión erpify-22 en dos pases, más un pase de verificación del delta; sus parches se aplicaron en la misma rama.
 - Los riesgos residuales de arriba están superados: los escritores hermanos quedaron serializados (DW-69) la espera está acotada por `lock_timeout`, y la re-evaluación tras la espera se mide con un proceso aparte que retiene y borra la fila (`Fixtures/hold-and-erase-identity.php`).
+- **Revisión de cuatro capas sobre la PR #1035 entera** (2026-10-20, `bmad-code-review`, modo completo): ocho subagentes de solo lectura —las cuatro capas sobre el diff de la API y las cuatro sobre el de la PWA— contra las seis specs de la ronda y las decisiones D1–D6. Sin hilos de revisión abiertos en la PR.
+
+### Review Findings
+
+- [x] [Review][Decision] `IdentityRowLock` en `FOR KEY SHARE` en vez de `FOR UPDATE` — basta para serializar contra la erasure y deja de hacer esperar a otro escritor tardío; resuelto por Sergio (1a), aplicado.
+- [x] [Review][Decision] Un login que confirma tras la erasure deja sesión y `SessionStarted` nombrando a la persona — resuelto por Sergio (2a): `StartSession` bloquea la identidad (`SessionSubjectLock`, `FOR KEY SHARE`) antes de cualquier fila de sesión; `LoginRacingAnErasureFunctionalTest`.
+- [x] [Review][Patch] §7: el ítem de los escritores tardíos negaba el gate que esta PR añade, describía una llamada anidada que el adaptador rechaza y llamaba «observabilidad» a la pérdida de una fila `security` [PRODUCTION_SECURITY_CHECKLIST.md]
+- [x] [Review][Patch] La ADR de auditoría decía que `level` no lleva CHECK [docs/adr/audit-activity-log.md]
+- [x] [Review][Patch] `architecture-api.md` listaba la cadena de la erasure en el orden retirado [docs/architecture-api.md]
+- [x] [Review][Patch] El catálogo de eventos mostraba los payloads vacíos como `[]` [docs/architecture/event-catalog.md]
+- [x] [Review][Patch] Nada leía la fila de auditoría de un mint/revoke real del secreto de recuperación [api/tests/Functional/Iam/Identity/RevokeMyRecoverySecretFunctionalTest.php]
+- [x] [Review][Patch] Ningún test afirmaba la fase `commit` de los cuatro escritores [api/tests/Unit/Iam/Identity/Application/InMemoryIdentityRowLock.php]
+- [x] [Review][Patch] Cuerpo de la PR: CHECK de `level` «en el mismo ALTER TABLE» y recuento de publicadores 14/2/9 frente a 15/2/8 de la ADR (ahora 16/1/8 con `StartSession`)
+- [x] [Review][Patch] Un 502/504 en el login se mostraba como credenciales incorrectas [pwa/src/context/backoffice/user/infrastructure/ApiLoginRepository.ts]
+- [x] [Review][Patch] Docblock de `Routes.MAINTENANCE`, etiqueta de la galería y fila de la doc decían solo 503 [pwa/src/context/shared/routing/domain/Routes.ts]
+- [x] [Review][Patch] `role="status"` montado con su texto y envolviendo el botón [pwa/src/app/_components/SessionUnavailableNotice.tsx]
+- [x] [Review][Patch] Docblock de `login()` contradecía su test [pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx]
+- [x] [Review][Patch] Docblocks mal partidos [pwa/src/context/shared/access/infrastructure/ui/AuthProvider.tsx, pwa/src/context/shared/access/domain/IdentityRepository.ts]
+- [x] [Review][Patch] Sin test para los dos incrementos de ticket de `logout()` ni para la re-comprobación de `winningSession()` [pwa/tests/context/shared/access/AuthProvider.test.tsx]
+- [x] [Review][Patch] `HttpStatus.test.ts` no fijaba 501 ni 504 [pwa/tests/context/shared/http-client/domain/HttpStatus.test.ts]
+- [x] [Review][Patch] `Navbar` importaba `AuthStatus` saltándose el índice del módulo [pwa/src/app/_components/Navbar.tsx]
+- [x] [Review][Defer] Las comprobaciones previas de las dos migraciones nunca corren sobre una tabla con filas que violen el CHECK [api/migrations/2026/Version20260929102251.php] — deferred: migraciones de un solo uso; un arnés de ejecución cuesta más que el residual.
+
+Cada test nuevo se falsificó quitando la línea que defiende (guarda de `StartSession`, `PHASE_COMMIT` en los cuatro escritores, `recordMinted`/`recordRevoked`, los dos incrementos de ticket y la re-comprobación de `winningSession()`): todos enrojecen y la fuente se restauró por bytes.
+
+**Rechazados (19):** status 0 sigue yendo a `/login` (es D2); telemetría al decidir `unavailable` (low); `refresh` alias de `login` (especulativo); `/maintenance` no reacciona a la recuperación (low); e2e con 502 HTML (cubierto por `FetchHttpClient.test.ts`); `?next=/%6Daintenance` y foco tras reintento (guardas que cuestan más que lo que arreglan); `Routes.MAINTENANCE` en la galería y `?next=` en la doc (cosmético); specs desfasadas respecto a D1–D4 (la regla de la revisión no edita la spec bajo revisión); ruta del access-log con tipo `User` (no existe y exigiría clasificarla); fila `activity` tardía en el eje actor (ya registrada en §7); backfill `[]`→`{}` (la ADR acepta las filas viejas); `(object)` sobre una lista (los payloads son asociativos); 0930 por nombre y `down()` asimétrico, y la comprobación previa en `--dry-run` (solo bases de dev previas al merge); fixture `hold-and-revoke` (el uso del bloqueo lo fijan los tests de carrera con la clase real); `StartSession` anuncia la revocación de otra persona (intencionado y argumentado); #860 sin cerrar (la PR lleva «Closes #860»); reintento tras `55P03` (raro y complejo; el matiz va en §7).

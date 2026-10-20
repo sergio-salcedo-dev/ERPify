@@ -46,6 +46,9 @@ final class InMemoryIdentityRowLock implements IdentityRowLock
     /** Runs as the lock is taken, before the operation — a test can throw from it to fail the lock itself. */
     public ?Closure $onLock = null;
 
+    /** Runs once the operation has returned, as the transaction commits — a test can throw from it to fail COMMIT. */
+    public ?Closure $onRelease = null;
+
     public ?LockOrderJournal $lockOrderJournal = null;
 
     public function __construct(private readonly ?UserRepository $users = null)
@@ -93,7 +96,13 @@ final class InMemoryIdentityRowLock implements IdentityRowLock
         $this->holding = true;
 
         try {
-            return $body();
+            $result = $body();
+
+            if ($this->onRelease instanceof Closure) {
+                ($this->onRelease)();
+            }
+
+            return $result;
         } finally {
             $this->holding = false;
         }

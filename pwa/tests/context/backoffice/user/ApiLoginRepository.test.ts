@@ -86,20 +86,23 @@ describe("ApiLoginRepository.login", () => {
     ).rejects.toBe(error);
   });
 
-  it("maps a 503 service-unavailable to request-failed (retryable, not a credentials error)", async () => {
-    const post = vi
-      .fn()
-      .mockRejectedValue(
-        new HttpError(problem(HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable")),
-      );
+  it.each([
+    ["a 502 bad-gateway", HttpStatus.BAD_GATEWAY, "bad-gateway"],
+    ["a 503 service-unavailable", HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable"],
+    ["a 504 gateway-timeout", HttpStatus.GATEWAY_TIMEOUT, "gateway-timeout"],
+  ])(
+    "maps %s to request-failed (retryable, not a credentials error)",
+    async (_label, status, type) => {
+      const post = vi.fn().mockRejectedValue(new HttpError(problem(status, type)));
 
-    const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
-      email: "a@b.com",
-      password: "x",
-    });
+      const outcome = await new ApiLoginRepository(httpClientPosting(post)).login({
+        email: "a@b.com",
+        password: "x",
+      });
 
-    expect(outcome.kind).toBe(LoginOutcomeKind.REQUEST_FAILED);
-  });
+      expect(outcome.kind).toBe(LoginOutcomeKind.REQUEST_FAILED);
+    },
+  );
 
   it.each([
     ["401 unauthenticated", HttpStatus.UNAUTHORIZED, "unauthenticated"],

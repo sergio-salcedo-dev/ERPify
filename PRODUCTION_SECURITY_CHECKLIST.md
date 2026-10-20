@@ -965,19 +965,27 @@ mitigated state. Accepting one means recording who accepted it and against which
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
       **The pass clears what is committed when it runs**, so it is closed only together with the item below.
-- [ ] **A row naming the subject that commits after the erasure's pass is kept out by convention, not by a
-      gate.** The four post-commit writers that name a `User` in `resource_id` — the lockout, the lockout
-      notice, the recovery throttle and the recovery-secret projections — each write under the subject's
-      `identity_user` row lock (`IdentityRowLock`), which `FulfilIdentityErasure` holds from its administrator
-      re-check to its commit, ahead of the trail pass; so each row either commits first and is redacted, or
-      waits and finds no subject. Pinned against a second Postgres connection holding and deleting the row in
-      `LateAuditWriterErasureSerialisationFunctionalTest`. What stays open: **(a)** nothing enumerates the late
-      writers — a fifth one written without the lock reopens the window with every gate green, and only
-      `identity:gdpr:reconcile-subject-references` would report the row it leaves; **(b)** the wait is bounded
-      by `lock_timeout` (2 s) only when the lock opens the outermost transaction — nested inside a caller's own,
-      the bound is that caller's (no caller does that today); **(c)** a wait that exhausts the bound drops the
-      audit row and reports it on `observability` — an observability loss rather than a residue, but one a
-      long-running erasure, or anything else holding that row past the bound, can cause; **(d)** in the lockout
+- [ ] **A row naming the subject that commits after the erasure's pass is kept out by a lock, and the gate
+      over it sees one directory.** The four post-commit writers that name a `User` in `resource_id` — the
+      lockout, the lockout notice, the recovery throttle and the recovery-secret projections — each write under
+      the subject's `identity_user` row lock (`IdentityRowLock`, `FOR KEY SHARE`), which `FulfilIdentityErasure`
+      holds `FOR UPDATE` from its administrator re-check to its commit, ahead of the trail pass; so each row
+      either commits first and is redacted, or waits and finds no subject. A login holds the same row
+      (`SessionSubjectLock`) before it writes its session, so a session and its `SessionStarted` are purged and
+      rewritten with the rest or never written. Pinned against a second Postgres connection holding and deleting
+      the row in `LateAuditWriterErasureSerialisationFunctionalTest` and `LoginRacingAnErasureFunctionalTest`.
+      `SubjectAuditWriteSerialisationGateTest` pins every site under `Iam/Identity/Application` that writes an
+      audit row naming its subject, and reds one written without a serialising mechanism. What stays open:
+      **(a)** the gate is blind to a writer outside that directory, to the resource type spelled as a literal or
+      reached under an alias, and to a write reached through a callable, a helper in another file or a trait —
+      such a writer reopens the window with every gate green, and only
+      `identity:gdpr:reconcile-subject-references` would report the row it leaves; **(b)** the lock refuses to
+      run inside a transaction the caller already opened, because nested there the bound and the commit would
+      both be the caller's — so a writer moved inside one loses its row with an `error` report on `observability`
+      instead of committing it; **(c)** a wait that exhausts the 2 s `lock_timeout` drops the row and reports it
+      on `observability`. When the erasure behind it commits, no row was owed; when it rolls back — an
+      administrator refusal, a later failure in the chain — the identity is live and a `security` row it was
+      owed is lost, the evidence surviving only as that report; **(d)** in the lockout
       notice's race the MAIL may still reach the address of a person whose erasure is committing, since it is
       sent before the stamp and the audit row: a notification, not a record, and nothing of it persists here.
 - [ ] **Backup object archives carry the dump's personal data and no longer expire on their own.** The
@@ -1344,7 +1352,7 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
       An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
       the attempt that trips the lock, and on that same attempt the lockout projection's own transaction —
-      BEGIN, a second `SELECT … FOR UPDATE` of the row and the `audit_log` INSERT, since that projection
+      BEGIN, a `SELECT … FOR KEY SHARE` of the row and the `audit_log` INSERT, since that projection
       serialises on the subject's row against an erasure; pinned as the only extra round trips in
       `LoginAttemptRegistrarExistenceShapeTest`); every existing identity pays the hydration of its row inside
       the locked read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed

@@ -81,7 +81,9 @@ describe("Navbar — session unavailable notice", () => {
       openMobileMenu();
 
       const notice = screen.getByTestId(noticeId);
-      expect(notice.getAttribute("role")).toBe("status");
+      // Not a live region: it mounts already holding its text, which a region never announces,
+      // and it wraps the retry control.
+      expect(notice.getAttribute("role")).toBeNull();
       expect(notice.textContent).toContain("Sign-in temporarily unavailable");
       const retry = screen.getByTestId(retryId);
       expect(retry.getAttribute("aria-label")).toBe("Try again");
