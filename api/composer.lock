@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b9f161b542a25f006261608125e2d18d",
+    "content-hash": "e220137782537e6b2c56d33774c915bb",
     "packages": [
         {
             "name": "behat/gherkin",
@@ -1276,35 +1276,35 @@
         },
         {
             "name": "guzzlehttp/psr7",
-            "version": "2.13.2",
+            "version": "3.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/guzzle/psr7.git",
-                "reference": "adee536f95101929f262b8c59e8a61472f347d58"
+                "reference": "cdc139396207a5eba10c242d241fb014cb098390"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/guzzle/psr7/zipball/adee536f95101929f262b8c59e8a61472f347d58",
-                "reference": "adee536f95101929f262b8c59e8a61472f347d58",
+                "url": "https://api.github.com/repos/guzzle/psr7/zipball/cdc139396207a5eba10c242d241fb014cb098390",
+                "reference": "cdc139396207a5eba10c242d241fb014cb098390",
                 "shasum": ""
             },
             "require": {
-                "php": "^7.2.5 || ^8.0",
-                "psr/http-factory": "^1.0",
-                "psr/http-message": "^1.1 || ^2.0",
-                "ralouphie/getallheaders": "^3.0",
-                "symfony/deprecation-contracts": "^2.5 || ^3.0",
-                "symfony/polyfill-php80": "^1.25"
+                "php": "^7.4 || ^8.0",
+                "psr/http-factory": "^1.1",
+                "psr/http-message": "^2.0",
+                "symfony/polyfill-php80": "^1.25",
+                "symfony/polyfill-php82": "^1.27"
             },
             "provide": {
-                "psr/http-factory-implementation": "1.0",
-                "psr/http-message-implementation": "1.0"
+                "psr/http-factory-implementation": "1.1",
+                "psr/http-message-implementation": "2.0"
             },
             "require-dev": {
                 "bamarni/composer-bin-plugin": "^1.8.2",
                 "http-interop/http-factory-tests": "1.1.0",
                 "jshttp/mime-db": "1.54.0.1",
-                "phpunit/phpunit": "^8.5.52 || ^9.6.34"
+                "php-http/psr7-integration-tests": "^1.5.1",
+                "phpunit/phpunit": "^9.6.34"
             },
             "suggest": {
                 "laminas/laminas-httphandlerrunner": "Emit PSR-7 responses"
@@ -1375,7 +1375,7 @@
             ],
             "support": {
                 "issues": "https://github.com/guzzle/psr7/issues",
-                "source": "https://github.com/guzzle/psr7/tree/2.13.2"
+                "source": "https://github.com/guzzle/psr7/tree/3.2.0"
             },
             "funding": [
                 {
@@ -1391,7 +1391,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-10-17T23:49:46+00:00"
+            "time": "2026-10-17T23:57:19+00:00"
         },
         {
             "name": "intervention/gif",
@@ -2676,50 +2676,6 @@
             "time": "2024-09-11T13:17:53+00:00"
         },
         {
-            "name": "ralouphie/getallheaders",
-            "version": "3.0.3",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/ralouphie/getallheaders.git",
-                "reference": "120b605dfeb996808c31b6477290a714d356e822"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/ralouphie/getallheaders/zipball/120b605dfeb996808c31b6477290a714d356e822",
-                "reference": "120b605dfeb996808c31b6477290a714d356e822",
-                "shasum": ""
-            },
-            "require": {
-                "php": ">=5.6"
-            },
-            "require-dev": {
-                "php-coveralls/php-coveralls": "^2.1",
-                "phpunit/phpunit": "^5 || ^6.5"
-            },
-            "type": "library",
-            "autoload": {
-                "files": [
-                    "src/getallheaders.php"
-                ]
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Ralph Khattar",
-                    "email": "ralph.khattar@gmail.com"
-                }
-            ],
-            "description": "A polyfill for getallheaders.",
-            "support": {
-                "issues": "https://github.com/ralouphie/getallheaders/issues",
-                "source": "https://github.com/ralouphie/getallheaders/tree/develop"
-            },
-            "time": "2019-03-08T08:55:37+00:00"
-        },
-        {
             "name": "sentry/sentry",
             "version": "4.34.0",
             "source": {
@@ -2920,21 +2876,21 @@
         },
         {
             "name": "softcreatr/jsonpath",
-            "version": "1.0.2",
+            "version": "2.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/SoftCreatR/JSONPath.git",
-                "reference": "a07f7e4290cb32d21e8faa31bbfae045d97e8c57"
+                "reference": "105243c9a3a3cf7ef76d81a2ec306dfdb83ab53a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/SoftCreatR/JSONPath/zipball/a07f7e4290cb32d21e8faa31bbfae045d97e8c57",
-                "reference": "a07f7e4290cb32d21e8faa31bbfae045d97e8c57",
+                "url": "https://api.github.com/repos/SoftCreatR/JSONPath/zipball/105243c9a3a3cf7ef76d81a2ec306dfdb83ab53a",
+                "reference": "105243c9a3a3cf7ef76d81a2ec306dfdb83ab53a",
                 "shasum": ""
             },
             "require": {
                 "ext-json": "*",
-                "php": "^8.5"
+                "php": "^8.3"
             },
             "replace": {
                 "flow/jsonpath": "*"
@@ -2986,7 +2942,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-01-23T14:53:57+00:00"
+            "time": "2026-09-28T16:20:10+00:00"
         },
         {
             "name": "symfony/cache",
@@ -4974,16 +4930,16 @@
         },
         {
             "name": "symfony/mercure",
-            "version": "v0.8.0",
+            "version": "v0.9.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/mercure.git",
-                "reference": "920f08c73793f37e94981e5d9fc1a84351ec8c6c"
+                "reference": "d0dca3c654858ada61dcecbaee058c72f05de61e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/mercure/zipball/920f08c73793f37e94981e5d9fc1a84351ec8c6c",
-                "reference": "920f08c73793f37e94981e5d9fc1a84351ec8c6c",
+                "url": "https://api.github.com/repos/symfony/mercure/zipball/d0dca3c654858ada61dcecbaee058c72f05de61e",
+                "reference": "d0dca3c654858ada61dcecbaee058c72f05de61e",
                 "shasum": ""
             },
             "require": {
@@ -5013,7 +4969,7 @@
                     "name": "dunglas/mercure"
                 },
                 "branch-alias": {
-                    "dev-main": "0.8.x-dev"
+                    "dev-main": "0.9.x-dev"
                 }
             },
             "autoload": {
@@ -5045,7 +5001,7 @@
             ],
             "support": {
                 "issues": "https://github.com/symfony/mercure/issues",
-                "source": "https://github.com/symfony/mercure/tree/v0.8.0"
+                "source": "https://github.com/symfony/mercure/tree/v0.9.0"
             },
             "funding": [
                 {
@@ -5057,20 +5013,20 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-11T07:23:36+00:00"
+            "time": "2026-10-07T21:19:29+00:00"
         },
         {
             "name": "symfony/mercure-bundle",
-            "version": "v0.5.0",
+            "version": "v0.6.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/mercure-bundle.git",
-                "reference": "84143afcd5225bbc3cc5e05b9218a05f2ae4a566"
+                "reference": "a9f1affc1cbd81413938d2035141732b614a9507"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/mercure-bundle/zipball/84143afcd5225bbc3cc5e05b9218a05f2ae4a566",
-                "reference": "84143afcd5225bbc3cc5e05b9218a05f2ae4a566",
+                "url": "https://api.github.com/repos/symfony/mercure-bundle/zipball/a9f1affc1cbd81413938d2035141732b614a9507",
+                "reference": "a9f1affc1cbd81413938d2035141732b614a9507",
                 "shasum": ""
             },
             "require": {
@@ -5079,7 +5035,7 @@
                 "symfony/config": "^6.4|^7.3|^8.0",
                 "symfony/dependency-injection": "^6.4|^7.3|^8.0",
                 "symfony/http-kernel": "^6.4|^7.3|^8.0",
-                "symfony/mercure": "^0.8",
+                "symfony/mercure": "^0.8|^0.9",
                 "symfony/web-link": "^6.4|^7.3|^8.0"
             },
             "require-dev": {
@@ -5096,7 +5052,7 @@
             "type": "symfony-bundle",
             "extra": {
                 "branch-alias": {
-                    "dev-main": "0.5.x-dev"
+                    "dev-main": "0.6.x-dev"
                 }
             },
             "autoload": {
@@ -5128,7 +5084,7 @@
             ],
             "support": {
                 "issues": "https://github.com/symfony/mercure-bundle/issues",
-                "source": "https://github.com/symfony/mercure-bundle/tree/v0.5.0"
+                "source": "https://github.com/symfony/mercure-bundle/tree/v0.6.1"
             },
             "funding": [
                 {
@@ -5140,7 +5096,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-11T11:25:49+00:00"
+            "time": "2026-10-11T21:01:28+00:00"
         },
         {
             "name": "symfony/messenger",

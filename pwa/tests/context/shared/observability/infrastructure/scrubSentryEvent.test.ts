@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ErrorEvent } from "@sentry/nextjs";
-import { scrubSentryEvent } from "@/context/shared/observability/infrastructure/scrubSentryEvent";
+import {
+  scrubSentryEvent,
+  scrubSentrySpan,
+  type StreamedSpanJSON,
+} from "@/context/shared/observability/infrastructure/scrubSentryEvent";
 
 describe("scrubSentryEvent", () => {
   it("strips denylisted keys from extra and contexts (recursively)", () => {
@@ -272,12 +276,9 @@ describe("scrubSentryEvent", () => {
       url: "/api/v1/banks?token=REDACTED",
     });
   });
-  // `beforeSendTransaction` is wired to this same function and tracing is on in every environment
-  // (sampled 0.2 in prod), so a traced fetch hands over a span carrying the request URL — under
-  // `url`, `http.url`, `url.full` and `http.query`, three of them whole. The span NAME is
-  // sanitised by the SDK, which is what made this easy to miss; the attributes are not. This is
-  // the leak #821 was filed for, one surface over from the one it named.
-  it("redacts the request URL a traced fetch leaves on its span", () => {
+  // An event that embeds span data (the static trace lifecycle's transaction shape) is scrubbed on
+  // the same terms. The streamed spans the SDK sends by default are covered below, by `scrubSentrySpan`.
+  it("redacts the request URL a traced fetch leaves on span data embedded in an event", () => {
     const event = {
       spans: [
         {
@@ -309,6 +310,60 @@ describe("scrubSentryEvent", () => {
     // The shape stays readable: an operator still sees which endpoint was called.
     expect(data.url).toContain("/api/v1/backoffice/audit");
     expect(data["http.response.status_code"]).toBe(500);
+  });
+
+  // Tracing is on in every environment (sampled 0.2 in prod) and spans are streamed one at a time,
+  // never through `beforeSend`, so a traced fetch's request URL — under `url`, `http.url`,
+  // `url.full` and `http.query`, three of them whole — is reachable only from `beforeSendSpan`.
+  // This is the leak #821 was filed for, on the surface the SDK now sends it through.
+  it("redacts the request URL a traced fetch leaves on a streamed span", () => {
+    const leaked =
+      "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com";
+    const span: StreamedSpanJSON = {
+      trace_id: "t",
+      span_id: "s",
+      name: "GET /api/v1/backoffice/audit?actorId=8f14e45f",
+      start_timestamp: 1,
+      status: "error",
+      is_segment: false,
+      attributes: {
+        "sentry.op": "http.client",
+        url: leaked,
+        "http.url": leaked,
+        "url.full": leaked,
+        "http.query": "?filters%5B0%5D%5Bvalue%5D=jane%40example.com",
+        "http.response.status_code": 500,
+        authorization: "Bearer x",
+      },
+      links: [{ context: { traceId: "t", spanId: "s" }, attributes: { "url.full": leaked } }],
+    } as unknown as StreamedSpanJSON;
+
+    const scrubbed = scrubSentrySpan(span);
+
+    expect(JSON.stringify(scrubbed)).not.toContain("jane");
+    expect(JSON.stringify(scrubbed)).not.toContain("8f14e45f");
+    expect(scrubbed.name).toBe("GET /api/v1/backoffice/audit?actorId=REDACTED");
+    expect(scrubbed.attributes["url.full"]).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(scrubbed.attributes["http.query"]).toBe("?filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(scrubbed.attributes).not.toHaveProperty("authorization");
+    // The shape stays readable: an operator still sees which endpoint was called.
+    expect(scrubbed.attributes.url).toContain("/api/v1/backoffice/audit");
+    expect(scrubbed.attributes["http.response.status_code"]).toBe(500);
+    expect(scrubbed.attributes["sentry.op"]).toBe("http.client");
+  });
+
+  it("leaves a span name that carries no query untouched", () => {
+    const span = {
+      trace_id: "t",
+      span_id: "s",
+      name: "GET /api/v1/banks",
+      start_timestamp: 1,
+      status: "ok",
+      is_segment: true,
+      attributes: {},
+    } as StreamedSpanJSON;
+
+    expect(scrubSentrySpan(span).name).toBe("GET /api/v1/banks");
   });
 
   it("redacts a person id on the trace context's own attributes", () => {

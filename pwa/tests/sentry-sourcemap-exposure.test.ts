@@ -516,7 +516,7 @@ describe("Sentry source maps are uploaded, never published", () => {
 
 describe("the source-map rules reject what they exist to reject", () => {
   const config = (options: string, nextConfig = "{}"): string => `
-    import { withSentryConfig } from "@sentry/nextjs";
+    import { withSentryConfig } from "@sentry/nextjs/config";
     const nextConfig = ${nextConfig};
     export default withSentryConfig(nextConfig, ${options});
   `;
