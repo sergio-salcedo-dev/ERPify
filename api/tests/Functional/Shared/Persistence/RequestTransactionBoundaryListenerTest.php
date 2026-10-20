@@ -107,7 +107,7 @@ final class RequestTransactionBoundaryListenerTest extends KernelTestCase
         $this->connection->beginTransaction();
         $this->takeTheLock();
 
-        $listener->onRequest($this->requestEvent($this->request()));
+        $listener->onRequestStart($this->requestEvent($this->request()));
 
         $this->assertTrue($this->lockIsFreeOutside(), 'the carried-over transaction still holds its lock');
         $this->assertSame('http_request_start', $this->logger->records[0]['context']['boundary'] ?? null);
@@ -163,7 +163,11 @@ final class RequestTransactionBoundaryListenerTest extends KernelTestCase
             }
         }
 
-        $this->assertSame([DoctrineConnectionResetListener::PRIORITY - 1], $ours['kernel.request']);
+        \rsort($ours['kernel.request']);
+        $this->assertSame(
+            [DoctrineConnectionResetListener::PRIORITY + 1, DoctrineConnectionResetListener::PRIORITY - 1],
+            $ours['kernel.request'],
+        );
         $this->assertCount(2, $ours['kernel.terminate']);
         $this->assertNotSame([], $others['kernel.terminate'], 'no other terminate listener: vacuous ordering');
         $this->assertGreaterThan(\max($others['kernel.terminate']), \max($ours['kernel.terminate']));

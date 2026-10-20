@@ -12,8 +12,10 @@ use Symfony\Component\Messenger\Event\WorkerRunningEvent;
 
 /**
  * Ends a worker message's claim on the database: whatever transaction handling it opened and did not close is
- * rolled back, see {@see LeakedTransactionContainment}. It never throws — a throw here escapes the worker loop
- * and stops the consumer — so a log line naming the message class is the whole of its report.
+ * rolled back, see {@see LeakedTransactionContainment}. Outside `test` it never throws — a throw here escapes the
+ * worker loop and stops the consumer — so a log line naming the message class is the whole of its report. Under
+ * `test` a rollback that fails above the observed baseline is rethrown, because there the alternative is ending
+ * the transaction the test kept.
  *
  * **A failed message is contained BEFORE its retry.** `WorkerMessageFailedEvent` runs before the ack, and the
  * retry listener's re-queue `INSERT` and the `reject()` `DELETE` run on the same connection; left inside the
@@ -27,9 +29,17 @@ use Symfony\Component\Messenger\Event\WorkerRunningEvent;
  * with a `critical` each time. Rolling back before the ack would instead lose the message for good.
  *
  * **Outside `test`, every tick checks from zero.** A message that arrives with a transaction already open met a
- * leak that escaped an earlier boundary; an idle tick is where a batch handler's flush would leak. Both are
- * contained from zero, since nothing legitimately spans a message there. Under `test` the baseline is the level
+ * leak that escaped an earlier boundary, and an idle tick catches one left by anything between two messages. Both
+ * are contained from zero, since nothing legitimately spans a message there. Under `test` the baseline is the level
  * observed on receipt, and an idle tick does nothing.
+ *
+ * **What it does not cover: a batch handler, and anything that leaks after the running tick.** The worker skips
+ * the running event for an iteration whose flush did work, and a message a batch flush fails reaches
+ * `onMessageFailed()` with no baseline, so a batch handler's leak is contained by neither. Nor is a leak from a
+ * `WorkerStartedEvent` listener or a `WorkerRunningEvent` listener below this one. Such a leak reaches the next
+ * `get()`, whose `delivered_at` claim then runs inside it, and the start-of-message check that rolls it back rolls
+ * the claim back too — so the message is claimable again while it is being handled. Nothing in this application
+ * implements a batch handler or leaks there today.
  *
  * If a leaked transaction is ABORTED, the ack's `DELETE` fails before the running tick: the consumer stops, the
  * process manager restarts it, and the dropped connection is what rolls back — the message is redelivered.

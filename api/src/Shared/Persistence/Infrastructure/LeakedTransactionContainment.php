@@ -22,13 +22,14 @@ use Throwable;
  *
  * **Down to a baseline.** The caller passes the nesting level the unit is entitled to leave open. Outside `test`
  * that is always zero, because nothing legitimately spans a request or a message there; under `test` it is the
- * level observed when the unit began, because a functional test may open a transaction around the requests it
- * makes, and that one is not this class's to end.
+ * level observed when the unit began, because a test may hold a transaction of its own across the unit, and that
+ * one is not this class's to end. That matters to a worker message; on the HTTP lane the dev/test connection reset
+ * has already closed any such transaction before the baseline is read, so there it is zero in practice.
  *
  * **A counted loop, never `while (isTransactionActive())`.** With `autoCommit` off, a top-level `rollBack()`
  * begins the next transaction itself, so a loop keyed on "still active" never ends.
  *
- * **`close()` is the fallback, and only above a zero baseline.** It drops the handle, which makes the server roll
+ * **`close()` is the fallback, and only at a zero baseline.** It drops the handle, which makes the server roll
  * back, and it zeroes the nesting level — so above a non-zero baseline it would end the transaction the caller
  * kept, and there the failure is rethrown instead. It also leaves DBAL's rollback-only flag as it was, so the
  * next unit's first commit would fail for a reason it did not cause; a bare begin/rollback on the fresh handle
@@ -37,8 +38,8 @@ use Throwable;
  * **Reported on the always-on channel, and never at the caller's expense.** A `critical` on the default channel
  * would activate the prod `fingers_crossed` handler and flush the request's buffered records with it — the email
  * `ContextListener` writes on every authenticated request among them. The context carries the route or message
- * class, never a path or a payload. A logger that throws is swallowed: the worker boundary promises never to
- * throw, and a report is worth less than the rollback it describes.
+ * class, never a path or a payload. A logger that throws is swallowed: outside `test` the worker boundary
+ * promises never to throw, and a report is worth less than the rollback it describes.
  *
  * Only the default connection is covered; this application maps one.
  */

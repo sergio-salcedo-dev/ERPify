@@ -18,8 +18,6 @@ use Doctrine\DBAL\DriverManager;
  */
 trait ProbesATransactionScopedLock
 {
-    private const int LOCK_KEY = 815_004_211;
-
     private Connection $connection;
 
     private Connection $outside;
@@ -32,7 +30,7 @@ trait ProbesATransactionScopedLock
 
     private function closeBothConnections(): void
     {
-        while ($this->connection->isTransactionActive()) {
+        for ($level = $this->connection->getTransactionNestingLevel(); $level > 0; --$level) {
             $this->connection->rollBack();
         }
 
@@ -41,16 +39,20 @@ trait ProbesATransactionScopedLock
 
     private function takeTheLock(): void
     {
-        $this->connection->executeStatement('SELECT pg_advisory_xact_lock(:key)', ['key' => self::LOCK_KEY]);
+        $this->connection->executeStatement(
+            'SELECT pg_advisory_xact_lock(:key)',
+            ['key' => LeaksATransaction::LOCK_KEY],
+        );
         $this->assertFalse($this->lockIsFreeOutside(), 'the lock is not held: the test would pass vacuously');
     }
 
     private function lockIsFreeOutside(): bool
     {
-        $free = (bool) $this->outside->fetchOne('SELECT pg_try_advisory_lock(:key)', ['key' => self::LOCK_KEY]);
+        $key = ['key' => LeaksATransaction::LOCK_KEY];
+        $free = (bool) $this->outside->fetchOne('SELECT pg_try_advisory_lock(:key)', $key);
 
         if ($free) {
-            $this->outside->executeStatement('SELECT pg_advisory_unlock(:key)', ['key' => self::LOCK_KEY]);
+            $this->outside->executeStatement('SELECT pg_advisory_unlock(:key)', $key);
         }
 
         return $free;

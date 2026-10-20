@@ -14,16 +14,14 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageReceivedEvent;
-use Symfony\Component\Messenger\Event\WorkerRunningEvent;
 
 /**
  * Pins the worker boundary: a leak is rolled back before a failed message's retry and after a handled message's
- * ack, a carried-over or idle-tick leak is caught outside `test`, it never throws, and it is registered on every
- * event those claims need. Every leak case reads a lock from a second connection.
+ * ack, a carried-over or idle-tick leak is caught outside `test`, and outside `test` it never throws. Every leak
+ * case reads a lock from a second connection; where each check is registered is
+ * {@see MessageTransactionBoundaryRegistrationTest}'s.
  *
  * @internal
  */
@@ -117,19 +115,6 @@ final class MessageTransactionBoundaryListenerTest extends KernelTestCase
         $this->assertSame([], $this->logger->records);
     }
 
-    #[Test]
-    public function eachCheckIsRegisteredWhereItsClaimNeedsIt(): void
-    {
-        $dispatcher = self::getContainer()->get('event_dispatcher');
-        $this->assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
-
-        $this->assertNotNull($this->priorityOn($dispatcher, WorkerMessageReceivedEvent::class));
-        // Above the retry listener (100) and the error-details stamp (200), both of which write.
-        $this->assertGreaterThan(200, $this->priorityOn($dispatcher, WorkerMessageFailedEvent::class));
-        // Ahead of Messenger's ResetServicesListener.
-        $this->assertGreaterThan(-1024, $this->priorityOn($dispatcher, WorkerRunningEvent::class));
-    }
-
     private function listener(string $environment): MessageTransactionBoundaryListener
     {
         return new MessageTransactionBoundaryListener(
@@ -141,16 +126,5 @@ final class MessageTransactionBoundaryListenerTest extends KernelTestCase
     private function received(): WorkerMessageReceivedEvent
     {
         return new WorkerMessageReceivedEvent(new Envelope(new stdClass()), 'async');
-    }
-
-    private function priorityOn(EventDispatcherInterface $dispatcher, string $eventName): ?int
-    {
-        foreach ($dispatcher->getListeners($eventName) as $listener) {
-            if (\is_array($listener) && $listener[0] instanceof MessageTransactionBoundaryListener) {
-                return $dispatcher->getListenerPriority($eventName, $listener);
-            }
-        }
-
-        return null;
     }
 }

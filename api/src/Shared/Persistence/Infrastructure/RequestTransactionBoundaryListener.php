@@ -19,15 +19,21 @@ use const PHP_SAPI;
  *
  * **Three checks, because one boundary is not enough.** Before every other `kernel.terminate` listener, so the
  * writers that run there (`AccessLogAuditListener`, `RecoveryThrottleAuditListener`) do not write into the leaked
- * transaction and lose their rows with it — rows written DURING the request, a module's `activity` row or a
- * `kernel.response` security row, ran inside it and are lost regardless. After every other one, so a terminate
- * listener that leaks is caught too. And, outside `test`, at the start of the next request, because
- * `kernel.terminate` does not run when the runtime fails before it: whatever reaches a new request open is a leak.
+ * transaction and lose their rows with it. What ran DURING the request ran inside it: an `AuditLogger` row a use
+ * case wrote is lost with the rollback, while a request-boundary security row is refused by
+ * `RequestBoundarySecurityAudit`, which will not write inside an open transaction and answers 5xx instead. After
+ * every other one, so a terminate listener that leaks is caught too. And, outside `test`, at the start of the next
+ * request, because `kernel.terminate` does not run when the runtime fails before it: whatever reaches a new request
+ * open is a leak.
  *
- * **The baseline is read after the dev/test connection reset.** `DoctrineConnectionResetListener` closes the
- * connection at priority 256 on `kernel.request`, so the level read below it is the one the request really starts
- * from. Outside `test` it is zero by definition. Under `test`, a request whose `kernel.request` never reached this
- * listener has no baseline, and nothing is rolled back rather than guessing one.
+ * **The start check runs ABOVE the dev/test connection reset, the baseline is read below it.**
+ * `DoctrineConnectionResetListener` closes the connection at its own priority on `kernel.request` in dev and test.
+ * Checked after it, a carried-over leak would already be gone without a report, and `close()` would leave DBAL's
+ * rollback-only flag set for this request's first commit. The baseline is read after it because that is the level
+ * the request really starts from — which, on this lane, means a transaction a functional test opened around its
+ * requests has already been closed by the reset, so the observed baseline is zero in practice. Outside `test` it is
+ * zero by definition. Under `test`, a request whose `kernel.request` never reached this listener has no baseline,
+ * and nothing is rolled back rather than guessing one.
  *
  * **It fails the test that leaked.** Under `test` in the CLI — the kernel browser, which is how both PHPUnit and
  * Behat send requests — the rollback is followed by a throw, so a leaking route turns its test red instead of
@@ -49,18 +55,24 @@ final class RequestTransactionBoundaryListener
         $this->baselineIsObserved = 'test' === $environment;
     }
 
+    #[AsEventListener(event: KernelEvents::REQUEST, priority: DoctrineConnectionResetListener::PRIORITY + 1)]
+    public function onRequestStart(RequestEvent $event): void
+    {
+        if (!$event->isMainRequest() || $this->baselineIsObserved) {
+            return;
+        }
+
+        $this->containment->containAbove(0, [
+            'boundary' => 'http_request_start',
+            'method' => $event->getRequest()->getMethod(),
+        ]);
+    }
+
     #[AsEventListener(event: KernelEvents::REQUEST, priority: DoctrineConnectionResetListener::PRIORITY - 1)]
     public function onRequest(RequestEvent $event): void
     {
         if (!$event->isMainRequest()) {
             return;
-        }
-
-        if (!$this->baselineIsObserved) {
-            $this->containment->containAbove(0, [
-                'boundary' => 'http_request_start',
-                'method' => $event->getRequest()->getMethod(),
-            ]);
         }
 
         $this->baseline = $this->baselineIsObserved ? $this->containment->nestingLevel() : 0;
