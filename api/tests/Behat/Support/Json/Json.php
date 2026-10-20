@@ -9,7 +9,6 @@ use Override;
 use stdClass;
 use Stringable;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
-use UnexpectedValueException;
 
 class Json implements Stringable
 {
@@ -90,12 +89,8 @@ class Json implements Stringable
      */
     private function decode(string $content): array|stdClass
     {
-        $result = \json_decode($content, false, 512, JSON_THROW_ON_ERROR);
-
-        if (JSON_ERROR_NONE !== \json_last_error()) {
-            throw new UnexpectedValueException(\sprintf("The string '%s' is not valid json", $content));
-        }
-
-        return $result;
+        // JSON_THROW_ON_ERROR leaves json_last_error() untouched, so reading it here would report whatever
+        // the application's own last non-throwing decode left behind in this same process.
+        return \json_decode($content, false, 512, JSON_THROW_ON_ERROR);
     }
 }
