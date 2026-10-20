@@ -327,15 +327,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   // The held session rather than the probe's own: when a sign-out or a later probe superseded
   // this one, its result was never applied, and announcing it would contradict the provider. The
-  // loop waits out every probe that superseded it in turn, so the answer is what the latest one
-  // wrote rather than the state before it.
+  // sign-in waits out every probe that superseded it in turn, so the answer is what the latest one
+  // wrote rather than the state before it. The wait is sequential by nature: which probe comes
+  // next is known only once the current one has settled.
   const login = useCallback(async (): Promise<Session | null> => {
-    let awaited: Promise<unknown> = probe();
-    await awaited;
-    while (awaited !== latestProbe.current) {
-      awaited = latestProbe.current;
+    const waitOut = async (awaited: Promise<unknown>): Promise<void> => {
       await awaited;
-    }
+      if (awaited !== latestProbe.current) await waitOut(latestProbe.current);
+    };
+    await waitOut(probe());
     return heldSession.current;
   }, [probe]);
 

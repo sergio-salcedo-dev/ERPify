@@ -49,8 +49,8 @@ final readonly class DoctrineErasureResweepRepository implements ErasureResweepR
     #[Override]
     public function findAll(): array
     {
-        /** @var list<ErasureResweep> $resweeps */
-        $resweeps = $this->entityManager->createQueryBuilder()
+        /** @phpstan-var list<ErasureResweep> */
+        return $this->entityManager->createQueryBuilder()
             ->select('r')
             ->from(ErasureResweep::class, 'r')
             ->orderBy('r.createdAt', NativeSortDirection::Ascending)
@@ -58,8 +58,6 @@ final readonly class DoctrineErasureResweepRepository implements ErasureResweepR
             ->getQuery()
             ->getResult()
         ;
-
-        return $resweeps;
     }
 
     #[Override]
