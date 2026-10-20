@@ -159,9 +159,10 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
     private function competingErasureFromASecondConnection(): void
     {
         // Without a `lock_timeout` this method simply never returns once the erasure holds the row — which
-        // is the serialisation working, reported as a hang nobody can assert on. The value only sets how long
-        // the refusal takes: the erasure holds the row until after this returns, so a short one cannot let
-        // the competitor through, and a correct run waits it out in full.
+        // is the serialisation working, reported as a hang nobody can assert on. The erasure holds the row
+        // until after this returns, so a short value cannot let the competitor through; it sets how long the
+        // refusal takes, which a correct run pays once. It is session-scoped, so it also bounds the later
+        // statements on this connection, the fixture cleanup among them.
         $this->outsideConnection()->executeStatement("SET lock_timeout = '200ms'");
 
         try {

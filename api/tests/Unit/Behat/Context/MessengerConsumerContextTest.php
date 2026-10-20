@@ -10,7 +10,6 @@ use Erpify\Tests\Behat\Support\Execution\LastRun;
 use Erpify\Tests\Behat\Support\Messenger\MessengerTransports;
 use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\IgnoreDeprecations;
 use PHPUnit\Framework\TestCase;
 use stdClass;
 use Symfony\Component\DependencyInjection\Container;
@@ -33,10 +32,9 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
  * The matching halves are not decoration. Without them a step that refused every consume would satisfy
  * the refusing halves just as well, and the file would prove nothing.
  *
- * {@see IgnoreDeprecations} because {@see \Symfony\Component\Messenger\EventListener\StopWorkerOnTimeLimitListener}
- * is deprecated as of Symfony 8.1 and the context under test still carries it; that is a property of the
- * subject, not of these tests, and `failOnDeprecation` would otherwise report it once, on whichever test
- * happened to autoload the file first.
+ * A run that ends on its time limit costs no wall-clock here: the `Worker` reads and sleeps on Symfony's
+ * global clock, which the suite pins to a `MockClock`, so an idle worker's sleep advances that clock
+ * instead of the process waiting on it. The acceptance lane runs the same context on the real clock.
  *
  * {@see CoversNothing} because the subject is test infrastructure — `tests/` sits outside the coverage
  * allowlist, so there is no production line here to credit.
@@ -44,13 +42,13 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
  * @internal
  */
 #[CoversNothing]
-#[IgnoreDeprecations]
 final class MessengerConsumerContextTest extends TestCase
 {
     private const string ASYNC = 'async';
 
     /**
-     * Long enough to be a real run and short enough that a defect's spin costs a second, not five.
+     * Below the context's five-second default so these cases name their own limit; on the pinned clock a
+     * run to it costs no wall-clock time either way.
      */
     private const int TIME_LIMIT = 1;
 
@@ -121,8 +119,8 @@ final class MessengerConsumerContextTest extends TestCase
     }
 
     /**
-     * Fewer messages pending than the step named is not a shorter run: the time-limit listener stops the
-     * worker, `run()` returns, and nothing counts what was handled.
+     * Fewer messages pending than the step named is not a shorter run: the time limit stops the worker,
+     * `run()` returns, and nothing counts what was handled.
      */
     public function testAConsumeThatReadsFewerMessagesThanTheStepNamedIsRefused(): void
     {
