@@ -7,6 +7,13 @@ import type { LoginCredentials } from "../domain/LoginCredentials";
 import type { LoginRepository } from "../domain/LoginRepository";
 import { LoginOutcomeKind, LoginProblemType, type LoginOutcome } from "../domain/LoginOutcome";
 
+/** The statuses by which the server — or a gateway in front of it — says it cannot decide. */
+const UNDECIDED_STATUSES = new Set<number>([
+  HttpStatus.BAD_GATEWAY,
+  HttpStatus.SERVICE_UNAVAILABLE,
+  HttpStatus.GATEWAY_TIMEOUT,
+]);
+
 /**
  * Maps the session sign-in HTTP contract to a {@link LoginOutcome}:
  *
@@ -18,8 +25,8 @@ import { LoginOutcomeKind, LoginProblemType, type LoginOutcome } from "../domain
  *    login outcome, so the form surfaces it as a generic retryable error rather
  *    than mislabelling it as bad credentials (or mis-rendering the deactivated
  *    wall — that wall is keyed on the specific `account-deactivated` type).
- *  - 503 → request-failed (retryable — credentials were accepted, but finalising
- *    the session hit a transient store fault; not a credentials problem).
+ *  - 502 / 503 / 504 → request-failed (retryable — the server, or a gateway in
+ *    front of it, could not decide; not a credentials problem).
  *  - 401 / any other HTTP error → invalid-credentials (kept indistinguishable
  *    for neutrality — wrong password, unknown email and invited all collapse).
  *
@@ -62,7 +69,7 @@ export class ApiLoginRepository implements LoginRepository {
         throw error;
       }
     }
-    if (problem.status === HttpStatus.SERVICE_UNAVAILABLE) {
+    if (UNDECIDED_STATUSES.has(problem.status)) {
       return { kind: LoginOutcomeKind.REQUEST_FAILED };
     }
     return { kind: LoginOutcomeKind.INVALID_CREDENTIALS };

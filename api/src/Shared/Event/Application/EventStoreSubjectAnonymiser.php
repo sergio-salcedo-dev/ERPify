@@ -26,7 +26,8 @@ namespace Erpify\Shared\Event\Application;
  * **One pseudonym for every row of one subject, and the reason is NOT the stream UNIQUE.** That constraint
  * spans `(tenant_id, aggregate_id, aggregate_version)`, `tenant_id` is written `NULL` on every row, and
  * Postgres compares nulls as distinct — so it imposes nothing today, measured against `pg_indexes` rather
- * than the migration and recorded in `deferred-work.md`. The reasons that do hold are two: one person must
+ * than the migration; `aggregate_version` is informative by decision (the D4 amendment in
+ * `docs/adr/event-store-and-projections.md`). The reasons that do hold are two: one person must
  * not split into several anonymous identities, which is why the pseudonym is the one the actor pass already
  * minted for the audit axes; and a subject's events share one version sequence under a single `aggregate_id`
  * — the identity events and the two bulk session revokes alike — so moving them apart would scatter a

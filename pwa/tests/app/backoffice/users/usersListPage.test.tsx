@@ -24,6 +24,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 // `UsersTable` routes to the detail page on row activation.
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
+  usePathname: () => "/backoffice/users",
 }));
 
 import UsersListPage from "@/app/backoffice/users/page";

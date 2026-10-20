@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Double;
 
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Event\Application\SubjectPseudonymisation;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
@@ -24,6 +25,9 @@ final class RecordingEventStoreSubjectAnonymiser implements EventStoreSubjectAno
     /** @var list<array{subjectId: string, pseudonym: string}> */
     public array $calls = [];
 
+    /** Set when a test is asserting where the pass falls among the tables the chain locks. */
+    public ?LockOrderJournal $lockOrderJournal = null;
+
     public function __construct(
         private readonly int $matchCount = 0,
     ) {
@@ -32,6 +36,7 @@ final class RecordingEventStoreSubjectAnonymiser implements EventStoreSubjectAno
     #[Override]
     public function anonymise(SubjectPseudonymisation $pseudonymisation): int
     {
+        $this->lockOrderJournal?->locked(LockOrderJournal::EVENT_STORE);
         $this->calls[] = [
             'subjectId' => $pseudonymisation->subjectId,
             'pseudonym' => $pseudonymisation->pseudonym,

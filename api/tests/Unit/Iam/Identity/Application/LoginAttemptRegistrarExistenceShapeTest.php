@@ -69,6 +69,25 @@ final class LoginAttemptRegistrarExistenceShapeTest extends TestCase
         $this->assertSame([1, [LockOrderJournal::IDENTITY_USER]], $unknown);
     }
 
+    public function testTheAttemptThatTripsTheLockPaysOnlyTheLockoutProjectionsOwnLockOnTop(): void
+    {
+        // The stated residual, pinned so it cannot grow unnoticed: an `ACTIVE` identity at its threshold pays, on
+        // top of the round trips an unknown address pays, exactly one more transaction — the lockout projection's,
+        // opened by its row lock and not by the registrar — and one more locked read of the same row. Anything
+        // else here would be a new existence signal on the tenth attempt.
+        $known = $this->portCallsFor(
+            new InMemoryUserRepository($this->userOneAttemptFromLockout()),
+            UserMother::DEFAULT_EMAIL,
+        );
+        $projectionTransactions = $this->lockoutAuditRowLock?->transactionsOpened;
+        $unknown = $this->portCallsFor(new InMemoryUserRepository(), 'nobody@erpify.test');
+
+        $this->assertSame([1, [LockOrderJournal::IDENTITY_USER]], $unknown);
+        $this->assertSame(0, $this->lockoutAuditRowLock?->transactionsOpened, 'an unknown address trips nothing');
+        $this->assertSame([1, [LockOrderJournal::IDENTITY_USER, LockOrderJournal::IDENTITY_USER]], $known);
+        $this->assertSame(1, $projectionTransactions, "the second lock rides the projection's own transaction");
+    }
+
     /**
      * The transactions opened and the locks taken by one failed attempt against `$email`.
      *

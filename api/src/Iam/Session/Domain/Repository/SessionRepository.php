@@ -45,6 +45,23 @@ interface SessionRepository
     public function findActiveById(SessionId $id): ?Session;
 
     /**
+     * {@see findActiveById()} under a row lock held until the surrounding transaction ends: the same
+     * admissibility predicate, the same `null` for a revoked, expired or absent row. MUST run inside a
+     * transaction, for the reason {@see lockActiveForUser()} states.
+     *
+     * It exists for a caller that revokes the row it reads and publishes the event that revocation records.
+     * An unlocked read lets a rival revoke or delete the row between the read and the write; the write then
+     * re-stamps `revoked_at`, or targets a row that is gone, and a second `SessionRevoked` is published for a
+     * revocation that already happened. Under the lock the rival either waits for this transaction, or has
+     * committed first — and then the row no longer satisfies the predicate when the wait ends, so it resolves
+     * to `null` instead of being returned stale. One row by primary key, so it cannot close a lock cycle with a
+     * locker of a user's whole set.
+     *
+     * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
+     */
+    public function lockActiveById(SessionId $id): ?Session;
+
+    /**
      * The user's currently-admissible sessions, newest first, for the "my sessions" projection (same temporal
      * predicate). The order is part of the contract rather than an adapter detail: the projection renders the
      * list in the order it arrives, so the sequence a user reads on their devices screen is decided here.

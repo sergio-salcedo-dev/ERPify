@@ -7,6 +7,7 @@ import { container } from "@/context/shared/dependency-injection/infrastructure/
 import { CheckHealth } from "@/context/frontoffice/health/application/CheckHealth";
 import type { HealthCheck } from "@/context/frontoffice/health/domain/HealthCheck";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { telemetry } from "@/context/shared/observability/infrastructure";
 import { Navbar } from "@/app/_components/Navbar";
@@ -56,7 +57,7 @@ export default function StatusPage() {
 
   return (
     <div className="status-page flex min-h-screen flex-col bg-background font-sans">
-      <Navbar goToBackoffice={() => router.push(Routes.BACKOFFICE)} />
+      <Navbar goToBackoffice={() => router.push(safeHref(Routes.BACKOFFICE))} />
 
       <main className="status-page__main flex-grow">
         <section className="status-page__content mx-auto max-w-3xl px-4 py-12 sm:px-6 md:py-20 lg:px-8">
