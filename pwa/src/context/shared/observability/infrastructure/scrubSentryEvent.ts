@@ -1,7 +1,4 @@
 import type { BrowserOptions, Event } from "@sentry/nextjs";
-
-/** The span `beforeSendSpan` receives, which `@sentry/nextjs` uses without exporting its name. */
-export type StreamedSpanJSON = Parameters<NonNullable<BrowserOptions["beforeSendSpan"]>>[0];
 import {
   isDenylistedKey,
   decodeUntilQuerySurfaces,
@@ -9,6 +6,9 @@ import {
   REDACTION_SENTINEL,
   scrubDeep,
 } from "@/context/shared/observability/domain/redaction";
+
+/** The span `beforeSendSpan` receives, which `@sentry/nextjs` uses without exporting its name. */
+export type StreamedSpanJSON = Parameters<NonNullable<BrowserOptions["beforeSendSpan"]>>[0];
 
 /**
  * Sentry `beforeSend` hook: defense-in-depth scrub of denylisted keys from every
@@ -70,13 +70,19 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
  * rewritten.
  */
 export function scrubSentrySpan(span: StreamedSpanJSON): StreamedSpanJSON {
-  span.attributes = scrubStructured(span.attributes) as StreamedSpanJSON["attributes"];
-  span.name = scrubSpanName(span.name);
-  if (span.links) {
-    span.links = scrubStructured(span.links) as StreamedSpanJSON["links"];
-  }
+  try {
+    span.attributes = scrubStructured(span.attributes) as StreamedSpanJSON["attributes"];
+    span.name = scrubSpanName(span.name);
+    if (span.links) {
+      span.links = scrubStructured(span.links) as StreamedSpanJSON["links"];
+    }
 
-  return span;
+    return span;
+  } catch {
+    // The SDK wraps this hook and, when it throws, sends the span it was handed — unscrubbed. A
+    // failure here must therefore lose the span's data rather than let it through.
+    return { ...span, name: REDACTION_SENTINEL, attributes: {}, links: undefined };
+  }
 }
 
 /**
@@ -86,15 +92,15 @@ export function scrubSentrySpan(span: StreamedSpanJSON): StreamedSpanJSON {
  * judged whole.
  */
 function scrubSpanName(name: string): string {
-  const space = name.indexOf(" ");
-  if (space === -1) {
+  const parts = /^(\S+\s+)(.*)$/s.exec(name);
+  if (parts === null) {
     return scrubUrlLikeValue(name);
   }
 
-  const target = name.slice(space + 1);
+  const [, method, target] = parts;
   const scrubbed = scrubUrlLikeValue(target);
 
-  return scrubbed === target ? scrubUrlLikeValue(name) : `${name.slice(0, space + 1)}${scrubbed}`;
+  return scrubbed === target ? scrubUrlLikeValue(name) : `${method}${scrubbed}`;
 }
 
 /**
@@ -162,9 +168,25 @@ function scrubUrlLikeValues(value: unknown, depth: number): unknown {
 
   const scrubbed: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    scrubbed[key] = scrubUrlLikeValues(nested, depth + 1);
+    scrubbed[key] =
+      typeof nested === "string" && QUERY_KEY.test(key)
+        ? scrubBareQuery(nested)
+        : scrubUrlLikeValues(nested, depth + 1);
   }
   return scrubbed;
+}
+
+/**
+ * A key naming a query string: the SDK's `url.query`, the older `http.query`, a `query_string`.
+ * The one place this pass reads a key rather than a shape, and necessarily so: the SDK writes
+ * `url.query` with its `?` removed, and a bare `actorId=…&x=1` looks like no URL at all — measured,
+ * the shape rule passed it through on every traced fetch and every outgoing-request breadcrumb.
+ */
+const QUERY_KEY = /(?:^|[._])query(?:_string)?$/i;
+
+/** A query string with or without its leading `?`, scrubbed param by param. */
+function scrubBareQuery(value: string): string {
+  return value.startsWith("?") ? scrubUrlLikeValue(value) : scrubQueryString(value);
 }
 
 /**

@@ -47,7 +47,27 @@ describe("sentryInitOptions", () => {
       request: { deny: expect.arrayContaining(["forwarded", "-ip", "-user"]) },
       response: { deny: expect.arrayContaining(["forwarded", "-ip", "-user"]) },
     });
-    expect(collection?.urlQueryParams).toEqual({ deny: expect.arrayContaining(["-user"]) });
+    expect(collection?.urlQueryParams).toEqual({
+      deny: expect.arrayContaining(["actorid", "resourceid", "correlationid", "[value]"]),
+    });
+    expect(collection?.stackFrameVariables).toBe(false);
+  });
+
+  // A subset match would stay green over a category a later SDK adds with a permissive default.
+  it("decides every category the SDK defines, and no other", () => {
+    expect(Object.keys(options().dataCollection ?? {}).sort()).toEqual([
+      "cookies",
+      "databaseQueryData",
+      "frameContextLines",
+      "genAI",
+      "graphQL",
+      "httpBodies",
+      "httpHeaders",
+      "queues",
+      "stackFrameVariables",
+      "urlQueryParams",
+      "userInfo",
+    ]);
   });
 
   it("scrubs error events and streamed spans with the shared scrubbers", () => {
@@ -57,9 +77,9 @@ describe("sentryInitOptions", () => {
     expect(resolved.beforeSendSpan).toBe(scrubSentrySpan);
   });
 
-  it("keeps the default streamed trace lifecycle, the one beforeSendSpan is wired for", () => {
-    // A callback that does not match the lifecycle is never invoked, so `'static'` here would
-    // silently switch the span scrub off.
-    expect(options()).not.toHaveProperty("traceLifecycle");
+  it("pins the streamed trace lifecycle, the one beforeSendSpan is wired for", () => {
+    // A callback that does not match the lifecycle is never invoked, and an absent option lets
+    // `SENTRY_TRACE_LIFECYCLE=static` in the environment switch the span scrub off.
+    expect(options().traceLifecycle).toBe("stream");
   });
 });

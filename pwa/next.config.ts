@@ -212,13 +212,14 @@ if (sentryUpload.warning !== null) {
 //    its static routes are `public/` and `.next/static` alone. They are image
 //    contents, readable by whoever can pull the image, not a URL.
 //
-// Four settings would genuinely publish client maps, and the gate refuses all
+// Three settings would genuinely publish client maps, and the gate refuses all
 // of them: `filesToDeleteAfterUpload`, which OVERRIDES the deletion flag so a
 // narrow glob serves everything it does not name; `productionBrowserSourceMaps:
 // true`, which generates maps even when upload is off and nothing deletes them;
-// `useRunAfterProductionCompileHook: false`, which switches the deleting hook
-// off; and `unstable_sentryWebpackPluginOptions`, whose `sourcemaps` the SDK
-// spreads last over its own and so replaces the deletion glob wholesale.
+// and `useRunAfterProductionCompileHook: false`, which switches the deleting
+// hook off. The gate also refuses `unstable_sentryWebpackPluginOptions`, which
+// the SDK no longer reads (it only warns) and whose `sourcemaps` would replace
+// the deletion glob wholesale if a release ever honoured it again.
 //
 // The token is used for exactly three things, all in the post-compile hook: the
 // source-map upload, creating the release those maps are attached to, and

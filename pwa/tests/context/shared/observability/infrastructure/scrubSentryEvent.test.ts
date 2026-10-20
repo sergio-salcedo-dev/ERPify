@@ -313,25 +313,26 @@ describe("scrubSentryEvent", () => {
   });
 
   // Tracing is on in every environment (sampled 0.2 in prod) and spans are streamed one at a time,
-  // never through `beforeSend`, so a traced fetch's request URL — under `url`, `http.url`,
-  // `url.full` and `http.query`, three of them whole — is reachable only from `beforeSendSpan`.
-  // This is the leak #821 was filed for, on the surface the SDK now sends it through.
+  // never through `beforeSend`, so a traced fetch's request URL is reachable only from
+  // `beforeSendSpan`. The attributes are the ones the SDK writes on a fetch span: `url.full`, and
+  // `url.query` with its `?` removed — a bare query no URL-shape rule can recognise.
   it("redacts the request URL a traced fetch leaves on a streamed span", () => {
     const leaked =
       "https://app.example/api/v1/backoffice/audit?filters%5B0%5D%5Bvalue%5D=jane@example.com";
     const span: StreamedSpanJSON = {
       trace_id: "t",
       span_id: "s",
-      name: "GET /api/v1/backoffice/audit?actorId=8f14e45f",
+      name: "GET app.example",
       start_timestamp: 1,
       status: "error",
       is_segment: false,
       attributes: {
         "sentry.op": "http.client",
-        url: leaked,
-        "http.url": leaked,
         "url.full": leaked,
-        "http.query": "?filters%5B0%5D%5Bvalue%5D=jane%40example.com",
+        "url.query":
+          "filters%5B0%5D%5Bfield%5D=actorId&filters%5B0%5D%5Bvalue%5D=jane%40example.com",
+        "url.domain": "app.example",
+        "http.request.header.referer": ["https://app.example/backoffice/audit?actorId=8f14e45f"],
         "http.response.status_code": 500,
         authorization: "Bearer x",
       },
@@ -342,28 +343,94 @@ describe("scrubSentryEvent", () => {
 
     expect(JSON.stringify(scrubbed)).not.toContain("jane");
     expect(JSON.stringify(scrubbed)).not.toContain("8f14e45f");
-    expect(scrubbed.name).toBe("GET /api/v1/backoffice/audit?actorId=REDACTED");
     expect(scrubbed.attributes["url.full"]).toContain("filters%5B0%5D%5Bvalue%5D=REDACTED");
-    expect(scrubbed.attributes["http.query"]).toBe("?filters%5B0%5D%5Bvalue%5D=REDACTED");
+    expect(scrubbed.attributes["url.query"]).toBe(
+      "filters%5B0%5D%5Bfield%5D=actorId&filters%5B0%5D%5Bvalue%5D=REDACTED",
+    );
     expect(scrubbed.attributes).not.toHaveProperty("authorization");
     // The shape stays readable: an operator still sees which endpoint was called.
-    expect(scrubbed.attributes.url).toContain("/api/v1/backoffice/audit");
+    expect(scrubbed.attributes["url.full"]).toContain("/api/v1/backoffice/audit");
     expect(scrubbed.attributes["http.response.status_code"]).toBe(500);
     expect(scrubbed.attributes["sentry.op"]).toBe("http.client");
   });
 
-  it("leaves a span name that carries no query untouched", () => {
+  it("leaves a bare query that carries nothing sensitive byte-identical", () => {
     const span = {
       trace_id: "t",
       span_id: "s",
-      name: "GET /api/v1/banks",
+      name: "GET app.example",
+      start_timestamp: 1,
+      status: "ok",
+      is_segment: false,
+      attributes: { "url.query": "page=2&size=20%20x" },
+    } as StreamedSpanJSON;
+
+    expect(scrubSentrySpan(span).attributes["url.query"]).toBe("page=2&size=20%20x");
+  });
+
+  // The node SDK records an outgoing request as a breadcrumb carrying the same bare `url.query`,
+  // and a breadcrumb rides on an ERROR event, so this is the event path rather than the span one.
+  it("redacts the bare url.query an outgoing-request breadcrumb carries", () => {
+    const event = {
+      breadcrumbs: [
+        {
+          category: "http",
+          data: { "url.query": "actorId=8f14e45f&page=1", "http.method": "GET" },
+        },
+      ],
+    } as unknown as ErrorEvent;
+
+    expect(scrubSentryEvent(event).breadcrumbs?.[0]?.data?.["url.query"]).toBe(
+      "actorId=REDACTED&page=1",
+    );
+  });
+
+  // The SDK names a client span `<METHOD> <domain>` and a server span by its route, so a query in
+  // the name is not a shape it produces today; the name pass is cheap insurance for one that does.
+  it.each([
+    ["GET /api/v1/audit?actorId=8f14e45f", "GET /api/v1/audit?actorId=REDACTED"],
+    ["GET  /api/v1/audit?actorId=8f14e45f", "GET  /api/v1/audit?actorId=REDACTED"],
+    ["GET\t/api/v1/audit?actorId=8f14e45f", "GET\t/api/v1/audit?actorId=REDACTED"],
+    ["GET /api/v1/banks", "GET /api/v1/banks"],
+  ])("scrubs a query behind the method in span name %j", (name, expected) => {
+    const span = {
+      trace_id: "t",
+      span_id: "s",
+      name,
       start_timestamp: 1,
       status: "ok",
       is_segment: true,
       attributes: {},
     } as StreamedSpanJSON;
 
-    expect(scrubSentrySpan(span).name).toBe("GET /api/v1/banks");
+    expect(scrubSentrySpan(span).name).toBe(expected);
+  });
+
+  // The SDK catches a throw from `beforeSendSpan` and sends the span it handed over, unscrubbed.
+  it("drops the span's data rather than sending it when the scrub throws", () => {
+    const attributes = new Proxy(
+      { "url.full": "https://app.example/audit?actorId=8f14e45f" },
+      {
+        ownKeys: () => {
+          throw new Error("boom");
+        },
+      },
+    );
+    const span = {
+      trace_id: "t",
+      span_id: "s",
+      name: "GET /audit?actorId=8f14e45f",
+      start_timestamp: 1,
+      status: "ok",
+      is_segment: true,
+      attributes,
+    } as unknown as StreamedSpanJSON;
+
+    const scrubbed = scrubSentrySpan(span);
+
+    expect(scrubbed.attributes).toEqual({});
+    expect(scrubbed.name).toBe("REDACTED");
+    expect(scrubbed.trace_id).toBe("t");
   });
 
   it("redacts a person id on the trace context's own attributes", () => {

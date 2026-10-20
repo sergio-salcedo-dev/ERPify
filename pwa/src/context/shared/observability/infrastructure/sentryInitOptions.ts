@@ -1,19 +1,30 @@
 import type { init } from "@sentry/nextjs";
 import { AppEnv } from "@/context/shared/environment/domain/AppEnv";
+import { IDENTITY_AXES } from "@/context/shared/observability/domain/redaction";
 import { scrubSentryEvent, scrubSentrySpan } from "./scrubSentryEvent";
 
 /** What `Sentry.init` accepts in any of the three runtimes. */
 type SentryInitOptions = NonNullable<Parameters<typeof init>[0]>;
 
-/**
- * Every collection category the SDK knows, each set explicitly. Leaving `dataCollection` unset is
- * NOT the restrictive choice: the SDK then collects cookies, user info, every request and response
- * body, database query data and queue payloads, so an absent key is a grant. This is the baseline
- * the SDK documents as equivalent to the old `sendDefaultPii: false`, with the header and query
- * denylists it applied by default; {@link scrubSentryEvent} and {@link scrubSentrySpan} still run
- * over whatever survives, since a key denylist cannot see an identifier spelled under another name.
- */
+/** Header-name fragments that carry a client address or an authenticated user. */
 const IP_AND_IDENTITY_HEADERS = ["forwarded", "-ip", "remote-", "via", "-user"];
+
+/**
+ * Query-parameter names the SDK filters at the source, before any hook runs, on every surface it
+ * writes a URL to. The SDK matches each entry as a case-insensitive substring of the decoded
+ * name, so `[value]` covers the search grammar's `filters[N][value]` in every spelling the wire
+ * uses. {@link scrubSentryEvent} and {@link scrubSentrySpan} still run afterwards, because a name
+ * list cannot see an identifier carried inside another URL (`?next=<the audit URL>`).
+ */
+const SENSITIVE_QUERY_PARAMS = [...IP_AND_IDENTITY_HEADERS, ...IDENTITY_AXES, "[value]"];
+
+/**
+ * Every collection category, each set explicitly. Leaving `dataCollection` unset, or a category
+ * out of it, is NOT the restrictive choice: the SDK then collects cookies, user info, every
+ * request and response body, database query data, queue payloads and stack-frame variables, so
+ * an absent key is a grant. The test pins the key set, so a category a later SDK adds has to be
+ * decided here rather than inherited.
+ */
 const DATA_COLLECTION = {
   userInfo: false,
   cookies: false,
@@ -22,11 +33,13 @@ const DATA_COLLECTION = {
     response: { deny: IP_AND_IDENTITY_HEADERS },
   },
   httpBodies: [],
-  urlQueryParams: { deny: IP_AND_IDENTITY_HEADERS },
+  urlQueryParams: { deny: SENSITIVE_QUERY_PARAMS },
   graphQL: { document: false, variables: false },
   genAI: { inputs: false, outputs: false },
   databaseQueryData: false,
   queues: false,
+  stackFrameVariables: false,
+  frameContextLines: 5,
 } satisfies SentryInitOptions["dataCollection"];
 
 /** Full tracing in dev (only the developer hits `erpify-pwa-dev`) for local verification. */
@@ -67,5 +80,9 @@ export function sentryInitOptions(): SentryInitOptions | null {
     // URL attributes are reachable only from `beforeSendSpan`.
     beforeSend: scrubSentryEvent,
     beforeSendSpan: scrubSentrySpan,
+    // Pinned rather than defaulted: with the option absent, the node and edge SDKs read
+    // `SENTRY_TRACE_LIFECYCLE` from the environment, and `static` there would make the SDK skip
+    // `beforeSendSpan` — every server span would leave unscrubbed with no hook to stop it.
+    traceLifecycle: "stream",
   };
 }
