@@ -62,8 +62,8 @@ const NAVIGABLE_ROUTES: ReadonlyArray<RouteCase> = [
   },
   {
     label: "503 — Maintenance",
-    url: "/maintenance",
-    description: "Planned downtime / deployment window landing.",
+    url: Routes.MAINTENANCE,
+    description: "Planned downtime, deployment window or identity-service outage landing.",
   },
   {
     label: "Offline (PWA)",

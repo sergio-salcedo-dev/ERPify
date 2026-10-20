@@ -34,9 +34,17 @@ final class InMemoryErasureResweepRepository implements ErasureResweepRepository
         $this->resweeps = \array_values($resweeps);
     }
 
+    /**
+     * An upsert on the subject, as the production adapter's `ON CONFLICT (subject_id)`: a second scheduling
+     * restarts the window instead of adding a row, so it moves to the end of the read order.
+     */
     #[Override]
     public function save(ErasureResweep $resweep): void
     {
+        $this->resweeps = \array_values(\array_filter(
+            $this->resweeps,
+            static fn (ErasureResweep $held): bool => 0 !== \strcasecmp($held->subjectId(), $resweep->subjectId()),
+        ));
         $this->resweeps[] = $resweep;
 
         if ($this->onSave instanceof Closure) {

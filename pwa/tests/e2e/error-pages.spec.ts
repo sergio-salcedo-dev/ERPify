@@ -74,8 +74,8 @@ const STATIC_PAGES: ReadonlyArray<StaticErrorPageCase> = [
     url: "/maintenance",
     testId: "maintenance",
     status: "Error 503",
-    title: "Scheduled maintenance",
-    descriptionContains: "temporarily offline",
+    title: "Service temporarily unavailable",
+    descriptionContains: "can't be reached right now",
     expectedHttpStatus: 200,
   },
   {

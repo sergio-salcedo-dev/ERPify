@@ -256,7 +256,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   useEffect(() => {
     if (!serviceUnavailable) return;
-    // Probes the loop has sent; the backoff grows with it, so a tick skipped while offline does not.
+    // Timed probes the loop has sent; the backoff grows with them alone. A tick skipped while offline
+    // does not count, and neither does a probe a visibility or `online` event sent: those already answer
+    // the moment that changed, and counting them would push the next timed probe out by a tab switch.
     let attempt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let inFlight = false;
@@ -279,6 +281,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         schedule();
         return;
       }
+      attempt += 1;
       reprobe();
     }
     // A request arriving while a probe is in flight is held rather than dropped: a tab waking from
@@ -294,7 +297,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       }
       clearTimeout(timer);
       inFlight = true;
-      attempt += 1;
       void reprobeDuringOutage().then(({ result, applied }) => {
         inFlight = false;
         const runHeldRequest = pendingReprobe && !result.answered;
@@ -308,7 +310,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       });
     }
     function reprobeWhenVisible(): void {
-      if (globalThis.document.visibilityState === "visible") reprobe();
+      if (globalThis.document.visibilityState === "visible" && globalThis.navigator.onLine)
+        reprobe();
     }
 
     schedule();

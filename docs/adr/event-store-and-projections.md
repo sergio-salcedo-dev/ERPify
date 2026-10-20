@@ -101,22 +101,23 @@ CREATE TABLE event_store (
     aggregate_version INT          NOT NULL,                -- per-stream (1,2,3…) — informativo, sin garantía (D14)
     event_name        VARCHAR(190) NOT NULL,
     event_version     SMALLINT     NOT NULL DEFAULT 1,
-    payload           JSONB        NOT NULL,                -- toPrimitives(): SOLO dominio
+    payload           JSONB        NOT NULL,                -- toPrimitives(): SOLO dominio; objeto, {} si vacío (D14)
     metadata          JSONB        NOT NULL,                -- objeto, {} si vacío (D14); correlation/causation/actor futuros
     tenant_id         UUID         NULL,                    -- multi-tenant SaaS: NULL hoy, NOT NULL al llegar auth
     occurred_on       TIMESTAMPTZ  NOT NULL,                -- tiempo de DOMINIO
     recorded_on       TIMESTAMPTZ  NOT NULL,                -- tiempo de SISTEMA (clock_timestamp() al append)
-    PRIMARY KEY (sequence),
-    CONSTRAINT event_store_event_id_uniq UNIQUE (event_id),
-    CONSTRAINT event_store_stream_version_uniq UNIQUE (tenant_id, aggregate_id, aggregate_version)
+    PRIMARY KEY (sequence)
 );
+CREATE UNIQUE INDEX event_store_event_id_uniq        ON event_store (event_id);
+CREATE UNIQUE INDEX event_store_stream_version_uniq  ON event_store (tenant_id, aggregate_id, aggregate_version);
 CREATE INDEX event_store_aggregate_idx ON event_store (aggregate_type, aggregate_id, sequence);
 CREATE INDEX event_store_name_idx      ON event_store (event_name, sequence);
 CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
 ```
 
-El bloque describe el esquema que aplica la migración (`Version20260616201857`): ni `metadata` ni
-`recorded_on` llevan `DEFAULT` — los dos los escribe siempre `DbalEventStore`.
+El bloque describe el esquema que aplica la migración (`Version20260616201857`): las dos unicidades son índices
+únicos, no restricciones de tabla (no aparecen en `pg_constraint`), y ni `metadata` ni `recorded_on` llevan
+`DEFAULT` — los dos los escribe siempre `DbalEventStore`.
 
 - **`sequence BIGINT IDENTITY` como PK**, `event_id` UUID v7 `UNIQUE`. Para un log append-only escaneado por
   rango (checkpoint "todo después de N"), el BIGINT gap-aware gana a UUIDv7 en localidad y semántica de offset.
@@ -543,7 +544,8 @@ append convierte los dos mapas del envelope a objeto **en el nivel superior** an
 `DbalAuditLogWriter` aplica a `audit_log.metadata` —: vacío es `{}`, las claves se conservan y una lista anidada
 sigue siendo array. `payload` entra por la misma razón aunque la decisión original nombrara solo `metadata`: una
 decena de eventos (`BankDeletedDomainEvent`, `UserDeactivated`, `PasswordChanged`…) devuelven `toPrimitives()` vacío,
-y ambos mapas están tipados `array<string, mixed>`, así que el cast no puede convertir una lista en `{"0": …}`. La
+y ambos mapas están tipados `array<string, mixed>`, así que PHPStan impide que llegue una lista que el cast
+convertiría en `{"0": …}`; en ejecución nada lo comprueba. La
 forma la garantiza el escritor, no el esquema (las columnas no tienen `DEFAULT`, D4).
 **Las filas `[]` ya escritas no se migran**, ni en `event_store` ni en `audit_log` (las anteriores al cast de
 su escritor): hoy ningún lector las deconstruye — `decode()` devuelve `[]` para ambas formas, el anonimizador de D12
@@ -579,7 +581,8 @@ observabilidad de eventos repuntado a `event_store`.
 
 ## Triggers de revisita
 
-(a) Auth/tenancy real → `tenant_id` pasa a `NOT NULL`, se evalúa partición/RLS por tenant. (b) Primer sink
+(a) Auth/tenancy real → `tenant_id` pasa a `NOT NULL`, se evalúa partición/RLS por tenant; y antes, D14(a): con
+`tenant_id` no nulo el índice de stream empieza a rechazar versiones repetidas, que sin traducción son un 500. (b) Primer sink
 externo (CRM/BI/DW/API pública) → relay aguas abajo del `event_store` por `sequence`. (c) Primer agregado
 event-sourced o per-stream replay → se consume `aggregate_version`, y antes hay que convertirlo en garantía
 (D14: índice efectivo + lock o reintento en cada publicador del stream). (d) Primera evolución de

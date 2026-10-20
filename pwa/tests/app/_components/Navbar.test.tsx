@@ -89,10 +89,13 @@ describe("Navbar access cluster", () => {
     auth.status = AuthStatus.UNAVAILABLE;
 
     renderNavbar();
+    openMobileMenu();
 
     const slot = screen.getByTestId("navbar__access");
     expect(within(slot).getByTestId("navbar__link-login")).toBeInTheDocument();
     expect(screen.queryByTestId("navbar__go-to-backoffice-button")).toBeNull();
+    expect(screen.getByTestId("navbar__link-login--mobile")).toHaveAttribute("href", Routes.LOGIN);
+    expect(screen.queryByTestId("navbar__go-to-backoffice-button--mobile")).toBeNull();
   });
 
   it("keeps the links that do not depend on the session in every state", () => {

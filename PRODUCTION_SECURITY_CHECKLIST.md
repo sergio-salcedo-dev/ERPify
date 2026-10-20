@@ -2008,7 +2008,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       relies on returning JSON.
 
 - [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
-      within five minutes — unless it commits more than an hour after the erasure.** The erasure's passes reach
+      on its next tick — unless it commits after the subject's window closed.** The erasure's passes reach
       the rows that exist when they run, and a request that loaded the subject before the identity row went can
       commit one afterwards. Three review rounds each found more writers able to: the access log and the four
       request-boundary security audit listeners on the actor axis, `StartSession` and the three session
@@ -2016,21 +2016,40 @@ mitigated state. Accepting one means recording who accepted it and against which
       change. An enumeration that failed three times is not a control, so the class is closed by mechanism
       instead: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
       `ResweepErasedSubjects` re-runs the actor, resource, business-log and session passes for every subject
-      erased in the last hour, every five minutes on the `identity_maintenance` schedule, whoever wrote the row
-      (`docs/adr/audit-activity-log.md` D4.2). The late writers of `Iam/Identity` that run after their own
+      still scheduled, on the five-minute `identity_maintenance` schedule, whoever wrote the row
+      (`docs/adr/audit-activity-log.md` D4.2). A subject's window is one hour from the instant the erasure built
+      its row, inside the erasure's transaction — so a slow erasure commit shortens the post-commit coverage —
+      and "next tick" means the next one the single `scheduler_worker` actually runs: a tick waiting behind
+      another, a restart or a stopped worker delays it. The re-sweep repeats only those four passes; the
+      reset-token, recovery-secret, membership and invitation purges are not repeated, because their late
+      writers contend on `identity_user` or `iam_invitation` and so cannot commit after the erasure. The late writers of `Iam/Identity` that run after their own
       commit stay serialised on `identity_user` (§6), which closes their window outright rather than bounding
       it. What remains, **accepted by Sergio (product owner) on 2026-10-06 together with the mechanism**:
-      - **a row committed more than an hour after the erasure is not reached.** Nothing bounds how long a
+      - **a row committed after the subject's window closed is not reached.** Nothing bounds how long a
         request runs — `max_execution_time` does not count time spent waiting on the database, and neither
         Caddy nor Postgres sets a timeout — so the hour is a margin chosen far above any sane request, not a
         guarantee;
-      - **the subject's real id stays in `identity_erasure_resweep` for up to an hour and five minutes** after
-        the erasure reported it gone. The column has a named owner of its erasure (the re-sweep deletes the row
-        on the tick that closes its window) and a detective source that reports a row that outlived it;
+      - **a Postgres timeout would not close that either**: the `kernel.terminate` writers insert in
+        autocommit, after the request's own work, so no statement or transaction timeout reaches the late
+        insert itself;
+      - **the subject's real id stays in `identity_erasure_resweep` until the first successful tick after its
+        window closes** — an hour and up to one period on a healthy scheduler, longer while a subject's sweep
+        keeps failing or the scheduler is down. The column has a named owner of its erasure (the re-sweep
+        deletes the row on the tick that closes its window) and a detective source that reports a row older
+        than two windows;
       - **a late row gets the tick's own fresh pseudonym**, not the erasure's, so it does not link to the rest
         of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
         vetoes.
       Re-affirm or close before the first customer.
+- [ ] **A login whose browser correlation never persists leaves an `ACTIVE` `iam_session` row, with its `ip`
+      and `device`, that no request can present.** `StartSession` writes the correlation only after the row and
+      its outbox commit, so a correlation never names a row that does not exist; the opposite orphan — the
+      native session failing to persist at the end of the response — keeps that row until its absolute expiry
+      and `PruneRetiredSessions`, about 97 days after the login, unless its owner revokes it from "my sessions".
+      The identity's erasure still removes it (the session purge matches by user). **Accepted by Sergio
+      (product owner) on 2026-10-04**: compensating in `StartSession` would guard an unreachable path and miss
+      the reachable one; reopen with a row born `PENDING` and activated by its first admitted request if such
+      orphans are measured in production (`docs/adr/identity-invitation-lifecycle.md` D8).
 - [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
       subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
       nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
@@ -2099,4 +2118,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       holding real rows, count the rows it would refuse: `SELECT count(*) FROM audit_log WHERE actor_type NOT IN
       ('anonymous','api_key','system','user') OR (actor_type IN ('anonymous','system')) <> (actor_id IS NULL)`.
       The migration validates existing rows on purpose and fails on the first violation, so a non-zero count is
-      a decision to take before the deploy, not during it.
+      a decision to take before the deploy, not during it. Size the table as well: each `ADD CONSTRAINT` holds
+      `ACCESS EXCLUSIVE` on `audit_log` for a full scan, blocking every audit write meanwhile, so a large table
+      takes the out-of-band path the migration's docblock reserves for it (`NOT VALID`, then `VALIDATE CONSTRAINT`, run
+      outside the migration transaction, which otherwise keeps the first lock until commit).

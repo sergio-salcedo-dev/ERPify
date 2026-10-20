@@ -85,8 +85,8 @@ use Symfony\Contracts\Cache\CacheInterface;
  * is anchored at that instant. The delay is not one period paid once: at a deploy cadence of one period or
  * less the tick is re-anchored before it ever comes due and never fires.
  * `cache.scheduler_checkpoint` is Postgres-backed and outlives the container; the measurement is in
- * `cache.yaml`. `NotifyLockedIdentitiesMessage` is the one member of this schedule the defect spares, its
- * five-minute period being far shorter than any deploy.
+ * `cache.yaml`. `NotifyLockedIdentitiesMessage` and `ResweepErasedSubjectsMessage` are the members of this
+ * schedule the defect spares, their five-minute period being far shorter than any deploy.
  */
 #[AsSchedule('identity_maintenance')]
 final readonly class IdentityMaintenanceSchedule implements ScheduleProviderInterface

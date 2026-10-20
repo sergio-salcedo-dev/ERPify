@@ -1,6 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-09-28 (D3 reviewed — request-boundary
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-06 (D4.2 — deferred re-sweep of the
+> erasure passes; D7 — `audit_log` actor CHECK constraints, 2026-10-03; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -532,7 +533,8 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
   cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
-  camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
+  camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
+  re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
   **En la tabla, `metadata` se escribe como objeto** —`DbalAuditLogWriter` convierte el nivel superior—; las
   filas anteriores que guardan `[]` no se reescriben, decisión registrada en
   [`event-store-and-projections.md`](event-store-and-projections.md), D14(b), junto con la de `event_store`.
@@ -673,8 +675,8 @@ encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de s
 **Decisión** (Sergio, 2026-10-06). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
 propia transacción, y sólo si su identidad estaba viva —la misma condición que el pase de `event_store`, que
 casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
-`identity_maintenance`, repite para cada sujeto de la última **hora** los pases de actor, recurso, log de negocio
-y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado. El tick que cierra la ventana barre
+`identity_maintenance`, repite para cada sujeto aún programado —una **hora** desde que el borrado construyó su
+fila, hasta el primer tick con éxito tras cerrarse— los pases de actor, recurso, log de negocio y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado. El tick que cierra la ventana barre
 una última vez y borra la fila en la misma transacción. Un sujeto que falla no detiene a los demás: el fallo se
 captura por sujeto, el tick sigue y al final lanza una excepción que cuenta los fallos sin citar su texto —un
 mensaje del driver podría llevar el id—; el sujeto que falló conserva su fila y se reintenta en el siguiente tick.
@@ -690,8 +692,12 @@ escribió la fila.
 - **Evidencia (D4.1).** Un tick que reescribe algo escribe `GDPR_ERASURE_EXECUTED` con
   `anonymized_actor_id` y `resweep: true`; uno que no reescribe nada no escribe nada. Como en el borrado de un
   sujeto que nunca actuó, ese pseudónimo puede no figurar en ninguna fila `actor_erased` —un tick que sólo borró
-  sesiones o reescribió eventos—: D4.1 se cumple en el sentido fila → evidencia, no en el inverso.
-- **La fila pendiente guarda el id real** hasta 1 h 5 min después del borrado. Es una referencia a persona con
+  sesiones o reescribió eventos—: D4.1 se cumple en el sentido fila → evidencia, no en el inverso. Esas filas
+  son evidencia de `AuditErasureEvidence::ACTIONS` y la poda no las toca nunca: un borrado puede sumar hasta una
+  por tick de su ventana (trece), y como no llevan recurso ni comparten pseudónimo con el borrado, no se pueden
+  atribuir a él. Es la consecuencia directa de no guardar el mapeo, no un descuido.
+- **La fila pendiente guarda el id real** hasta el primer tick con éxito tras cerrarse su ventana: una hora y
+  hasta un periodo con el scheduler sano, más mientras su barrido falle o el scheduler esté parado. Es una referencia a persona con
   dueño de su borrado (el re-barrido) en `api/.person-reference-policy`, y su fuente detectiva sólo lista las
   filas que superan dos ventanas: una fila en ventana es el instrumento del propio borrado, y listarla daría una
   falsa divergencia por cada borrado.

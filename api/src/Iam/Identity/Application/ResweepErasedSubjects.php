@@ -25,11 +25,11 @@ use Throwable;
  *
  * {@see FulfilIdentityErasure} rewrites every row naming the subject that exists when it runs. A request
  * already in flight when it starts can still commit one afterwards — an access-log or request-boundary audit
- * row, a session row, a session event — and every review that enumerated those writers found the list
- * incomplete. This closes the class rather than the list: whatever names the subject on either audit axis,
- * in `event_store` or in `iam_session` is rewritten on the next tick, whoever wrote it, so such a row
- * survives at most one period of the schedule and the subject's id at most one window
- * ({@see ErasureResweep::WINDOW}) beyond the erasure. `docs/adr/audit-activity-log.md` D4.2 is the decision
+ * row, a session row, a session event — and those writers are an open set rather than a list. This covers
+ * the class instead: whatever names the subject on either audit axis, in `event_store` or in `iam_session`
+ * while its row is scheduled is rewritten on the next tick that runs, whoever wrote it. A subject is
+ * scheduled for one window ({@see ErasureResweep::WINDOW}) from the instant the erasure built its row, and
+ * forgotten by the first successful tick after that. `docs/adr/audit-activity-log.md` D4.2 is the decision
  * and records what it leaves uncovered.
  *
  * **The passes are the erasure's own, unchanged.** Each matches by value and a second run over clean tables

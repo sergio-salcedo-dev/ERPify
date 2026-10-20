@@ -36,7 +36,7 @@ Las dos rutas de lectura del trail —`GET /api/v1/backoffice/audit/timeline` y 
 
 Discarded: clase `Voter` propia ahora — duplica el `RoleVoter` sin lógica contextual. Discarded: `JsonResponse` de error manual en el controlador — prohibido por el pipeline (`php.lint.error-contract`).
 
-### D5 — `actor_id` stays nullable; "real attribution" is a seam invariant, not a schema constraint
+### D5 — `actor_id` stays nullable; "real attribution" is a seam invariant, also enforced by a schema CHECK since 2026-10-03
 
 FR15 y el paréntesis «(`actor_id` NOT NULL)» de D9 (tier 3) son taquigrafía; el mecanismo autoritativo es D9 **tier 1**: «`actor_id` stays nullable and only `ActorContextFactory` swaps». Se ratifica: la columna **permanece nullable**. «Atribución real» significa que toda request **autenticada** produce un UUID de actor real; las escrituras `system`/fuera de request (CLI, worker, scheduler) siguen `NULL` por diseño —no hay humano— y existen con o sin auth. El invariante se construye en la costura; el esquema lo impone además desde 2026-10-03 (ver la reversión al final de D5), sin cambiar la nulabilidad.
 

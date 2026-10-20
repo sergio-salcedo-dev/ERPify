@@ -71,7 +71,7 @@ final class ScheduleConsumption
      * Read per file rather than per stack, unlike {@see COMPOSE_STACKS}, and on purpose: here the strictest
      * reading is that no file contradicts the pin, whichever overlay it lands under. `make/config.mk` composes
      * dev as `compose.yaml + compose.dev.yaml`, so a `deploy.replicas: 2` written into the dev overlay runs two
-     * clocks over the same nine ticks. The overlay declares `messenger_worker` in order to extend it, which is
+     * clocks over the same ten ticks. The overlay declares `messenger_worker` in order to extend it, which is
      * why the same reader works on all three.
      */
     public const array REPLICA_SCOPE = [
@@ -90,7 +90,7 @@ final class ScheduleConsumption
      * saved, so a second replica CAN duplicate a tick rather than always doing so — the window is between the
      * winner's `acquire()` and its `save()`, which runs after the handler.
      *
-     * That window is why the count is one rather than why it is nearly harmless. Eight of the nine ticks are
+     * That window is why the count is one rather than why it is nearly harmless. Nine of the ten ticks are
      * idempotent sweeps and would mostly collapse; `NotifyLockedIdentitiesMessage` mails a person and holds
      * the window open for an SMTP exchange, and it sends BEFORE stamping the suppression window — so two
      * clocks deliver the notice twice to someone whose account an attacker is already driving.

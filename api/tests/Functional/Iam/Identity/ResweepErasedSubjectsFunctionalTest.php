@@ -140,6 +140,25 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
         $this->assertSame($evidenceBefore, $this->resweepEvidenceRows());
     }
 
+    /**
+     * Carrying one pseudonym across ticks would need it stored beside the real id — the mapping D4 vetoes — so
+     * each tick that finds something mints its own.
+     */
+    #[Test]
+    public function eachTickThatRewritesSomethingMintsAPseudonymOfItsOwn(): void
+    {
+        $this->eraseALiveSubject();
+        $firstLateRow = $this->insertLateActorRow();
+        $this->resweep()->resweep();
+        $secondLateRow = $this->insertLateActorRow();
+        $this->resweep()->resweep();
+
+        $first = $this->erasedActorOf($firstLateRow);
+        $second = $this->erasedActorOf($secondLateRow);
+
+        $this->assertNotSame($first, $second);
+    }
+
     #[Test]
     public function theTickAfterTheWindowClosesSweepsOnceMoreAndForgetsTheSubject(): void
     {
@@ -162,8 +181,8 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
     #[Test]
     public function aSubjectErasedAgainInsideItsWindowRestartsItInsteadOfFailingTheErasure(): void
     {
-        // An identity recreated under the same id — a fixture or seed with fixed ids — and erased again. On the
-        // unique index this used to fail the erasure, with the subject's id in the driver's DETAIL line.
+        // An identity recreated under the same id — a fixture or seed with fixed ids — and erased again. A plain
+        // insert would fail that erasure on the unique index, with the subject's id in the driver's DETAIL line.
         $this->eraseALiveSubject();
         $first = $this->scheduledAt();
         $this->travel('PT30M');
@@ -236,6 +255,17 @@ final class ResweepErasedSubjectsFunctionalTest extends KernelTestCase
     private function insertLateActorRow(): string
     {
         return $this->insertAuditRow(actorId: $this->subjectId, resourceType: 'Bank', resourceId: Uuid::generate());
+    }
+
+    private function erasedActorOf(string $auditRowId): string
+    {
+        $pseudonym = $this->connection->fetchOne(
+            'SELECT actor_id FROM audit_log WHERE id = CAST(:id AS UUID) AND actor_erased',
+            ['id' => $auditRowId],
+        );
+        $this->assertIsString($pseudonym);
+
+        return $pseudonym;
     }
 
     private function insertLateResourceRow(): void

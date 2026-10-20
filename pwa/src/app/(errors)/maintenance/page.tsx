@@ -4,8 +4,8 @@ import { IconTone } from "@/context/shared/error/domain/IconTone";
 import { MaintenanceActions } from "./_components/MaintenanceActions";
 
 export const metadata = {
-  title: "Scheduled maintenance · Erpify",
-  description: "Erpify is currently undergoing scheduled maintenance.",
+  title: "Service unavailable · Erpify",
+  description: "Erpify is temporarily unavailable, for maintenance or an outage.",
 };
 
 export default function MaintenancePage() {
@@ -13,8 +13,8 @@ export default function MaintenancePage() {
     <ErrorScreen
       testIdPrefix="maintenance"
       status="Error 503"
-      title="Scheduled maintenance"
-      description="Erpify is temporarily offline. We'll be back shortly — thank you for your patience."
+      title="Service temporarily unavailable"
+      description="Erpify can't be reached right now, for maintenance or a temporary outage. We'll be back shortly — thank you for your patience."
       icon={Wrench}
       iconTone={IconTone.WARNING}
       actions={<MaintenanceActions />}

@@ -719,6 +719,45 @@ describe("AuthProvider", () => {
       expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
     });
 
+    it("does not grow the backoff for re-probes a visibility or online event sent", async () => {
+      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockRejectedValueOnce(new IdentityServiceUnavailableError())
+        .mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await advance(0);
+
+      for (let event = 0; event < 3; event += 1) {
+        await act(async () => {
+          document.dispatchEvent(new Event("visibilitychange"));
+        });
+        await advance(0);
+      }
+      expect(me).toHaveBeenCalledTimes(4);
+
+      // Still the first delay away: three tab switches are not three failed attempts of the loop.
+      await advance(REPROBE_INITIAL_DELAY_MS);
+      expect(me).toHaveBeenCalledTimes(5);
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("does not send a visibility re-probe while the browser is offline", async () => {
+      me.mockRejectedValue(new IdentityServiceUnavailableError());
+
+      renderAuth();
+      await advance(0);
+
+      setOnline(false);
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await advance(0);
+
+      expect(me).toHaveBeenCalledTimes(1);
+    });
+
     it("does not grow the backoff for ticks skipped while offline", async () => {
       me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
 

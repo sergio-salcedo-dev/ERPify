@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use ArrayObject;
+use Closure;
 use DateInterval;
 use Erpify\Iam\Identity\Application\ErasureResweepIncomplete;
 use Erpify\Iam\Identity\Application\ResweepErasedSubjects;
@@ -100,6 +101,63 @@ final class ResweepErasedSubjectsTest extends TestCase
             'resweep' => true,
         ], $audit->records[0]['metadata']);
         $this->assertStringNotContainsString(self::SUBJECT_ID, (string) \json_encode($audit->records[0]));
+    }
+
+    /**
+     * The order is the erasure's — audit rows, then the business log, then sessions — because the tick runs
+     * against the same late writers the erasure contends with. Each pass therefore records what the others had
+     * done at the instant it ran: a double recording only its own calls would stay green over any reordering.
+     */
+    public function testThePassesRunInTheErasuresLockOrder(): void
+    {
+        $actor = new RecordingAuditActorAnonymiser(matchCount: 0);
+        $sessions = new InMemorySessionRepository();
+        /** @var ArrayObject<int, string> $journal */
+        $journal = new ArrayObject();
+        $lock = new RecordingAuditSubjectRowLock(static function () use ($journal, $actor): int {
+            $journal[] = \sprintf('audit_log lock (actor passes run: %d)', \count($actor->anonymisedActorIds));
+
+            return 0;
+        });
+        $events = new class implements EventStoreSubjectAnonymiser {
+            public ?Closure $onAnonymise = null;
+
+            #[Override]
+            public function anonymise(SubjectPseudonymisation $pseudonymisation): int
+            {
+                unset($pseudonymisation);
+
+                if ($this->onAnonymise instanceof Closure) {
+                    ($this->onAnonymise)();
+                }
+
+                return 0;
+            }
+        };
+        $events->onAnonymise = static function () use ($journal, $actor, $sessions): void {
+            $journal[] = \sprintf(
+                'event_store (actor passes run: %d, session purges run: %d)',
+                \count($actor->anonymisedActorIds),
+                \count($sessions->deleteAllCalls),
+            );
+        };
+
+        $resweep = new ResweepErasedSubjects(
+            new InMemoryErasureResweepRepository(ErasureResweep::scheduleFor(self::SUBJECT_ID)),
+            new OrderedAuditSubjectTrailErasure($lock, $actor, new RecordingAuditResourceAnonymiser(matchCount: 0)),
+            $events,
+            new PurgeUserSessions($sessions),
+            new RecordingAuditLogger(),
+            new InlineTransactionManager(),
+            new FixedClock(SystemClock::now()),
+        );
+        $resweep->resweep();
+
+        $this->assertSame([
+            'audit_log lock (actor passes run: 0)',
+            'event_store (actor passes run: 1, session purges run: 0)',
+        ], $journal->getArrayCopy());
+        $this->assertSame([self::SUBJECT_ID], $sessions->deleteAllCalls);
     }
 
     public function testATickThatRewritesNothingLeavesNoEvidenceAndKeepsAnOpenWindow(): void

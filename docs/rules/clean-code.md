@@ -44,6 +44,7 @@
 - Remove commented-out code before committing
 - Use comments for complex business logic or non-obvious decisions
 - Keep comments up-to-date with code changes
+- A comment states what the code does and why; a residual, a known gap or a risk acceptance — what the code does **not** cover, who accepted it, what would reopen it — goes to the record that owns it (`PRODUCTION_SECURITY_CHECKLIST.md` §7, the ADR whose decision produced it, or `deferred-work.md`), never only to a docblock. A usage contract and an `@accepted-risk #<issue>` tripwire stay at the code site. Rationale: root `CLAUDE.md` → *Code comments*
 
 ## Error Handling
 - Handle errors explicitly

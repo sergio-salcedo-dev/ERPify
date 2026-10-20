@@ -13,13 +13,13 @@ use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
- * An erased subject whose anonymising passes are re-run for one window after their erasure commits.
+ * An erased subject whose anonymising passes are re-run for one window after their erasure schedules it.
  *
  * The erasure rewrites every row naming the subject that exists when it runs. A request already in flight
  * when it starts — one that loaded the subject before the identity row went — can still commit a row naming
- * them afterwards, and the set of writers able to do that has been found incomplete by every review that
- * enumerated it. The re-sweep closes that class by mechanism rather than by list: whatever names the subject
- * inside the window is rewritten on the next tick, whoever wrote it.
+ * them afterwards, and the writers able to do that are an open set rather than a list anyone can close. The
+ * re-sweep covers that class by mechanism: whatever names the subject inside the window is rewritten on the
+ * next tick that runs, whoever wrote it.
  *
  * **This row holds the subject's real id after their erasure, and that is the price of the mechanism.** No
  * other trace of the id survives — that is the erasure's point — so nothing else could tell the sweep what

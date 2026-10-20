@@ -51,7 +51,9 @@ describe("MaintenancePage", () => {
   it("holds a parked visitor on the page while the server still cannot answer", () => {
     render(<MaintenancePage />);
 
-    expect(screen.getByTestId("maintenance__title")).toHaveTextContent("Scheduled maintenance");
+    expect(screen.getByTestId("maintenance__title")).toHaveTextContent(
+      "Service temporarily unavailable",
+    );
     expect(screen.queryByTestId("maintenance__way-back-link")).toBeNull();
     expect(routerReplace).not.toHaveBeenCalled();
   });
