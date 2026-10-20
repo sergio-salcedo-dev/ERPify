@@ -16,13 +16,24 @@ const RETRY_TARGET_PARAM = "next";
 const RESOLVE_ORIGIN = "https://retry-after-outage.invalid";
 
 /**
+ * `path` with its trailing slashes removed. A scan from the end rather than `/\/+$/`: that
+ * pattern retries from every slash of a run, so a `?next=` carrying a long run of slashes
+ * before one other character costs time quadratic in its length and freezes the tab.
+ */
+function withoutTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === "/") end--;
+  return path.slice(0, end);
+}
+
+/**
  * The route the retry returns to. A target that is this page itself is refused as well as a
  * hostile one: returning here re-probes nothing, so the button would appear to do nothing.
  */
 function retryTarget(next: string | null): string {
   const target = safeInternalPath(next, Routes.BACKOFFICE);
   const { pathname } = new URL(target, RESOLVE_ORIGIN);
-  const isThisPage = pathname.replace(/\/+$/, "") === Routes.MAINTENANCE;
+  const isThisPage = withoutTrailingSlashes(pathname) === Routes.MAINTENANCE;
   return isThisPage ? Routes.BACKOFFICE : target;
 }
 

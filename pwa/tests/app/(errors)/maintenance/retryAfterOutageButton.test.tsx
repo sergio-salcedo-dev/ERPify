@@ -46,7 +46,13 @@ describe("RetryAfterOutageButton", () => {
     },
   );
 
-  it.each(["/maintenance", "/maintenance/", "/maintenance?next=%2Fbackoffice", "/maintenance#top"])(
+  it.each([
+    "/maintenance",
+    "/maintenance/",
+    "/maintenance///",
+    "/maintenance?next=%2Fbackoffice",
+    "/maintenance#top",
+  ])(
     "falls back to the back-office root when ?next=%s names this page, which would re-probe nothing",
     (self) => {
       landOnMaintenance(`?next=${encodeURIComponent(self)}`);
@@ -57,6 +63,17 @@ describe("RetryAfterOutageButton", () => {
       expect(replace).toHaveBeenCalledWith("/backoffice");
     },
   );
+
+  it("answers a ?next= carrying a long run of slashes without backtracking through it", () => {
+    // Quadratic in the run's length, 200k slashes take ~10 s — twice this test's timeout.
+    const hostile = `/backoffice${"/".repeat(200_000)}x`;
+    landOnMaintenance(`?next=${encodeURIComponent(hostile)}`);
+    render(<RetryAfterOutageButton />);
+
+    retry();
+
+    expect(replace).toHaveBeenCalledWith(hostile);
+  });
 
   it("keeps a route that merely starts with the page's name", () => {
     landOnMaintenance(`?next=${encodeURIComponent("/maintenance-windows")}`);
