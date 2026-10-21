@@ -39,7 +39,7 @@ namespace Erpify\Shared\Audit\Domain;
  * `actor_id`, so these columns clear only if that administrator's trail is erased. Which route reaches it
  * matters, because only one of them is gated. The *identity* route refuses a subject still carrying `ADMIN`,
  * so it needs a demotion first — and the ≥1-admin invariant permits that only while a second active
- * administrator **exists**, never requiring one to perform it, since nothing guards self-demotion. The
+ * administrator **exists**, who also has to perform it, since a self-targeted role change is refused. The
  * operator CLI `audit:gdpr:erase` carries no such gate: it anonymises by `actor_id` for any UUID, with no
  * role check. Separately, and not to be read as the same fact: the CLI paths do not *write* these columns on
  * the rows they mint — they run off-request as `system`, with both null.

@@ -42,14 +42,20 @@ final class Bank extends AggregateRoot implements AuditedEntity
         #[Assert\NotBlank]
         #[Assert\Length(max: self::MAX_NAME_LENGTH)]
         private string $name,
-        #[ORM\Column(unique: true)]
+        /**
+         * Byte-wise collation (`C`): the keyset cursor and the uniqueness check compare bytes, not locale
+         * order. Declared on the mapping as well as in the migration because the schema comparator compares
+         * collation, so a mapping without it makes `make db.diff` generate the revert.
+         */
+        #[ORM\Column(unique: true, options: ['collation' => 'C'])]
         private string $nameNormalized,
         /**
          * Stored canonicalized: upper-case ASCII (no diacritics) via
          * {@see NormalizedText::toAsciiUpper()}. Comparisons / uniqueness use
-         * the raw column directly — no separate normalized half needed.
+         * the raw column directly — no separate normalized half needed. Byte-wise
+         * collation for the same reason as `$nameNormalized`.
          */
-        #[ORM\Column(length: 50, unique: true)]
+        #[ORM\Column(length: 50, unique: true, options: ['collation' => 'C'])]
         #[Assert\NotBlank]
         #[Assert\Length(max: 50)]
         private string $shortName,

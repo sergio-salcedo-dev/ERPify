@@ -40,6 +40,8 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
 
     private KernelBrowser $client;
 
+    private ?string $suspendedActorId = null;
+
     #[Override]
     protected function setUp(): void
     {
@@ -48,6 +50,8 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
 
     protected function tearDown(): void
     {
+        $this->reinstateSuspendedActor();
+        $this->resetTarget();
         $this->restoreParkedAdministrators();
         parent::tearDown();
     }
@@ -81,25 +85,51 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
         return $data[$key];
     }
 
-    public function testSuspendingTheLastActiveAdministratorIsARealConflictWithoutMutating(): void
+    public function testAnAdministratorCannotChangeTheStatusOfTheirOwnIdentity(): void
     {
-        // Clear every administrator, then seat exactly one: functional-admin is now the SOLE active admin, so
-        // the production directory adapter — not a test double — answers 409 when it is the target.
-        $this->demoteEveryAdministrator();
+        // Other administrators may well exist here; the refusal does not depend on the last-admin guard, it
+        // precedes it.
         $this->authenticateAdminClient($this->client);
-        $loneAdminId = $this->soleActiveAdministratorId();
+        $actorId = $this->functionalAdministratorId();
 
         $this->client->request(
             Request::METHOD_PATCH,
-            self::ENDPOINT . '/' . $loneAdminId . '/status',
+            self::ENDPOINT . '/' . $actorId . '/status',
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: '{"status":"SUSPENDED"}',
+        );
+
+        self::assertResponseStatusCodeSame(409);
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        $this->assertSame('self-status-change-forbidden', $this->problemType());
+        $this->assertSame('ACTIVE', $this->statusOf($actorId));
+    }
+
+    public function testSuspendingTheLastActiveAdministratorIsARealConflictWithoutMutating(): void
+    {
+        // Clear every administrator, seat the actor, seed one ADMIN target and take the actor out of the pool:
+        // the target is now the SOLE active administrator, so the production directory adapter — not a test
+        // double — answers 409 when it is the target.
+        $this->demoteEveryAdministrator();
+        $this->authenticateAdminClient($this->client);
+        $actorId = $this->soleActiveAdministratorId();
+        $this->resetTarget();
+        $this->persistTarget([Role::ADMIN->value]);
+        $this->suspendActorBeneathItsSession($actorId);
+        $this->assertSame(self::TARGET_ID, $this->soleActiveAdministratorId());
+
+        $this->client->request(
+            Request::METHOD_PATCH,
+            self::ENDPOINT . '/' . self::TARGET_ID . '/status',
             server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
             content: '{"status":"DEACTIVATED"}',
         );
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        $this->assertSame('last-active-administrator-protected', $this->problemType());
         // The guard runs before the aggregate mutates: the lone admin stays ACTIVE.
-        $this->assertSame('ACTIVE', $this->statusOf($loneAdminId));
+        $this->assertSame('ACTIVE', $this->statusOf(self::TARGET_ID));
     }
 
     public function testANonAdminIsForbidden(): void
@@ -157,24 +187,91 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
         );
     }
 
-    private function persistTarget(): void
+    /**
+     * @param list<string> $roles
+     */
+    private function persistTarget(array $roles = [Role::VIEWER->value]): void
     {
         $entityManager = $this->entityManager();
         $entityManager->persist(
-            UserFixtureFactory::create(self::TARGET_ID, self::TARGET_EMAIL, 'target-password', [Role::VIEWER->value]),
+            UserFixtureFactory::create(self::TARGET_ID, self::TARGET_EMAIL, 'target-password', $roles),
         );
         $entityManager->flush();
         $entityManager->clear();
     }
 
+    /**
+     * Asserts there is exactly ONE active administrator and returns it — a `fetchOne` alone would return the
+     * first of several and let a "sole administrator" premise pass over a pool that is not empty.
+     */
     private function soleActiveAdministratorId(): string
     {
-        $id = $this->entityManager()->getConnection()->fetchOne(
+        $ids = $this->entityManager()->getConnection()->fetchFirstColumn(
             'SELECT id FROM identity_user WHERE status = \'ACTIVE\' AND roles::jsonb @> \'["ADMIN"]\'::jsonb',
+        );
+        $this->assertCount(1, $ids);
+        $id = $ids[0];
+        $this->assertIsString($id);
+
+        return $id;
+    }
+
+    /**
+     * Takes the seated administrator out of the active-admin pool beneath its live session. The admission gate
+     * reads the session row and never the identity's status, so the actor stays admitted while no longer
+     * counting as an active administrator — the only sequential shape in which another administrator can be the
+     * last one, since an actor may not target itself. The shape the guard exists for, two administrators
+     * acting on each other concurrently, cannot be driven over sequential HTTP.
+     */
+    private function suspendActorBeneathItsSession(string $actorId): void
+    {
+        $this->entityManager()->getConnection()->executeStatement(
+            "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = CAST(:id AS uuid)",
+            ['id' => $actorId],
+        );
+        $this->suspendedActorId = $actorId;
+    }
+
+    private function reinstateSuspendedActor(): void
+    {
+        if (null === $this->suspendedActorId) {
+            return;
+        }
+
+        $this->entityManager()->getConnection()->executeStatement(
+            "UPDATE identity_user SET status = 'ACTIVE' WHERE id = CAST(:id AS uuid)",
+            ['id' => $this->suspendedActorId],
+        );
+        $this->suspendedActorId = null;
+    }
+
+    private function functionalAdministratorId(): string
+    {
+        $id = $this->entityManager()->getConnection()->fetchOne(
+            'SELECT id FROM identity_user WHERE email = :email',
+            ['email' => self::FUNCTIONAL_ADMIN_EMAIL],
         );
         $this->assertIsString($id);
 
         return $id;
+    }
+
+    /**
+     * @throws JsonException
+     */
+    private function problemType(): string
+    {
+        $decoded = \json_decode(
+            (string) $this->client->getResponse()->getContent(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        $this->assertIsArray($decoded);
+        $this->assertArrayHasKey('type', $decoded);
+        $this->assertIsString($decoded['type']);
+
+        return $decoded['type'];
     }
 
     private function statusOf(string $id): string

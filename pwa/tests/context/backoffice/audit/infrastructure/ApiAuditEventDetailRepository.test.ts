@@ -196,6 +196,60 @@ describe("ApiAuditEventDetailRepository response guard", () => {
 });
 
 /**
+ * A `changes` stored as `null` or a scalar is served verbatim by the API and carries no `{old, new}` pair, so
+ * it degrades to an unreadable diff rather than losing the whole event. A list or a malformed map may carry
+ * real pairs, so it stays drift and still rejects (reasoning: `docs/adr/audit-activity-log.md`, D4).
+ */
+describe("ApiAuditEventDetailRepository null/scalar changes", () => {
+  const CORRUPT_CHANGES = [null, "x", "", 7, 0, 1.5, true, false];
+
+  it.each(CORRUPT_CHANGES)("admits a row whose changes is %j", (changes) => {
+    expect(
+      isAuditEventDetailResponse({
+        data: { ...DETAIL, metadata: { changes, operation: "UPDATED" } },
+      }),
+    ).toBe(true);
+  });
+
+  it.each(CORRUPT_CHANGES)(
+    "maps a changes of %j to an unreadable diff, keeping its siblings",
+    async (changes) => {
+      const httpClient = httpClientReturning({
+        data: { ...DETAIL, metadata: { changes, operation: "UPDATED", source: "import" } },
+      });
+
+      const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+      expect(detail.metadata).not.toHaveProperty("changes");
+      expect(detail.changesUnreadable).toBe(true);
+      expect(detail.metadata.operation).toBe("UPDATED");
+      expect(detail.metadata.source).toBe("import");
+    },
+  );
+
+  it.each([
+    ["a valid diff", { changes: { name: { old: "a", new: "b" } } }],
+    ["an empty diff", { changes: {} }],
+    ["no changes key", { operation: "UPDATED" }],
+  ])("does not flag %s as unreadable", async (_label, metadata) => {
+    const httpClient = httpClientReturning({ data: { ...DETAIL, metadata } });
+
+    const detail = await new ApiAuditEventDetailRepository(httpClient).findById(DETAIL.id);
+
+    expect(detail).not.toHaveProperty("changesUnreadable");
+  });
+
+  it.each([[[]], [[1]], [[{ old: "a", new: "b" }]], [{ name: { old: "a" } }]])(
+    "still rejects a changes shaped like a list or a malformed map (%j)",
+    (changes) => {
+      expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { changes } } })).toBe(
+        false,
+      );
+    },
+  );
+});
+
+/**
  * The detail guard mirrors the timeline's tolerance on the one presentational field: `resourceErased`
  * may be absent, because losing the whole event — diff included — over a badge is the wrong failure.
  * Four states, separated: missing is valid and reads as `true` — the safe direction, mirroring the

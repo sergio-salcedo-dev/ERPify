@@ -28,6 +28,11 @@ Feature: Redeem a recovery secret (the sole administrator's only lockout edge)
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'lena@erpify.test' AND locked_until > NOW()"
     And there should have 1 records in SQL result
     And I execute the SQL query "INSERT INTO identity_recovery_secret (id, user_id, secret_hash, expires_at, created_at, updated_at) VALUES ('0190f400-0000-7000-8000-0000000000a1', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a65', '1eb66bb65a0c3db8c8bc00d65db18d26f8a7aba9e7ed643bbc2bf8ba63b6d70b', '2099-01-01 00:00:00', NOW(), NOW())"
+    # A session the identity already holds — a forgotten device, or one somebody stole. Read back so a seed
+    # that matched nothing cannot let the eviction assertion below pass over a session that never existed.
+    And I execute the SQL query "INSERT INTO iam_session (id, user_id, organization_id, status, expires_at, device, created_at, updated_at) VALUES ('0190f400-0000-7000-8000-0000000000b1', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a65', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', 'ACTIVE', NOW() + INTERVAL '1 day', 'A device held before the redemption', NOW(), NOW())"
+    And I execute the SQL query "SELECT id FROM iam_session WHERE id = '0190f400-0000-7000-8000-0000000000b1' AND status = 'ACTIVE'"
+    And there should have 1 records in SQL result
     When I send a POST request to "/backoffice/recovery/redeem" with body:
     """
     {
@@ -50,9 +55,13 @@ Feature: Redeem a recovery secret (the sole administrator's only lockout edge)
     # The row is retired, so the same presentation cannot be spent twice.
     And I execute the SQL query "SELECT id FROM identity_recovery_secret WHERE id = '0190f400-0000-7000-8000-0000000000a1'"
     And there should have 0 records in SQL result
-    # A session was minted for the identity the secret belongs to. This is the half that makes the endpoint
-    # a recovery edge rather than an expensive delete.
-    And I execute the SQL query "SELECT id FROM iam_session WHERE user_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a65' AND status = 'ACTIVE'"
+    # A session was minted for the identity the secret belongs to, and it is the ONLY one alive. The first
+    # half makes the endpoint a recovery edge rather than an expensive delete; the second is what makes the
+    # recovered session hold — a session left standing could sign it out again through "sign out my other
+    # devices", which carries no budget, with the secret already spent.
+    And I execute the SQL query "SELECT id FROM iam_session WHERE user_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a65' AND status = 'ACTIVE' AND id <> '0190f400-0000-7000-8000-0000000000b1'"
+    And there should have 1 records in SQL result
+    And I execute the SQL query "SELECT id FROM iam_session WHERE id = '0190f400-0000-7000-8000-0000000000b1' AND status = 'REVOKED'"
     And there should have 1 records in SQL result
     # The audit row nothing else writes. It is projected POST-COMMIT and unconditionally on the transaction
     # having committed, so removing the retirement does NOT red it — the `0 records` assertion four lines

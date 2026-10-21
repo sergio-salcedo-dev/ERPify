@@ -11,9 +11,9 @@ import { apiBaseURL } from "../fixtures/api";
  * this is a single happy-path smoke.
  *
  * Its target is a dedicated non-admin (`e2e-suspendable@erpify.test`, shared with the change-status smoke) — NOT
- * the admin, whose demotion would hit the last-active-admin guard. The `make pwa.test.e2e` seed resets its roles
- * to VIEWER before every run, so the re-grant is repeatable. Roles are editable in any lifecycle status, so this
- * spec is order-independent from the suspend smoke that may already have suspended the same member.
+ * the signed-in admin, whose own roles the API refuses to change (409 `self-role-change-forbidden`) and whose
+ * detail offers no form. The `make pwa.test.e2e` seed resets its roles to VIEWER before every run, so the
+ * re-grant is repeatable. Roles are editable in any lifecycle status, so this spec is order-independent from the suspend smoke that may already have suspended the same member.
  */
 const TARGET_EMAIL = "e2e-suspendable@erpify.test";
 

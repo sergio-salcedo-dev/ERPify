@@ -461,8 +461,8 @@ development_status:
 
   # Derivada de GitHub #925, sin épica: trabajo suelto que el issue dejó especificado y sin hacer.
   # La clave ES el nombre del fichero (ver INVARIANTE DE NOMBRES arriba):
-  # gh-925-repository-root-marker.md
-  gh-925-repository-root-marker: ready-for-dev
+  # gh-925-repository-root-marker.md — shipped in #988; the artifact is out of the tree (git history keeps it).
+  gh-925-repository-root-marker: done
 
   # bmad-loop-board-legibility.md
   bmad-loop-board-legibility: ready-for-dev

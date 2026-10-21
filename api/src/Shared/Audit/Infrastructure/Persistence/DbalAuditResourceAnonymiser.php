@@ -45,8 +45,13 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * `X-Forwarded-For` from any hop inside `SYMFONY_TRUSTED_PROXIES`, but Symfony discards every forwarded value
  * failing `FILTER_VALIDATE_IP`, so the sentinel specifically cannot be forged into that column. A sentinel
  * there can therefore only have come from one of the two passes, and `actor_erased` tells them apart:
- * `TRUE` is the actor pass, `FALSE` alongside `resource_erased = TRUE` is this one. `user_agent` has no such
- * filter and IS forgeable as the literal, so the inference rests on `ip` alone.
+ * `TRUE` is the actor pass, `FALSE` alongside `resource_erased = TRUE` and `actor_type = 'anonymous'` is this
+ * one. `user_agent` has no such filter, but a captured value cannot carry the exact literal either:
+ * {@see AuditRedaction::neutraliseCaptured()} rewrites any value equal to it with a `[client-supplied] `
+ * prefix. A row stored without that rewrite may still hold a client-sent literal, and the same predicate
+ * still attributes it correctly: the
+ * `actor_type` term excludes an identified actor's row this statement left alone, and on an anonymous one
+ * this statement overwrote whatever non-blank value was there.
  *
  * Erring the other way is not the safe default it looks like. {@see
  * \Erpify\Shared\Audit\Application\PersonResourceReferences} reads only `resource_erased = FALSE` rows, so

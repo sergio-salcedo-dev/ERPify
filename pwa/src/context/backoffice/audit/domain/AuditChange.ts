@@ -56,12 +56,20 @@ export type AuditWriteOperation = (typeof AuditWriteOperation)[keyof typeof Audi
 /**
  * The full audit event read model behind `GET /audit/events/{id}`: the same slim fields as a timeline
  * {@link AuditEntry} plus the decoded `metadata`. For a `change` row `metadata.changes` carries the
- * field-by-field diff and `metadata.operation` the write kind that produced it; the rest of `metadata`
+ * field-by-field diff (absent when {@link AuditEventDetail.changesUnreadable} is set) and
+ * `metadata.operation` the write kind that produced it; the rest of `metadata`
  * stays an open record (forensic fidelity — an unknown key still reaches the UI). `ip`/`user_agent` are
  * deliberately absent: the E1 payload is diff-only.
  */
 export interface AuditEventDetail extends AuditEntry {
   metadata: { changes?: AuditChanges; operation?: AuditWriteOperation } & Record<string, unknown>;
+  /**
+   * Present and `true` only when the stored `metadata.changes` existed but was not a diff (a `null` or a
+   * scalar): `metadata.changes` is then absent, and the UI must say the diff is unreadable rather than
+   * report "no changes", which would claim the write changed nothing. Top-level rather than inside
+   * `metadata` because that record is rendered verbatim, and this is the client's reading, not stored data.
+   */
+  changesUnreadable?: true;
 }
 
 /** The four shapes a field change can take, derived from which side is `null`. */

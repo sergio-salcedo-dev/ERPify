@@ -31,7 +31,12 @@ final readonly class RevokeAllSessions
         Uuid::ensure($userId);
 
         $this->transactionManager->transactional(function () use ($userId): void {
+            // Ordered first, so this UPDATE acquires the user's active rows in the id order the two "revoke the
+            // others" paths lock them in, rather than in whatever order the scan meets them — which is the
+            // cycle a suspension racing the suspended user's own "sign out my other devices" would close.
+            $this->sessions->lockActiveForUser($userId);
             $this->sessions->revokeAllForUser($userId);
+
             $this->eventBus->publish(new AllSessionsRevoked($userId, occurredOn: $this->clock->now()));
         });
     }

@@ -206,33 +206,68 @@ function AuditEntryDrawerBody({
 
       {entry.level === AuditLevel.Change ? (
         <Section title="Changes">
-          {detail ? (
-            <AuditChangeDiff
-              changes={detail.metadata.changes ?? {}}
-              operation={detail.metadata.operation}
-              testId="audit-entry-drawer__diff"
-            />
-          ) : (
-            <DormantDetail />
-          )}
+          {detail ? <ChangesBody detail={detail} /> : <DormantDetail />}
         </Section>
       ) : null}
 
       <Section title="Metadata">
-        {detail ? <MetadataBlock value={nonDiffMetadata(detail.metadata)} /> : <DormantDetail />}
+        {entry.level !== AuditLevel.Change && detail?.changesUnreadable ? (
+          <UnreadableChanges />
+        ) : null}
+        {detail ? <MetadataBlock value={nonDiffMetadata(detail)} /> : <DormantDetail />}
       </Section>
     </div>
   );
 }
 
 /**
- * The metadata minus `changes` and `operation` — the Changes section already renders the diff (and its
- * snapshot header, sourced from `operation`) in full.
+ * A diff the client could not read, or one the entry never stored, is said to be so — never rendered as an
+ * empty diff: "No changes recorded" would claim the write changed nothing, which neither case shows.
  */
-function nonDiffMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+function ChangesBody({ detail }: Readonly<{ detail: AuditEventDetail }>) {
+  if (detail.changesUnreadable) {
+    return <UnreadableChanges />;
+  }
+
+  if (detail.metadata.changes === undefined) {
+    return (
+      <p className="text-muted-foreground text-xs" data-testid="audit-entry-drawer__diff--absent">
+        {"No change record was stored with this entry."}
+      </p>
+    );
+  }
+
+  return (
+    <AuditChangeDiff
+      changes={detail.metadata.changes}
+      operation={detail.metadata.operation}
+      testId="audit-entry-drawer__diff"
+    />
+  );
+}
+
+/**
+ * Shown wherever an unreadable `changes` would otherwise vanish: the client drops the value from the typed
+ * metadata, so on any level the only trace of it is this notice.
+ */
+function UnreadableChanges() {
+  return (
+    <p className="text-muted-foreground text-xs" data-testid="audit-entry-drawer__diff--unreadable">
+      {"Diff unavailable — the stored change record is not a field-by-field diff."}
+    </p>
+  );
+}
+
+/**
+ * The metadata minus what the Changes section already renders: `changes` always, and `operation` only when
+ * the diff is readable — its snapshot header is sourced from it. An unreadable diff shows no header, so the
+ * write kind stays here rather than appearing nowhere.
+ */
+function nonDiffMetadata(detail: AuditEventDetail): Record<string, unknown> {
   const rest: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(metadata)) {
-    if (key !== "changes" && key !== "operation") rest[key] = value;
+  for (const [key, value] of Object.entries(detail.metadata)) {
+    const renderedAsDiff = key === "changes" || (key === "operation" && !detail.changesUnreadable);
+    if (!renderedAsDiff) rest[key] = value;
   }
   return rest;
 }

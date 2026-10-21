@@ -45,6 +45,31 @@ final class RevokeAllSessionsTest extends TestCase
         $this->assertInstanceOf(AllSessionsRevoked::class, $eventBus->publishedEvents[0]);
     }
 
+    /**
+     * The UPDATE's own scan meets the user's rows in heap order, which is not id order; taking the ordered lock
+     * first is what keeps this teardown from closing a cycle with a concurrent "sign out my other devices".
+     */
+    public function testLocksTheActiveSetInIdOrderBeforeTheBulkStatement(): void
+    {
+        $sessions = new InMemorySessionRepository();
+        $steps = [];
+        $sessions->beforeLockActive = static function () use (&$steps): void {
+            $steps[] = 'lock';
+        };
+        $sessions->onRevokeAll = static function () use (&$steps): void {
+            $steps[] = 'revoke';
+        };
+
+        (new RevokeAllSessions(
+            $sessions,
+            new RecordingEventBus(),
+            new InlineTransactionManager(),
+            FixedClock::at(self::NOW),
+        ))->revoke(SessionMother::DEFAULT_USER_ID);
+
+        $this->assertSame(['lock', 'revoke'], $steps);
+    }
+
     public function testRejectsAMalformedUserIdBeforeTouchingTheStore(): void
     {
         $sessions = new InMemorySessionRepository();

@@ -44,8 +44,9 @@ use Throwable;
  * INERT on the API surface. The one line emitted is the responder's own, and for a client error it is
  * `warning`: below the `error` the `main` handler activates at, so an API 404 flushes nothing.
  * `excluded_http_codes` decides nothing here — it is consulted only once the LEVEL has already activated the
- * handler, and its real population is the routing 404/405s from OUTSIDE `/api/`, where `RouterListener`
- * throws, the responder does not match the prefix, and `ErrorListener` does log at `error`.
+ * handler, and its real population is the routing 404/405s from outside the `^/api` boundary
+ * (`ApiRequestMatcher`), where `RouterListener` throws, the responder does not match, and `ErrorListener` does
+ * log at `error`.
  *
  * Close that gap from either side — raise the 4xx branch of `resolveLogLevel()`, or lower `action_level` —
  * and every API client error dumps the buffer into `php://stderr`, among it the `debug` record Symfony's

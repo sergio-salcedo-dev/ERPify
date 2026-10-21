@@ -25,6 +25,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\ResourceResponderBuilder;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryIdentityRowLock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\RecordingEventBus;
@@ -228,7 +229,11 @@ final class MintRecoverySecretControllerTest extends TestCase
             $users,
             $secrets,
             new ProveCurrentPassword(),
-            new RecordRecoverySecretAuditBestEffort(new RecordingAuditLogger(), new NullLogger()),
+            new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
+                new RecordingAuditLogger(),
+                new NullLogger(),
+            ),
             new RecordingEventBus(),
             new InlineTransactionManager(),
             FixedClock::at(self::NOW),

@@ -10,6 +10,7 @@ use Erpify\Backoffice\Audit\Application\Resource\AuditEventDetailResource;
 use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
 use Erpify\Backoffice\Audit\Infrastructure\Http\AuditEventDetailResourceMapper;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -70,15 +71,41 @@ final class AuditEventDetailResourceMapperTest extends TestCase
     }
 
     /**
-     * A record with no `changes` key gets none invented, and a `changes` that is not an array is not
-     * rewritten into one — the mapper seals a shape, it never manufactures one.
+     * A record with no `changes` key gets none invented — the mapper seals a shape, it never manufactures
+     * one.
      */
     public function testToResourceNeverInventsAChangesKey(): void
     {
         $this->assertArrayNotHasKey('changes', $this->mapper()->toResource($this->detail([]))->metadata);
-        $this->assertNull(
-            $this->mapper()->toResource($this->detail(['changes' => null]))->metadata['changes'],
-        );
+    }
+
+    /**
+     * A `changes` stored as `null` or a scalar is served verbatim: neither wrapped into a map nor deleted,
+     * so the corruption stays visible to every consumer of the wire (why: the audit ADR, D4). The decoded
+     * wire is asserted in the functional test.
+     */
+    #[DataProvider('provideToResourceServesANullOrScalarChangesVerbatimCases')]
+    public function testToResourceServesANullOrScalarChangesVerbatim(mixed $changes): void
+    {
+        $metadata = $this->mapper()->toResource($this->detail(['changes' => $changes]))->metadata;
+
+        $this->assertArrayHasKey('changes', $metadata);
+        $this->assertSame($changes, $metadata['changes']);
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function provideToResourceServesANullOrScalarChangesVerbatimCases(): iterable
+    {
+        yield 'null' => [null];
+        yield 'string' => ['corrupt'];
+        yield 'empty string' => [''];
+        yield 'int' => [7];
+        yield 'zero' => [0];
+        yield 'float' => [1.5];
+        yield 'true' => [true];
+        yield 'false' => [false];
     }
 
     public function testToResourcePassesNullableFieldsAndEmptyMetadataThrough(): void

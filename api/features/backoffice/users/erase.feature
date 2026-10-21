@@ -94,8 +94,9 @@ Feature: Erase an identity (GDPR right to erasure)
     # delete, the reset-token delete, the recovery-secret delete, the two-axis row lock, the actor-axis
     # anonymisation UPDATE, the
     # GDPR_SUBJECT_ERASED insert, the resource-axis anonymisation UPDATE, the event-store anonymisation UPDATE,
-    # the session delete, the membership delete and the GDPR_ERASURE_EXECUTED insert
-    # (= 18). There are TWO administrator readings and their positions are the point: the unlocked one refuses
+    # the ordered lock on the subject's active sessions, the session delete, the membership delete and the
+    # GDPR_ERASURE_EXECUTED insert (= 19). The session lock precedes its delete so the delete meets the active
+    # rows in the id order a concurrent "sign out my other devices" takes them in, never the scan's own. There are TWO administrator readings and their positions are the point: the unlocked one refuses
     # early and takes no write lock, and the locked one — which is the one that decides — cannot run before
     # the invitation lock without inverting the order the accept path is unable to reverse. Its round trip is
     # the price of the refusal holding at commit rather than only at the instant it was asked. The three table-touching deletes are listed in the order they run because that order is itself an
@@ -121,7 +122,7 @@ Feature: Erase an identity (GDPR right to erasure)
     # assumed: it is one directed DELETE beside the reset-token one, it costs +1 whether it matches a row or
     # none, and it sits last among the identity module's own deletes because nothing else reaches both that
     # table and the reset tokens — its only fixed constraint is that it follows the identity row.
-    And 22 requests got executed for doctrine connection "default"
+    And 23 requests got executed for doctrine connection "default"
 
   Scenario: Erasure forgets the subject where the trail NAMES them, not only where they acted
     # The crosswalk row: the subject is both actor and resource, which is what a self-service role change
@@ -221,6 +222,23 @@ Feature: Erase an identity (GDPR right to erasure)
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "self-erasure-forbidden"
     And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    # The refusal is recorded, once, on the actor axis alone: the target is the actor by definition, so the row
+    # names no resource, and its metadata is the problem type and the route — never the request body.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_erase\", \"refusal\": \"self-erasure-forbidden\"}"
+      }
+    ]
+    """
 
   Scenario: Self-erasure is refused even when the admin spells their own id in a different case
     Given I am logged in as an administrator
@@ -228,6 +246,22 @@ Feature: Erase an identity (GDPR right to erasure)
     Then the response status code should be 409
     And the JSON node "type" should be equal to "self-erasure-forbidden"
     And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    # The actor comes from the session, so the row names it in its canonical lower case.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_erase\", \"refusal\": \"self-erasure-forbidden\"}"
+      }
+    ]
+    """
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator

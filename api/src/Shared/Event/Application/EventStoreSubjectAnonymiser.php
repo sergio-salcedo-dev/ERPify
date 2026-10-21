@@ -26,7 +26,8 @@ namespace Erpify\Shared\Event\Application;
  * **One pseudonym for every row of one subject, and the reason is NOT the stream UNIQUE.** That constraint
  * spans `(tenant_id, aggregate_id, aggregate_version)`, `tenant_id` is written `NULL` on every row, and
  * Postgres compares nulls as distinct — so it imposes nothing today, measured against `pg_indexes` rather
- * than the migration and recorded in `deferred-work.md`. The reasons that do hold are two: one person must
+ * than the migration; `aggregate_version` is informative by decision (the D4 amendment in
+ * `docs/adr/event-store-and-projections.md`). The reasons that do hold are two: one person must
  * not split into several anonymous identities, which is why the pseudonym is the one the actor pass already
  * minted for the audit axes; and a subject's events share one version sequence under a single `aggregate_id`
  * — the identity events and the two bulk session revokes alike — so moving them apart would scatter a
@@ -47,11 +48,13 @@ namespace Erpify\Shared\Event\Application;
 interface EventStoreSubjectAnonymiser
 {
     /**
-     * Irreversibly rewrites every occurrence of `$subjectId` in the log to `$pseudonym` — a UUID minted fresh
-     * in the erasure, with no original value, no mapping table and no deterministic derivation (D4 of
-     * `docs/adr/audit-activity-log.md` vetoes the last two by name).
+     * Irreversibly rewrites every occurrence of the pair's `subjectId` in the log to its `pseudonym` — a UUID
+     * minted fresh in the erasure, with no original value, no mapping table and no deterministic derivation
+     * (D4 of `docs/adr/audit-activity-log.md` vetoes the last two by name). The pair arrives as one value
+     * because the two members are indistinguishable by shape, and a swapped pair rewrites nothing while
+     * reporting success.
      *
      * @return int rows the erasure rewrote
      */
-    public function anonymise(string $subjectId, string $pseudonym): int;
+    public function anonymise(SubjectPseudonymisation $pseudonymisation): int;
 }

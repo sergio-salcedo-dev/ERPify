@@ -46,7 +46,7 @@ final readonly class DoctrineRecoverySecretRepository implements RecoverySecretR
             // caller met one situation and has one remedy, and two spellings of it is how a client ends up
             // handling only whichever it happened to see first.
             //
-            // Unbound, like the six other catches of this type in the tree. Binding it would carry the
+            // Unbound, like the five other catches of this type in the tree. Binding it would carry the
             // SQLSTATE into the dev debug chain while the two naming gates disagree about what the variable
             // may be called: Rector demands the type's full name and PHPMD refuses any identifier that long.
             //

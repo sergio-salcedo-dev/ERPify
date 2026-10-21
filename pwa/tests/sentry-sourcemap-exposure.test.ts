@@ -26,10 +26,10 @@ import { describe, expect, it } from "vitest";
  *  2. Nothing overrides that deletion. `filesToDeleteAfterUpload` **overrides**
  *     `deleteSourcemapsAfterUpload` outright, so a narrow glob there deletes only
  *     what it names and serves everything else — with (1) still green.
- *     `unstable_sentryWebpackPluginOptions` does the same from further away: the
- *     SDK spreads its `sourcemaps` LAST over the block it built, replacing it
- *     whole, deletion glob included (top-level spelling too — the SDK migrates it
- *     under `webpack`). Both are refused under any key spelling (identifier,
+ *     `unstable_sentryWebpackPluginOptions` would do the same from further away:
+ *     an SDK honouring it spreads its `sourcemaps` LAST over the block it built,
+ *     replacing it whole, deletion glob included. The installed SDK ignores it
+ *     with a warning, which is no reason to let it back in. Both are refused under any key spelling (identifier,
  *     string, computed, shorthand, `a.key`, `a["key"]`) anywhere in the file,
  *     and the `sourcemaps` object may hold no spread, because a spread is where
  *     they would hide.
@@ -516,7 +516,7 @@ describe("Sentry source maps are uploaded, never published", () => {
 
 describe("the source-map rules reject what they exist to reject", () => {
   const config = (options: string, nextConfig = "{}"): string => `
-    import { withSentryConfig } from "@sentry/nextjs";
+    import { withSentryConfig } from "@sentry/nextjs/config";
     const nextConfig = ${nextConfig};
     export default withSentryConfig(nextConfig, ${options});
   `;

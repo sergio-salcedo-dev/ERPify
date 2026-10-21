@@ -22,6 +22,9 @@ Feature: Unlock an identity's persisted lockout (administrative recovery)
     And the JSON node "data.id" should be equal to "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64"
     And the JSON node "data.email" should be equal to "leo@erpify.test"
     And the JSON node "data.unlocked" should be true
+    # Aimed at somebody else, so nothing is refused and no refusal row is written.
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'SELF_TARGETED_ACT_REFUSED'"
+    And there should have 0 records in SQL result
     # The counter and the expiry are both cleared, not merely the one the login wall reads.
     And I execute the SQL query "SELECT id FROM identity_user WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64' AND failed_attempts = 0 AND locked_until IS NULL"
     And there should have 1 records in SQL result
@@ -83,12 +86,45 @@ Feature: Unlock an identity's persisted lockout (administrative recovery)
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'ACCOUNT_UNLOCKED_BY_ADMIN' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
     And there should have 0 records in SQL result
+    # The refusal is recorded, once, on the actor axis alone: the target is the actor by definition, so the row
+    # names no resource, and its metadata is the problem type and the route — never the request body.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_unlock\", \"refusal\": \"self-unlock-forbidden\"}"
+      }
+    ]
+    """
 
   Scenario: Self-unlock is refused even when the admin spells their own id in a different case
     Given I am logged in as an administrator
     When I send a "POST" request to "/backoffice/users/0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A66/unlock"
     Then the response status code should be 409
     And the JSON node "type" should be equal to "self-unlock-forbidden"
+    # The actor comes from the session, so the row names it in its canonical lower case.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id, metadata FROM audit_log WHERE correlation_id = '<correlationId>'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "SELF_TARGETED_ACT_REFUSED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": null,
+        "resource_id": null,
+        "metadata": "{\"route\": \"backoffice_user_unlock\", \"refusal\": \"self-unlock-forbidden\"}"
+      }
+    ]
+    """
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator

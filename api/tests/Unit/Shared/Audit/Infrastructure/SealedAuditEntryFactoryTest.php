@@ -71,6 +71,18 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $this->assertSame('Mozilla/5.0 (probe)', $entry->userAgent);
     }
 
+    public function testItNeutralisesAUserAgentHeaderSpellingTheRedactionSentinel(): void
+    {
+        $request = new Request(server: ['REMOTE_ADDR' => '203.0.113.7']);
+        $request->headers->set('User-Agent', '[REDACTED]');
+
+        $requestStack = new RequestStack([$request]);
+
+        $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
+
+        $this->assertSame('[client-supplied] [REDACTED]', $entry->userAgent);
+    }
+
     public function testItLeavesTheClientIpAndUserAgentNullOffRequest(): void
     {
         $entry = $this->factory(new RequestStack())->create('SYSTEM_TICK', AuditLevel::ACTIVITY);

@@ -88,6 +88,11 @@ src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Er
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Organization\Membership\Application\FindUserOrganizationId
 
+# Session minting holds the identity it names. StartSession (Iam/Session) declares the SessionSubjectLock port it
+# needs and Iam/Identity implements it, because identity_user is Identity's table: the session context learns only
+# whether the row is there, and the lock is taken in the same order the erasure takes it (identity, then sessions).
+src/Iam/Identity/Infrastructure/Persistence/Doctrine/DbalSessionSubjectLock.php => Erpify\Iam\Session\Application\SessionSubjectLock
+
 # Invitation flow → Identity + Organization seams (II-4). The onboarding orchestration is inherently
 # cross-context: SendInvitation provisions an INVITED identity via the published InviteUser use case, funnels
 # it through GrantMembership (so a user never exists without a membership), and mints the Invitation; on accept,
@@ -133,6 +138,13 @@ src/Iam/Identity/Application/RevokeSessionsBestEffort.php => Erpify\Iam\Session\
 src/Iam/Identity/Application/RevokeCurrentSessionBestEffort.php => Erpify\Iam\Session\Application\CurrentSessionReference
 src/Iam/Identity/Application/RevokeCurrentSessionBestEffort.php => Erpify\Iam\Session\Application\RevokeSession
 src/Iam/Identity/Application/RevokeCurrentSessionBestEffort.php => Erpify\Iam\Session\Domain\SessionId
+
+# A recovery redemption keeps the session it established and evicts every other one, inside the transaction
+# that consumes the secret. The survivor is named through the same correlation seam its compensating sibling
+# above reads, and the eviction is Session's published use case — Identity never touches the session store.
+src/Iam/Identity/Application/KeepOnlyCurrentSession.php => Erpify\Iam\Session\Application\CurrentSessionReference
+src/Iam/Identity/Application/KeepOnlyCurrentSession.php => Erpify\Iam\Session\Application\EvictOtherSessions
+src/Iam/Identity/Application/KeepOnlyCurrentSession.php => Erpify\Iam\Session\Domain\SessionId
 
 # GDPR erasure → hard-delete every session. FulfilIdentityErasure (Iam/Identity Application) consumes the
 # published PurgeUserSessions use case (Iam/Session) to hard-delete the erased subject's sessions inside the same

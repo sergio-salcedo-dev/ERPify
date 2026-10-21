@@ -124,6 +124,7 @@ tests/Unit/Gate/AuditActionOperationAgreementGateTest.php :: home
 tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
+tests/Unit/Gate/AuditLogCheckEnumTokenGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
 tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
 tests/Unit/Gate/AuditWriteOperationParityTest.php :: home
@@ -144,6 +145,7 @@ tests/Unit/Gate/CorrelationIdOwnershipGateTest.php :: home
 tests/Unit/Gate/CredentialProofActionRulesGateTest.php :: home
 tests/Unit/Gate/CredentialProofGateTest.php :: home
 tests/Unit/Gate/CredentialProofRulesGateTest.php :: home
+tests/Unit/Gate/DeptracBlessedLayerGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
 tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
@@ -203,6 +205,7 @@ tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validat
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context
 tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php :: mirrored :: tests/Behat/Context
+tests/Unit/Iam/Identity/Domain/Exception/SelfTargetedRefusalMarkerGateTest.php :: mirrored :: src/Iam/Identity/Domain/Exception
 tests/Unit/Shared/Images/ImageConsumerAuthorizationGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImagePixelBudgetGateTest.php :: mirrored :: src/Shared/Images
@@ -234,3 +237,5 @@ tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack
 tests/Unit/Gate/BmadLoopSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
+tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home
+tests/Unit/Gate/SubjectAuditWriteSerialisationGateTest.php :: home

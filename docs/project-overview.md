@@ -41,10 +41,12 @@ Target personas (each shapes a distinct surface): **civil engineers** (pavement 
 
 ## Tech stack summary
 
+Majors only; the exact versions live in [`project-context.md`](project-context.md), which a gate keeps in step with the manifests.
+
 | Part | Role | Language / Runtime | Framework | Key infrastructure |
 |---|---|---|---|---|
-| `api/` | HTTP API + async workers | PHP 8.5 | Symfony 8.1.x | FrankenPHP (Caddy), Doctrine ORM 3.7 / DBAL 4.4, PostgreSQL 18, Symfony Messenger, Mercure Hub, Monolog, Symfony UID |
-| `pwa/` | Web UI | TypeScript 6 / Node 26 | Next.js 16.3 (App Router) + React 19.2 | Tailwind 4.3, Shadcn 4, Inversify 8.2, Base UI 1.8, Vitest 5.0, Playwright 1.63 |
+| `api/` | HTTP API + async workers | PHP 8.5 | Symfony 8 | FrankenPHP (Caddy), Doctrine ORM 3 / DBAL 4, PostgreSQL 18, Symfony Messenger, Mercure Hub, Monolog, Symfony UID |
+| `pwa/` | Web UI | TypeScript 6 / Node 26 | Next.js 16 (App Router) + React 19 | Tailwind 4, Shadcn 4, Inversify 8, Base UI 1, Vitest 5, Playwright 1 |
 
 ## Architecture type
 

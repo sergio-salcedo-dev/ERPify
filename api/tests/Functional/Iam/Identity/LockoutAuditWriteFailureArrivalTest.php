@@ -42,7 +42,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversNothing]
 final class LockoutAuditWriteFailureArrivalTest extends WebTestCase
 {
-    private const string FAILURE_MESSAGE = 'Lockout committed; security audit projection skipped (write failed).';
+    private const string FAILURE_MESSAGE = 'Lockout committed; security audit projection skipped.';
 
     private const string LOGIN_ROUTE = '/api/v1/backoffice/login';
 

@@ -16,8 +16,9 @@ use RuntimeException;
  * Split from the gate test the way {@see PersistentTransportPolicy} is, so the derivation is exercisable
  * against a fixture directory without a dirty line ever existing in the real registry.
  *
- * The universe is derived, never listed: a class whose constructor takes {@see AuditLogger} is a writer of
- * audit rows, and the token it writes is a string constant on that class. Deriving it is the whole point —
+ * The universe is derived, never listed: a class whose constructor takes {@see AuditLogger} — directly, or
+ * through a forwarder that names no action of its own — is a writer of audit rows, and the token it writes is
+ * a string constant on that class. Deriving it is the whole point —
  * a hand-maintained list of actions would go stale in the same silence the registry exists to break.
  *
  * @internal test support
@@ -119,18 +120,8 @@ final readonly class AuditEvidenceActions
         $actions = [];
 
         foreach ($this->auditWriters() as $writer) {
-            foreach ((new ReflectionClass($writer))->getReflectionConstants() as $constant) {
-                $value = $constant->getValue();
-
-                if (!\is_string($value)) {
-                    continue;
-                }
-
-                if (1 !== \preg_match(self::ACTION_TOKEN, $value)) {
-                    continue;
-                }
-
-                $actions[$value][] = $writer . '::' . $constant->getName();
+            foreach ($this->tokensOn($writer) as $name => $value) {
+                $actions[$value][] = $writer . '::' . $name;
             }
         }
 
@@ -200,33 +191,97 @@ final readonly class AuditEvidenceActions
     }
 
     /**
-     * Every concrete class under `src` whose constructor takes an {@see AuditLogger} — the closed set of
-     * classes that can put a token in `audit_log.action` by naming it.
+     * Every concrete class under `src` whose constructor takes an audit write seam — the closed set of classes
+     * that can put a token in `audit_log.action` by naming it.
+     *
+     * A write seam is {@see AuditLogger} itself, or a class that takes a write seam and declares no action token
+     * of its own: a forwarder such as `RequestBoundarySecurityAudit`, which adds a precondition to the write and
+     * leaves the naming to its callers. Without that step every caller of a forwarder would declare its token
+     * outside the universe, and the gate would read the tokens as deleted. It is derived to a fixed point rather
+     * than listed, so a second forwarder is covered by being written. A class that declares a token is a writer
+     * and never a seam, so a use case naming its own action does not drag its callers' constants in.
      *
      * @return list<class-string>
      */
     private function auditWriters(): array
     {
+        $classes = $this->concreteClasses();
+        $seams = [AuditLogger::class];
+
+        do {
+            $grown = false;
+
+            foreach ($classes as $class) {
+                if (\in_array($class, $seams, true) || !$this->takesAny($class, $seams)) {
+                    continue;
+                }
+
+                if ([] !== $this->tokensOn($class)) {
+                    continue;
+                }
+
+                $seams[] = $class;
+                $grown = true;
+            }
+        } while ($grown);
+
+        $writers = \array_values(\array_filter(
+            $classes,
+            fn (string $fqcn): bool => $this->takesAny($fqcn, $seams),
+        ));
+        \sort($writers);
+
+        return $writers;
+    }
+
+    /**
+     * @return list<class-string>
+     */
+    private function concreteClasses(): array
+    {
         $root = $this->apiRoot . '/src';
-        $writers = [];
+        $classes = [];
 
         foreach (ApiSourceFiles::phpFiles($root) as $file) {
             $relative = \substr($file->getPathname(), \strlen($root) + 1);
             $fqcn = 'Erpify\\' . \str_replace('/', '\\', \substr($relative, 0, -4));
 
-            if (!\class_exists($fqcn)) {
-                continue;
+            if (\class_exists($fqcn)) {
+                $classes[] = $fqcn;
             }
-
-            if (!\in_array(AuditLogger::class, ConstructorCollaboratorTypes::of($fqcn), true)) {
-                continue;
-            }
-
-            $writers[] = $fqcn;
         }
 
-        \sort($writers);
+        return $classes;
+    }
 
-        return $writers;
+    /**
+     * @param class-string       $fqcn
+     * @param list<class-string> $seams
+     */
+    private function takesAny(string $fqcn, array $seams): bool
+    {
+        return [] !== \array_intersect($seams, ConstructorCollaboratorTypes::of($fqcn));
+    }
+
+    /**
+     * The action tokens a class declares as string constants, keyed by constant name.
+     *
+     * @param class-string $fqcn
+     *
+     * @return array<string, string>
+     */
+    private function tokensOn(string $fqcn): array
+    {
+        $tokens = [];
+
+        foreach ((new ReflectionClass($fqcn))->getReflectionConstants() as $reflectionClassConstant) {
+            $value = $reflectionClassConstant->getValue();
+
+            if (\is_string($value) && 1 === \preg_match(self::ACTION_TOKEN, $value)) {
+                $tokens[$reflectionClassConstant->getName()] = $value;
+            }
+        }
+
+        return $tokens;
     }
 }

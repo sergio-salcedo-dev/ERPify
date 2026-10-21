@@ -101,8 +101,21 @@ violation-builder calls that follow it; reaching any other member is a breach th
 This exception is enforced by collector, not by baseline: `Vendor.PassiveMetadata` in
 `api/tools/deptrac/deptrac.yaml` matches the class **anchored** (`…\ExecutionContextInterface$`). The anchor
 is load-bearing for anything added there — an unanchored `…\Validator\Constraint` entry would also swallow
-`ConstraintViolation` and its `List`/`Interface` siblings, which are runtime result types that must stay in
-`Infrastructure/`.
+`ConstraintViolation` and its `List`/`Interface` siblings, which are runtime result types that stay in
+`Infrastructure/` — with the single exception below.
+
+#### Documented exception — the validation seam (`Shared\Validation\Application\Validator`)
+
+Exactly **one** `Application/` class MAY import six Symfony Validator runtime types — `Constraint`,
+`ConstraintViolation`, `ConstraintViolationList`, `ConstraintViolationListInterface`,
+`Exception\ValidationFailedException` and `Validator\ValidatorInterface`: the validation seam
+`Validator::ensure()`, whose own signature accepts `Constraint` values, so a port would add a type rather
+than remove one. Blessed, not grandfathered: `deptrac.yaml` carves the class out of `Shared.Application`
+into its own layer (`Shared.ValidatorSeam`) and the six types out of `Vendor.Symfony` into
+`Vendor.SymfonyValidatorRuntime`, both **anchored**, and only the seam's ruleset admits the runtime layer
+inward. Any other inner-layer class importing one of them, and the seam importing a seventh, fails
+deptrac. The collector and this paragraph move together. Decision record:
+[`docs/adr/external-dependencies-in-domain.md`](../adr/external-dependencies-in-domain.md) D5.
 
 #### Documented exception — PSR interface-only interop contracts
 

@@ -117,7 +117,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 
         (new RecordRecoveryThrottleAuditBestEffort(
             new ThrowingRecoveryThrottleAuditBudget(),
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create())),
             $auditLogger,
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -125,6 +125,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         $this->assertSame([], $auditLogger->records);
         $this->assertCount(1, $logger->records);
         $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('budget', $logger->records[0]['context']['phase'] ?? null);
     }
 
     public function testAFailedWriteIsSwallowedAndLoggedAtError(): void
@@ -134,7 +135,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 
         (new RecordRecoveryThrottleAuditBestEffort(
             new FixedRecoveryThrottleAuditBudget(granted: true),
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create())),
             new FailingAuditLogger($failure),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -145,6 +146,30 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
             'A swallowed projection failure that logs nothing is an observation that silently did not happen.',
         );
         $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('write', $logger->records[0]['context']['phase'] ?? null);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
+    }
+
+    public function testACommitThatFailsIsSwallowedAndReportedAsTheCommitPhase(): void
+    {
+        // The row is written and only the COMMIT fails — a serialization failure, a lost connection — so the
+        // report has to say the write got that far rather than blaming the INSERT.
+        $failure = new RuntimeException('could not serialize access');
+        $identityRows = new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create()));
+        $identityRows->onRelease = static fn () => throw $failure;
+
+        $logger = new RecordingLogger();
+
+        (new RecordRecoveryThrottleAuditBestEffort(
+            new FixedRecoveryThrottleAuditBudget(granted: true),
+            $identityRows,
+            new RecordingAuditLogger(),
+            $logger,
+        ))->record(UserMother::DEFAULT_EMAIL);
+
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(LogLevel::ERROR, $logger->records[0]['level']);
+        $this->assertSame('commit', $logger->records[0]['context']['phase'] ?? null);
         $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
@@ -154,7 +179,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 
         (new RecordRecoveryThrottleAuditBestEffort(
             new FixedRecoveryThrottleAuditBudget(granted: true),
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create())),
             new FailingAuditLogger(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -163,7 +188,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         $record = $logger->records[0];
         $this->assertStringNotContainsStringIgnoringCase(UserMother::DEFAULT_EMAIL, $record['message']);
         $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $record['message']);
-        $this->assertSame(['exception'], \array_keys($record['context']));
+        $this->assertSame(['phase', 'exception'], \array_keys($record['context']));
     }
 
     public function testALoggerFailureWhileReportingDoesNotEscape(): void
@@ -178,7 +203,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
 
         (new RecordRecoveryThrottleAuditBestEffort(
             new FixedRecoveryThrottleAuditBudget(granted: true),
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create())),
             new FailingAuditLogger(),
             $logger,
         ))->record(UserMother::DEFAULT_EMAIL);
@@ -190,7 +215,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
     ): RecordRecoveryThrottleAuditBestEffort {
         return new RecordRecoveryThrottleAuditBestEffort(
             $budget ?? new FixedRecoveryThrottleAuditBudget(granted: true),
-            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create())),
             $auditLogger,
             new RecordingLogger(),
         );

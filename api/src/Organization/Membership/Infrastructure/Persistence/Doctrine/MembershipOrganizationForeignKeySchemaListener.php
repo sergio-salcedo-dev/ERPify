@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedForeignKeySchemaListener;
 
 /**
  * Re-injects the physical `membership.organization_id` → `organization.id` foreign key into Doctrine's
@@ -20,30 +20,15 @@ use Doctrine\ORM\Tools\ToolEvents;
  * (Organization → Iam), where isolation is by id, not by a schema-level coupling.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class MembershipOrganizationForeignKeySchemaListener
+final class MembershipOrganizationForeignKeySchemaListener extends InjectedForeignKeySchemaListener
 {
-    private const string TABLE = 'membership';
-
-    private const string REFERENCED_TABLE = 'organization';
-
-    private const string COLUMN = 'organization_id';
-
-    private const string FOREIGN_KEY = 'fk_membership_organization';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
-
-        if (!$schema->hasTable(self::TABLE) || !$schema->hasTable(self::REFERENCED_TABLE)) {
-            return;
-        }
-
-        $table = $schema->getTable(self::TABLE);
-
-        if ($table->hasForeignKey(self::FOREIGN_KEY)) {
-            return;
-        }
-
-        $table->addForeignKeyConstraint(self::REFERENCED_TABLE, [self::COLUMN], ['id'], [], self::FOREIGN_KEY);
+        parent::__construct(
+            table: 'membership',
+            column: 'organization_id',
+            referencedTable: 'organization',
+            foreignKey: 'fk_membership_organization',
+        );
     }
 }

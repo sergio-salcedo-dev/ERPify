@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom";
 import { afterEach } from "vitest";
 import "reflect-metadata";
+import { resetAnnouncer } from "@/components/erpify/liveAnnouncer";
 
 // Defensive shim for contributors on Node versions outside the supported
 // engines range (see .nvmrc — Node 24). On Node 25+, `globalThis.localStorage`
@@ -41,8 +42,9 @@ if (dom?.window) {
   });
 }
 
-// The copy announcer lives on <body>, outside every container Testing Library unmounts, so a message
-// from one test would otherwise still be readable in the next and satisfy its assertion.
+// The copy announcer lives on <body>, outside every container Testing Library unmounts, and its timers
+// outlive the test that armed them: left alone, a message from one test lands in the next and satisfies
+// its assertion, or fires after the file's environment is gone and fails the run on a missing `document`.
 afterEach(() => {
-  document.body.querySelector("[data-live-announcer]")?.remove();
+  resetAnnouncer();
 });

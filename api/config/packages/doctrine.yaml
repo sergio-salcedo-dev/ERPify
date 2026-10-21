@@ -2,6 +2,9 @@ doctrine:
     dbal:
         url: '%env(resolve:DATABASE_URL)%'
         server_version: '18'
+        # Introspect jsonb as the JSONB type: DBAL otherwise maps it to JSON plus a deprecated `jsonb` platform option.
+        mapping_types:
+            jsonb: jsonb
         profiling_collect_backtrace: '%kernel.debug%'
         types:
             datetimetz: Erpify\Shared\Persistence\Infrastructure\DateTimeTzMicrosType

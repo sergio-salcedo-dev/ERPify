@@ -11,6 +11,7 @@ use Erpify\Iam\Session\Domain\Enum\SessionStatus;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 use ReflectionProperty;
 use RuntimeException;
@@ -79,6 +80,30 @@ final class InMemorySessionRepository implements SessionRepository
      */
     public ?Closure $onRevokeAll = null;
 
+    /**
+     * Records the locked read as the `iam_session` acquisition, for a use case whose claim is the ORDER in which
+     * it reaches this table relative to others.
+     */
+    public ?LockOrderJournal $lockOrderJournal = null;
+
+    /**
+     * Invoked inside {@see lockActiveForUser()} BEFORE the set is read — the position of a rival transaction
+     * that committed while this one waited on the lock, which is the only interleaving a lock can still expose.
+     */
+    public ?Closure $beforeLockActive = null;
+
+    /**
+     * Invoked inside {@see lockActiveById()} BEFORE the row is read — the position of a rival transaction that
+     * revoked or deleted the row and committed while this one waited on its lock.
+     */
+    public ?Closure $beforeLockActiveById = null;
+
+    /** @var list<string> ids passed to findActiveById */
+    public array $findActiveByIdCalls = [];
+
+    /** @var list<string> ids passed to lockActiveById */
+    public array $lockActiveByIdCalls = [];
+
     /** @var list<string> userIds passed to revokeOthersForUser */
     public array $revokeOthersCalls = [];
 
@@ -116,6 +141,30 @@ final class InMemorySessionRepository implements SessionRepository
     #[Override]
     public function findActiveById(SessionId $id): ?Session
     {
+        $this->findActiveByIdCalls[] = $id->toString();
+
+        $session = $this->byId[$id->toString()] ?? null;
+
+        if (!$session instanceof Session) {
+            return null;
+        }
+
+        return $session->isActive(SystemClock::now()) ? $session : null;
+    }
+
+    /**
+     * The same admissibility as {@see findActiveById()}, judged after the rival hook has run — which is what the
+     * adapter's `FOR UPDATE` gives: the predicate is re-checked against the row as the rival left it.
+     */
+    #[Override]
+    public function lockActiveById(SessionId $id): ?Session
+    {
+        $this->lockActiveByIdCalls[] = $id->toString();
+
+        if ($this->beforeLockActiveById instanceof Closure) {
+            ($this->beforeLockActiveById)();
+        }
+
         $session = $this->byId[$id->toString()] ?? null;
 
         if (!$session instanceof Session) {
@@ -158,6 +207,32 @@ final class InMemorySessionRepository implements SessionRepository
         );
 
         return $admissible;
+    }
+
+    /**
+     * The lifecycle half alone and ascending by id, mirroring the adapter's `status = ACTIVE ORDER BY id FOR
+     * UPDATE` — the same selection {@see bulkRevokeActive()} flips, and case-insensitive for the same reason.
+     */
+    #[Override]
+    public function lockActiveForUser(string $userId): array
+    {
+        if ($this->beforeLockActive instanceof Closure) {
+            ($this->beforeLockActive)();
+        }
+
+        $this->lockOrderJournal?->locked(LockOrderJournal::IAM_SESSION);
+
+        $ids = [];
+
+        foreach ($this->byId as $id => $session) {
+            if (0 === \strcasecmp($session->userId(), $userId) && SessionStatus::ACTIVE === $session->status()) {
+                $ids[] = (string) $id;
+            }
+        }
+
+        \sort($ids);
+
+        return \array_map(SessionId::fromString(...), $ids);
     }
 
     #[Override]

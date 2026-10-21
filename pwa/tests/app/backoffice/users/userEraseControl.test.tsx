@@ -27,7 +27,10 @@ vi.mock("@/context/shared/notification/infrastructure/Toast", () => ({
   },
 }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push }),
+  usePathname: () => "/backoffice/users",
+}));
 
 import { UserEraseControl } from "@/app/backoffice/users/_components/UserEraseControl";
 import { AuthProvider } from "@/context/shared/access/infrastructure/ui/AuthProvider";
@@ -92,6 +95,17 @@ describe("UserEraseControl", () => {
 
     expect(await screen.findByTestId("user-erase")).toBeInTheDocument();
     expect(screen.getByTestId("user-erase__trigger")).toBeInTheDocument();
+  });
+
+  it("offers no trigger on the operator's own identity, whatever case the id is spelled in", async () => {
+    // The API refuses a self-targeted erasure; a trigger that can only fail is not offered.
+    me.mockResolvedValue({ ...ADMIN, id: TARGET_ID.toUpperCase() });
+    renderControl();
+
+    expect(await screen.findByTestId("user-erase__self")).toHaveTextContent(
+      "You cannot erase your own identity.",
+    );
+    expect(screen.queryByTestId("user-erase__trigger")).not.toBeInTheDocument();
   });
 
   it("hides the control when the session lacks users.erase", async () => {

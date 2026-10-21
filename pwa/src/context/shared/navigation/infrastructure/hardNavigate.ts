@@ -51,7 +51,11 @@ type NavigationClaim = {
   preemptible: boolean;
   /** Callers that found the sink held, told once this claim's own outcome is known. */
   readonly superseded: SupersededCaller[];
-  /** End it without committing: disarm, report to its own caller, then to its losers. */
+  /**
+   * End it without committing, on preemption: disarm and report `not-committed` to its own caller.
+   * Its losers have already moved to the takeover claim, so only that caller is told here, and
+   * whatever its callback throws is rethrown.
+   */
   readonly abandon: () => void;
 };
 
@@ -96,6 +100,9 @@ let claim: NavigationClaim | undefined;
  * navigation, and a document performs at most one; a caller that goes away before it fires
  * observes a state update into an unmounted tree, which React discards. Adding a canceller
  * for that would be an API with no caller.
+ *
+ * What a failure callback throws is rethrown, never swallowed, and only after every owed report
+ * has been delivered — from this call when it preempts a claim, from the budget timer otherwise.
  */
 export function hardNavigate(
   url: string,
@@ -149,9 +156,29 @@ export function hardNavigate(
 
   const fire = (): void => {
     disarm();
-    onFailure("not-committed");
     // Drained rather than iterated: this claim is over, and a loser is owed exactly one report.
-    for (const loser of ownClaim.superseded.splice(0)) loser("superseded");
+    const reports: (() => void)[] = [
+      () => onFailure("not-committed"),
+      ...ownClaim.superseded.splice(0).map((loser) => () => loser("superseded")),
+    ];
+    // Every report is owed independently of the others. Sequenced plainly, one callback that
+    // throws leaves every caller after it latched for the life of the document — the wedge this
+    // module exists to remove, reintroduced by someone else's bug. So each one runs in isolation,
+    // and whatever failed is handed back once all of them have been told: not interpreted, not
+    // swallowed. A lone failure keeps its identity, so its receiver observes exactly what it would
+    // have without the others.
+    const failures: unknown[] = [];
+    for (const report of reports) {
+      try {
+        report();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(failures, "hard navigation: several failure callbacks threw");
+    }
   };
 
   // A claim that starts on a hidden document is preemptible from the outset — that is the

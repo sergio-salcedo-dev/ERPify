@@ -1,4 +1,4 @@
-import type { SentryBuildOptions } from "@sentry/nextjs";
+import type { SentryBuildOptions } from "@sentry/nextjs/config";
 
 /**
  * The Sentry credentials handed to `withSentryConfig`, and whether source maps

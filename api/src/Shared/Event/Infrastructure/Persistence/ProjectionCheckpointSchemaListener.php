@@ -6,9 +6,10 @@ namespace Erpify\Shared\Event\Infrastructure\Persistence;
 
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
+use Doctrine\DBAL\Schema\TableEditor;
 use Doctrine\DBAL\Types\Types;
-use Doctrine\ORM\Tools\Event\GenerateSchemaEventArgs;
 use Doctrine\ORM\Tools\ToolEvents;
+use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
 
 /**
  * Injects the `projection_checkpoint` table (last applied `sequence` per projection) into Doctrine's
@@ -18,24 +19,24 @@ use Doctrine\ORM\Tools\ToolEvents;
  * `updated_at` is set by the writer (no DB-side `DEFAULT now()`).
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
-final class ProjectionCheckpointSchemaListener
+final class ProjectionCheckpointSchemaListener extends InjectedTableSchemaListener
 {
-    private const string TABLE = 'projection_checkpoint';
-
-    public function postGenerateSchema(GenerateSchemaEventArgs $args): void
+    public function __construct()
     {
-        $schema = $args->getSchema();
+        parent::__construct('projection_checkpoint');
+    }
 
-        if ($schema->hasTable(self::TABLE)) {
-            return;
-        }
-
-        $table = $schema->createTable(self::TABLE);
-        $table->addColumn('name', Types::STRING, ['length' => 120]);
-        $table->addColumn('last_sequence', Types::BIGINT, ['default' => 0]);
-        $table->addColumn('updated_at', Types::DATETIMETZ_IMMUTABLE);
-        $table->addPrimaryKeyConstraint(
-            PrimaryKeyConstraint::editor()->setUnquotedColumnNames('name')->create(),
-        );
+    protected function define(TableEditor $table): TableEditor
+    {
+        return $table
+            ->setColumns(
+                $this->column('name', Types::STRING)->setLength(120)->create(),
+                $this->column('last_sequence', Types::BIGINT)->setDefaultValue(0)->create(),
+                $this->column('updated_at', Types::DATETIMETZ_IMMUTABLE)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setUnquotedColumnNames('name')->create(),
+            )
+        ;
     }
 }

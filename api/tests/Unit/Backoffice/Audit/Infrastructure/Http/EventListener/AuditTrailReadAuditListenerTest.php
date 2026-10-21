@@ -9,8 +9,11 @@ use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditTimelineSearchControl
 use Erpify\Backoffice\Audit\Infrastructure\Http\EventListener\AuditTrailReadAuditListener;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAudit;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Http\RequestBoundarySecurityAuditDoubles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -22,6 +25,8 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 #[CoversClass(AuditTrailReadAuditListener::class)]
 final class AuditTrailReadAuditListenerTest extends TestCase
 {
+    use RequestBoundarySecurityAuditDoubles;
+
     private const string EVENT_ID = '0190e5e7-7ab0-7cde-8f01-aaaabbbbcccc';
 
     public function testRecordsASecurityEntryForAnAuthorizedTimelineRead(): void
@@ -65,7 +70,7 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onResponse(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onResponse(
             $this->event('backoffice_bank_search', path: '/api/v1/backoffice/banks'),
         );
     }
@@ -77,7 +82,7 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onResponse($this->event(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onResponse($this->event(
             AuditTimelineSearchController::ROUTE_NAME,
             status: Response::HTTP_FORBIDDEN,
             path: '/api/v1/backoffice/audit/timeline',
@@ -89,16 +94,50 @@ final class AuditTrailReadAuditListenerTest extends TestCase
         $logger = $this->createMock(AuditLogger::class);
         $logger->expects($this->never())->method('log');
 
-        $this->listener($logger)->onResponse($this->event(
+        $this->listener($logger, $this->untouchedBoundaryAudit($logger))->onResponse($this->event(
             AuditTimelineSearchController::ROUTE_NAME,
             path: '/api/v1/backoffice/audit/timeline',
             requestType: HttpKernelInterface::SUB_REQUEST,
         ));
     }
 
-    private function listener(AuditLogger $logger): AuditTrailReadAuditListener
+    public function testRefusesToRecordAReadInsideALeakedTransaction(): void
     {
-        return new AuditTrailReadAuditListener($logger);
+        $logger = $this->createMock(AuditLogger::class);
+        $logger->expects($this->never())->method('log');
+
+        $this->expectRefusal();
+
+        $this->listener($logger, $this->leakedTransactionBoundaryAudit($logger))->onResponse(
+            $this->event(AuditTimelineSearchController::ROUTE_NAME, path: '/api/v1/backoffice/audit/timeline'),
+        );
+    }
+
+    public function testPropagatesAFailedSecurityWriteUntouched(): void
+    {
+        // Thrown from `kernel.response` the failure re-enters HttpKernel's own handling and reaches the Problem
+        // Details responder, so a read of the trail never completes without its row.
+        $failure = new RuntimeException('audit_log is unreachable');
+        $logger = $this->createStub(AuditLogger::class);
+        $logger->method('log')->willThrowException($failure);
+
+        try {
+            $this->listener($logger)->onResponse(
+                $this->event(AuditTimelineSearchController::ROUTE_NAME, path: '/api/v1/backoffice/audit/timeline'),
+            );
+            $this->fail('a failed security write must propagate');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame($failure, $runtimeException);
+        }
+    }
+
+    private function listener(
+        AuditLogger $logger,
+        ?RequestBoundarySecurityAudit $audit = null,
+    ): AuditTrailReadAuditListener {
+        return new AuditTrailReadAuditListener(
+            $audit ?? $this->boundaryAudit($logger),
+        );
     }
 
     private function event(

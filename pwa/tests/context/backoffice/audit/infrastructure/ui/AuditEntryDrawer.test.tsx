@@ -55,6 +55,91 @@ describe("AuditEntryDrawer", () => {
     expect(screen.getByText("BBVA S.A.")).toBeInTheDocument();
   });
 
+  it("says the diff is unreadable, never that nothing changed, when the stored changes was not a diff", () => {
+    const changeEntry: AuditEntry = {
+      ...ENTRY,
+      level: "change",
+      action: "BANK_UPDATED",
+      resourceType: "Bank",
+    };
+    render(
+      <AuditEntryDrawer
+        entry={changeEntry}
+        open
+        onClose={vi.fn()}
+        detail={{ ...changeEntry, metadata: { operation: "UPDATED" }, changesUnreadable: true }}
+      />,
+    );
+
+    expect(screen.getByTestId("audit-entry-drawer__diff--unreadable")).toHaveTextContent(
+      "Diff unavailable — the stored change record is not a field-by-field diff.",
+    );
+    expect(screen.queryByTestId("audit-entry-drawer__diff")).not.toBeInTheDocument();
+    // No snapshot header is drawn for an unreadable diff, so the write kind stays in Metadata.
+    expect(screen.getByText(/"operation": "UPDATED"/)).toBeInTheDocument();
+    expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
+  });
+
+  it("says no change record was stored, never that nothing changed, when a change entry carries no changes", () => {
+    const changeEntry: AuditEntry = {
+      ...ENTRY,
+      level: "change",
+      action: "BANK_UPDATED",
+      resourceType: "Bank",
+    };
+    render(
+      <AuditEntryDrawer
+        entry={changeEntry}
+        open
+        onClose={vi.fn()}
+        detail={{ ...changeEntry, metadata: { operation: "UPDATED" } }}
+      />,
+    );
+
+    expect(screen.getByTestId("audit-entry-drawer__diff--absent")).toHaveTextContent(
+      "No change record was stored with this entry.",
+    );
+    expect(screen.queryByText("No changes recorded")).not.toBeInTheDocument();
+  });
+
+  it("still names an unreadable changes on an entry that is not a change, where no Changes section exists", () => {
+    render(
+      <AuditEntryDrawer
+        entry={ENTRY}
+        open
+        onClose={vi.fn()}
+        detail={{
+          ...ENTRY,
+          metadata: { route: "backoffice_bank_update" },
+          changesUnreadable: true,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("audit-entry-drawer__diff--unreadable")).toBeInTheDocument();
+    expect(screen.queryByTestId("audit-entry-drawer__diff")).not.toBeInTheDocument();
+  });
+
+  it("still reports a legitimately empty diff as no changes recorded", () => {
+    const changeEntry: AuditEntry = {
+      ...ENTRY,
+      level: "change",
+      action: "BANK_UPDATED",
+      resourceType: "Bank",
+    };
+    render(
+      <AuditEntryDrawer
+        entry={changeEntry}
+        open
+        onClose={vi.fn()}
+        detail={{ ...changeEntry, metadata: { changes: {}, operation: "UPDATED" } }}
+      />,
+    );
+
+    expect(screen.getByText("No changes recorded")).toBeInTheDocument();
+    expect(screen.queryByTestId("audit-entry-drawer__diff--unreadable")).not.toBeInTheDocument();
+  });
+
   it("wires metadata.operation into the diff's snapshot header and excludes it from Metadata", () => {
     const changeEntry: AuditEntry = {
       ...ENTRY,

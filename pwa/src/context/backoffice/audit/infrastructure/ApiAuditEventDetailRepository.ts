@@ -51,6 +51,15 @@ function isAuditChanges(value: unknown): value is AuditChanges {
   return isObjectRecord(value) && Object.values(value).every(isAuditFieldChange);
 }
 
+/**
+ * `metadata` as the guard admits it: `changes` is a well-formed diff, or a `null`/scalar the client degrades
+ * to an unreadable diff (see {@link isAuditEventMetadata}); `operation` is anything, placed downstream.
+ */
+type AuditEventMetadataWire = {
+  changes?: AuditChanges | AuditScalar | null;
+  operation?: unknown;
+} & Record<string, unknown>;
+
 const AUDIT_WRITE_OPERATIONS: ReadonlySet<string> = new Set(Object.values(AuditWriteOperation));
 
 function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
@@ -62,6 +71,13 @@ function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
  * with no diff (an access-log read) carries `{}`/other keys and still validates — both are optional, the
  * object is not.
  *
+ * **A `changes` that is `null` or a scalar degrades to an unreadable diff instead of rejecting.** The API
+ * serves the stored value verbatim, so a corrupt row reaches this guard as-is, and refusing it would lose
+ * the whole event over a field the UI only uses to paint the diff. A list or a malformed map still rejects:
+ * it may carry real `{old, new}` pairs, and degrading it would drop them silently — the full reasoning is
+ * the audit ADR (`docs/adr/audit-activity-log.md`, D4). {@link toMetadata} removes the value from the typed
+ * slot, and {@link toAuditEventDetail} flags the detail `changesUnreadable`.
+ *
  * **`operation` is deliberately NOT validated here.** It is an enum the API owns, so a release that adds a
  * fourth kind reaches this client before the client knows the name; rejecting the row would turn a value the
  * UI does not need into a `MALFORMED_RESPONSE_ENVELOPE` over the whole event, diff included. The domain
@@ -69,18 +85,21 @@ function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
  * kind — and {@link toMetadata} applies it by dropping the unrecognised value from the typed slot, so the
  * header renders as silence exactly as it does for a row that carries no operation at all.
  */
-function isAuditEventMetadata(
-  value: unknown,
-): value is { changes?: AuditChanges; operation?: unknown } & Record<string, unknown> {
+function isAuditEventMetadata(value: unknown): value is AuditEventMetadataWire {
   if (!isObjectRecord(value)) return false;
-  return !("changes" in value) || isAuditChanges(value.changes);
+  return (
+    !("changes" in value) || isAuditScalarOrNull(value.changes) || isAuditChanges(value.changes)
+  );
 }
 
 /**
  * The row as it arrives on the wire. Identical to {@link AuditEventDetail} except that
  * `resourceErased` may be absent — see {@link isAuditEventDetailRow}.
  */
-type AuditEventDetailWire = Omit<AuditEventDetail, "resourceErased"> & { resourceErased?: boolean };
+type AuditEventDetailWire = Omit<AuditEventDetail, "resourceErased" | "metadata"> & {
+  resourceErased?: boolean;
+  metadata: AuditEventMetadataWire;
+};
 
 /**
  * Validates the un-enveloped row: the slim fields as the timeline guard checks them
@@ -145,20 +164,19 @@ function normalizeFieldValue(value: AuditFieldValue): AuditFieldValue {
 }
 
 /**
- * Carries `metadata` through verbatim (forensic fidelity) but normalises `changes` when present, and drops
- * an `operation` this client cannot place. The cost is stated rather than hidden: the raw value of a fourth
- * kind does not reach the UI. The alternative is worse in both directions — typing the slot as a plain
- * string pushes the unknown into every consumer that indexes it, and keeping it typed while it holds a
- * value the type does not admit is the lie the type exists to prevent.
+ * Carries the other `metadata` keys through verbatim (forensic fidelity); `changes` is kept, normalised, only
+ * when it is a diff — a `null`/scalar is removed and reported as `changesUnreadable` on the detail instead —
+ * and an `operation` this client cannot place is dropped. The cost is stated rather than hidden: neither the
+ * raw corrupt `changes` nor the raw value of a fourth kind reaches the UI. Keeping either in a typed slot
+ * that does not admit it is the lie the type exists to prevent, and widening the slot pushes the unknown
+ * into every consumer that indexes it.
  */
-function toMetadata(
-  metadata: { changes?: AuditChanges; operation?: unknown } & Record<string, unknown>,
-): AuditEventDetail["metadata"] {
-  const { operation, ...rest } = metadata;
+function toMetadata(metadata: AuditEventMetadataWire): AuditEventDetail["metadata"] {
+  const { operation, changes, ...rest } = metadata;
   const placed = isAuditWriteOperation(operation) ? { ...rest, operation } : rest;
 
-  if (!isAuditChanges(placed.changes)) return { ...placed };
-  return { ...placed, changes: toAuditChanges(placed.changes) };
+  if (!isAuditChanges(changes)) return placed;
+  return { ...placed, changes: toAuditChanges(changes) };
 }
 
 function toAuditEventDetail(detail: AuditEventDetailWire): AuditEventDetail {
@@ -175,7 +193,13 @@ function toAuditEventDetail(detail: AuditEventDetailWire): AuditEventDetail {
     actorErased: detail.actorErased,
     resourceErased: detail.resourceErased ?? true,
     metadata: toMetadata(detail.metadata),
+    ...(hasUnreadableChanges(detail.metadata) ? { changesUnreadable: true } : {}),
   };
+}
+
+/** A `changes` key the row carries but that is not a diff — the guard admitted it only as a `null`/scalar. */
+function hasUnreadableChanges(metadata: AuditEventMetadataWire): boolean {
+  return "changes" in metadata && !isAuditChanges(metadata.changes);
 }
 
 /**

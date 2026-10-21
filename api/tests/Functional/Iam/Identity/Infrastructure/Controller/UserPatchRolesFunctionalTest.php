@@ -23,7 +23,8 @@ use Symfony\Component\HttpFoundation\Request;
  * answers a real `409` (not an autowiring failure), the shape only the in-memory double can otherwise reach —
  * that an ADMIN reassigns a non-admin's set (200 with the new roles), that a non-admin is refused (403), and
  * that the guard stays silent when the sole administrator keeps `ADMIN` — the conditional-invocation contract
- * this endpoint diverges on, verified against the production adapter rather than a stub.
+ * this endpoint diverges on, verified against the production adapter rather than a stub — and that an actor
+ * targeting its own identity is refused before any of that runs.
  *
  * The role-delegation refusal is driven over a policy that withholds `users.grantAdmin`, because the shipped
  * grant row makes such an actor unconstructible: both `users.changeRoles` and `users.grantAdmin` are ADMIN-only
@@ -49,6 +50,8 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
 
     private KernelBrowser $client;
 
+    private ?string $suspendedActorId = null;
+
     #[Override]
     protected function setUp(): void
     {
@@ -57,6 +60,8 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
 
     protected function tearDown(): void
     {
+        $this->reinstateSuspendedActor();
+        $this->resetTarget();
         $this->restoreParkedAdministrators();
         parent::tearDown();
     }
@@ -83,13 +88,18 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
      */
     public function testDemotingTheLastActiveAdministratorIsARealConflictWithoutMutating(): void
     {
-        // Clear every administrator, then seat exactly one: functional-admin is now the SOLE active admin, so
-        // the production directory adapter — not a test double — answers 409 when its ADMIN is taken away.
+        // Clear every administrator, seat the actor, seed one ADMIN target and take the actor out of the pool:
+        // the target is now the SOLE active administrator, so the production directory adapter — not a test
+        // double — answers 409 when its ADMIN is taken away.
         $this->demoteEveryAdministrator();
         $this->authenticateAdminClient($this->client);
-        $loneAdminId = $this->soleActiveAdministratorId();
+        $actorId = $this->soleActiveAdministratorId();
+        $this->resetTarget();
+        $this->persistTarget([Role::ADMIN->value]);
+        $this->suspendActorBeneathItsSession($actorId);
+        $this->assertSame(self::TARGET_ID, $this->soleActiveAdministratorId());
 
-        $this->request($loneAdminId, '{"roles":["EDITOR"]}');
+        $this->request(self::TARGET_ID, '{"roles":["EDITOR"]}');
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
@@ -97,23 +107,46 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         // directory adapter is precisely what this test exists to prove.
         $this->assertSame('last-active-administrator-protected', $this->problemString('type'));
         // The guard runs before the aggregate mutates: the lone admin keeps its ADMIN.
-        $this->assertContains('ADMIN', $this->rolesOf($loneAdminId));
+        $this->assertContains('ADMIN', $this->rolesOf(self::TARGET_ID));
     }
 
     /**
      * @throws JsonException
      */
-    public function testTheSoleAdministratorMayWidenItsOwnSetBecauseTheGuardDoesNotApply(): void
+    public function testTheGuardStaysSilentWhenTheSoleAdministratorKeepsAdmin(): void
     {
         // Same single-administrator setup as the conflict above; the only difference is that ADMIN is kept, so
         // nobody leaves the active-admin pool and the guard is never consulted.
         $this->demoteEveryAdministrator();
         $this->authenticateAdminClient($this->client);
-        $loneAdminId = $this->soleActiveAdministratorId();
+        $actorId = $this->soleActiveAdministratorId();
+        $this->resetTarget();
+        $this->persistTarget([Role::ADMIN->value]);
+        $this->suspendActorBeneathItsSession($actorId);
+        $this->assertSame(self::TARGET_ID, $this->soleActiveAdministratorId());
 
-        $data = $this->patchRoles($loneAdminId, ['ADMIN', 'EDITOR'], expectedStatusCode: 200);
+        $data = $this->patchRoles(self::TARGET_ID, ['ADMIN', 'EDITOR'], expectedStatusCode: 200);
 
         $this->assertSame(['ADMIN', 'EDITOR'], $this->node($data, 'roles'));
+    }
+
+    /**
+     * @throws JsonException
+     */
+    public function testAnAdministratorCannotChangeTheirOwnRoles(): void
+    {
+        // A widening that keeps ADMIN — the one self-change the administrator invariant would allow — is
+        // refused all the same: the refusal is about who is targeted, never about what the set would do.
+        $this->authenticateAdminClient($this->client);
+        $actorId = $this->functionalAdministratorId();
+        $held = $this->rolesOf($actorId);
+
+        $this->request($actorId, '{"roles":["ADMIN","EDITOR"]}');
+
+        self::assertResponseStatusCodeSame(409);
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        $this->assertSame('self-role-change-forbidden', $this->problemString('type'));
+        $this->assertSame($held, $this->rolesOf($actorId));
     }
 
     public function testANonAdminIsForbidden(): void
@@ -268,21 +301,70 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         );
     }
 
-    private function persistTarget(): void
+    /**
+     * @param list<string> $roles
+     */
+    private function persistTarget(array $roles = [Role::VIEWER->value]): void
     {
         $entityManager = $this->entityManager();
         $entityManager->persist(
-            UserFixtureFactory::create(self::TARGET_ID, self::TARGET_EMAIL, 'target-password', [Role::VIEWER->value]),
+            UserFixtureFactory::create(self::TARGET_ID, self::TARGET_EMAIL, 'target-password', $roles),
         );
         $entityManager->flush();
         $entityManager->clear();
     }
 
-    private function soleActiveAdministratorId(): string
+    /**
+     * Takes the seated administrator out of the active-admin pool beneath its live session. The admission gate
+     * reads the session row and never the identity's status, so the actor stays admitted while no longer
+     * counting as an active administrator — the only sequential shape in which another administrator can be the
+     * last one, since an actor may not target itself. The shape the guard exists for, two administrators
+     * acting on each other concurrently, cannot be driven over sequential HTTP.
+     */
+    private function suspendActorBeneathItsSession(string $actorId): void
+    {
+        $this->entityManager()->getConnection()->executeStatement(
+            "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = CAST(:id AS uuid)",
+            ['id' => $actorId],
+        );
+        $this->suspendedActorId = $actorId;
+    }
+
+    private function reinstateSuspendedActor(): void
+    {
+        if (null === $this->suspendedActorId) {
+            return;
+        }
+
+        $this->entityManager()->getConnection()->executeStatement(
+            "UPDATE identity_user SET status = 'ACTIVE' WHERE id = CAST(:id AS uuid)",
+            ['id' => $this->suspendedActorId],
+        );
+        $this->suspendedActorId = null;
+    }
+
+    private function functionalAdministratorId(): string
     {
         $id = $this->entityManager()->getConnection()->fetchOne(
+            'SELECT id FROM identity_user WHERE email = :email',
+            ['email' => self::FUNCTIONAL_ADMIN_EMAIL],
+        );
+        $this->assertIsString($id);
+
+        return $id;
+    }
+
+    /**
+     * Asserts there is exactly ONE active administrator and returns it — a `fetchOne` alone would return the
+     * first of several and let a "sole administrator" premise pass over a pool that is not empty.
+     */
+    private function soleActiveAdministratorId(): string
+    {
+        $ids = $this->entityManager()->getConnection()->fetchFirstColumn(
             'SELECT id FROM identity_user WHERE status = \'ACTIVE\' AND roles::jsonb @> \'["ADMIN"]\'::jsonb',
         );
+        $this->assertCount(1, $ids);
+        $id = $ids[0];
         $this->assertIsString($id);
 
         return $id;

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, refresh: mocks.refresh, back: vi.fn() }),
+  usePathname: () => "/backoffice/users/invite",
 }));
 // The form resolves its use case from the container, and the `users.grantAdmin` gate hydrates the session
 // from `/me` through that same container. Dispatch by token and throw on an unknown one: a silently

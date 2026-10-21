@@ -91,6 +91,13 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowDoctrineConnectionLostController
         methods: [GET]
 
+    # Leaves its transaction open, so the request boundary's leaked-transaction containment is driven through a
+    # real kernel (LeakedTransactionKernelBrowserTest).
+    test_leak_transaction:
+        path: /api/test/_leak-transaction
+        controller: Erpify\Tests\Functional\Shared\Persistence\Fixtures\LeakTransactionController
+        methods: [GET]
+
     # Mirrors the dev-only dev_wdt_loader route (config/routes/dev.yaml) so its loader-rendering
     # behaviour is covered by a functional test through a real kernel.
     dev_wdt_loader:

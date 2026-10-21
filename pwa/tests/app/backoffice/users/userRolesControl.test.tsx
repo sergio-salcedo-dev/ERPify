@@ -105,6 +105,18 @@ describe("UserRolesControl", () => {
     me.mockResolvedValue(ADMIN);
   });
 
+  it("offers no form on the operator's own identity, whatever case the id is spelled in", async () => {
+    // The API refuses a self-targeted role change; checkboxes that can only fail are not offered.
+    me.mockResolvedValue({ ...ADMIN, id: TARGET_ID.toUpperCase() });
+    renderControl(user([Role.ADMIN]));
+
+    expect(await screen.findByTestId("user-roles__self")).toHaveTextContent(
+      "You cannot change your own roles.",
+    );
+    expect(screen.queryByTestId("user-roles__save")).not.toBeInTheDocument();
+    expect(screen.queryByTestId(`user-roles__role-${Role.ADMIN}`)).not.toBeInTheDocument();
+  });
+
   it("pre-checks exactly the roles the identity currently holds", async () => {
     renderControl(user([Role.EDITOR, Role.AUDIT_READER]));
 
