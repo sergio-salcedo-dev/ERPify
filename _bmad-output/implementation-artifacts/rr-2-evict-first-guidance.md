@@ -1,7 +1,7 @@
 # Story RR-2: "Evict first, rotate second" on every surface that tells a user what to do next
 
-Status: backlog — **blocked on #1001** (redemption evicting every other session is what the redemption
-copy states)
+Status: backlog — unblocked: #1001 (redemption evicting every other session, which the redemption copy
+states) merged on 2026-09-28
 
 ## Story
 

@@ -1,5 +1,5 @@
 # generated: 2026-09-28
-# last_updated: 2026-09-28
+# last_updated: 2026-10-21
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -12,10 +12,10 @@
 #
 # Story Status: backlog → ready-for-dev → in-progress → review → done
 # A story moves to `done` when the three-layer code review of the complete task is done.
-# RR-2 stays `backlog` until #1001 merges: its redemption copy states what #1001 ships.
+# RR-2 is `backlog` with no spec yet; #1001, whose behaviour its redemption copy states, merged 2026-09-28.
 
 generated: 2026-09-28
-last_updated: 2026-09-28
+last_updated: 2026-10-21
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
