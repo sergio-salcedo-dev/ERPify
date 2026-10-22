@@ -28,6 +28,11 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * app's own session rows can stay `ACTIVE` while the mail says otherwise. And not that the old password
  * stopped working: no constraint requires the new credential to differ from the old one, so a reset to the
  * same password would make that sentence false in the very run it is sent.
+ *
+ * What it may say is what the two recovery paths guarantee on their own: redeeming the recovery secret evicts
+ * every other session atomically with its consumption, and a reset revokes them best effort after commit,
+ * backed by the credential change de-authenticating them natively — so "either one signs every other device
+ * out" is a property of the path the reader is told to take, never a report on this change.
  */
 #[AsAlias(PasswordChangedEmailSender::class)]
 final readonly class SymfonyPasswordChangedEmailSender implements PasswordChangedEmailSender
@@ -63,7 +68,10 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
         return \implode("\n", [
             'Your ERPify password has changed.',
             '',
-            'If this was not you, contact ' . $from . ' immediately.',
+            'If this was not you, use your recovery secret or reset your password from the sign-in page — '
+                . 'either one signs every other device out. Then set a new password.',
+            '',
+            'If neither works, contact ' . $from . ' immediately.',
         ]);
     }
 
@@ -75,8 +83,12 @@ final readonly class SymfonyPasswordChangedEmailSender implements PasswordChange
             <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
               Your <strong>ERPify</strong> password has changed.
             </p>
+            <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">
+              If this was not you, use your recovery secret or reset your password from the sign-in page —
+              <strong>either one signs every other device out</strong>. Then set a new password.
+            </p>
             <p style="font-size:13px;line-height:1.5;color:#6b7280;margin:0;">
-              If this was not you, contact {$safeFrom} immediately.
+              If neither works, contact {$safeFrom} immediately.
             </p>
             HTML);
     }

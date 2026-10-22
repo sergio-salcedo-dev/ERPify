@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { RecoveryRedeemedNextStep } from "./_components/RecoveryRedeemedNextStep";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -10,6 +11,8 @@ export default function BackOfficeDashboard() {
       <h1 className="dashboard__title text-foreground text-2xl font-semibold tracking-tight">
         Dashboard
       </h1>
+
+      <RecoveryRedeemedNextStep />
 
       <div className="dashboard__empty flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
         <p className="dashboard__empty-lead text-foreground text-base font-semibold">

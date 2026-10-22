@@ -73,6 +73,16 @@ describe("LoginForm — authenticated return URL", () => {
   });
 });
 
+describe("LoginForm — ways back in", () => {
+  it("links the recovery page, which works without a lockout", () => {
+    render(<LoginForm />);
+
+    const link = screen.getByTestId("login-form__recovery-link");
+    expect(link).toHaveTextContent("Use a recovery secret");
+    expect(link).toHaveAttribute("href", "/recovery");
+  });
+});
+
 describe("LoginForm — access outcomes", () => {
   it("shows a single neutral credentials error and does not navigate on invalid credentials", async () => {
     outcome = { kind: LoginOutcomeKind.INVALID_CREDENTIALS };

@@ -1335,7 +1335,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       mail; the redemption flow needs none, because it evicts on its own. The warning half of (1) exists: every
       back-office page tells an `ADMIN` session whose secret is not live (none, spent or lapsed — the server's
       `live`, never a client clock) so, in a non-dismissible `<aside>` that leaves the moment a mint answers. It
-      warns; it does not close (i).
+      warns; it does not close (i). (2) exists too: the password-changed mail tells a reader who did not make
+      the change to redeem their recovery secret or reset from the sign-in page — either one signs every other
+      device out — and only then set a new password, with the security mailbox as the fallback; the change-password
+      form opens with the same order and a link to *Active sessions*. A redemption whose session is confirmed says
+      the second half itself: its toast states the other sessions were signed out, and the dashboard it lands on says once what is still owed — a
+      new password, since redemption changes none, and a new secret, since the used one is spent — never that the
+      account is now safe. A redemption whose session probe fails gets neither: its copy says only that the secret
+      is spent and to open the back office. That notice lives in the tab's memory until a dashboard mounts: a reload
+      loses it, and if the redirect lands elsewhere it waits and shows at that tab's next dashboard visit. Only the
+      back-office "no live recovery secret" banner — administrators only, and only about the secret — repeats any of
+      it; nothing else restates that redemption changed no password. The sign-in page links the recovery
+      page, so the mail's "use your recovery secret … from the sign-in page" names a reachable step.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import type { IdentityRepository } from "@/context/shared/access/domain/IdentityRepository";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
@@ -17,8 +18,14 @@ import {
 import { FormField, MutationError, Spinner } from "@/components/erpify";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/button";
+import { Routes } from "@/context/shared/routing/domain/Routes";
+import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 
 const IDENTITY_REPOSITORY_KEY = "IdentityRepository";
+
+// Evict first, rotate second: the change only asks the other sessions to sign out, best effort, so an intruder's
+// session that survives that request would hold the new password.
+const ACTIVE_SESSIONS_PATH = `${Routes.PROFILE}/sessions`;
 
 // The sign-out of the other sessions is requested best-effort and the 204 carries no word on whether it
 // landed, so the copy states the request and points at the surface that shows the truth — the same reason
@@ -190,6 +197,20 @@ export function ChangePasswordForm() {
       data-hydrated={hydrated ? "true" : undefined}
       noValidate
     >
+      <p
+        className="change-password-form__evict-first-hint text-muted-foreground text-sm"
+        data-testid="change-password-form__evict-first-hint"
+      >
+        Think someone else is signed in? Sign out other devices first in{" "}
+        <Link
+          href={safeHref(ACTIVE_SESSIONS_PATH)}
+          className="change-password-form__sessions-link text-foreground font-medium underline underline-offset-4"
+          data-testid="change-password-form__sessions-link"
+        >
+          Active sessions
+        </Link>
+        , then change your password here.
+      </p>
       {problem ? (
         <MutationError
           problem={problem}

@@ -79,6 +79,33 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         }
     }
 
+    public function testBothBodiesSayEvictFirstBeforeFallingBackToTheSecurityMailbox(): void
+    {
+        $email = $this->send();
+        $text = $email->getTextBody();
+        $html = $email->getHtmlBody();
+
+        $this->assertIsString($text);
+        $this->assertIsString($html);
+
+        $textGuidance = 'If this was not you, use your recovery secret or reset your password from the sign-in page — '
+            . 'either one signs every other device out. Then set a new password.';
+        $this->assertStringContainsString($textGuidance, $text);
+        $this->assertStringContainsString('If neither works, contact ' . self::FROM . ' immediately.', $text);
+        $this->assertGuidancePrecedesTheFallback($text, $textGuidance);
+        // The guidance replaces the bare "contact us" line rather than sitting beside it.
+        $this->assertSame(1, \substr_count($text, 'If this was not you'));
+
+        // The HTML wraps the sentence across lines; compare it with its whitespace collapsed.
+        $flatHtml = (string) \preg_replace('/\s+/u', ' ', $html);
+        $htmlGuidance = 'If this was not you, use your recovery secret or reset your password from the sign-in page — '
+            . '<strong>either one signs every other device out</strong>. Then set a new password.';
+        $this->assertStringContainsString($htmlGuidance, $flatHtml);
+        $this->assertStringContainsString('If neither works, contact ' . self::FROM . ' immediately.', $flatHtml);
+        $this->assertGuidancePrecedesTheFallback($flatHtml, $htmlGuidance);
+        $this->assertSame(1, \substr_count($flatHtml, 'If this was not you'));
+    }
+
     public function testRendersThroughTheSharedChrome(): void
     {
         $html = $this->send()->getHtmlBody();
@@ -108,6 +135,16 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertInstanceOf(Email::class, $email);
 
         return $email;
+    }
+
+    private function assertGuidancePrecedesTheFallback(string $body, string $guidance): void
+    {
+        $guidanceAt = \strpos($body, $guidance);
+        $fallbackAt = \strpos($body, 'contact ' . self::FROM . ' immediately');
+
+        $this->assertIsInt($guidanceAt);
+        $this->assertIsInt($fallbackAt);
+        $this->assertLessThan($fallbackAt, $guidanceAt);
     }
 
     /**
