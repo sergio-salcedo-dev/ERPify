@@ -99,8 +99,8 @@ scanned, signed prod images in the registry, addressable by Git SHA.
 - **Scan gates:** Trivy (image CVE scan, fail on HIGH/CRITICAL fixable),
   gitleaks (secret scan on the repo/diff). Add SBOM (syft) + cosign signing
   (keyless OIDC) as a follow-up slice.
-- **Dependabot** (`.github/dependabot.yml`) for `github-actions`, `composer`,
-  and `npm` ecosystems.
+- **Dependabot** (`.github/dependabot.yaml`, shipped) for `npm`, `github-actions`,
+  `composer`, `docker` and `docker-compose`.
 
 **Commit slices:** `ci(shared): publish prod images to registry` ·
 `ci(shared): add trivy + gitleaks scan gates` · `ci(shared): SBOM + image

@@ -266,34 +266,50 @@ routine; a bump whose two sides land in *different* suites is a distro upgrade
 wearing a digest bump's clothes, and belongs in its own PR with the user's call.
 
 **Docker Compose.** Service images are pinned as `<image>:<tag>@sha256:<digest>` —
-`postgres` in `compose.yaml`, `axllent/mailpit` in `compose.dev.yaml` — and a
-`docker_compose` PR moves **tag and digest together**, so copy the whole reference
-from its diff. `compose.prod.yaml` declares no `image:` on `database`: production runs
-the `compose.yaml` postgres pin, so that one bump is a production change.
+`postgres` in `compose.yaml`, `axllent/mailpit` in `compose.dev.yaml` — so copy the
+whole reference from the PR's diff. `compose.prod.yaml` declares no `image:` on
+`database`: production runs the `compose.yaml` postgres pin, so that one bump is a
+production change.
 
-Verify the digest by what kind of tag it carries, because the Hub lookup above only
-answers for one of them. An **immutable** tag (`v1.31.5`) must resolve on Docker Hub
-to exactly the pinned digest:
+Verify the digest by what kind of tag it carries, because a Hub lookup answers for one
+kind only. **Every `library/*` tag is floating, whatever its spelling** — the official
+images re-push even full-version tags (`postgres:18.1-alpine` was re-pushed months
+after its release). Only a vendor image's full release tag (`axllent/mailpit:vX.Y.Z`)
+is immutable, and must resolve on Docker Hub to exactly the pinned digest:
 
 ```bash
 curl -s "https://hub.docker.com/v2/repositories/<owner>/<image>/tags/<tag>" \
  | python3 -c "import sys,json; print(json.load(sys.stdin).get('digest'))"
 ```
 
-A **floating** tag (`18-alpine`) is rebuilt upstream and stops matching as soon as it is —
-measured on 2026-10-22, the correct `postgres:18-alpine` pin already differed from the
-Hub's current digest — so a mismatch there proves nothing. Prove the digest exists and
-read what it actually runs instead:
+For a floating tag a mismatch proves nothing — measured on 2026-10-22, the correct
+`postgres:18-alpine` pin already differed from the Hub's current digest — and when
+unsure which kind a tag is, take this path, which proves strictly more. Prove the
+digest exists and read what it runs, on **both** sides of the bump:
 
 ```bash
 docker buildx imagetools inspect <image>@sha256:<digest> | head -3
 docker run --rm <image>@sha256:<digest> postgres --version   # mailpit: `version`
+docker run --rm --entrypoint cat <image>@sha256:<digest> /etc/alpine-release
 ```
 
-A postgres bump that changes the **major** (`18` → `19`) is not a digest bump: a
-`PGDATA` initialised by one major does not start under the next without
-`pg_upgrade`. It belongs in its own PR with the user's call, exactly as a Debian
-suite change does.
+A floating-tag bump names the same tag on both sides — #838 is titled `bump postgres
+from 18-alpine to 18-alpine` — so the title says nothing and the diff is the only
+record. An Alpine release change between the two digests is the Debian-suite case
+above: say so in the PR, and give it its own PR if it crosses a minor.
+
+A postgres bump that changes the **major** is not a digest bump: a `PGDATA`
+initialised by one major does not start under the next without `pg_upgrade`, and
+`POSTGRES_VERSION` — the `serverVersion=` default in every `DATABASE_URL` of
+`compose.yaml` and `compose.prod.yaml` — moves with it. Check it mechanically rather
+than by reading the title, because the gate in step 8 cannot catch it (a worktree
+stack runs `initdb` on a fresh volume under whatever major it is given):
+
+```bash
+old=$(git show origin/main:compose.yaml | grep -oP 'image: postgres:\K[0-9]+')
+new=$(grep -oP 'image: postgres:\K[0-9]+' compose.yaml)
+[ "$old" = "$new" ] || echo "postgres MAJOR $old -> $new: stop, own PR, user's call"
+```
 
 ## 7. Assert the lockfile gained nothing — and moved everything
 
@@ -317,7 +333,7 @@ back out of the lock and check it against that PR's target:
 ```bash
 python3 - <<'PY'
 import json
-old=json.load(open('/tmp/lock-main.json'))['packages']   # git show origin/main:… > this
+old=json.load(open('tmp/lock-main.json'))['packages']   # git show origin/main:… > this
 new=json.load(open('pwa/package-lock.json'))['packages']
 for p in ['<pkg>', '…']:                                  # one per superseded PR
     k=f'node_modules/{p}'
@@ -334,7 +350,8 @@ letting the PR body assert a version the lock does not hold.
 Run only what the batch touched. zsh has **no `PIPESTATUS`**; capture properly:
 
 ```bash
-make <target> > /tmp/gate.log 2>&1; echo "<target> EXIT=$?"
+mkdir -p tmp   # gitignored, so a fresh worktree has none
+make <target> > tmp/gate.log 2>&1; echo "<target> EXIT=$?"
 ```
 
 | Touched | Gates |
@@ -343,7 +360,7 @@ make <target> > /tmp/gate.log 2>&1; echo "<target> EXIT=$?"
 | npm, when `@playwright/test` moved | `cd pwa && ./node_modules/.bin/playwright test --list` — proves the new version parses `playwright.config.ts` and discovers every spec without needing browsers. Use the local binary: `npx playwright` may fetch a standalone package instead. |
 | composer | `make php.quality`, `make ci.api` |
 | docker | build the stage that carries the pin (below), or lean on the `API Build (Docker)` CI job |
-| docker_compose | `make docker.up`, then read the running version back (below) |
+| docker_compose | `make docker.up.wait`, then read the running version back (below); for a `postgres` bump also `make db.test.prepare` and `make php.unit c='--filter PlanFunctionalTest'`, or lean on CI's API jobs, which run on this same pin |
 | github_actions only | nothing local — CI is the gate |
 
 The full E2E suite is CI's job unless the user asks for it locally.
@@ -355,8 +372,8 @@ therefore comes up green having never read the digest you changed. Build the sta
 that actually carries the pin, and read the result back:
 
 ```bash
-cd api && docker build --target frankenphp_prod -t deps-probe:prod . \
-  > /tmp/gate-docker.log 2>&1; echo "docker build EXIT=$?"
+mkdir -p tmp && cd api && docker build --target frankenphp_prod -t deps-probe:prod . \
+  > ../tmp/gate-docker.log 2>&1; echo "docker build EXIT=$?"
 docker run --rm --entrypoint cat deps-probe:prod /etc/os-release | head -2
 docker rmi deps-probe:prod
 ```
@@ -364,22 +381,31 @@ docker rmi deps-probe:prod
 The `os-release` read is the load-bearing half: a digest that silently crossed a
 Debian suite builds exactly as green as one that did not.
 
-**For a compose pin it is the other way round: `make docker.up` is the gate.** Those
-images are pulled, not built, so the dev stack runs exactly the reference you changed —
-`postgres` from `compose.yaml` and `mailpit` from `compose.dev.yaml`. Bring it up from
-the worktree and read the version from the running container, not from the file:
+**For a compose pin it is the other way round: `make docker.up.wait` is the gate.**
+Those images are pulled, not built, so the dev stack runs exactly the reference you
+changed — `postgres` from `compose.yaml` and `mailpit` from `compose.dev.yaml`. Use the
+`.wait` form: plain `docker.up` returns as soon as the containers exist, so a digest
+that crash-loops or never passes the `database` healthcheck exits 0. Then read what
+runs from the container, not from the file:
 
 ```bash
-make docker.up > /tmp/gate-compose.log 2>&1; echo "docker.up EXIT=$?"
+mkdir -p tmp
+make docker.up.wait > tmp/gate-compose.log 2>&1; echo "docker.up.wait EXIT=$?"
 P=$(make -s docker.info | awk -F': ' '/COMPOSE_PROJECT_NAME/{print $2}')
-docker compose -p "$P" exec database postgres --version
-docker compose -p "$P" exec mailpit /mailpit version
-docker compose -p "$P" images database mailpit   # IMAGE ID = the pinned digest's prefix
+dc() { docker compose -p "$P" -f compose.yaml -f compose.dev.yaml "$@"; }
+dc exec database postgres --version
+dc exec mailpit /mailpit version
+docker image inspect --format '{{json .RepoDigests}}' \
+  "$(dc images -q database)" "$(dc images -q mailpit)"   # must name the pinned digests
 ```
 
 The `-p` is not optional. A worktree's stack runs under `erpify-<slug>` while a bare
 `docker compose` takes its project name from the directory, so it answers
-`service "database" is not running` against a stack that is up.
+`service "database" is not running` against a stack that is up. `dc` is a function
+and not a `DC="docker compose …"` string, because zsh does not word-split an unquoted
+variable and runs the whole string as one command name. Compare `RepoDigests`, not
+the `IMAGE ID` column: that one equals the pinned digest only under the containerd
+image store.
 
 ## 9. Security review
 
@@ -388,6 +414,8 @@ say so in the PR rather than skipping silently. Always cover:
 
 - **Supply chain** — the added/removed counts from step 7.
 - **Action pinning** — still SHA-pinned with a version comment, verified upstream.
+- **Image pinning** — every Dockerfile `FROM` and compose `image:` still
+  `@sha256:`-pinned, each digest verified per step 6.
 - **`npm audit` / `composer audit`** — for each advisory, decide **pre-existing vs
   introduced** by checking whether that package's version changed against `main`.
   Never report a pre-existing advisory as this batch's, and never let a new one pass
