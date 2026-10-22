@@ -1204,7 +1204,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       a `mercure`-claim publish is accepted, a wrong key and a missing token are 401, a private update
       reaches the `mercureAuthorization` cookie on `?topic=` and not an anonymous subscriber. Residual:
       the hub also accepts a 1.0 token whose `aud` names it; moving to an `issuer` block and protocol 1.0
-      is the way out of compatibility mode, and the two move together.
+      is the way out of compatibility mode, and the two move together. The hub is also named
+      (`name erpify`): `SERVER_NAME` lists the origin and `php:80`, so the block yields two servers, and
+      1.x refuses two unnamed hubs; the shared name is what pools them onto one transport, so an update
+      published on `php:80` still reaches a subscriber on the origin (measured across two servers).
       Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
       **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
       cache `v0.4.2` exits 1 with `Deprecations: 1` naming
