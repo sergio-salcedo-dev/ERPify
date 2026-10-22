@@ -1,7 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
 > **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-06 (D4.2 — deferred re-sweep of the
-> erasure passes; D7 — `audit_log` actor CHECK constraints, 2026-10-03; 2026-09-28: D3 reviewed — request-boundary
+> erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -172,9 +172,17 @@ como decisión abierta.
 
 **Quién queda fuera del seam, y por qué.** Los productores `security` de caso de uso escriben dentro de su
 transacción (arriba). Los `Record*AuditBestEffort` (`RecordLockoutAuditBestEffort`,
-`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`) escriben **después** del
+`RecordRecoveryThrottleAuditBestEffort`, `RecordLockoutNoticeAuditBestEffort`,
+`RecordRecoverySecretAuditBestEffort`) escriben **después** del
 commit de su caso de uso y tragan el fallo por decisión —su fila proyecta un hecho que ya persiste el
-`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los comandos de operador
+`event_store`—, así que no son frontera HTTP ni se enrutan por aquí. Los cuatro escriben en una transacción
+propia bajo el bloqueo de la fila `identity_user` del sujeto (`IdentityRowLock`: un `SELECT … FOR KEY SHARE` sobre
+la conexión —el modo más débil que aún espera al `FOR UPDATE` y al `DELETE` de la erasure, sin hacer esperar a
+otro escritor tardío ni a un `UPDATE` que no toca la clave—, sin hidratar `User` ni vaciar el entity manager, con la espera acotada por `lock_timeout`), en el
+orden de la erasure (`identity_user` → `audit_log`), así que no pueden confirmar una fila que lo nombre tras la
+pasada de la erasure: o confirman antes y la pasada la redacta, o esperan y no encuentran sujeto. Una espera que
+agota su cota es una proyección omitida y reportada, no una fila escrita; lo que escape a todo ello lo señala
+`identity:gdpr:reconcile-subject-references`. Los comandos de operador
 (`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
 no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
 distingue además con su propio código de salida (`ERASED_UNRECORDED`).
@@ -455,20 +463,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   para no reescribir un valor jamás capturado como evidencia de una redacción que no ocurrió. Y **no-nulo no
   basta**: `SealedAuditEntryFactory` solo comprueba `null`, así que una cabecera `User-Agent:` vacía sella
   `''`; la guarda es por tanto no-nulo **y** no-vacío.
-  **Los escritores tardíos se serializan sobre `identity_user`.** Este paso, como el bloqueo de ejes,
-  alcanza las filas que existen cuando corre; una fila que nombre al sujeto y se confirme entre el `UPDATE`
-  y el commit del borrado conservaría el id real con `resource_erased = FALSE`. Las proyecciones `security`
-  de `Iam/Identity` que escriben post-commit (bloqueo, aviso de bloqueo, transiciones del secreto de
-  recuperación, throttle de recuperación) toman antes, en su propia transacción, la fila `identity_user`
-  del sujeto `FOR UPDATE` —la que el borrado retiene desde su comprobación de administrador hasta el
-  commit— y no escriben fila con recurso si ya no existe. O confirman antes de que corran los pases, que
-  las reescriben, o esperan al commit del borrado y no encuentran a nadie. Toman una sola fila de esa tabla
-  y no esperan nada más mientras la retienen, así que no pueden cerrar un ciclo con el borrado. Las filas
-  del log de acceso escritas en `kernel.terminate` quedan fuera de ese bloqueo: ninguna ruta declara un
-  tipo-persona como recurso, pero una petición del propio sujeto en vuelo durante el borrado puede confirmar
-  su fila de actor tras el pase de actor, y `Shared/Audit` no puede tomar `identity_user` sin cruzar de
-  contexto. Esa fila la reescribe el re-barrido de D4.2 en el siguiente tick, si se confirma dentro de la
-  hora que sigue al borrado.
+  **Las filas del log de acceso escritas en `kernel.terminate` quedan fuera del bloqueo de `identity_user`**
+  que serializa a los escritores tardíos de `Iam/Identity` (arriba, «Quién queda fuera del seam»): ninguna ruta
+  declara un tipo-persona como recurso, pero una petición del propio sujeto en vuelo durante el borrado puede
+  confirmar su fila de actor tras el pase de actor, y `Shared/Audit` no puede tomar `identity_user` sin cruzar de
+  contexto. Esa fila la reescribe el re-barrido de D4.2 en el siguiente tick, si se confirma dentro de la hora que
+  sigue al borrado.
   **Lo que este paso no alcanza, dicho para que no se lea como cobertura total:** el throttle de recuperación
   también emite filas anónimas **sin recurso** cuando la dirección no resuelve a nadie, igual que toda fila
   anónima del log de acceso. Ningún statement del eje de recurso puede casarlas —no hay sujeto al que
@@ -535,9 +535,6 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
   re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
-  **En la tabla, `metadata` se escribe como objeto** —`DbalAuditLogWriter` convierte el nivel superior—; las
-  filas anteriores que guardan `[]` no se reescriben, decisión registrada en
-  [`event-store-and-projections.md`](event-store-and-projections.md), D14(b), junto con la de `event_store`.
   **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
   `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
@@ -668,15 +665,16 @@ eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo eve
 **Contexto.** Los pases del borrado (D4, D4.1 y el del log de negocio de
 [`event-store-and-projections.md`](event-store-and-projections.md), D12) reescriben las filas que **existen**
 cuando corren. Una petición que cargó al sujeto antes de que desapareciera su fila de identidad puede confirmar
-otra después: el log de acceso y los cuatro escritores de auditoría del borde de la petición en el eje de actor,
-y `StartSession` con las tres revocaciones de sesión en `event_store` e `iam_session`. Tres rondas de revisión
-encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de ser un control.
+otra después. Tres rondas de revisión encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de
+ser un control. Los de sesión —`StartSession` y las revocaciones, en `event_store` e `iam_session`— quedan
+serializados con el borrado (`SessionSubjectLock`, y el borrado purga las sesiones antes del log de negocio); la
+clase viva es el log de acceso y los cuatro escritores de auditoría del borde de la petición en el eje de actor.
 
 **Decisión** (Sergio, 2026-10-06). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
 propia transacción, y sólo si su identidad estaba viva —la misma condición que el pase de `event_store`, que
 casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
 `identity_maintenance`, repite para cada sujeto aún programado —una **hora** desde que el borrado construyó su
-fila, hasta el primer tick con éxito tras cerrarse— los pases de actor, recurso, log de negocio y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado. El tick que cierra la ventana barre
+fila, hasta el primer tick con éxito tras cerrarse— los pases de actor, recurso, log de negocio y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado (auditoría, sesiones, log de negocio). El tick que cierra la ventana barre
 una última vez y borra la fila en la misma transacción. Un sujeto que falla no detiene a los demás: el fallo se
 captura por sujeto, el tick sigue y al final lanza una excepción que cuenta los fallos sin citar su texto —un
 mensaje del driver podría llevar el id—; el sujeto que falló conserva su fila y se reintenta en el siguiente tick.
@@ -777,6 +775,19 @@ ActorType  enum  anonymous | system | api_key | user
 | `api_key`    | `<api_key_uuid>` |
 | `user`       | `<user_uuid>`    |
 
+La tabla la impone también Postgres, no solo `ActorContext`: SQL crudo (DBAL, fixtures, Behat) escribe
+`audit_log` sin pasar por él, y una fila `user` con `actor_id` NULL no la casa ninguno de los dos pases de
+borrado. Dos `CHECK` con nombre: `audit_log_actor_type_check` (`actor_type` ∈ los cuatro tokens) y
+`audit_log_actor_id_presence_check` (`(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`, igualdad
+booleana que nunca evalúa a NULL). DBAL no modela ni introspecta un `CHECK` de tabla, así que viven solo en sus
+migraciones y `db.diff` no los ve; sus guardianes son `AuditLogCheckConstraintFunctionalTest`, que además falla
+si `ActorType` gana un caso que el `CHECK` de tokens no admite, y `AuditLogCheckEnumTokenGateTest`, que compara
+los literales de las migraciones con los enums sin base de datos. `Version20260929102251` añade esos dos; una
+migración propia, `Version20260930072817`, añade `audit_log_level_check` (`level` ∈ los tres tokens de
+`AuditLevel`, mismos guardianes), para que la reciba también una base que ya registró la anterior: el pruner
+borra `WHERE level = :level` por cada caso del enum, así que una fila con otro token sobreviviría a toda ventana de retención. Una fila existente que
+viole cualquiera de los tres aborta la migración con su recuento y la consulta que la lista; se repara a mano.
+
 `ActorContext` (en `Shared/…/Audit/Domain`, value object de dominio, sin dependencias de framework):
 
 ```php
@@ -797,24 +808,14 @@ Descartado: derivar el tipo de `actor_id IS NULL` + heurística de ruta — no e
 frágil y se rompe en cuanto entra `api_key`. Descartado: enum más rico (`cron`, `webhook`) hoy —
 `system` los cubre; se expande cuando un caso real lo exija (YAGNI).
 
-**La tabla lo impone también, no solo `ActorContext`.** `audit_log` lleva dos `CHECK`:
-`actor_type IN (<tokens de ActorType>)` y `(actor_type IN ('anonymous','system')) = (actor_id IS NULL)`.
-`ActorContext` hace irrepresentable el estado ilegal en PHP, pero la tabla también se escribe con SQL crudo
-(seeds de Behat, fixtures funcionales, `psql`), y una fila `user` con `actor_id` nulo conserva `ip`/`user_agent`
-tras ambos pases de borrado: el de actor casa por `actor_id` y el de recurso solo redacta filas `anonymous`.
-El borrado de actor es compatible por construcción — reacuña `actor_id`, nunca lo anula. Las listas de tokens se
-derivan de `ActorType` (`isIdentified()`) en `AuditLogSchemaListener::checkConstraints()`; DBAL no modela `CHECK`,
-así que `make db.diff` no las genera ni detecta su ausencia, y `AuditLogActorCheckConstraintFunctionalTest`
-compara esa declaración con el catálogo de Postgres. Un caso nuevo de `ActorType` exige migración a mano.
-
 ## Esbozo de esquema (`audit_log`)
 
 ```text
 id              uuid v7      PK (Shared/Domain/Entity/Identifiable, id app-assigned)
-level           enum         activity | security | change
+level           enum         activity | security | change — CHECK audit_log_level_check (D7)
 action          string       p.ej. BANK_ACCOUNTS_VIEWED, UNAUTHORIZED_UPDATE_ATTEMPT
-actor_type      enum         anonymous|system|api_key|user — obligatorio, CHECK de tokens (D7)
-actor_id        uuid         NULL salvo api_key/user, CHECK de presencia (D7)
+actor_type      enum         anonymous|system|api_key|user — obligatorio (D7); CHECK audit_log_actor_type_check
+actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audit_log_actor_id_presence_check
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
@@ -826,12 +827,18 @@ actor_erased    boolean      NOT NULL — false al insertar (writer); true tras 
 occurred_on     timestamptz
 ```
 
+`metadata` se escribe como **objeto** JSON (`DbalAuditLogWriter` coerce el nivel superior con `(object)`, así
+que un mapa vacío queda `{}`). Las filas históricas que se escribieron `[]` antes de esa coerción **se aceptan
+sin backfill**: reescribirlas sería una cuarta mutación sancionada sobre `audit_log` (D4) para corregir una forma
+que nada lee como array, y se descarta. Consecuencia: una consulta que trate `metadata` como objeto acota por
+`jsonb_typeof(metadata) = 'object'` (o compara el texto con `metadata::text`), nunca asume la forma.
+
 `ip` se persiste como `varchar(45)` (cabe una IPv6) y no como `inet`: DBAL no modela el tipo `inet`
 y ninguna consulta usa operadores CIDR/subred — solo se almacena como evidencia.
 
 `level` y `actor_type` se persisten como `VARCHAR` guardando el `->value` de enums PHP
 string-backed (`EnumType` es una constraint de Symfony Validator, no un Doctrine `Type`; no se usan
-enums nativos de Postgres).
+enums nativos de Postgres). Los conjuntos cerrados de `actor_type` y de `level` los refuerza cada uno un `CHECK` (D7).
 
 Índices previstos: `(actor_id, occurred_on)` (jornada), `(correlation_id)` (request), `(level,
 occurred_on)` (retención/prune), `(resource_type, resource_id)` (investigación por recurso).
@@ -857,8 +864,7 @@ resto son ejemplos, algunos de módulos futuros, marcados con \*).
 
 ## Triggers de revisita
 
-(a) Auth real / multirrol → entra `audit_session` si hay caso; `actor_id` no pasa a `NOT NULL`, porque
-`anonymous`/`system` no nombran a nadie y el `CHECK` de D7 lo exige nulo para ellos. (b)
+(a) Auth real / multirrol → `actor_id` pasa a `NOT NULL` y entra `audit_session` si hay caso. (b)
 Volumen de `activity` que exija particionado temporal o un *sink* externo (deja de ser PostgreSQL).
 (c) Necesidad de exponer la auditoría a un contexto cliente (hoy solo Backoffice la consume). (d)
 **Eje de clasificación estable**: cuando el read model de `Backoffice/Audit` necesite dashboards,

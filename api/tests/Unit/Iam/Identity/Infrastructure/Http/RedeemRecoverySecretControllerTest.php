@@ -211,8 +211,8 @@ final class RedeemRecoverySecretControllerTest extends TestCase
             $users,
             $secrets,
             new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
             new RevokeCurrentSessionBestEffort(

@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Domain\Email;
-use Erpify\Iam\Identity\Domain\Entity\User;
-use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
-use Erpify\Shared\Persistence\Application\TransactionManager;
 use Psr\Log\LoggerInterface;
 use SensitiveParameter;
 use Throwable;
@@ -21,9 +18,10 @@ use Throwable;
  * one and {@see \Erpify\Shared\Audit\Domain\AuditPolicy} audits `GET` only, so neither generic hook can see
  * a refusal that raises no exception and changes no response.
  *
- * NOTHING HERE ESCAPES — not the write, not the subject lookup, and not the budget claim. A `security` entry
- * propagates by design in {@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger}, which is correct where
- * a 403 becoming a 5xx is still a refusal and inadmissible on a path whose whole contract is a uniform answer.
+ * NOTHING HERE ESCAPES — not the write, not the subject lookup or its lock, not the transaction, and not the
+ * budget claim. A `security` entry propagates by design in
+ * {@see \Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger}, which is correct where a 403 becoming a 5xx
+ * is still a refusal and inadmissible on a path whose whole contract is a uniform answer.
  * The claim is inside the swallow because it can throw on its own account: a limiter configured with a limit
  * below one rejects every reservation outright, which would otherwise turn a misconfiguration into an
  * exception on exactly the refused requests and nowhere else.
@@ -43,12 +41,24 @@ use Throwable;
  * such floor, because the throttle is precisely what is being reported.
  *
  * THE ROW NAMES THE SUBJECT WHEN THE ADDRESS RESOLVES, AND NOTHING WHEN IT DOES NOT. Naming it costs one
- * indexed read, and it mints no new obligation: `User` is already the registry's person type
+ * indexed read that the served branch already performs ({@see RequestPasswordReset}), so the two branches
+ * converge rather than diverge, and it mints no new obligation: `User` is already the registry's person type
  * with an erasure owner, and `audit_log.resource_id` is already inside the reconciler's reach. What may never
  * appear, in `metadata` or anywhere else, is the ADDRESS — in clear, hashed or encoded. It is a person datum
  * whose erasure nothing owns: the anonymisers rewrite `actor_id` and `resource_id` and never touch
  * `metadata`, and every control holding `audit_log.metadata` free of person ids matches by id against
  * `identity_user`, so an address would be invisible to all of them and outlive its own subject.
+ *
+ * THE LOOKUP AND THE WRITE SHARE ONE TRANSACTION, AND THE LOOKUP HOLDS THE SUBJECT'S ROW. This runs from
+ * `kernel.terminate`, well after anything else in the request, so an unlocked read could resolve an identity
+ * whose erasure then commits and runs its pass over the trail before this INSERT lands — leaving the subject's
+ * real id in `resource_id` with `resource_erased = FALSE`. {@see IdentityRowLock::whileHeldByEmail()} makes the
+ * write wait for any erasure holding the row: once that commits, Postgres re-evaluates the locked read, finds
+ * nothing, and the row is written without a resource, exactly as for an address that never named anyone. If this
+ * side locks first, the erasure waits instead and its pass redacts the row it then finds committed. The budget
+ * claim stays OUTSIDE the transaction and ahead of it: it is a limiter reservation, not a database write, and
+ * spending it only once a write succeeded would let a failing trail retry the INSERT on every refused request —
+ * the amplifier the budget exists to remove — and keep a lock wait on each of them.
  *
  * A resource-less row for an unresolved address is deliberate rather than a fallback: it keeps the signal of
  * a sweep against addresses that name nobody. The trail therefore lets an authorised reader tell a resolvable
@@ -71,16 +81,6 @@ use Throwable;
  *
  * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
  * nothing escapes may not throw, and the report call is real I/O.
- *
- * **The address is resolved under `FOR UPDATE`, in the transaction that writes the row.** This runs from
- * `kernel.terminate`, outside anything that holds the subject, so an unlocked read would let an erasure
- * complete its trail passes between the lookup and the insert and would leave the row naming an identity that no
- * longer exists. Under the lock the lookup either commits its row before the erasure's passes run, which then
- * rewrite it, or waits for the erasure to commit and finds nobody — and an address that names nobody is
- * already the resource-less row this class writes for an unknown address, so an erased subject leaves nothing
- * an observer could tell apart from one that never existed. The lock is the same one
- * {@see LoginAttemptRegistrar} takes on its address-keyed path, and the transaction sits behind the budget
- * claim, so it is paid at most once per address per window.
  */
 final readonly class RecordRecoveryThrottleAuditBestEffort
 {
@@ -88,66 +88,72 @@ final readonly class RecordRecoveryThrottleAuditBestEffort
 
     private const string THROTTLED_ACTION = 'PASSWORD_RECOVERY_THROTTLED';
 
+    /** Where a failure raised by the budget claim itself is reported: ahead of any lock or write. */
+    private const string PHASE_BUDGET = 'budget';
+
     public function __construct(
         private RecoveryThrottleAuditBudget $auditBudget,
-        private UserRepository $users,
+        private IdentityRowLock $identityRows,
         private AuditLogger $auditLogger,
-        private TransactionManager $transactionManager,
         private LoggerInterface $logger,
     ) {
     }
 
     public function record(#[SensitiveParameter] string $email): void
     {
+        $phase = self::PHASE_BUDGET;
+
         try {
             if (!$this->auditBudget->claimFor($email)) {
                 return;
             }
 
-            $this->transactionManager->transactional(function () use ($email): void {
-                $this->auditLogger->log(self::THROTTLED_ACTION, AuditLevel::SECURITY, $this->subjectOf($email));
-            });
+            $phase = self::PHASE_LOCK;
+            $this->writeUnderTheSubjectsLock($email, $phase);
         } catch (Throwable $throwable) {
             // The only signal that an observation was owed and not made: the claim is already spent, so this
             // address stays silent for the rest of the window. No id and no address in the line — this runs
             // once per address per window on an anonymous path the erasure chain does not reach. The channel
             // is what makes the signal reachable at all; see the class docblock.
             $this->reportSafely(fn () => $this->logger->error(
-                'Recovery throttle exhausted; security audit projection skipped (write failed).',
-                ['exception' => $throwable],
+                'Recovery throttle exhausted; security audit projection skipped.',
+                ['phase' => $phase, 'exception' => $throwable],
             ));
         }
     }
 
     /**
-     * The actor is `anonymous` by construction — no token exists at a forgot-password request — so the target
-     * rides in the resource columns, which the erasure chain rewrites alongside `actor_id`. A malformed
-     * address and an address matching no identity are the same answer here: no resource, no metadata, and in
-     * particular no record of what was typed. Called inside the writing transaction only: the lookup is what
-     * holds the subject's row until the row naming it commits.
+     * An address with no canonical form — blank, or not valid UTF-8 — takes no lock: there is no row it could
+     * resolve to. It still gets its row, without a resource, for the reason the class docblock gives.
      *
-     * It hydrates, where {@see \Erpify\Iam\Identity\Domain\Repository\IdentityRowLock} deliberately does not,
-     * because this writer holds an address rather than an id and only the aggregate lookup resolves one to the
-     * other under a lock. It is safe here for the reason that port gives for avoiding it elsewhere: this runs at
-     * `kernel.terminate`, after the request's own unit of work is finished, so there is no instance of the
-     * caller's for the refresh to overwrite.
+     * @param-out string $phase
      */
-    private function subjectOf(#[SensitiveParameter] string $email): ?AuditResource
+    private function writeUnderTheSubjectsLock(#[SensitiveParameter] string $email, string &$phase): void
     {
         $canonicalEmail = Email::tryFrom($email);
 
         if (!$canonicalEmail instanceof Email) {
-            return null;
+            $phase = self::PHASE_WRITE;
+            $this->auditLogger->log(self::THROTTLED_ACTION, AuditLevel::SECURITY);
+
+            return;
         }
 
-        $user = $this->users->findByEmailForUpdate($canonicalEmail);
+        $this->identityRows->whileHeldByEmail($canonicalEmail, function (?string $userId) use (&$phase): void {
+            $phase = self::PHASE_WRITE;
+            $this->auditLogger->log(self::THROTTLED_ACTION, AuditLevel::SECURITY, $this->subjectOf($userId));
+            $phase = self::PHASE_COMMIT;
+        });
+    }
 
-        if (!$user instanceof User) {
-            return null;
-        }
-
-        $userId = $user->getId();
-
+    /**
+     * The actor is `anonymous` by construction — no token exists at a forgot-password request — so the target
+     * rides in the resource columns, which the erasure chain rewrites alongside `actor_id`. An address matching
+     * no identity is the same answer as a malformed one: no resource, no metadata, and in particular no record of
+     * what was typed.
+     */
+    private function subjectOf(?string $userId): ?AuditResource
+    {
         return null === $userId ? null : AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId);
     }
 }

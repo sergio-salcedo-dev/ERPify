@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\ErasureResweep;
 use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
+use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
@@ -35,8 +37,9 @@ use Throwable;
  * **The passes are the erasure's own, unchanged.** Each matches by value and a second run over clean tables
  * rewrites nothing, so re-running them adds no mutation to the closed set either log admits. The event-store
  * pass matches by value across every kind of aggregate, which is why the erasure runs it only for a subject
- * whose identity was live; a row here exists only for such a subject, so that precondition holds by
- * construction.
+ * whose identity was live; a row here is written only for such a subject, and a tick that finds an identity
+ * under the subject's id again — a fixture or seed recreating it — forgets the row instead of sweeping a live
+ * person's sessions and trail.
  *
  * **Every tick mints a fresh pseudonym**, never the erasure's: carrying that one forward would need it stored
  * beside the real id, the mapping table D4 vetoes. Within one tick both audit axes and the business log share
@@ -54,8 +57,9 @@ use Throwable;
  * read before it, so nothing after the failure depends on the manager that failed. The failures are raised
  * together once the others are done ({@see ErasureResweepIncomplete}), which is what keeps the tick visible at
  * `critical`; a failing subject keeps its row, is retried on the next tick, and is reported by the detective
- * source once it outlives its window. The lock order is the erasure's — audit rows, then the business log,
- * then sessions — with `identity_user` absent because the row is gone.
+ * source once it outlives its window. The lock order is the erasure's — audit rows, then sessions, then the
+ * business log, for the reason {@see FulfilIdentityErasure} purges sessions first — with `identity_user`
+ * absent because the row is gone.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -65,6 +69,7 @@ final readonly class ResweepErasedSubjects
 
     public function __construct(
         private ErasureResweepRepository $erasureResweeps,
+        private UserRepository $users,
         private AuditSubjectTrailErasure $auditTrail,
         private EventStoreSubjectAnonymiser $eventStoreSubjectAnonymiser,
         private PurgeUserSessions $purgeUserSessions,
@@ -88,11 +93,12 @@ final readonly class ResweepErasedSubjects
 
         foreach ($scheduled as $erasureResweep) {
             $subjectId = $erasureResweep->subjectId();
+            $scheduledAt = $erasureResweep->getCreatedAt();
             $windowClosed = $erasureResweep->windowClosedAt($now);
 
             try {
                 $rewritten += $this->transactionManager->transactional(
-                    fn (): int => $this->resweepSubject($subjectId, $windowClosed),
+                    fn (): int => $this->resweepSubject($subjectId, $scheduledAt, $windowClosed),
                 );
             } catch (Throwable $throwable) {
                 $failures[] = $throwable::class;
@@ -108,19 +114,26 @@ final readonly class ResweepErasedSubjects
 
     /**
      * The last tick of a subject's window sweeps before it forgets, in the same transaction, so a closed
-     * window never loses the sweep it was owed to a failure between the two.
+     * window never loses the sweep it was owed to a failure between the two. The row is forgotten only as it
+     * was read: an erasure that restarted the window meanwhile is owed the hour it restarted.
      */
-    private function resweepSubject(string $subjectId, bool $windowClosed): int
+    private function resweepSubject(string $subjectId, DateTimeImmutable $scheduledAt, bool $windowClosed): int
     {
+        if ($this->users->findById($subjectId) instanceof \Erpify\Iam\Identity\Domain\Entity\User) {
+            $this->erasureResweeps->deleteForSubject($subjectId, $scheduledAt);
+
+            return 0;
+        }
+
         $subject = AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $subjectId);
 
         $anonymisation = $this->auditTrail->beginForSubject($subject);
         $resourceRows = $this->auditTrail->completeForSubject($subject, $anonymisation);
+        $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
         $eventRows = $this->eventStoreSubjectAnonymiser->anonymise(SubjectPseudonymisation::of(
             subjectId: $subjectId,
             pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
         ));
-        $sessionsDeleted = $this->purgeUserSessions->purge($subjectId);
 
         $rewritten = $anonymisation->affectedRows + $resourceRows + $eventRows + $sessionsDeleted;
 
@@ -136,7 +149,7 @@ final readonly class ResweepErasedSubjects
         }
 
         if ($windowClosed) {
-            $this->erasureResweeps->deleteForSubject($subjectId);
+            $this->erasureResweeps->deleteForSubject($subjectId, $scheduledAt);
         }
 
         return $rewritten;

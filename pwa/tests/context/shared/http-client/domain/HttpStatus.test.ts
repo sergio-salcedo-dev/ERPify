@@ -14,8 +14,10 @@ describe("HttpStatus", () => {
     expect(HttpStatus.UNPROCESSABLE_ENTITY).toBe(422);
     expect(HttpStatus.TOO_MANY_REQUESTS).toBe(429);
     expect(HttpStatus.INTERNAL_SERVER_ERROR).toBe(500);
+    expect(HttpStatus.NOT_IMPLEMENTED).toBe(501);
     expect(HttpStatus.BAD_GATEWAY).toBe(502);
     expect(HttpStatus.SERVICE_UNAVAILABLE).toBe(503);
+    expect(HttpStatus.GATEWAY_TIMEOUT).toBe(504);
   });
 
   it("derives the matching union type via keyof typeof", () => {
@@ -32,10 +34,12 @@ describe("HttpStatus", () => {
       HttpStatus.UNPROCESSABLE_ENTITY,
       HttpStatus.TOO_MANY_REQUESTS,
       HttpStatus.INTERNAL_SERVER_ERROR,
+      HttpStatus.NOT_IMPLEMENTED,
       HttpStatus.BAD_GATEWAY,
       HttpStatus.SERVICE_UNAVAILABLE,
+      HttpStatus.GATEWAY_TIMEOUT,
     ];
-    expect(allowed).toHaveLength(13);
-    expect(new Set(allowed).size).toBe(13);
+    expect(allowed).toHaveLength(15);
+    expect(new Set(allowed).size).toBe(15);
   });
 });

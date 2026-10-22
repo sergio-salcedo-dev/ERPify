@@ -46,9 +46,10 @@ final class RecordingHub implements HubInterface
     }
 
     /**
-     * `config/packages/mercure.yaml` sets no `protocol_version`, so the real hub is the bundle's
-     * default. Pinning the double to the same case keeps a scenario that asserts on the cookie
-     * honest: under protocol 1.0 the name changes and the browser contract changes with it.
+     * Mirrors the `protocol_version: '0.x'` pinned in `config/packages/mercure.yaml` (and asserted on
+     * the container's own hub by `MercureHubProtocolFunctionalTest`). Pinning the double to the same
+     * case keeps a scenario that asserts on the cookie honest: under protocol 1.0 the name changes and
+     * the browser contract changes with it.
      */
     #[Override]
     public function getProtocolVersion(): ProtocolVersion

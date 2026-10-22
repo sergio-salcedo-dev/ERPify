@@ -1,4 +1,4 @@
-import type { Event } from "@sentry/nextjs";
+import type { BrowserOptions, Event } from "@sentry/nextjs";
 import {
   isDenylistedKey,
   decodeUntilQuerySurfaces,
@@ -7,11 +7,14 @@ import {
   scrubDeep,
 } from "@/context/shared/observability/domain/redaction";
 
+/** The span `beforeSendSpan` receives, which `@sentry/nextjs` uses without exporting its name. */
+export type StreamedSpanJSON = Parameters<NonNullable<BrowserOptions["beforeSendSpan"]>>[0];
+
 /**
- * Sentry `beforeSend` / `beforeSendTransaction` hook: defense-in-depth scrub of
- * denylisted keys from every event (errors AND performance transactions) before
- * it leaves the process, recursively, mirroring the API's `SentryEventScrubber`.
- * Pairs with `sendDefaultPii: false` (the belt to those braces) and reuses the
+ * Sentry `beforeSend` hook: defense-in-depth scrub of denylisted keys from every
+ * error event before it leaves the process, recursively, mirroring the API's
+ * `SentryEventScrubber`. Spans never reach it — see {@link scrubSentrySpan}.
+ * Pairs with the restrictive `dataCollection` (the belt to those braces) and reuses the
  * shared {@link scrubDeep} denylist so the browser/Next scrub stays in parity
  * with the back-end's RFC 9457 + Sentry redaction.
  *
@@ -24,12 +27,11 @@ import {
  * Every structured surface gets BOTH passes — the denylist and the URL one. The
  * SDK writes a request URL as a plain string in more places than a key list can
  * anticipate: one breadcrumb per `fetch` and per history entry, and four span
- * attributes per traced fetch (`url`, `http.url`, `url.full`, `http.query`),
- * which `beforeSendTransaction` hands to this same function.
+ * attributes per traced fetch (`url`, `http.url`, `url.full`, `http.query`).
  * Free-text (`message`, the captured
  * `Error.message`/stack) is intentionally NOT key-scrubbed — same scope as the
- * API scrubber; `sendDefaultPii: false` already keeps headers/cookies/bodies off
- * spans by default.
+ * API scrubber; the restrictive `dataCollection` already keeps cookies and bodies
+ * off events.
  */
 export function scrubSentryEvent<E extends Event>(event: E): E {
   if (event.extra) {
@@ -59,13 +61,56 @@ export function scrubSentryEvent<E extends Event>(event: E): E {
 }
 
 /**
+ * Sentry `beforeSendSpan` hook. Spans are streamed as each one ends rather than buffered into a
+ * transaction event, so they never pass through {@link scrubSentryEvent}: without this every
+ * traced fetch would ship its request URL — under `url.full`, `http.url`, `url` and `http.query`,
+ * the whole query three times over — straight to a third-party sink. The attributes get the same
+ * two passes as any structured event surface, and the name gets the URL pass, since the SDK
+ * builds a span's name from the request it describes. A span cannot be dropped from here, only
+ * rewritten.
+ */
+export function scrubSentrySpan(span: StreamedSpanJSON): StreamedSpanJSON {
+  try {
+    span.attributes = scrubStructured(span.attributes) as StreamedSpanJSON["attributes"];
+    span.name = scrubSpanName(span.name);
+    if (span.links) {
+      span.links = scrubStructured(span.links) as StreamedSpanJSON["links"];
+    }
+
+    return span;
+  } catch {
+    // The SDK wraps this hook and, when it throws, sends the span it was handed — unscrubbed. A
+    // failure here must therefore lose the span's data rather than let it through.
+    return { ...span, name: REDACTION_SENTINEL, attributes: {}, links: undefined };
+  }
+}
+
+/**
+ * A request span is named `<METHOD> <target>` (`GET /api/v1/audit?actorId=…`), so the URL rule,
+ * which recognises a value by how it STARTS, would never reach the target behind the method.
+ * The first word is set aside and the remainder judged on its own; a name of any other shape is
+ * judged whole.
+ */
+function scrubSpanName(name: string): string {
+  const parts = /^(\S+\s+)(.*)$/s.exec(name);
+  if (parts === null) {
+    return scrubUrlLikeValue(name);
+  }
+
+  const [, method, target] = parts;
+  const scrubbed = scrubUrlLikeValue(target);
+
+  return scrubbed === target ? scrubUrlLikeValue(name) : `${method}${scrubbed}`;
+}
+
+/**
  * The denylist pass, then the URL pass over what survived.
  *
  * Applied to EVERY structured surface rather than to the ones known to carry URLs. Naming the
- * surfaces was the defect: the URL pass was pointed at `breadcrumbs` alone, and `spans` — which
- * `beforeSendTransaction` hands over on a sampled fraction of every traced fetch — carried
- * `url`, `http.url`, `url.full` and `http.query` straight through, the whole request URL three
- * times over. The vocabulary was already right; it was simply never asked about that surface.
+ * surfaces was the defect: the URL pass was pointed at `breadcrumbs` alone, and span data —
+ * present on a sampled fraction of every traced fetch — carried `url`, `http.url`, `url.full` and
+ * `http.query` straight through, the whole request URL three times over. The vocabulary was
+ * already right; it was simply never asked about that surface.
  *
  * Order matters: a key the denylist strips has no URL left to scrub, and the reverse order would
  * scrub a value that was about to be dropped.
@@ -123,9 +168,25 @@ function scrubUrlLikeValues(value: unknown, depth: number): unknown {
 
   const scrubbed: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    scrubbed[key] = scrubUrlLikeValues(nested, depth + 1);
+    scrubbed[key] =
+      typeof nested === "string" && QUERY_KEY.test(key)
+        ? scrubBareQuery(nested)
+        : scrubUrlLikeValues(nested, depth + 1);
   }
   return scrubbed;
+}
+
+/**
+ * A key naming a query string: the SDK's `url.query`, the older `http.query`, a `query_string`.
+ * The one place this pass reads a key rather than a shape, and necessarily so: the SDK writes
+ * `url.query` with its `?` removed, and a bare `actorId=…&x=1` looks like no URL at all — measured,
+ * the shape rule passed it through on every traced fetch and every outgoing-request breadcrumb.
+ */
+const QUERY_KEY = /(?:^|[._])query(?:_string)?$/i;
+
+/** A query string with or without its leading `?`, scrubbed param by param. */
+function scrubBareQuery(value: string): string {
+  return value.startsWith("?") ? scrubUrlLikeValue(value) : scrubQueryString(value);
 }
 
 /**

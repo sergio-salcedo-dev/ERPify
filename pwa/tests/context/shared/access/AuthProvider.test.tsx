@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { useContext } from "react";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { useContext, useEffect, type ReactNode } from "react";
+import { renderHook, render, act, waitFor } from "@testing-library/react";
 
 // Hydration is driven by the `/me` probe resolved through the DI container. Mock
 // at that boundary so the provider never touches the network and each test
@@ -18,27 +18,20 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 vi.mock("@/context/shared/observability/infrastructure", () => ({
   telemetry: { warn: vi.fn(), error: vi.fn() },
 }));
+// The provider binds a 503 verdict to the route it was observed on, so the tests drive the route.
+const nav = vi.hoisted(() => ({ pathname: "/backoffice" as string | null }));
+vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 
 import {
   AuthProvider,
   AuthContext,
   AuthStatus,
-  REPROBE_INITIAL_DELAY_MS,
-  REPROBE_MAX_DELAY_MS,
   type AuthContextValue,
 } from "@/context/shared/access/infrastructure/ui/AuthProvider";
 import type { Identity } from "@/context/shared/access/domain/Identity";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
-import { IdentityServiceUnavailableError } from "@/context/shared/access/domain/IdentityServiceUnavailableError";
-import { HttpError } from "@/context/shared/http-client/domain/HttpError";
-import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
-import {
-  MALFORMED_RESPONSE_ENVELOPE,
-  NETWORK_ERROR,
-  REQUEST_TIMEOUT,
-} from "@/context/shared/http-client/domain/HttpClient";
-import type { Session } from "@/context/shared/access/domain/Session";
+import { IdentityUnavailableError } from "@/context/shared/access/domain/IdentityUnavailableError";
 
 function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
@@ -58,56 +51,30 @@ const ADMIN: Identity = {
   permissions: [],
 };
 
+function unavailable(): IdentityUnavailableError {
+  return new IdentityUnavailableError();
+}
+
+function pending(): {
+  promise: Promise<Identity | null>;
+  settle: (identity: Identity | null) => void;
+  fail: (error: unknown) => void;
+} {
+  let settle!: (identity: Identity | null) => void;
+  let fail!: (error: unknown) => void;
+  const promise = new Promise<Identity | null>((resolve, reject) => {
+    settle = resolve;
+    fail = reject;
+  });
+  return { promise, settle, fail };
+}
+
 beforeEach(() => {
+  nav.pathname = "/backoffice";
   me.mockReset();
   revokeCurrent.mockReset();
   revokeCurrent.mockResolvedValue(undefined);
 });
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-/** Advance the fake clock and let every probe the advance started settle into state. */
-async function advance(ms: number): Promise<void> {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms);
-  });
-}
-
-function setVisibility(state: DocumentVisibilityState): void {
-  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => state });
-}
-
-function setOnline(online: boolean): void {
-  Object.defineProperty(navigator, "onLine", { configurable: true, get: () => online });
-}
-
-function problem(type: string, status: number): HttpError {
-  return new HttpError({
-    type,
-    title: "The request failed",
-    status,
-    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
-    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
-  });
-}
 
 describe("AuthProvider", () => {
   it("stays hydrating until the /me probe resolves, then authenticates", async () => {
@@ -161,25 +128,8 @@ describe("AuthProvider", () => {
     expect(result.current.session).toBeNull();
   });
 
-  it("is unauthenticated when the /me body is malformed (not a store outage)", async () => {
-    me.mockRejectedValue(
-      new HttpError({
-        type: MALFORMED_RESPONSE_ENVELOPE,
-        title: "API response did not match the expected shape",
-        status: HttpStatus.OK,
-        instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
-        "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5d",
-      }),
-    );
-
-    const { result } = renderAuth();
-
-    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
-    expect(result.current.session).toBeNull();
-  });
-
-  it("is unavailable, not unauthenticated, when /me answers service-unavailable", async () => {
-    me.mockRejectedValue(new IdentityServiceUnavailableError());
+  it("is unavailable, with no session, when /me answers 503", async () => {
+    me.mockRejectedValue(unavailable());
 
     const { result } = renderAuth();
 
@@ -187,23 +137,8 @@ describe("AuthProvider", () => {
     expect(result.current.session).toBeNull();
   });
 
-  it("login() leaves the unavailable state once the server answers again", async () => {
-    me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
-
-    const { result } = renderAuth();
-    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
-
-    let resolved: unknown;
-    await act(async () => {
-      resolved = await result.current.login();
-    });
-
-    expect(resolved).not.toBeNull();
-    expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-  });
-
-  it("login() resolves null and reports unavailable while the server cannot answer", async () => {
-    me.mockResolvedValueOnce(null).mockRejectedValueOnce(new IdentityServiceUnavailableError());
+  it("login() resolves null and reads unavailable when its re-probe answers 503", async () => {
+    me.mockResolvedValueOnce(null).mockRejectedValueOnce(unavailable());
 
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
@@ -217,8 +152,76 @@ describe("AuthProvider", () => {
     expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
   });
 
-  it("logout() clears an unavailable state to unauthenticated", async () => {
-    me.mockRejectedValue(new IdentityServiceUnavailableError());
+  it("login() clears the unavailable verdict once /me answers 200", async () => {
+    me.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce(ADMIN);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    await act(async () => {
+      await result.current.login();
+    });
+
+    expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+  });
+
+  it("login() clears the unavailable verdict once /me answers 401", async () => {
+    me.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce(null);
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    await act(async () => {
+      await result.current.login();
+    });
+
+    expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+  });
+
+  it("refresh() keeps the unavailable verdict when its re-probe gets no answer", async () => {
+    me.mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    let resolved: unknown = "unset";
+    await act(async () => {
+      resolved = await result.current.refresh();
+    });
+
+    expect(me).toHaveBeenCalledTimes(2);
+    expect(resolved).toBeNull();
+    expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+  });
+
+  it("a navigation re-probe with no answer keeps the outage on the new route", async () => {
+    me.mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(new Error("network down"));
+
+    const { result, rerender } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    nav.pathname = "/backoffice/banks";
+    rerender();
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+    expect(me).toHaveBeenCalledTimes(2);
+  });
+
+  it("a probe with no answer still reads unauthenticated when no outage is known", async () => {
+    me.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+  });
+
+  it("logout() clears the unavailable verdict", async () => {
+    me.mockRejectedValue(unavailable());
 
     const { result } = renderAuth();
     await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
@@ -228,6 +231,414 @@ describe("AuthProvider", () => {
     });
 
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+  });
+
+  it("treats a null pathname (outside the App Router) as one more route", async () => {
+    nav.pathname = null;
+    me.mockRejectedValue(unavailable());
+
+    const { result } = renderAuth();
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+  });
+
+  describe("after a 503, a client navigation", () => {
+    // Records the status from a CHILD's effect, which runs before the provider's own effects —
+    // the same position RequireAuth reads it from. A status reset in a provider effect would
+    // reach this recorder one commit late, after the guard had already redirected.
+    function renderRecording(): { seen: string[]; rerender: () => void } {
+      const seen: string[] = [];
+      function Recorder() {
+        const ctx = useContext(AuthContext);
+        useEffect(() => {
+          if (ctx) seen.push(ctx.status);
+        });
+        return null;
+      }
+      const tree = (): ReactNode => (
+        <AuthProvider>
+          <Recorder />
+        </AuthProvider>
+      );
+      const view = render(tree());
+      return { seen, rerender: () => view.rerender(tree()) };
+    }
+
+    it("reads hydrating before any effect runs, then authenticates on a 200 re-probe", async () => {
+      me.mockRejectedValueOnce(unavailable());
+      const { seen, rerender } = renderRecording();
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+
+      let settle!: (identity: Identity | null) => void;
+      me.mockReturnValueOnce(
+        new Promise<Identity | null>((resolve) => {
+          settle = resolve;
+        }),
+      );
+      const before = seen.length;
+      nav.pathname = "/backoffice/users";
+      rerender();
+
+      expect(seen[before]).toBe(AuthStatus.HYDRATING);
+      expect(me).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        settle(ADMIN);
+      });
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.AUTHENTICATED));
+      expect(seen.slice(before)).not.toContain(AuthStatus.UNAVAILABLE);
+    });
+
+    it("reads unavailable again when the re-probe answers 503 too", async () => {
+      me.mockRejectedValue(unavailable());
+      const { seen, rerender } = renderRecording();
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+
+      const before = seen.length;
+      nav.pathname = "/maintenance";
+      rerender();
+
+      expect(seen[before]).toBe(AuthStatus.HYDRATING);
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+      expect(me).toHaveBeenCalledTimes(2);
+    });
+
+    it("stamps the verdict with the route current when the probe answered, not when it started", async () => {
+      let fail!: (error: unknown) => void;
+      me.mockReturnValueOnce(
+        new Promise<Identity | null>((_resolve, reject) => {
+          fail = reject;
+        }),
+      );
+      const { seen, rerender } = renderRecording();
+
+      nav.pathname = "/backoffice/users";
+      rerender();
+
+      await act(async () => {
+        fail(unavailable());
+      });
+
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+      expect(me).toHaveBeenCalledTimes(1);
+    });
+
+    it("probes again, rather than replaying the verdict, on a return to its route before the re-probe answers", async () => {
+      me.mockRejectedValueOnce(unavailable());
+      const { seen, rerender } = renderRecording();
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+
+      // The re-probe on /maintenance is slow; the visitor presses Try again before it answers.
+      const slow = pending();
+      me.mockReturnValueOnce(slow.promise);
+      nav.pathname = "/maintenance";
+      rerender();
+      expect(me).toHaveBeenCalledTimes(2);
+
+      const retried = pending();
+      me.mockReturnValueOnce(retried.promise);
+      const before = seen.length;
+      nav.pathname = "/backoffice";
+      rerender();
+
+      expect(seen.slice(before)).not.toContain(AuthStatus.UNAVAILABLE);
+      expect(seen.at(-1)).toBe(AuthStatus.HYDRATING);
+      expect(me).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        slow.fail(unavailable());
+      });
+      expect(seen.at(-1)).toBe(AuthStatus.HYDRATING);
+
+      await act(async () => {
+        retried.settle(ADMIN);
+      });
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.AUTHENTICATED));
+    });
+
+    it("does not re-probe while the route stays the one the 503 was seen on", async () => {
+      me.mockRejectedValue(unavailable());
+      const { seen, rerender } = renderRecording();
+      await waitFor(() => expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE));
+
+      rerender();
+
+      expect(seen.at(-1)).toBe(AuthStatus.UNAVAILABLE);
+      expect(me).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("only the latest probe decides", () => {
+    it("keeps a login() session when a slower cold probe answers 503 after it", async () => {
+      const cold = pending();
+      me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      let resolved: unknown = "unset";
+      await act(async () => {
+        resolved = await result.current.login();
+      });
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+
+      await act(async () => {
+        cold.fail(unavailable());
+      });
+
+      expect(resolved).toMatchObject({ user: { email: "admin@erpify.dev" } });
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
+    });
+
+    it("keeps a login() session when a slower cold probe answers 401 after it", async () => {
+      const cold = pending();
+      me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
+
+      const { result } = renderAuth();
+      await act(async () => {
+        await result.current.login();
+      });
+
+      await act(async () => {
+        cold.settle(null);
+      });
+
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("keeps a login() session when a navigation re-probe answers 503 after it", async () => {
+      me.mockRejectedValueOnce(unavailable());
+      const { result, rerender } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+      const reprobe = pending();
+      me.mockReturnValueOnce(reprobe.promise).mockResolvedValueOnce(ADMIN);
+      nav.pathname = "/login";
+      rerender();
+      expect(me).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await result.current.login();
+      });
+      await act(async () => {
+        reprobe.fail(unavailable());
+      });
+
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("keeps the signed-out state when a probe started before logout() answers 200 after it", async () => {
+      const cold = pending();
+      me.mockReturnValueOnce(cold.promise);
+
+      const { result } = renderAuth();
+      await act(async () => {
+        await result.current.logout();
+      });
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+
+      await act(async () => {
+        cold.settle(ADMIN);
+      });
+
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+      expect(result.current.session).toBeNull();
+    });
+
+    it("login() resolves the later probe's null, and applies nothing of its own, when superseded", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const first = pending();
+      me.mockReturnValueOnce(first.promise).mockResolvedValueOnce(null);
+      let firstLogin!: Promise<unknown>;
+      act(() => {
+        firstLogin = result.current.login();
+      });
+      await act(async () => {
+        await result.current.login();
+      });
+      await act(async () => {
+        first.settle(ADMIN);
+      });
+
+      await expect(firstLogin).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    it("login() resolves the session the later probe found when a probe superseded it", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const own = pending();
+      const later = pending();
+      me.mockReturnValueOnce(own.promise).mockReturnValueOnce(later.promise);
+      let superseded!: Promise<unknown>;
+      act(() => {
+        superseded = result.current.login();
+      });
+      act(() => {
+        void result.current.refresh();
+      });
+
+      let settledEarly = false;
+      void superseded.then(() => {
+        settledEarly = true;
+      });
+      await act(async () => {
+        own.settle(null);
+      });
+      // Its own answer is discarded, so it waits for the winner rather than resolving null.
+      expect(settledEarly).toBe(false);
+
+      await act(async () => {
+        later.settle(ADMIN);
+      });
+
+      await expect(superseded).resolves.toMatchObject({ user: { email: "admin@erpify.dev" } });
+      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
+    });
+
+    it("login() resolves null when a logout() superseded it, even if its own probe found a session", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const own = pending();
+      me.mockReturnValueOnce(own.promise);
+      let superseded!: Promise<unknown>;
+      act(() => {
+        superseded = result.current.login();
+      });
+      await act(async () => {
+        await result.current.logout();
+      });
+      await act(async () => {
+        own.settle(ADMIN);
+      });
+
+      await expect(superseded).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    it("login() resolves null when a logout() starts after the winner it waits on", async () => {
+      me.mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+      const own = pending();
+      const later = pending();
+      me.mockReturnValueOnce(own.promise).mockReturnValueOnce(later.promise);
+      let superseded!: Promise<unknown>;
+      act(() => {
+        superseded = result.current.login();
+      });
+      act(() => {
+        void result.current.refresh();
+      });
+      // Its own answer is discarded, so it is now waiting on the refresh that superseded it.
+      await act(async () => {
+        own.settle(null);
+      });
+
+      await act(async () => {
+        await result.current.logout();
+      });
+      await act(async () => {
+        later.settle(ADMIN);
+      });
+
+      await expect(superseded).resolves.toBeNull();
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
+
+    describe("while the sign-out revoke is still in flight", () => {
+      function revokeInFlight(): { finish: () => void } {
+        let finish!: () => void;
+        revokeCurrent.mockReturnValueOnce(
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+        );
+        return { finish: () => finish() };
+      }
+
+      it("a login() started before the sign-out cannot sign the user in", async () => {
+        me.mockResolvedValueOnce(null);
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+        const own = pending();
+        me.mockReturnValueOnce(own.promise);
+        const revoke = revokeInFlight();
+        let superseded!: Promise<unknown>;
+        act(() => {
+          superseded = result.current.login();
+        });
+        let signingOut!: Promise<void>;
+        act(() => {
+          signingOut = result.current.logout();
+        });
+
+        await act(async () => {
+          own.settle(ADMIN);
+        });
+
+        await expect(superseded).resolves.toBeNull();
+        expect(result.current.status).not.toBe(AuthStatus.AUTHENTICATED);
+        expect(result.current.session).toBeNull();
+
+        await act(async () => {
+          revoke.finish();
+          await signingOut;
+        });
+        expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+      });
+
+      it("a refresh() started during the sign-out cannot sign the user back in", async () => {
+        me.mockResolvedValueOnce(null);
+        const { result } = renderAuth();
+        await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+        const revoke = revokeInFlight();
+        let signingOut!: Promise<void>;
+        act(() => {
+          signingOut = result.current.logout();
+        });
+        const probe = pending();
+        me.mockReturnValueOnce(probe.promise);
+        let refreshed!: Promise<unknown>;
+        act(() => {
+          refreshed = result.current.refresh();
+        });
+
+        await act(async () => {
+          revoke.finish();
+          await signingOut;
+        });
+        await act(async () => {
+          probe.settle(ADMIN);
+        });
+
+        await expect(refreshed).resolves.toBeNull();
+        expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+        expect(result.current.session).toBeNull();
+      });
+    });
+
+    it("refresh() re-probes on the route an unavailable verdict was seen on", async () => {
+      me.mockRejectedValueOnce(unavailable()).mockResolvedValueOnce(null);
+      const { result } = renderAuth();
+      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      expect(me).toHaveBeenCalledTimes(2);
+      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+    });
   });
 
   it("login() re-hydrates from /me (never accepts a fabricated identity)", async () => {
@@ -327,668 +738,5 @@ describe("AuthProvider", () => {
 
     expect(result.current.session?.context).toBe(AccessContext.SUPPLIER_PORTAL);
     expect(result.current.session?.roles).toEqual(["ADMIN"]);
-  });
-
-  describe("while unavailable", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-      setVisibility("visible");
-    });
-
-    afterEach(() => {
-      // Drop the own-property overrides so the prototypes' getters are visible again.
-      Reflect.deleteProperty(document, "visibilityState");
-      Reflect.deleteProperty(navigator, "onLine");
-    });
-
-    it("re-probes /me after the first delay and authenticates once the server answers", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-      expect(me).toHaveBeenCalledTimes(1);
-
-      await advance(REPROBE_INITIAL_DELAY_MS - 1);
-      expect(me).toHaveBeenCalledTimes(1);
-
-      await advance(1);
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
-
-      // Leaving `unavailable` stops the loop: nothing probes again on its own.
-      await advance(10 * REPROBE_MAX_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(vi.getTimerCount()).toBe(0);
-    });
-
-    it("lands on unauthenticated when the recovered server reports no live session", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(null);
-
-      const { result } = renderAuth();
-      await advance(0);
-      await advance(REPROBE_INITIAL_DELAY_MS);
-
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-      expect(vi.getTimerCount()).toBe(0);
-    });
-
-    it("backs off exponentially up to the cap while the server keeps answering 503", async () => {
-      me.mockRejectedValue(new IdentityServiceUnavailableError());
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      const expectedDelays = [5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000];
-      expect(expectedDelays[0]).toBe(REPROBE_INITIAL_DELAY_MS);
-      expect(Math.max(...expectedDelays)).toBe(REPROBE_MAX_DELAY_MS);
-      let calls = 1;
-      for (const delay of expectedDelays) {
-        await advance(delay - 1);
-        expect(me).toHaveBeenCalledTimes(calls);
-        await advance(1);
-        calls += 1;
-        expect(me).toHaveBeenCalledTimes(calls);
-      }
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-      // One pending timer at a time, never a pile-up.
-      expect(vi.getTimerCount()).toBe(1);
-    });
-
-    it("clears its timer and listeners on unmount", async () => {
-      me.mockRejectedValue(new IdentityServiceUnavailableError());
-
-      const { unmount } = renderAuth();
-      await advance(0);
-      expect(vi.getTimerCount()).toBe(1);
-
-      unmount();
-
-      expect(vi.getTimerCount()).toBe(0);
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      await advance(10 * REPROBE_MAX_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(1);
-    });
-
-    it("clears its timer when sign-out leaves the unavailable state", async () => {
-      me.mockRejectedValue(new IdentityServiceUnavailableError());
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      await act(async () => {
-        await result.current.logout();
-      });
-
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-      expect(vi.getTimerCount()).toBe(0);
-      await advance(10 * REPROBE_MAX_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(1);
-    });
-
-    it("re-probes at once when the tab becomes visible, and not while it is hidden", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      setVisibility("hidden");
-      await act(async () => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      expect(me).toHaveBeenCalledTimes(1);
-
-      setVisibility("visible");
-      await act(async () => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      await advance(0);
-
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("re-probes at once when the browser comes back online", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-      });
-      await advance(0);
-
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    // A re-probe that got no answer proves nothing about the session, so it must not be read as
-    // "signed out": that would send a visitor who is still signed in to the sign-in form.
-    it.each([
-      ["a network failure", new TypeError("Failed to fetch")],
-      ["a transport error with no response", problem(NETWORK_ERROR, 0)],
-      ["a client timeout", problem(REQUEST_TIMEOUT, 0)],
-      ["a proxy's 502", problem("about:blank", 502)],
-      ["a malformed body", problem(MALFORMED_RESPONSE_ENVELOPE, HttpStatus.OK)],
-    ])(
-      "stays unavailable and keeps re-probing when a re-probe gets %s",
-      async (_label, failure) => {
-        me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-          .mockRejectedValueOnce(failure)
-          .mockResolvedValueOnce(ADMIN);
-
-        const { result } = renderAuth();
-        await advance(0);
-        await advance(REPROBE_INITIAL_DELAY_MS);
-
-        expect(me).toHaveBeenCalledTimes(2);
-        expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-        expect(vi.getTimerCount()).toBe(1);
-
-        await advance(2 * REPROBE_INITIAL_DELAY_MS);
-        expect(me).toHaveBeenCalledTimes(3);
-        expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-      },
-    );
-
-    it("stays unavailable when the tab wakes before the network does", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-        .mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      await act(async () => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      await advance(0);
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-      });
-      await advance(0);
-      expect(me).toHaveBeenCalledTimes(3);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("skips a tick while the browser is offline and re-probes when it comes back", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      setOnline(false);
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(1);
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-      // The skipped tick leaves the next one scheduled, in case `online` never fires.
-      expect(vi.getTimerCount()).toBe(1);
-
-      setOnline(true);
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-      });
-      await advance(0);
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    // A sign-in keeps the cold-probe mapping: it is not the loop, and a failure there is reported
-    // by the form rather than waited out.
-    it("lets a sign-in that gets no answer leave the unavailable state", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockRejectedValueOnce(
-        new TypeError("Failed to fetch"),
-      );
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      let resolved: unknown = "unset";
-      await act(async () => {
-        resolved = await result.current.login();
-      });
-
-      expect(resolved).toBeNull();
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-      expect(vi.getTimerCount()).toBe(0);
-    });
-
-    it("resolves login() to null when an outage re-probe answering 503 supersedes it", async () => {
-      const signInProbe = deferred<Identity | null>();
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockReturnValueOnce(signInProbe.promise)
-        .mockRejectedValueOnce(new IdentityServiceUnavailableError());
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      let pending!: Promise<Session | null>;
-      act(() => {
-        pending = result.current.login();
-      });
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(3);
-
-      let resolved: unknown = "unset";
-      await act(async () => {
-        signInProbe.resolve(ADMIN);
-        resolved = await pending;
-      });
-
-      // The sign-in's own answer was superseded, so the caller hears what the provider holds.
-      expect(resolved).toBeNull();
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-    });
-
-    // The loop's probe started after the sign-in's, so had it superseded the sign-in on starting,
-    // its own failure would have discarded the sign-in's answer: nothing would write, the provider
-    // would stay unavailable and `login()` would report failure over a cookie the server had set.
-    it("keeps a sign-in's answer when an outage re-probe started after it gets none", async () => {
-      const signInProbe = deferred<Identity | null>();
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockReturnValueOnce(signInProbe.promise)
-        .mockRejectedValueOnce(new TypeError("Failed to fetch"));
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      let pending!: Promise<Session | null>;
-      act(() => {
-        pending = result.current.login();
-      });
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(3);
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-
-      let resolved: Session | null = null;
-      await act(async () => {
-        signInProbe.resolve(ADMIN);
-        resolved = await pending;
-      });
-
-      expect(resolved).toEqual(result.current.session);
-      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it.each([
-      ["before", true],
-      ["after", false],
-    ])(
-      "drops an outage re-probe's answer arriving %s a sign-in started after it",
-      async (_label, loopSettlesFirst) => {
-        const loopProbe = deferred<Identity | null>();
-        const signInProbe = deferred<Identity | null>();
-        me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-          .mockReturnValueOnce(loopProbe.promise)
-          .mockReturnValueOnce(signInProbe.promise);
-
-        const { result } = renderAuth();
-        await advance(0);
-        await advance(REPROBE_INITIAL_DELAY_MS);
-        expect(me).toHaveBeenCalledTimes(2);
-
-        let pending!: Promise<Session | null>;
-        act(() => {
-          pending = result.current.login();
-        });
-        expect(me).toHaveBeenCalledTimes(3);
-
-        if (loopSettlesFirst) {
-          await act(async () => {
-            loopProbe.resolve(null);
-          });
-          // Applied, this answer would have signed the visitor out.
-          expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-        }
-        let resolved: Session | null = null;
-        await act(async () => {
-          signInProbe.resolve(ADMIN);
-          resolved = await pending;
-        });
-        await act(async () => {
-          loopProbe.resolve(null);
-        });
-
-        expect(resolved).not.toBeNull();
-        expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-        expect(result.current.session?.user.email).toBe("admin@erpify.dev");
-      },
-    );
-
-    // A tab waking from sleep: `visibilitychange` sends a probe before the network is back, and the
-    // `online` that follows arrives while that probe is still failing.
-    it("re-probes as soon as a probe that got no answer settles when `online` arrived meanwhile", async () => {
-      const asleep = deferred<Identity | null>();
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockReturnValueOnce(asleep.promise)
-        .mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      await act(async () => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-      });
-      expect(me).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        asleep.reject(new TypeError("Failed to fetch"));
-      });
-      await advance(0);
-
-      expect(me).toHaveBeenCalledTimes(3);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("keeps the backoff when the probe `online` waited on got an answer", async () => {
-      const inFlight = deferred<Identity | null>();
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockReturnValueOnce(inFlight.promise)
-        .mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      await act(async () => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-      });
-      await act(async () => {
-        inFlight.reject(new IdentityServiceUnavailableError());
-      });
-      await advance(0);
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-
-      await advance(2 * REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(3);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("does not grow the backoff for re-probes a visibility or online event sent", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      for (let event = 0; event < 3; event += 1) {
-        await act(async () => {
-          document.dispatchEvent(new Event("visibilitychange"));
-        });
-        await advance(0);
-      }
-      expect(me).toHaveBeenCalledTimes(4);
-
-      // Still the first delay away: three tab switches are not three failed attempts of the loop.
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(5);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("does not send a visibility re-probe while the browser is offline", async () => {
-      me.mockRejectedValue(new IdentityServiceUnavailableError());
-
-      renderAuth();
-      await advance(0);
-
-      setOnline(false);
-      await act(async () => {
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      await advance(0);
-
-      expect(me).toHaveBeenCalledTimes(1);
-    });
-
-    it("does not grow the backoff for ticks skipped while offline", async () => {
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-
-      setOnline(false);
-      for (let skipped = 0; skipped < 3; skipped += 1) {
-        await advance(REPROBE_INITIAL_DELAY_MS);
-        expect(me).toHaveBeenCalledTimes(1);
-      }
-
-      // Back online with no `online` event: the next tick is still the first delay away.
-      setOnline(true);
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(2);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("does not stack a second probe on one still in flight", async () => {
-      const slow = deferred<Identity | null>();
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError()).mockReturnValueOnce(
-        slow.promise,
-      );
-
-      const { result } = renderAuth();
-      await advance(0);
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        globalThis.dispatchEvent(new Event("online"));
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      expect(me).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        slow.resolve(ADMIN);
-      });
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    // A sign-in re-probe started after the loop's own supersedes it. If that sign-in probe ALSO
-    // answers 503, the state does not change, so nothing re-runs the loop's effect: the superseded
-    // loop probe has to schedule the next attempt itself, or the provider stays unavailable for ever.
-    it("keeps re-probing when its own probe was superseded by a sign-in that also got a 503", async () => {
-      const loopProbe = deferred<Identity | null>();
-      const signInProbe = deferred<Identity | null>();
-      me.mockRejectedValueOnce(new IdentityServiceUnavailableError())
-        .mockReturnValueOnce(loopProbe.promise)
-        .mockReturnValueOnce(signInProbe.promise)
-        .mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await advance(0);
-      await advance(REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(2);
-
-      let signIn!: Promise<unknown>;
-      act(() => {
-        signIn = result.current.login();
-      });
-      await act(async () => {
-        loopProbe.resolve(ADMIN);
-        signInProbe.reject(new IdentityServiceUnavailableError());
-        await signIn;
-      });
-      // The superseded loop probe answered ADMIN, but only the latest probe may write the state.
-      expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
-      expect(me).toHaveBeenCalledTimes(3);
-
-      await advance(2 * REPROBE_INITIAL_DELAY_MS);
-      expect(me).toHaveBeenCalledTimes(4);
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-  });
-
-  describe("probes settling out of order", () => {
-    it("keeps a sign-in's session when the slower cold probe settles after it as unavailable", async () => {
-      const cold = deferred<Identity | null>();
-      me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await act(async () => {
-        await result.current.login();
-      });
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-
-      await act(async () => {
-        cold.reject(new IdentityServiceUnavailableError());
-      });
-
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
-    });
-
-    it("keeps a sign-in's session when the slower cold probe settles after it with no session", async () => {
-      const cold = deferred<Identity | null>();
-      me.mockReturnValueOnce(cold.promise).mockResolvedValueOnce(ADMIN);
-
-      const { result } = renderAuth();
-      await act(async () => {
-        await result.current.login();
-      });
-
-      await act(async () => {
-        cold.resolve(null);
-      });
-
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("applies only the later sign-in probe when the superseded cold probe settles first", async () => {
-      const cold = deferred<Identity | null>();
-      const signIn = deferred<Identity | null>();
-      me.mockReturnValueOnce(cold.promise).mockReturnValueOnce(signIn.promise);
-
-      const { result } = renderAuth();
-      let resolved: unknown = "unset";
-      let pending!: Promise<unknown>;
-      act(() => {
-        pending = result.current.login();
-      });
-
-      await act(async () => {
-        cold.resolve(ADMIN);
-      });
-      // The cold probe was superseded by the sign-in one, so its answer is not applied.
-      expect(result.current.status).toBe(AuthStatus.HYDRATING);
-
-      await act(async () => {
-        signIn.resolve(null);
-        resolved = await pending;
-      });
-
-      expect(resolved).toBeNull();
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-    });
-
-    it("resolves a superseded sign-in to the session the sign-in after it applied", async () => {
-      const first = deferred<Identity | null>();
-      const second = deferred<Identity | null>();
-      me.mockResolvedValueOnce(null)
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
-
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
-
-      let firstLogin!: Promise<Session | null>;
-      act(() => {
-        firstLogin = result.current.login();
-        void result.current.login();
-      });
-      let firstResolved: Session | null | "pending" = "pending";
-      void firstLogin.then((session) => {
-        firstResolved = session;
-      });
-
-      await act(async () => {
-        first.resolve(null);
-      });
-      // Its own probe was superseded, and the one that superseded it has not written yet.
-      expect(firstResolved).toBe("pending");
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-
-      await act(async () => {
-        second.resolve(ADMIN);
-        await firstLogin;
-      });
-
-      expect(firstResolved).toEqual(result.current.session);
-      expect(result.current.session?.user.email).toBe("admin@erpify.dev");
-      expect(result.current.status).toBe(AuthStatus.AUTHENTICATED);
-    });
-
-    it("resolves a superseded sign-in to null when a sign-out supersedes the sign-in after it", async () => {
-      const first = deferred<Identity | null>();
-      const second = deferred<Identity | null>();
-      me.mockResolvedValueOnce(null)
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
-
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
-
-      let firstLogin!: Promise<Session | null>;
-      act(() => {
-        firstLogin = result.current.login();
-        void result.current.login();
-      });
-      await act(async () => {
-        first.resolve(ADMIN);
-      });
-      await act(async () => {
-        await result.current.logout();
-      });
-      let resolved: unknown = "unset";
-      await act(async () => {
-        second.resolve(ADMIN);
-        resolved = await firstLogin;
-      });
-
-      expect(resolved).toBeNull();
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-    });
-
-    it("drops a probe that sign-out outlives", async () => {
-      const signIn = deferred<Identity | null>();
-      me.mockResolvedValueOnce(null).mockReturnValueOnce(signIn.promise);
-
-      const { result } = renderAuth();
-      await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
-
-      let pending!: Promise<unknown>;
-      act(() => {
-        pending = result.current.login();
-      });
-      await act(async () => {
-        await result.current.logout();
-      });
-      let resolved: unknown = "unset";
-      await act(async () => {
-        signIn.resolve(ADMIN);
-        resolved = await pending;
-      });
-
-      // The caller must not announce a sign-in the provider dropped.
-      expect(resolved).toBeNull();
-      expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
-      expect(result.current.session).toBeNull();
-    });
   });
 });

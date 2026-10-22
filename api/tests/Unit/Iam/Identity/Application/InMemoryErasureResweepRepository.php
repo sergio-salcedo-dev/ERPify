@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Closure;
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\ErasureResweep;
 use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Override;
@@ -62,11 +63,12 @@ final class InMemoryErasureResweepRepository implements ErasureResweepRepository
     }
 
     #[Override]
-    public function deleteForSubject(string $subjectId): void
+    public function deleteForSubject(string $subjectId, DateTimeImmutable $scheduledAt): void
     {
         $this->resweeps = \array_values(\array_filter(
             $this->resweeps,
-            static fn (ErasureResweep $held): bool => $held->subjectId() !== $subjectId,
+            static fn (ErasureResweep $held): bool => $held->subjectId() !== $subjectId
+                || $held->getCreatedAt()->format('U.u') !== $scheduledAt->format('U.u'),
         ));
         $this->deletedSubjectIds[] = $subjectId;
 

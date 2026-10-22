@@ -85,14 +85,14 @@ final readonly class NotifyLockedIdentities
      * The one failure that genuinely is per-row is the send, and it never reaches here — the mailer sits
      * behind {@see SendAccountLockedEmailBestEffort}, which swallows it and reports `false`.
      *
-     * A GDPR erasure racing this method cannot leave a post-erasure audit row naming the erased subject.
-     * `User` carries no `#[ORM\Version]`, so if `FulfilIdentityErasure` deletes this identity between the
-     * `findById()` above and `save()` below, Doctrine's plain `UPDATE` affects zero rows without raising and
-     * `save()` returns as if it succeeded. What keeps that from reaching `audit_log` is
-     * {@see RecordLockoutNoticeAuditBestEffort}, not this method: it writes inside a transaction that first
-     * locks the subject's `identity_user` row — the row the erasure holds `FOR UPDATE` until it commits — and
-     * skips the write once the row is gone. Either the erasure commits first and nothing is written, or the
-     * notice row commits first and the erasure's resource pass redacts it with every other row it finds.
+     * **A GDPR erasure racing this method writes no row naming its subject.** `User` carries no
+     * `#[ORM\Version]`, so an erasure deleting this identity between the `findById()` below and `save()` makes
+     * that `UPDATE` affect zero rows without raising, and `save()` returns as if it had succeeded. What keeps the
+     * notice's audit row from then naming the erased subject is not here but in
+     * {@see RecordLockoutNoticeAuditBestEffort}, which writes under the subject's `identity_user` row lock and
+     * finds the row gone. The mail itself may still have gone out in that span — to the address of a person being
+     * erased, about a lock on their account — which is a notification, not a record, and leaves nothing behind in
+     * this application.
      */
     private function notifyOwner(string $userId, DateTimeImmutable $now, DateTimeImmutable $staleFrom): void
     {

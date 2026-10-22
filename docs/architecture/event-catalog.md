@@ -135,7 +135,7 @@ aggregate, because their revocations are directed UPDATEs that hydrate no row.
 | `eventName` | ver | Producer (use case) | Payload |
 |-------------|:---:|---------------------|---------|
 | `erpify.iam.session.started` | 1 | `StartSession` (recorded by `Session::start()`) | `userId` |
-| `erpify.iam.session.revoked` | 1 | `RevokeSession`; `StartSession` when a login replaces the live session of the same identity its browser already correlated (recorded by `Session::revoke()`) | `userId` |
+| `erpify.iam.session.revoked` | 1 | `RevokeSession`; `StartSession` for the session the same browser's cookie correlated before a re-login, when that row belongs to the identity signing in and is still admissible under its row lock (recorded by `Session::revoke()`) | `userId` |
 | `erpify.iam.session.all-revoked` | 1 | `RevokeAllSessions`; `EvictOtherSessions` when the session it was to keep was already revoked (the interrupted recovery redemption) | *empty* `{}` |
 | `erpify.iam.session.others-revoked` | 1 | `RevokeOtherSessions` (sign out my other devices); `EvictOtherSessions` on every completed recovery redemption | `keptSessionId` |
 
@@ -328,10 +328,10 @@ What a `DomainEvent` becomes in the `event_store` (raw DBAL; full rationale in
 | `event_id` | UUID v7, `UNIQUE` — stable identity (idempotent re-append). |
 | `aggregate_id` | the subject's id (envelope). |
 | `aggregate_type` | e.g. `Backoffice.Bank`. |
-| `aggregate_version` | per-stream `MAX+1`, **informative only** — no concurrency guarantee: concurrent appends to one stream may record the same version ([ADR D14](../adr/event-store-and-projections.md)). Order by `sequence`. |
+| `aggregate_version` | per-stream `MAX+1`, **informative only** — not a concurrency control. The stream `UNIQUE` spans `tenant_id`, which is always written `NULL`, and PostgreSQL defaults to `NULLS DISTINCT`, so it never fires and two concurrent appends may record the same version. Decision: [`event-store-and-projections.md`](../adr/event-store-and-projections.md). |
 | `event_name`, `event_version` | the canonical key. |
-| `payload` | JSONB object — `toPrimitives()` (domain state only), `{}` when empty (rows written before ADR D14 may hold `[]`). |
-| `metadata` | JSONB object, `{}` when empty (rows written before ADR D14 may hold `[]`) — reserved (`correlation_id`/`causation_id`/actor). |
+| `payload` | JSONB object — `toPrimitives()` (domain state only), `{}` when empty (top-level coercion only). Rows written before the coercion hold `[]` and are accepted without backfill, as for `metadata`. |
+| `metadata` | JSONB object, `{}` when empty (top-level coercion only) — reserved (`correlation_id`/`causation_id`/actor). Rows written before the coercion hold `[]` and are accepted without backfill (a backfill would be another sanctioned mutation, ADR D12); a reader treating it as an object bounds by `jsonb_typeof(metadata) = 'object'`. |
 | `tenant_id` | UUID, `NULL` today — reserved for multi-tenant isolation. |
 | `occurred_on` | TIMESTAMPTZ — **domain** time (envelope). |
 | `recorded_on` | TIMESTAMPTZ — **system** time (when persisted). |

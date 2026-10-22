@@ -22,7 +22,3 @@ export const captureMessage = (): void => {};
 export function withScope(callback: (scope: unknown) => void): void {
   callback({ setLevel: () => {}, setTag: () => {}, setContext: () => {} });
 }
-
-export function withSentryConfig<T>(config: T): T {
-  return config;
-}

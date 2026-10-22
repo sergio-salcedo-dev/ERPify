@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Application;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\RecordRecoverySecretAuditBestEffort;
 use Erpify\Iam\Identity\Application\ReportsAuditFailureSafely;
+use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\Attributes\CoversTrait;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LogLevel;
 use RuntimeException;
 
 /**
@@ -29,6 +31,8 @@ use RuntimeException;
  * own.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(RecordRecoverySecretAuditBestEffort::class)]
 #[CoversTrait(ReportsAuditFailureSafely::class)]
@@ -42,11 +46,7 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
 
-        (new RecordRecoverySecretAuditBestEffort(
-            $auditLogger,
-            InMemoryIdentityRowLock::serialiser(),
-            $logger,
-        ))->{$method}($subjectId);
+        $this->recorder($auditLogger, $logger)->{$method}($subjectId);
 
         $this->assertCount(1, $auditLogger->records);
         $record = $auditLogger->records[0];
@@ -63,31 +63,6 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $this->assertSame([], $logger->records, 'a successful projection must not log');
     }
 
-    /**
-     * Every transition runs post-commit, so an erasure can complete between its commit and the row; the
-     * compensated redemption is the transition that answers exactly that interleaving.
-     */
-    #[Test]
-    #[DataProvider('transitions')]
-    public function aSubjectErasedBeforeTheLockGetsNoRowAndNoReport(string $method, string $action): void
-    {
-        $subjectId = Uuid::generate();
-        $rows = new InMemoryIdentityRowLock();
-        $rows->gone[] = $subjectId;
-        $auditLogger = new RecordingAuditLogger();
-        $logger = new RecordingLogger();
-
-        (new RecordRecoverySecretAuditBestEffort(
-            $auditLogger,
-            InMemoryIdentityRowLock::serialiser($rows),
-            $logger,
-        ))->{$method}($subjectId);
-
-        $this->assertSame([$subjectId], $rows->locked);
-        $this->assertSame([], $auditLogger->records, $action . ' may not name an erased subject');
-        $this->assertSame([], $logger->records);
-    }
-
     #[Test]
     #[DataProvider('transitions')]
     public function everyTransitionSwallowsAFailedWriteAndReportsItAtError(string $method, string $action): void
@@ -98,13 +73,7 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $failure = new RuntimeException('audit_log is unavailable');
         $logger = new RecordingLogger();
 
-        (new RecordRecoverySecretAuditBestEffort(
-            new FailingAuditLogger($failure),
-            InMemoryIdentityRowLock::serialiser(),
-            $logger,
-        ))
-            ->{$method}(Uuid::generate())
-        ;
+        $this->recorder(new FailingAuditLogger($failure), $logger)->{$method}(Uuid::generate());
 
         $this->assertCount(1, $logger->records, 'a swallowed failure that logs nothing did not happen at all');
         $this->assertSame('error', $logger->records[0]['level']);
@@ -112,6 +81,89 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         // The action rides in the CONTEXT rather than in four separate messages, so which transition lost its
         // row is answerable without the message becoming a per-transition sentence somebody keeps in step.
         $this->assertSame($action, $logger->records[0]['context']['action'] ?? null);
+        $this->assertSame('write', $logger->records[0]['context']['phase'] ?? null);
+    }
+
+    #[Test]
+    #[DataProvider('transitions')]
+    public function everyTransitionIsWrittenWhileTheSubjectRowIsHeld(string $method, string $action): void
+    {
+        // Every one of them runs after its use case committed, so an erasure can commit in between; only a write
+        // made under the subject's row lock is on one side of it or the other.
+        $subjectId = Uuid::generate();
+        $identityRows = new InMemoryIdentityRowLock();
+        $auditLogger = new RowLockAwareAuditLogger($identityRows);
+        $rowsWhenLocked = null;
+        $identityRows->onLock = static function () use ($auditLogger, &$rowsWhenLocked): void {
+            $rowsWhenLocked = \count($auditLogger->records);
+        };
+
+        $this->recorder($auditLogger, identityRows: $identityRows)->{$method}($subjectId);
+
+        $this->assertSame([$subjectId], $identityRows->lockRequests);
+        $this->assertSame(0, $rowsWhenLocked, 'the subject row is locked before the audit row is written');
+        $this->assertCount(1, $auditLogger->records);
+        $this->assertSame($action, $auditLogger->records[0]['action']);
+        $this->assertTrue($auditLogger->records[0]['held'], 'the write runs while the lock is still held');
+    }
+
+    #[Test]
+    #[DataProvider('transitions')]
+    public function anIdentityGoneUnderTheLockIsOwedNoRow(string $method, string $action): void
+    {
+        // Seen absent under the lock means an erasure committed first and has already run its pass over the
+        // trail: a row written now would name the subject with nothing left to redact it.
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->goneUnderLock = true;
+
+        $auditLogger = new RecordingAuditLogger();
+        $logger = new RecordingLogger();
+
+        $this->recorder($auditLogger, $logger, $identityRows)->{$method}(Uuid::generate());
+
+        $this->assertSame([], $auditLogger->records, "no {$action} row may name an erased subject");
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(LogLevel::INFO, $logger->records[0]['level'], 'an erased subject is not a failure');
+        $this->assertSame(
+            ['action' => $action, 'phase' => 'subject_absent'],
+            $logger->records[0]['context'],
+            'the withheld row is explained, naming the transition and no subject',
+        );
+    }
+
+    #[Test]
+    public function aLockThatFailsIsSwallowedAndReportedAsTheLockPhase(): void
+    {
+        $failure = new RuntimeException('canceling statement due to lock timeout');
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->onLock = static fn () => throw $failure;
+
+        $logger = new RecordingLogger();
+
+        $this->recorder(new RecordingAuditLogger(), $logger, $identityRows)->recordMinted(Uuid::generate());
+
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(['action', 'phase', 'exception'], \array_keys($logger->records[0]['context']));
+        $this->assertSame('lock', $logger->records[0]['context']['phase'] ?? null);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
+    }
+
+    #[Test]
+    public function aCommitThatFailsIsSwallowedAndReportedAsTheCommitPhase(): void
+    {
+        // The row is written and only the COMMIT fails — a serialization failure, a lost connection — so the
+        // report has to say the write got that far rather than blaming the INSERT.
+        $failure = new RuntimeException('could not serialize access');
+        $identityRows = new InMemoryIdentityRowLock();
+        $identityRows->onRelease = static fn () => throw $failure;
+
+        $logger = new RecordingLogger();
+
+        $this->recorder(new RecordingAuditLogger(), $logger, $identityRows)->recordMinted(Uuid::generate());
+
+        $this->assertCount(1, $logger->records);
+        $this->assertSame('commit', $logger->records[0]['context']['phase'] ?? null);
+        $this->assertSame($failure, $logger->records[0]['context']['exception'] ?? null);
     }
 
     #[Test]
@@ -124,15 +176,11 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
         $subjectId = Uuid::generate();
         $logger = new RecordingLogger();
 
-        (new RecordRecoverySecretAuditBestEffort(
-            new FailingAuditLogger(),
-            InMemoryIdentityRowLock::serialiser(),
-            $logger,
-        ))->{$method}($subjectId);
+        $this->recorder(new FailingAuditLogger(), $logger)->{$method}($subjectId);
 
         $this->assertCount(1, $logger->records);
 
-        $encoded = \json_encode($logger->records[0], JSON_THROW_ON_ERROR | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $encoded = \json_encode($logger->records[0], JSON_THROW_ON_ERROR);
         $this->assertStringNotContainsString($subjectId, $encoded);
         // And the action still is there, so this is asserting an absence beside a presence rather than over
         // a record that carries nothing at all.
@@ -140,8 +188,8 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
     }
 
     /**
-     * The four transitions and the token each projects. Declared as data rather than as four near-identical
-     * cases so a fifth cannot be added with its action left unasserted.
+     * Every transition and the token it projects. Declared as data rather than as near-identical cases so
+     * another cannot be added with its action left unasserted.
      *
      * @return iterable<string, array{string, string}>
      */
@@ -154,5 +202,21 @@ final class RecordRecoverySecretAuditBestEffortTest extends TestCase
             'recordRedemptionCompensated',
             'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
         ];
+        yield 'redemption interrupted' => [
+            'recordRedemptionInterrupted',
+            'RECOVERY_SECRET_REDEMPTION_INTERRUPTED',
+        ];
+    }
+
+    private function recorder(
+        AuditLogger $auditLogger,
+        ?RecordingLogger $logger = null,
+        ?InMemoryIdentityRowLock $identityRows = null,
+    ): RecordRecoverySecretAuditBestEffort {
+        return new RecordRecoverySecretAuditBestEffort(
+            $identityRows ?? new InMemoryIdentityRowLock(),
+            $auditLogger,
+            $logger ?? new RecordingLogger(),
+        );
     }
 }

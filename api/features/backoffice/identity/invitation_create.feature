@@ -47,8 +47,8 @@ Feature: Invite a member from the console
     And 27 requests got executed only for doctrine connection "default"
     # The envelope, asserted against the stored row rather than against the emitting code: the subject of an
     # invitation event is the invited user, the payload is empty, and the schema version says so. Placed after
-    # the query budget above so these reads cannot move it. The empty payload is `{}`: the event store writes
-    # each envelope map as a JSON object, so an empty one never lands as `[]`.
+    # the query budget above so these reads cannot move it. The empty payload is `{}`: the store writes both
+    # JSON columns as an object, never as the `[]` an empty PHP array would encode to.
     And I execute the SQL query "SELECT 1 FROM event_store WHERE event_name = 'erpify.iam.invitation.created' AND aggregate_id = (SELECT id FROM identity_user WHERE email = 'newbie@erpify.test') AND payload = '{}'::jsonb AND event_version = 2"
     And there should have 1 records in SQL result
     # The half that matters: the invitation id is the selector of the acceptance link and keys its accept

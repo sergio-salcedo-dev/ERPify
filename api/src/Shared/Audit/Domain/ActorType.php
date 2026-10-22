@@ -9,23 +9,12 @@ namespace Erpify\Shared\Audit\Domain;
  * are the lowercase tokens persisted verbatim in the `actor_type` column, so the
  * enum doubles as the closed set the storage layer round-trips — hence lowercase,
  * unlike the uppercase wire enums elsewhere whose tokens are a transport contract.
+ *
+ * Postgres enforces the same closed set, so adding a case also needs a migration replacing
+ * `audit_log_actor_type_check` — and `audit_log_actor_id_presence_check` when the new case carries no id.
  */
 enum ActorType: string
 {
-    /**
-     * Whether an actor of this type is named by an id. `anonymous` and `system` name nobody, so they never
-     * carry one; an `api_key` or a `user` is nothing without it. This is the rule {@see ActorContext}'s
-     * factories encode and the `audit_log` CHECK constraints store, so the storage side derives its token
-     * lists from here rather than restating them.
-     */
-    public function isIdentified(): bool
-    {
-        return match ($this) {
-            self::ANONYMOUS, self::SYSTEM => false,
-            self::API_KEY, self::USER => true,
-        };
-    }
-
     case ANONYMOUS = 'anonymous';
     case SYSTEM = 'system';
     case API_KEY = 'api_key';

@@ -21,9 +21,8 @@ use PHPUnit\Framework\TestCase;
  * the build could tell that exception apart from an accident, and the knowledge lived in prose plus a
  * bespoke weekly cron that was deleted with the pin it watched.
  *
- * `require-dev` is deliberately out of scope. Two entries live there today for good reasons
- * (`behat/behat` at `@alpha`, which is what lifted the `symfony/console` cap, and
- * `roave/security-advisories` at `dev-latest`, which is only ever a dev-latest package), and a
+ * `require-dev` is deliberately out of scope. One entry lives there today for a good reason
+ * (`roave/security-advisories` at `dev-latest`, which is only ever a dev-latest package), and a
  * development tool that never ships cannot put unreviewed code in front of a customer.
  *
  * What a green proves: no shipped requirement carries a stability flag or a branch constraint. What it

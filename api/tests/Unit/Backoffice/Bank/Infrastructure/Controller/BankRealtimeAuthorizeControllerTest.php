@@ -16,6 +16,7 @@ use Symfony\Component\Mercure\Hub;
 use Symfony\Component\Mercure\HubRegistry;
 use Symfony\Component\Mercure\Jwt\LcobucciFactory;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
+use Symfony\Component\Mercure\ProtocolVersion;
 
 /**
  * The endpoint mints the Mercure subscriber cookie and returns no body. The cookie's signed JWT is
@@ -56,18 +57,21 @@ final class BankRealtimeAuthorizeControllerTest extends TestCase
             $claims['mercure']['subscribe'] ?? null,
         );
         // The security invariant is that a subscriber cookie grants no publish topic — not the shape
-        // of the claim. Mercure 0.8 omits `publish` entirely when no publish grant is present, where
-        // 0.7 emitted an empty list; under the 0.x protocol both deny publishing, and only a
-        // non-empty list would widen the cookie.
+        // of the claim. An absent `publish` and an empty one both deny publishing under the 0.x
+        // protocol, and the library emits either depending on its release; only a non-empty list
+        // would widen the cookie.
         $this->assertSame([], $claims['mercure']['publish'] ?? [], 'the subscriber cookie must grant no publish topic');
     }
 
     private function authorize(): Response
     {
+        // The protocol the configured hub is pinned to (`config/packages/mercure.yaml`); the library
+        // itself defaults to 1.0, whose tokens the embedded 0.x hub refuses.
         $authorization = new Authorization(new HubRegistry(new Hub(
             self::HUB_URL,
             new StaticTokenProvider('subscriber-token-unused-by-createCookie'),
-            new LcobucciFactory(self::JWT_SECRET),
+            new LcobucciFactory(self::JWT_SECRET, protocolVersion: ProtocolVersion::Legacy),
+            protocolVersion: ProtocolVersion::Legacy,
         )));
 
         $controller = new BankRealtimeAuthorizeController($authorization);

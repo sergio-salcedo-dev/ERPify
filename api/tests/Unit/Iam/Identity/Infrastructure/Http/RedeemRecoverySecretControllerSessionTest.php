@@ -201,8 +201,8 @@ final class RedeemRecoverySecretControllerSessionTest extends TestCase
             new InMemoryUserRepository(UserMother::create()),
             $secrets,
             new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
             new RevokeCurrentSessionBestEffort(

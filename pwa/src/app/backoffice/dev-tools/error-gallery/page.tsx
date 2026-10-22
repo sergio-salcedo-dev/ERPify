@@ -61,9 +61,10 @@ const NAVIGABLE_ROUTES: ReadonlyArray<RouteCase> = [
       "`/dev-throw` server-throws and the segment-level `error.tsx` catches it. Verifies the dev-mode `error.message` block + green-check digest copy.",
   },
   {
-    label: "503 — Maintenance",
+    label: "502/503/504 — Service unavailable",
     url: Routes.MAINTENANCE,
-    description: "Planned downtime, deployment window or identity-service outage landing.",
+    description:
+      "Where the auth guard sends a visitor when `/me` answers 502/503/504; `Try again` returns to `?next=`.",
   },
   {
     label: "Offline (PWA)",
@@ -193,7 +194,7 @@ const PROBLEM_FIXTURES: ReadonlyArray<ProblemCase> = [
     label: "503 — service unavailable",
     description: "Wrench icon, warning tone — used during deploys.",
     problem: makeProblem({
-      type: SharedProblemType.SERVICE_UNAVAILABLE,
+      type: "service-unavailable",
       title: "Service temporarily unavailable",
       status: 503,
       detail: "We're deploying improvements — back shortly.",

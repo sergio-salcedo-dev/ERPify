@@ -25,14 +25,15 @@ namespace Erpify\Shared\Event\Application;
  *
  * **One pseudonym for every row of one subject, and the reason is NOT the stream UNIQUE.** That constraint
  * spans `(tenant_id, aggregate_id, aggregate_version)`, `tenant_id` is written `NULL` on every row, and
- * Postgres compares nulls as distinct — so it imposes nothing, measured against `pg_indexes` rather than the
- * migration; `aggregate_version` is an informative counter and nothing more (event-store ADR D14). The
- * reasons that do hold are two, and both are per pass: within one pass a person must not split into several
- * anonymous identities, which is why the pseudonym is the one the actor pass of the same erasure or re-sweep
- * tick minted for the audit axes; and the events one pass rewrites share one version sequence under a single
- * `aggregate_id` — the identity events and the two bulk session revokes alike — so moving them apart would
- * scatter a coherent stream even while no constraint complained. Across passes the pseudonyms differ by
- * design: carrying one forward would need it stored beside the real id, the mapping D4 vetoes.
+ * Postgres compares nulls as distinct — so it imposes nothing today, measured against `pg_indexes` rather
+ * than the migration; `aggregate_version` is informative by decision (the D4 amendment in
+ * `docs/adr/event-store-and-projections.md`). The reasons that do hold are two, and both are per pass:
+ * within one pass a person must not split into several anonymous identities, which is why the pseudonym is
+ * the one the actor pass of the same erasure or re-sweep tick minted for the audit axes; and the events one
+ * pass rewrites share one version sequence under a single `aggregate_id` — the identity events and the two
+ * bulk session revokes alike — so moving them apart would scatter a coherent stream even while no constraint
+ * complained. Across passes the pseudonyms differ by design: carrying one forward would need it stored beside
+ * the real id, the mapping D4 vetoes.
  *
  * Idempotent by construction: a second pass matches nothing, because the value it searched for is gone. That
  * is not the same as saying nothing can reintroduce it — a transaction that loaded the subject before this

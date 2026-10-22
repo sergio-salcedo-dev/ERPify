@@ -230,15 +230,19 @@ Erpify\Iam\Session\Domain\Entity\Session::$organizationId => non-person
 # most consequential false statement this file could carry. Its owner hard-deletes the row: the whole
 # aggregate is the personal datum, so there is nothing left to scrub afterwards. It carries no
 # `#[PersonSubjectReference]` because the property is declared in the shared `Identifiable` trait, and
-# annotating it there would propagate the declaration to all eight entities that use it.
+# annotating it there would propagate the declaration to every entity that uses it.
 Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 
 # References to a person held by another aggregate. Each row is deleted outright rather than scrubbed:
 # neither table has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
-Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$subjectId => person :: src/Iam/Identity/Application/ResweepErasedSubjects.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
+
+# The erasure's own instrument, written after the person is gone: it holds the erased id for one re-sweep
+# window by design, its owner deletes the row when that window closes, and its detective source reports a
+# row that outlived two windows (ADR `docs/adr/audit-activity-log.md` D4.2).
+Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$subjectId => person :: src/Iam/Identity/Application/ResweepErasedSubjects.php
 
 # The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — the
 # database holds exactly two foreign keys, `bank_account.bank_id` and `membership.organization_id` — so

@@ -124,6 +124,7 @@ tests/Unit/Gate/AuditActionOperationAgreementGateTest.php :: home
 tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
+tests/Unit/Gate/AuditLogCheckEnumTokenGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
 tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
 tests/Unit/Gate/AuditWriteOperationParityTest.php :: home
@@ -237,3 +238,4 @@ tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: func
 tests/Unit/Gate/BmadLoopSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
 tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home
+tests/Unit/Gate/SubjectAuditWriteSerialisationGateTest.php :: home

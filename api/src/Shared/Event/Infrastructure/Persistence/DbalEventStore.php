@@ -22,17 +22,18 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * connection, so {@see append()} joins the use-case write transaction (aggregate row + this row +
  * outbox commit atomically). It is a log of infrastructure with no domain invariants and no ORM
  * entity — the `IDENTITY` sequence and the `aggregate_version` sub-select sit outside the ORM unit of
- * work (ADR D4). `tenant_id` is reserved and written `NULL`.
+ * work (ADR D4). `tenant_id` is reserved and written `NULL`; `payload` carries the event's primitives and
+ * `metadata` the serializer's envelope metadata (empty today), and both are always written as a JSON object,
+ * `{}` when empty — PHP encodes an empty array as `[]`, a JSON array in a column every reader treats as an
+ * object. The coercion is top-level only, so a nested value keeps whatever shape it carries; it changes
+ * nothing a reader of {@see stream()} sees, because both shapes decode to the same empty PHP array.
  *
- * `aggregate_version` is an **informative** per-stream counter, not a concurrency control (ADR D14). The
- * stream UNIQUE spans `tenant_id`, which is always `NULL` here, and PostgreSQL compares nulls as distinct,
- * so it refuses nothing; and most publishers hold no row lock on the aggregate they publish for. Two
- * concurrent appends to one stream can therefore record the same version, both commit, and nothing is
- * raised. Order is `sequence`, never this column.
- *
- * `metadata` carries the serializer's envelope metadata (empty today) and is cast to an object before
- * encoding, so an empty envelope stores `{}` rather than `[]` — the same top-level cast, for the same reason,
- * as `audit_log` ({@see \Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter}).
+ * `aggregate_version` is informative, not a concurrency control: it is `MAX+1` over the stream at insert
+ * time with no serialisation guaranteed (most publishers hold no row lock on the aggregate they publish
+ * for), and the stream UNIQUE spans `tenant_id`, which is always `NULL` — PostgreSQL treats NULLs as
+ * distinct, so the index never fires and two concurrent appends may record the same version. Should a
+ * UNIQUE violation ever surface (a non-null `tenant_id` arms the index), it propagates untranslated,
+ * aborting the write transaction (a 500): nothing here promises a retryable answer the schema does not back.
  */
 #[AsAlias(EventStore::class)]
 final readonly class DbalEventStore implements EventStore
@@ -50,9 +51,8 @@ final readonly class DbalEventStore implements EventStore
     {
         $envelope = $this->serializer->serialize($event);
 
-        // aggregate_version = MAX(version)+1 per (tenant_id, aggregate_id). The read takes no lock of its
-        // own, so a concurrent append to the same stream may compute the same value (class docblock).
-        // `sequence`/identity is assigned by the database.
+        // aggregate_version = MAX(version)+1 per (tenant_id, aggregate_id), informative only (see the class
+        // docblock). `sequence`/identity is assigned by the database.
         //
         // ON CONFLICT (event_id) DO NOTHING makes a re-append a silent no-op: the persist middleware
         // also runs when the worker re-dispatches the message on consume, and at-least-once redelivery
@@ -75,8 +75,8 @@ final readonly class DbalEventStore implements EventStore
                 'aggregate_type' => $event::aggregateType(),
                 'event_name' => $event::eventName(),
                 'event_version' => $event::eventVersion(),
-                'payload' => $this->encode($envelope['payload']),
-                'metadata' => $this->encode($envelope['metadata']),
+                'payload' => $this->encodeObject($envelope['payload']),
+                'metadata' => $this->encodeObject($envelope['metadata']),
                 'tenant_id' => null,
                 'occurred_on' => $event->occurredOn()->format('Y-m-d H:i:s.uP'),
             ],
@@ -165,12 +165,9 @@ final readonly class DbalEventStore implements EventStore
     }
 
     /**
-     * Both columns hold a map, and a map has one JSON shape: PHP's empty array would otherwise encode as `[]`.
-     * Only the top level is cast, so a list nested inside a value stays a list.
-     *
      * @param array<string, mixed> $data
      */
-    private function encode(array $data): string
+    private function encodeObject(array $data): string
     {
         return \json_encode((object) $data, JSON_THROW_ON_ERROR);
     }

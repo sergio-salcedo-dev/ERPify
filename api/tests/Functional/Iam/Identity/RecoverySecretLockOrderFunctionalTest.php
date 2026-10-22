@@ -361,8 +361,8 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
             $users,
             ProbingRecoverySecretRepository::aroundSelectorLock($secrets, $onArrival(...), $onLeaving(...)),
             new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
             $revokeSessions,
@@ -402,8 +402,8 @@ final class RecoverySecretLockOrderFunctionalTest extends KernelTestCase
             ProbingRecoverySecretRepository::aroundUserIdLock($secrets, $onArrival(...), $onLeaving(...)),
             new ProveCurrentPassword(),
             new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
             $eventBus,

@@ -230,8 +230,8 @@ final class MintRecoverySecretControllerTest extends TestCase
             $secrets,
             new ProveCurrentPassword(),
             new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
             new RecordingEventBus(),

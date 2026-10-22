@@ -21,6 +21,7 @@ use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -104,9 +105,11 @@ final class ResweepErasedSubjectsTest extends TestCase
     }
 
     /**
-     * The order is the erasure's — audit rows, then the business log, then sessions — because the tick runs
-     * against the same late writers the erasure contends with. Each pass therefore records what the others had
-     * done at the instant it ran: a double recording only its own calls would stay green over any reordering.
+     * The order is the erasure's — audit rows, then sessions, then the business log — because the tick runs
+     * against the same late writers the erasure contends with: a revocation holding a session row commits its
+     * event before the purge gets that row, so only a business-log pass after the purge can see it. Each pass
+     * therefore records what the others had done at the instant it ran: a double recording only its own calls
+     * would stay green over any reordering.
      */
     public function testThePassesRunInTheErasuresLockOrder(): void
     {
@@ -144,6 +147,7 @@ final class ResweepErasedSubjectsTest extends TestCase
 
         $resweep = new ResweepErasedSubjects(
             new InMemoryErasureResweepRepository(ErasureResweep::scheduleFor(self::SUBJECT_ID)),
+            new InMemoryUserRepository(),
             new OrderedAuditSubjectTrailErasure($lock, $actor, new RecordingAuditResourceAnonymiser(matchCount: 0)),
             $events,
             new PurgeUserSessions($sessions),
@@ -155,7 +159,7 @@ final class ResweepErasedSubjectsTest extends TestCase
 
         $this->assertSame([
             'audit_log lock (actor passes run: 0)',
-            'event_store (actor passes run: 1, session purges run: 0)',
+            'event_store (actor passes run: 1, session purges run: 1)',
         ], $journal->getArrayCopy());
         $this->assertSame([self::SUBJECT_ID], $sessions->deleteAllCalls);
     }
@@ -200,6 +204,71 @@ final class ResweepErasedSubjectsTest extends TestCase
         $this->assertSame([self::SUBJECT_ID, self::OTHER_SUBJECT_ID], $actor->anonymisedActorIds);
         $this->assertSame([self::SUBJECT_ID], $resweeps->deletedSubjectIds);
         $this->assertSame([self::OTHER_SUBJECT_ID], $resweeps->scheduledSubjectIds());
+    }
+
+    /**
+     * Scheduling held only while the identity was gone. An identity recreated under the subject's id — a fixture
+     * or seed with fixed ids — is a live person, whose sessions and trail a further tick would purge and
+     * pseudonymise every five minutes.
+     */
+    public function testAnIdentityRecreatedUnderTheSubjectsIdIsForgottenRatherThanSwept(): void
+    {
+        $resweeps = new InMemoryErasureResweepRepository(ErasureResweep::scheduleFor(self::SUBJECT_ID));
+        $actor = new RecordingAuditActorAnonymiser(matchCount: 1);
+        $sessions = new InMemorySessionRepository($this->sessionFor(self::SUBJECT_ID));
+        $audit = new RecordingAuditLogger();
+
+        $rewritten = $this->useCase(
+            $resweeps,
+            $actor,
+            new RecordingAuditResourceAnonymiser(matchCount: 1),
+            new RecordingEventStoreSubjectAnonymiser(),
+            $sessions,
+            $audit,
+            users: new InMemoryUserRepository(UserMother::create(self::SUBJECT_ID)),
+        )->resweep();
+
+        $this->assertSame(0, $rewritten);
+        $this->assertSame([], $actor->anonymisedActorIds);
+        $this->assertSame([], $sessions->deleteAllCalls);
+        $this->assertSame([], $audit->records);
+        $this->assertSame([], $resweeps->scheduledSubjectIds());
+    }
+
+    /**
+     * The tick decides a window has closed from the row it read; a re-erasure committing before the tick reaches
+     * the subject restarts that window, and the hour it restarted is owed in full.
+     */
+    public function testAWindowRestartedAfterTheTickReadItIsNotForgotten(): void
+    {
+        $resweeps = new InMemoryErasureResweepRepository($this->scheduledAgo(self::SUBJECT_ID, 'PT1H1S'));
+        $restartingErasure = new class implements EventStoreSubjectAnonymiser {
+            public ?Closure $onAnonymise = null;
+
+            #[Override]
+            public function anonymise(SubjectPseudonymisation $pseudonymisation): int
+            {
+                if ($this->onAnonymise instanceof Closure) {
+                    ($this->onAnonymise)($pseudonymisation->subjectId);
+                }
+
+                return 0;
+            }
+        };
+        $restartingErasure->onAnonymise = static function (string $subjectId) use ($resweeps): void {
+            $resweeps->save(ErasureResweep::scheduleFor($subjectId));
+        };
+
+        $this->useCase(
+            $resweeps,
+            new RecordingAuditActorAnonymiser(matchCount: 0),
+            new RecordingAuditResourceAnonymiser(matchCount: 0),
+            $restartingErasure,
+            new InMemorySessionRepository(),
+            new RecordingAuditLogger(),
+        )->resweep();
+
+        $this->assertSame([self::SUBJECT_ID], $resweeps->scheduledSubjectIds());
     }
 
     public function testTheClosingTickForgetsTheSubjectInsideTheTransactionThatSweptIt(): void
@@ -319,9 +388,11 @@ final class ResweepErasedSubjectsTest extends TestCase
         InMemorySessionRepository $sessions,
         RecordingAuditLogger $audit,
         ?TransactionManager $transactions = null,
+        ?InMemoryUserRepository $users = null,
     ): ResweepErasedSubjects {
         return new ResweepErasedSubjects(
             $resweeps,
+            $users ?? new InMemoryUserRepository(),
             new OrderedAuditSubjectTrailErasure(new RecordingAuditSubjectRowLock(), $actor, $resource),
             $events,
             new PurgeUserSessions($sessions),

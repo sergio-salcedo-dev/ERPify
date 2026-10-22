@@ -17,6 +17,7 @@ use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryErasureResweepRepository;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -75,6 +76,7 @@ final class ResweepErasedSubjectsHandlerTest extends TestCase
     ): ResweepErasedSubjectsHandler {
         return new ResweepErasedSubjectsHandler(new ResweepErasedSubjects(
             new InMemoryErasureResweepRepository(ErasureResweep::scheduleFor(self::SUBJECT_ID)),
+            new InMemoryUserRepository(),
             new OrderedAuditSubjectTrailErasure(
                 new RecordingAuditSubjectRowLock(),
                 $actor,

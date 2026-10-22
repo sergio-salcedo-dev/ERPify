@@ -1,4 +1,4 @@
-export { AuthProvider } from "./AuthProvider";
+export { AuthProvider, AuthStatus } from "./AuthProvider";
 export { Can } from "./Can";
 export { RequireAuth } from "./RequireAuth";
 export { DevSessionSwitcher } from "./DevSessionSwitcher";

@@ -162,9 +162,13 @@ you change anything here.
       carries no such `ENV`; only its builder stage did). With
       `SENTRY_REPOSITORY` empty, nothing is associated: the plugin's `auto`
       fallback reads a `.git` the build context does not contain.
-- [ ] Sentry events are scrubbed before send: `sendDefaultPii: false` plus a
-      `beforeSend` denylist scrub in parity with the API's `SentryEventScrubber`
-      (`scrubSentryEvent` / shared `redaction` keys); deliberate `telemetry.*`
+- [ ] Sentry events are scrubbed before send: every `dataCollection` category set
+      explicitly to its restrictive value (an unset one is a grant in SDK 11), the
+      identity axes filtered from query params at the source, a `beforeSend`
+      denylist scrub in parity with the API's `SentryEventScrubber` and the same
+      scrub over streamed spans in `beforeSendSpan` (`scrubSentryEvent` /
+      `scrubSentrySpan`, shared `redaction` keys), with `traceLifecycle: "stream"`
+      pinned so `SENTRY_TRACE_LIFECYCLE` cannot switch that hook off; deliberate `telemetry.*`
       causes pass through `serializeCause` (PII-scrubbed). No replay enabled.
 - [ ] The public `/monitoring` Sentry tunnel (`tunnelRoute`, relays anonymous
       browser POSTs to ingest) is rate-limited per client IP in `pwa/src/proxy.ts`
@@ -388,11 +392,6 @@ you change anything here.
       candidate is a heuristic (does the address match one the subject has held on an
       `iam_session`?) bought by making the audit writer read a second context's PII at
       capture time. Weighed and not taken — not impossible.
-      Those writers run **post-commit**, outside any transaction holding the subject, so
-      each takes the subject's `identity_user` row `FOR UPDATE` before writing and writes no
-      row naming a subject whose row is gone (`IdentityRowSerialiser`; the throttle resolves
-      its address under the same lock). Without it a row committed after the pass would keep
-      the real id and the address with `resource_erased = FALSE`.
       **The accepted cost, stated rather than hidden:** where the
       requester was a stranger — an attacker locking a victim out — that attacker's address
       is destroyed too. The **fact** survives even though the value does not, though not for
@@ -856,11 +855,7 @@ you change anything here.
       (never a fail-open pass-through). **Sign-out revokes server-side:** `POST /sessions/revoke-current` (this
       device) revokes the current registry row **and** invalidates the native session so the cookie is dropped, and
       `POST /sessions/revoke-others` revokes every other row — so "log out" leaves no resumable session behind on a
-      shared machine (the client never relies on merely clearing its own state). A sign-in over a browser whose native
-      session already correlates a live row **of the same identity** revokes that row in the minting transaction — the
-      id comes from server-side session storage, never from the client — so a re-login leaves no ghost device; another
-      identity's row on a shared browser is left to its owner, so no request writes about a person who did not make
-      it, and another browser's sessions are untouched. `iam_session` stores
+      shared machine (the client never relies on merely clearing its own state). `iam_session` stores
       **operational PII** — `ip` (plaintext, short-lived) and
       `device` (**normalised server-side** from the `User-Agent` to a bounded label, **never** the raw client string,
       closing stored-injection + free-text PII). The table is **not** an `AuditedEntity`, so the IP never enters the
@@ -974,6 +969,32 @@ mitigated state. Accepting one means recording who accepted it and against which
       and `identity:gdpr:reconcile-subject-references` reports any erased identity the trail still
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
+      **The pass clears what is committed when it runs**, so it is closed only together with the item below.
+- [ ] **A row naming the subject that commits after the erasure's pass is kept out by a lock, and the gate
+      over it sees one directory.** The four post-commit writers that name a `User` in `resource_id` — the
+      lockout, the lockout notice, the recovery throttle and the recovery-secret projections — each write under
+      the subject's `identity_user` row lock (`IdentityRowLock`, `FOR KEY SHARE`), which `FulfilIdentityErasure`
+      holds `FOR UPDATE` from its administrator re-check to its commit, ahead of the trail pass; so each row
+      either commits first and is redacted, or waits and finds no subject. A login holds the same row
+      (`SessionSubjectLock`) before it writes its session, so a session and its `SessionStarted` are purged and
+      rewritten with the rest or never written; a bulk revocation (`RevokeAllSessions`, after a role, status or
+      password change) holds it too, so its `AllSessionsRevoked` is rewritten with the rest or never written.
+      Pinned against a second Postgres connection holding and deleting
+      the row in `LateAuditWriterErasureSerialisationFunctionalTest` and `LoginRacingAnErasureFunctionalTest`.
+      `SubjectAuditWriteSerialisationGateTest` pins every site under `Iam/Identity/Application` that writes an
+      audit row naming its subject, and reds one written without a serialising mechanism. What stays open:
+      **(a)** the gate is blind to a writer outside that directory, to the resource type spelled as a literal or
+      reached under an alias, and to a write reached through a callable, a helper in another file or a trait —
+      such a writer reopens the window with every gate green, and only
+      `identity:gdpr:reconcile-subject-references` would report the row it leaves; **(b)** the lock refuses to
+      run inside a transaction the caller already opened, because nested there the bound and the commit would
+      both be the caller's — so a writer moved inside one loses its row with an `error` report on `observability`
+      instead of committing it; **(c)** a wait that exhausts the 2 s `lock_timeout` drops the row and reports it
+      on `observability`. When the erasure behind it commits, no row was owed; when it rolls back — an
+      administrator refusal, a later failure in the chain — the identity is live and a `security` row it was
+      owed is lost, the evidence surviving only as that report; **(d)** in the lockout
+      notice's race the MAIL may still reach the address of a person whose erasure is committing, since it is
+      sent before the stamp and the audit row: a notification, not a record, and nothing of it persists here.
 - [ ] **Backup object archives carry the dump's personal data and no longer expire on their own.** The
       paired backup wrote `objects-<stamp>.tar.gz` beside each dump, and its retention `find` was the only
       thing that ever deleted them. That surface was removed, so the pattern named an artifact nothing
@@ -1175,6 +1196,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       requirement to `symfony/mercure ^0.6.1|^0.7`, so staying on it would have coupled the tree to
       the abandoned 0.4/0.7 pair and put a future advisory in Mercure's JWT-minting path out of
       reach. The bundle keeps `protocol_version: 0.x` by default, so the hub contract is unchanged.
+      **Superseded 2026-10-20:** mercure-bundle 0.6 defaults to protocol 1.0, which the embedded 0.x
+      hub refuses, so `config/packages/mercure.yaml` pins `protocol_version: '0.x'` explicitly and
+      `MercureHubProtocolFunctionalTest` asserts it on the container's own hub.
       Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
       **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
       cache `v0.4.2` exits 1 with `Deprecations: 1` naming
@@ -1337,8 +1361,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       the refusal still counts against the login throttle (`OverlongPasswordTimingListenerTest`).
 - [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
       An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
-      the attempt that trips the lock); every existing identity pays the hydration of its row inside the locked
-      read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed
+      the attempt that trips the lock, and on that same attempt the lockout projection's own transaction —
+      BEGIN, a `SELECT … FOR KEY SHARE` of the row and the `audit_log` INSERT, since that projection
+      serialises on the subject's row against an erasure; pinned as the only extra round trips in
+      `LoginAttemptRegistrarExistenceShapeTest`); every existing identity pays the hydration of its row inside
+      the locked read; and its locked read can WAIT behind another transaction holding that row — a concurrent failed
       attempt against the same address, a successful login's clear, an unlock or a redemption — where a read
       over no row never waits. An attacker controls that concurrency, though each wait is short because the
       KDF runs before the transaction. All of it sits under a KDF of hundreds of milliseconds and rides the same
@@ -1841,9 +1868,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       `""`, so every request this transport issues starts with `/`, and nothing here uses hash
       routing — but a third-party script or a future relative fetch would leak. Leading whitespace is
       a third, hand-authored only.
+      **Moved 2026-10-20 (Sentry SDK 11):** spans are streamed and never pass through `beforeSend` or
+      `beforeSendTransaction` (the latter no-ops), and the query arrives as a bare `url.query` with
+      no `?`, which the shape rule cannot recognise — measured passing in clear on every traced fetch
+      and every outgoing-request breadcrumb. Spans are now scrubbed by `scrubSentrySpan` in
+      `beforeSendSpan`, a key naming a query is scrubbed as one, and the identity axes are also
+      filtered at the source through `dataCollection.urlQueryParams`. That hook fails OPEN in the
+      SDK (a throw sends the span unscrubbed), so `scrubSentrySpan` catches and empties the span.
       **Residual four — a green proves the transformation, never the sink.** These are unit rows over
       synthetic events; nothing here observes what a running SDK attaches, and `beforeSend` /
-      `beforeSendTransaction` are the only interception points, so an SDK field outside the surfaces
+      `beforeSendSpan` are the only interception points, so an SDK field outside the surfaces
       enumerated above is untouched by construction.
       **Accepted 2026-08-21 (Sergio):** residuals one to four, on the same basis as the access-log
       residuals above — no production deployment and no customer — and on the narrower fact that all
@@ -2010,11 +2044,12 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
       on its next tick — unless it commits after the subject's window closed.** The erasure's passes reach
       the rows that exist when they run, and a request that loaded the subject before the identity row went can
-      commit one afterwards. Three review rounds each found more writers able to: the access log and the four
-      request-boundary security audit listeners on the actor axis, `StartSession` and the three session
-      revocations in `event_store` and `iam_session` — the last also after an administrator's role or status
-      change. An enumeration that failed three times is not a control, so the class is closed by mechanism
-      instead: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
+      commit one afterwards. Three review rounds each found more writers able to. The session writers among
+      them — `StartSession` and the revocations — are serialised with the erasure (the item above, and the
+      erasure purging sessions before the business-log pass), which leaves the access log and the four
+      request-boundary security audit listeners on the actor axis as the live class. An enumeration that failed
+      three times is not a control, so that class is closed by mechanism instead, and the mechanism backs up
+      the serialised writers too: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
       `ResweepErasedSubjects` re-runs the actor, resource, business-log and session passes for every subject
       still scheduled, on the five-minute `identity_maintenance` schedule, whoever wrote the row
       (`docs/adr/audit-activity-log.md` D4.2). A subject's window is one hour from the instant the erasure built
@@ -2023,7 +2058,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       another, a restart or a stopped worker delays it. The re-sweep repeats only those four passes; the
       reset-token, recovery-secret, membership and invitation purges are not repeated, because their late
       writers contend on `identity_user` or `iam_invitation` and so cannot commit after the erasure. The late writers of `Iam/Identity` that run after their own
-      commit stay serialised on `identity_user` (§6), which closes their window outright rather than bounding
+      commit stay serialised on `identity_user` (§7, the item above), which closes their window outright rather than bounding
       it. What remains, **accepted by Sergio (product owner) on 2026-10-06 together with the mechanism**:
       - **a row committed after the subject's window closed is not reached.** Nothing bounds how long a
         request runs — `max_execution_time` does not count time spent waiting on the database, and neither
@@ -2041,15 +2076,6 @@ mitigated state. Accepting one means recording who accepted it and against which
         of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
         vetoes.
       Re-affirm or close before the first customer.
-- [ ] **A login whose browser correlation never persists leaves an `ACTIVE` `iam_session` row, with its `ip`
-      and `device`, that no request can present.** `StartSession` writes the correlation only after the row and
-      its outbox commit, so a correlation never names a row that does not exist; the opposite orphan — the
-      native session failing to persist at the end of the response — keeps that row until its absolute expiry
-      and `PruneRetiredSessions`, about 97 days after the login, unless its owner revokes it from "my sessions".
-      The identity's erasure still removes it (the session purge matches by user). **Accepted by Sergio
-      (product owner) on 2026-10-04**: compensating in `StartSession` would guard an unreachable path and miss
-      the reachable one; reopen with a row born `PENDING` and activated by its first admitted request if such
-      orphans are measured in production (`docs/adr/identity-invitation-lifecycle.md` D8).
 - [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
       subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
       nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
@@ -2087,12 +2113,26 @@ mitigated state. Accepting one means recording who accepted it and against which
       retired the gate was itself exactly that shape. **Re-assess before the first customer**:
       decide whether an unenforced convention is the control you want over auth, erasure and audit code.
 
+- [ ] **A request or worker message that leaks a transaction loses the audit rows written inside it.**
+      `RequestTransactionBoundaryListener` and `MessageTransactionBoundaryListener` roll back a transaction a
+      unit of work left open and report it at `critical` on the `observability` channel, naming the route or
+      message class. The `kernel.terminate` writers (`AccessLogAuditListener`, `RecoveryThrottleAuditListener`)
+      run after that rollback and keep their rows. What the unit wrote **inside** the leak does not: a use case's
+      `AuditLogger` row (a module's `activity` row among them) is rolled back with the work it describes, so the
+      trail has no entry for an action that, consistently, did not commit either. A request-boundary security
+      row is not lost but refused — `RequestBoundarySecurityAudit` will not write inside an open transaction and
+      answers 5xx. **Detection:** the `critical` line is the only record that the unit ran; nothing correlates it
+      with the missing row. **Residuals:** a handled message whose handler leaks is redelivered after the
+      transport's redelivery timeout and repeats any side effect outside the database each time (accepted by
+      the owner on #1036); a batch handler, and a leak after the worker's running tick, are not contained (none
+      exists today); only the default connection is covered.
+
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
       `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
       `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
-      closing either of the two while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
+      closing either while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
@@ -2114,11 +2154,3 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
-- [ ] Before the migration that adds the `audit_log` actor CHECKs (`Version20261003101500`) reaches a database
-      holding real rows, count the rows it would refuse: `SELECT count(*) FROM audit_log WHERE actor_type NOT IN
-      ('anonymous','api_key','system','user') OR (actor_type IN ('anonymous','system')) <> (actor_id IS NULL)`.
-      The migration validates existing rows on purpose and fails on the first violation, so a non-zero count is
-      a decision to take before the deploy, not during it. Size the table as well: each `ADD CONSTRAINT` holds
-      `ACCESS EXCLUSIVE` on `audit_log` for a full scan, blocking every audit write meanwhile, so a large table
-      takes the out-of-band path the migration's docblock reserves for it (`NOT VALID`, then `VALIDATE CONSTRAINT`, run
-      outside the migration transaction, which otherwise keeps the first lock until commit).

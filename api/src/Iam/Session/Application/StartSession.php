@@ -6,9 +6,11 @@ namespace Erpify\Iam\Session\Application;
 
 use DateInterval;
 use Erpify\Iam\Session\Domain\Entity\Session;
+use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 
@@ -18,27 +20,44 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * {@see \Erpify\Iam\Session\Domain\Event\SessionStarted}, and persist + publish commit in one transaction — the
  * aggregate row, its event-store rows and the outbox land atomically (or the login fails closed).
  *
- * **A login over a native session that already correlates a live registry row revokes that row in the same
- * transaction.** The correlation is about to be overwritten, and once it is, no request can ever present the
- * replaced row again — so leaving it `ACTIVE` would list a device nobody holds on its owner's "my sessions"
- * until it expired, and keep its `ip`/`device` until the retention sweep after that. The replaced row is read through
- * {@see SessionRepository::findActiveById()}, so one already revoked or past its expiry is left alone, and it
- * is retired through {@see Session::revoke()}, publishing the same
- * {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} a single "log out this device" does.
- *
- * **Only the signing-in identity's own row is revoked.** Two people sharing a browser leave the first one's row
- * live when the second signs in over it: the bag no longer names it, so that browser cannot present it again,
- * but its owner still sees it among their sessions and can retire it there, and it expires on its own. Revoking
- * it would publish a {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} naming a person from a request
- * that person did not make and whose erasure it does not serialise against — an event that, racing that erasure,
- * reaches the event store after its anonymising pass and keeps the real id until the erasure re-sweep reaches it
- * (`docs/adr/audit-activity-log.md` D4.2). A writer about a person here is
- * always a request of that person's.
- *
  * The correlation is written through {@see CurrentSessionReference} only AFTER the transaction commits, so a
- * failed persist never leaves an `iamSessionId` pointing at a session that does not exist — and never leaves
- * the replaced row revoked while the bag still names it, since both writes roll back together. The minting
- * caller treats any throw as fail-closed (invalidate the native session + 503).
+ * failed persist never leaves an `iamSessionId` pointing at a session that does not exist. The minting caller
+ * treats any throw as fail-closed (invalidate the native session + 503).
+ *
+ * A re-login from the same browser keeps the native session's attributes (the firewall migrates the session
+ * rather than clearing it), so the bag may still correlate an earlier session. Overwriting that correlation
+ * would leave the earlier row `ACTIVE` and reachable by nothing — a phantom device in "my sessions" until its
+ * expiry, and a row the retention sweep removes only once that expiry is 90 days behind it (~97 days after the
+ * login). So the session the bag correlated, if it is still admissible, is revoked in the SAME
+ * transaction that persists the new one, and its {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} is
+ * published beside the new session's start: both land or neither does. It is revoked only when it belongs to
+ * the identity signing in (product-owner decision, 2026-10-03): another person's row on a shared browser is left
+ * live for its owner, so no request publishes a `SessionRevoked` about a person who did not make it. That row is
+ * no longer reachable through this cookie, and stays in its owner's "my sessions", revocable from any other
+ * device, until the sweep bound below. Only that one row is touched; this is not a "log out everywhere", and
+ * revoking a single row by id takes no set lock, so it cannot close a lock cycle with a bulk revocation.
+ *
+ * That row is read under its row lock ({@see SessionRepository::lockActiveById()}), because the read decides
+ * whether a `SessionRevoked` is published. Read unlocked, a rival that revokes or deletes the row between this
+ * read and the flush — a "log out everywhere", a credential change's teardown, a single-session log-out, an
+ * erasure — leaves the flush re-stamping `revoked_at` over a revocation that already happened and publishing a
+ * `SessionRevoked` for it: a duplicate when the rival revoked that row alone, and after an erasure an event naming
+ * the person that outlives the erasure. Locked, the rival either waits for this transaction or has committed
+ * first, and then the row no longer reads as admissible and nothing is published for it. Against an erasure
+ * that waits, the event this commits is still reached, because the erasure purges sessions before it
+ * pseudonymises the business log (`FulfilIdentityErasure`).
+ *
+ * The identity itself is held first, through {@see SessionSubjectLock}, so a login racing that identity's erasure
+ * either commits before the erasure purges sessions and pseudonymises the business log — and is then purged and
+ * rewritten with the rest — or finds the identity gone and mints nothing. Without it a login admitted an instant
+ * before the erasure would leave a session row and a `SessionStarted` naming a person who no longer exists. A
+ * login that arrives second is refused like a store failure: the caller already turns any throw into a dropped
+ * cookie and a 503, and an identity erased mid-login has no session to fall back on either way.
+ *
+ * Two residuals remain, both bounded the same way — an unreachable `ACTIVE` row the sweep removes once its expiry
+ * is 90 days behind it, ~97 days after the login. A post-commit failure to write the new correlation leaves the
+ * NEW row unreachable. A mint the store refuses rolls the revocation back with it, while the minting listener
+ * drops the cookie, so the EARLIER row is then left `ACTIVE` and equally unreachable.
  *
  * The TTL is an absolute cap: there is no idle-timeout enforcement, so this ceiling is the sole bound on a
  * session's lifetime.
@@ -53,24 +72,30 @@ final readonly class StartSession
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private SessionSubjectLock $subjectLock,
     ) {
     }
 
+    /**
+     * @throws SessionStoreUnavailable when the identity no longer exists once its row is held
+     */
     public function start(string $userId, string $organizationId, string $device, ?string $ip): SessionId
     {
-        $replaced = $this->currentSession->get();
-
         $sessionId = SessionId::generate();
         $expiresAt = $this->clock->now()->add(new DateInterval(self::TTL_SPEC));
         $session = Session::start($sessionId->toString(), $userId, $organizationId, $device, $ip, $expiresAt);
 
-        $this->transactionManager->transactional(function () use ($replaced, $session, $userId): void {
-            if ($replaced instanceof SessionId) {
-                $this->revokeReplaced($replaced, $userId);
+        $previousId = $this->currentSession->get();
+
+        $this->transactionManager->transactional(function () use ($userId, $session, $previousId): void {
+            if (!$this->subjectLock->holdsLive($userId)) {
+                throw SessionStoreUnavailable::storeUnreachable();
             }
 
+            $revoked = $this->revokePrevious($previousId, $userId);
+
             $this->sessions->save($session);
-            $this->eventBus->publish(...$session->pullDomainEvents());
+            $this->eventBus->publish(...$revoked, ...$session->pullDomainEvents());
         });
 
         $this->currentSession->set($sessionId);
@@ -78,16 +103,28 @@ final readonly class StartSession
         return $sessionId;
     }
 
-    private function revokeReplaced(SessionId $replaced, string $userId): void
+    /**
+     * Revokes and saves the session the bag correlated before this login, returning the events it recorded so
+     * they are published with the new session's; nothing when there was no correlation, the row is no longer
+     * admissible once its lock is held, or it belongs to another identity.
+     *
+     * @return list<DomainEvent>
+     */
+    private function revokePrevious(?SessionId $previousId, string $userId): array
     {
-        $previous = $this->sessions->findActiveById($replaced);
+        if (!$previousId instanceof SessionId) {
+            return [];
+        }
+
+        $previous = $this->sessions->lockActiveById($previousId);
 
         if (!$previous instanceof Session || 0 !== \strcasecmp($previous->userId(), $userId)) {
-            return;
+            return [];
         }
 
         $previous->revoke();
         $this->sessions->save($previous);
-        $this->eventBus->publish(...$previous->pullDomainEvents());
+
+        return $previous->pullDomainEvents();
     }
 }

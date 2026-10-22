@@ -12,13 +12,12 @@ import { useDeparture } from "@/context/shared/navigation/application/useDepartu
  * Route protection. Identity is resolved before authorization: while the
  * provider is `hydrating` it renders nothing and does not redirect (the stored
  * session has not been read yet). Once resolved, only an `authenticated` (ACTIVE)
- * session sees the children. An `unavailable` provider (the server answered 503
- * `service-unavailable`, typically because it cannot reach its session store) is
- * sent to /maintenance, because /login would answer the same outage; anything
- * else is redirected to /login. Both keep the blocked target in `?next=`, so the
- * sign-in form, or the maintenance page once the server answers again, can return
- * there. Protected content therefore never flashes on the strength of a default
- * session.
+ * session sees the children. `unavailable` (the server answered 502/503/504: it
+ * cannot tell whether anyone is signed in) is replaced by /maintenance, since
+ * /login would be refused by the same outage; anything else is redirected to
+ * /login. Both carry the blocked target in `?next=`, so sign-in can return there
+ * and the maintenance page's retry can go back to it.
+ * Protected content therefore never flashes on the strength of a default session.
  */
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const router = useRouter();

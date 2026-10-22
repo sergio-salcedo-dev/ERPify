@@ -188,12 +188,12 @@ final class RedeemRecoverySecretRefusalTest extends TestCase
                 // line by the handler, and the message half is where an interpolated identifier would sit.
                 $this->assertStringNotContainsString(
                     $selector,
-                    \json_encode($record, JSON_THROW_ON_ERROR | JSON_PARTIAL_OUTPUT_ON_ERROR),
+                    \json_encode($record, JSON_THROW_ON_ERROR),
                     'the selector reached a log line, a sink with no TTL and no erasure owner',
                 );
                 $this->assertStringNotContainsString(
                     $generated->plaintext(),
-                    \json_encode($record, JSON_THROW_ON_ERROR | JSON_PARTIAL_OUTPUT_ON_ERROR),
+                    \json_encode($record, JSON_THROW_ON_ERROR),
                     'the presented credential reached a log line',
                 );
             }

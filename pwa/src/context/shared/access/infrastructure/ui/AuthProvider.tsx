@@ -9,12 +9,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import type { Session } from "../../domain/Session";
 import type { Identity } from "../../domain/Identity";
 import type { IdentityRepository } from "../../domain/IdentityRepository";
+import { IdentityUnavailableError } from "../../domain/IdentityUnavailableError";
 import type { SessionsRepository } from "../../domain/SessionsRepository";
 import { UserStatus } from "../../domain/UserStatus";
-import { IdentityServiceUnavailableError } from "../../domain/IdentityServiceUnavailableError";
 import { AccessContext } from "../../domain/AccessContext";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { telemetry } from "@/context/shared/observability/infrastructure";
@@ -28,33 +29,26 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * Identity must be resolved before authorization is evaluated. Until the cold
  * `/me` probe resolves, the provider is `hydrating` and guards render nothing —
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
- * session is `authenticated`; a server that answered 503 `service-unavailable`
- * (it could not reach a dependency it needs to decide, typically its session
- * store) is `unavailable`; no live session (401) is `unauthenticated`, and so is
- * a probe that got no answer. "No answer" is any failure other than those two —
- * offline, a timeout, a proxy's 5xx, a body that does not parse — because none of
- * them carries a decision from the server. There is no seeded default and no
- * auto-admin.
+ * session is `authenticated`; no live session (401) or any other failure
+ * (network, client timeout, malformed body, another 5xx) is `unauthenticated`, unless an
+ * outage is already known (below). There is no seeded default and no auto-admin.
  *
- * `unavailable` is kept apart from `unauthenticated` because the guard sends the
- * two to different places: a back-office visitor who may well still be signed in
- * gains nothing from a sign-in form while the store is down — the login route
- * answers the same 503 — so the guard parks that case on the maintenance page,
- * which returns them once the server answers. The failures that stay
- * `unauthenticated` do so because neither proves the server is up and undecided,
- * and the sign-in form is where a transient blip recovers on its own.
+ * `unavailable` is the server, or a gateway in front of it, saying it cannot decide (502/503/504):
+ * the session store is unreachable, so sending the user to sign in would land them on a form the
+ * same outage refuses. The verdict holds only for the route it was observed on — the provider
+ * outlives client navigations, so on the next route it reads `hydrating` again until a fresh probe
+ * answers.
  *
- * `unavailable` is the one status that clears itself: while in it the provider
- * re-probes `/me` with a bounded backoff, and at once when the tab becomes visible
- * or the browser comes back online, so the user leaves the maintenance page when
- * the server can answer again rather than at the next hard reload. Only an answer
- * is applied from a re-probe — a 200, a 401, or another 503 `service-unavailable`,
- * the last leaving it `unavailable` — and a re-probe that got none changes nothing,
- * so the status stays `unavailable`: leaving on one would send a visitor who is
- * still signed in to the sign-in form for want of a network, which is exactly the
- * moment a laptop waking from sleep produces. The cold probe and a sign-in's probe
- * keep the mapping above and read no answer as `unauthenticated`, because a sign-in
- * reports its failure through the form rather than waiting it out.
+ * Once an outage is known, only an answer ends it: a 200 or a 401 decides, while a probe that got
+ * no decision — a network error, a client timeout, a malformed body — keeps the visitor on the
+ * outage instead of signing them out. The gateway that just reported the outage is the likeliest
+ * reason that probe went unanswered, and the sign-in form sits behind it too.
+ *
+ * Probes are sequenced: the cold probe, a per-route re-probe and `login()`/`refresh()` each take a
+ * ticket when they START, and only the most recently started one may apply its answer.
+ * A slow cold probe answering 503 after a completed `login()` would otherwise sign the
+ * user out of the session they just obtained. `logout()` takes a ticket too, so an
+ * answer still in flight when the user signs out cannot sign them back in.
  */
 export const AuthStatus = {
   HYDRATING: "hydrating",
@@ -72,19 +66,25 @@ export interface AuthContextValue {
    * already set the httpOnly session cookie). Never accepts a fabricated
    * identity — the server is the single source of truth.
    *
-   * It resolves to the session the provider holds once the probe settles, because
-   * the caller cannot otherwise tell an authenticated provider from one the probe
-   * never confirmed. That is the probe's own session when it was applied. When it
-   * was not, something superseded it (a sign-out, a later probe), and the call waits
-   * until that has written too — a second sign-in still in flight would otherwise
-   * leave the caller holding the state from before either — then resolves to what
-   * it wrote. So a caller never announces a sign-in the provider does not hold, and
-   * never misses one it is about to. `null` conflates "no live
-   * session" with "could not tell" (a 503 `service-unavailable` included), and
-   * deliberately so: neither is grounds to announce a sign-in, so the caller's move
-   * is the same for both.
+   * It resolves to the session the probe produced, because the caller cannot
+   * otherwise tell an authenticated provider from one the probe never
+   * confirmed. `null` conflates "no live session" with "could not tell", and
+   * deliberately so: neither is grounds to announce a sign-in, so the caller's
+   * move is the same for both. When a probe started later (another `login()`, a
+   * re-probe) supersedes this one, its own answer is discarded and it resolves to the
+   * session the winning probe produced instead — the provider's status is the winner's
+   * to decide, and the caller must read that decision rather than a stale `null` it
+   * would take for a failed sign-in. That session may itself be `null` — the winning probe
+   * found no live session, or could not tell — and a winning `logout()` always yields `null`.
    */
   login: () => Promise<Session | null>;
+  /**
+   * Re-resolve the session from `/me` on the current route, with the same sequencing and
+   * resolution as `login()`. It is the retry for an `unavailable` verdict on a route the
+   * visitor stays on: that verdict is bound to its route, so without a navigation nothing
+   * else would ask again.
+   */
+  refresh: () => Promise<Session | null>;
   /**
    * Sign out: revoke the current server-side session (so the server drops its
    * cookie) and clear the in-memory session. The server call is best-effort —
@@ -103,36 +103,23 @@ export interface AuthContextValue {
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
-/** What one `/me` probe established: the session, or why there is none. */
-interface ProbeResult {
-  session: Session | null;
-  serviceUnavailable: boolean;
-  /**
-   * Whether the server decided anything: a 200, a 401 (resolved as no identity), or the 503
-   * `service-unavailable` error. False for every other failure (network, timeout, a proxy's 5xx, a
-   * malformed body), which carries no decision: the outage re-probe never applies it, while the cold
-   * probe and a sign-in read it as "no live session" — see {@link AuthStatus}.
-   */
-  answered: boolean;
-}
+/**
+ * What one `/me` probe established. Separate fields rather than `Session | null` so the
+ * catch cannot collapse "no live session", "the server could not decide" and "no decision
+ * reached us" into one value again.
+ */
+type Probe = { session: Session | null; unavailable: boolean; decided: boolean };
 
-/** One probe's result, and whether it was the one allowed to write the state. */
-interface ProbeOutcome {
-  result: ProbeResult;
-  applied: boolean;
-}
+/** A started probe and the ticket it took; see the provider's docblock. */
+type TicketedProbe = { ticket: number; answer: Promise<Probe> };
 
-/** Stands in for the latest probe once whatever advanced the generation has already written. */
-const ALREADY_WRITTEN: Promise<unknown> = Promise.resolve();
-
-/** First re-probe delay while `unavailable`; each further attempt doubles it. */
-export const REPROBE_INITIAL_DELAY_MS = 5_000;
-/** Ceiling of the re-probe backoff, so a long outage still recovers within a minute. */
-export const REPROBE_MAX_DELAY_MS = 60_000;
-
-function reprobeDelayMs(attempt: number): number {
-  return Math.min(REPROBE_INITIAL_DELAY_MS * 2 ** attempt, REPROBE_MAX_DELAY_MS);
-}
+/**
+ * Held in `unavailableAt` once a re-probe has started for a verdict observed elsewhere. No
+ * pathname starts with a NUL, so it matches no route: the verdict is no longer bound to the
+ * route it was seen on, and returning there before the re-probe answers reads `hydrating`
+ * and probes again rather than replaying the old verdict.
+ */
+const VERDICT_BEING_REPROBED = "\u0000reprobing";
 
 /**
  * Build the session from a resolved identity. A 200 from the gated `/me`
@@ -162,185 +149,129 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // no protected content can flash before `/me` resolves. `hydrated` flips once
   // the probe (or a login re-probe) has settled.
   const [session, setSession] = useState<Session | null>(null);
-  const [serviceUnavailable, setServiceUnavailable] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  // Several probes can be in flight at once (the cold probe, a sign-in re-probe, an outage
-  // re-probe) and they may settle in any order. The invariant: a probe writes the state only if
-  // nothing has advanced this generation since it started — so no result ever overwrites one from a
-  // probe that started after it, and a slow cold probe settling after a fast sign-in cannot
-  // overwrite the session that sign-in confirmed. The cold probe and a sign-in advance it when they
-  // start; sign-out and unmount advance it too, so a probe they outlive is dropped. An outage
-  // re-probe advances it only at the moment it writes, and writes only an answer: one that got no
-  // answer supersedes nothing, so it can never cost a sign-in that did get one.
-  const probeGeneration = useRef(0);
-  // Settles once whatever last advanced the generation has written, or declined to: the probe that
-  // advanced it, or `ALREADY_WRITTEN` for a sign-out, an unmount or an outage re-probe, which advance
-  // it only as they write. `login()` waits on it when its own probe was superseded.
-  const latestProbe = useRef<Promise<unknown>>(ALREADY_WRITTEN);
-  // The session last written to the state, readable without waiting for a render: `login()`
-  // answers with it when its own probe was superseded. Every write goes through `holdSession`.
-  const heldSession = useRef<Session | null>(null);
+  // The route an unavailable verdict was observed on (or VERDICT_BEING_REPROBED once a re-probe
+  // for it started elsewhere), or null when the last probe decided. Bound to the route rather than
+  // a boolean because this provider is mounted once for the whole app and its cold probe runs only
+  // on mount: a boolean would outlive the outage and bounce every later client navigation back to
+  // maintenance.
+  const [unavailableAt, setUnavailableAt] = useState<string | null>(null);
+  // Read by `applyProbe`, which must not re-create on every verdict change.
+  const unavailableAtRef = useRef(unavailableAt);
+  useEffect(() => {
+    unavailableAtRef.current = unavailableAt;
+  }, [unavailableAt]);
 
-  const holdSession = useCallback((next: Session | null): void => {
-    heldSession.current = next;
-    setSession(next);
-  }, []);
+  // Outside the App Router `usePathname()` is null; that is still one route.
+  const route = usePathname() ?? "";
+  const routeRef = useRef(route);
+  useEffect(() => {
+    routeRef.current = route;
+  }, [route]);
 
-  const resolveSession = useCallback(async (): Promise<ProbeResult> => {
+  // The ticket of the most recently started probe or sign-out; see the provider's docblock.
+  const probeSeqRef = useRef(0);
+  // The most recently started probe, so a superseded `login()` can wait for the one that won.
+  const latestProbeRef = useRef<TicketedProbe | null>(null);
+
+  const resolveSession = useCallback(async (): Promise<Probe> => {
     try {
       const identity = await identityRepository.me();
       return {
         session: identity ? sessionFromIdentity(identity) : null,
-        serviceUnavailable: false,
-        answered: true,
+        unavailable: false,
+        decided: true,
       };
     } catch (error) {
-      // The adapter already maps 401 to null and a 503 `service-unavailable` to its own error;
-      // any other failure (network, timeout, malformed body) carries no decision from the server.
-      const serviceUnavailable = error instanceof IdentityServiceUnavailableError;
-      return { session: null, serviceUnavailable, answered: serviceUnavailable };
+      // The adapter already maps 401 to null and a 502/503/504 to
+      // IdentityUnavailableError: an outage, not a missing session. Any other
+      // failure (network, malformed body) decided nothing; `applyProbe` reads it.
+      return {
+        session: null,
+        unavailable: error instanceof IdentityUnavailableError,
+        decided: false,
+      };
     }
   }, [identityRepository]);
 
-  const applyResult = useCallback(
-    (result: ProbeResult): void => {
-      holdSession(result.session);
-      setServiceUnavailable(result.serviceUnavailable);
-      setHydrated(true);
-    },
-    [holdSession],
-  );
+  const startProbe = useCallback((): TicketedProbe => {
+    probeSeqRef.current += 1;
+    const started = { ticket: probeSeqRef.current, answer: resolveSession() };
+    latestProbeRef.current = started;
+    return started;
+  }, [resolveSession]);
+
+  /** Runs one probe and answers `null` when a later probe or sign-out has superseded it. */
+  const sequencedProbe = useCallback(async (): Promise<Probe | null> => {
+    const { ticket, answer } = startProbe();
+    const probe = await answer;
+    return ticket === probeSeqRef.current ? probe : null;
+  }, [startProbe]);
 
   /**
-   * The cold probe and a sign-in's: supersede every probe in flight, then apply the result, answer
-   * or not, unless a later probe, a sign-out or the unmount has superseded this one in turn.
-   * Returns the very promise it records as the latest probe, so `login()` can tell whether anything
-   * started after it.
+   * The session of whichever probe holds the latest ticket once it answers, or `null` when a
+   * sign-out holds it. Loops because another probe may start while the awaited one is in flight.
    */
-  const probe = useCallback((): Promise<ProbeOutcome> => {
-    probeGeneration.current += 1;
-    const generation = probeGeneration.current;
-    const outcome = resolveSession().then((result): ProbeOutcome => {
-      const applied = generation === probeGeneration.current;
-      if (applied) applyResult(result);
-      return { result, applied };
+  const winningSession = useCallback(async (): Promise<Session | null> => {
+    for (;;) {
+      const latest = latestProbeRef.current;
+      if (latest?.ticket !== probeSeqRef.current) return null;
+      const probe = await latest.answer;
+      if (latest.ticket === probeSeqRef.current) return probe.session;
+    }
+  }, []);
+
+  // Stamped with the route current when the probe ANSWERED, not when it started. A probe that
+  // decided nothing while an outage is known keeps that outage; see the provider's docblock.
+  const applyProbe = useCallback((probe: Probe): void => {
+    const outageKnown = unavailableAtRef.current !== null;
+    const unavailable = probe.unavailable || (!probe.decided && outageKnown);
+    setSession(probe.session);
+    setUnavailableAt(unavailable ? routeRef.current : null);
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    sequencedProbe().then((probe) => {
+      if (!active || probe === null) return;
+      applyProbe(probe);
     });
-    latestProbe.current = outcome;
-    return outcome;
-  }, [resolveSession, applyResult]);
-
-  /**
-   * The outage loop's: supersede nothing while in flight, and only at the end — when the server
-   * answered and nothing advanced the generation meanwhile — supersede what is still in flight and
-   * apply. Getting no answer, or being overtaken, leaves everything as it was.
-   */
-  const reprobeDuringOutage = useCallback(async (): Promise<ProbeOutcome> => {
-    const observed = probeGeneration.current;
-    const result = await resolveSession();
-    const applied = result.answered && observed === probeGeneration.current;
-    if (applied) {
-      probeGeneration.current += 1;
-      latestProbe.current = ALREADY_WRITTEN;
-      applyResult(result);
-    }
-    return { result, applied };
-  }, [resolveSession, applyResult]);
-
-  useEffect(() => {
-    void probe();
     return () => {
-      probeGeneration.current += 1;
-      latestProbe.current = ALREADY_WRITTEN;
+      active = false;
     };
-  }, [probe]);
+  }, [sequencedProbe, applyProbe]);
 
+  // An unavailable verdict observed on another route is stale. Re-probe once the
+  // user has moved, exactly as a cold load of the new route would — never on a timer.
+  const staleVerdict = unavailableAt !== null && unavailableAt !== route;
+  // Unbound during render rather than in the effect, so a child's effect never reads the old
+  // verdict on the route it was seen on while the re-probe for it is still in flight.
+  if (staleVerdict && unavailableAt !== VERDICT_BEING_REPROBED) {
+    setUnavailableAt(VERDICT_BEING_REPROBED);
+  }
   useEffect(() => {
-    if (!serviceUnavailable) return;
-    // Timed probes the loop has sent; the backoff grows with them alone. A tick skipped while offline
-    // does not count, and neither does a probe a visibility or `online` event sent: those already answer
-    // the moment that changed, and counting them would push the next timed probe out by a tab switch.
-    let attempt = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let inFlight = false;
-    let pendingReprobe = false;
-    let stopped = false;
-
-    // Leaving `unavailable` re-runs this effect and stops the loop; a result that is still
-    // `unavailable` sets no new state, so the loop schedules its own next attempt. So does a probe
-    // that got no answer, which is not applied at all, and a probe superseded by someone else's
-    // (a sign-in re-probe): if that other probe also answered `unavailable`, nothing would re-run
-    // this effect, and the loop would stall.
-    function schedule(): void {
-      clearTimeout(timer);
-      timer = setTimeout(tick, reprobeDelayMs(attempt));
-    }
-    // A probe sent while the browser knows it is offline cannot be answered; the `online` listener
-    // re-probes the moment that changes, and the next tick stays scheduled in case it never fires.
-    function tick(): void {
-      if (!globalThis.navigator.onLine) {
-        schedule();
-        return;
-      }
-      attempt += 1;
-      reprobe();
-    }
-    // A request arriving while a probe is in flight is held rather than dropped: a tab waking from
-    // sleep sends one on `visibilitychange` before the network is back, and the `online` that
-    // follows lands while it is still failing. When that probe settles without an answer, the held
-    // request runs at once instead of waiting out the backoff; when it got one, it is already as
-    // fresh as the held request could be, and the backoff stands.
-    function reprobe(): void {
-      if (stopped) return;
-      if (inFlight) {
-        pendingReprobe = true;
-        return;
-      }
-      clearTimeout(timer);
-      inFlight = true;
-      void reprobeDuringOutage().then(({ result, applied }) => {
-        inFlight = false;
-        const runHeldRequest = pendingReprobe && !result.answered;
-        pendingReprobe = false;
-        if (stopped || (applied && !result.serviceUnavailable)) return;
-        if (runHeldRequest) {
-          reprobe();
-          return;
-        }
-        schedule();
-      });
-    }
-    function reprobeWhenVisible(): void {
-      if (globalThis.document.visibilityState === "visible" && globalThis.navigator.onLine)
-        reprobe();
-    }
-
-    schedule();
-    globalThis.document.addEventListener("visibilitychange", reprobeWhenVisible);
-    globalThis.addEventListener("online", reprobe);
+    if (!staleVerdict) return;
+    let active = true;
+    sequencedProbe().then((probe) => {
+      if (!active || probe === null) return;
+      applyProbe(probe);
+    });
     return () => {
-      stopped = true;
-      clearTimeout(timer);
-      globalThis.document.removeEventListener("visibilitychange", reprobeWhenVisible);
-      globalThis.removeEventListener("online", reprobe);
+      active = false;
     };
-  }, [serviceUnavailable, reprobeDuringOutage]);
+  }, [staleVerdict, route, sequencedProbe, applyProbe]);
 
-  // The held session rather than the probe's own: when a sign-out or a later probe superseded
-  // this one, its result was never applied, and announcing it would contradict the provider. The
-  // sign-in waits out every probe that superseded it in turn, so the answer is what the latest one
-  // wrote rather than the state before it. The wait is sequential by nature: which probe comes
-  // next is known only once the current one has settled.
   const login = useCallback(async (): Promise<Session | null> => {
-    const waitOut = async (awaited: Promise<unknown>): Promise<void> => {
-      await awaited;
-      if (awaited !== latestProbe.current) await waitOut(latestProbe.current);
-    };
-    await waitOut(probe());
-    return heldSession.current;
-  }, [probe]);
+    const probe = await sequencedProbe();
+    if (probe === null) return winningSession();
+    applyProbe(probe);
+    return probe.session;
+  }, [sequencedProbe, applyProbe, winningSession]);
 
   const logout = useCallback(
     async (budgetMs?: number): Promise<void> => {
+      probeSeqRef.current += 1;
       try {
         await sessionsRepository.revokeCurrent(budgetMs);
       } catch (error) {
@@ -351,42 +282,49 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           cause: error,
         });
       } finally {
-        probeGeneration.current += 1;
-        latestProbe.current = ALREADY_WRITTEN;
-        holdSession(null);
-        setServiceUnavailable(false);
+        // Again on settling: a probe started while the revoke was in flight read a session
+        // this sign-out is ending, and the local session is always cleared.
+        probeSeqRef.current += 1;
+        setSession(null);
+        setUnavailableAt(null);
         setHydrated(true);
       }
     },
-    [sessionsRepository, holdSession],
+    [sessionsRepository],
   );
 
   const override = useCallback(
     (patch: Omit<Partial<Session>, "user"> & { user?: Partial<Identity> }): void => {
-      const base = heldSession.current;
-      if (!base) return;
-      const user: Identity = { ...base.user, ...patch.user };
-      holdSession({
-        ...base,
-        ...patch,
-        user,
-        roles: patch.roles ?? user.roles,
-        permissions: patch.permissions ?? user.permissions,
+      setSession((base) => {
+        if (!base) return base;
+        const user: Identity = { ...base.user, ...patch.user };
+        return {
+          ...base,
+          ...patch,
+          user,
+          roles: patch.roles ?? user.roles,
+          permissions: patch.permissions ?? user.permissions,
+        };
       });
     },
-    [holdSession],
+    [],
   );
 
+  // Derived during render rather than reset in an effect: a child's effects run
+  // before this provider's, so a guard would already have redirected on the stale
+  // verdict by the time an effect here flipped the status back to `hydrating`.
   const status = useMemo<AuthStatus>(() => {
     if (!hydrated) return AuthStatus.HYDRATING;
-    if (serviceUnavailable) return AuthStatus.UNAVAILABLE;
+    if (unavailableAt !== null) {
+      return unavailableAt === route ? AuthStatus.UNAVAILABLE : AuthStatus.HYDRATING;
+    }
     return session?.user.status === UserStatus.ACTIVE
       ? AuthStatus.AUTHENTICATED
       : AuthStatus.UNAUTHENTICATED;
-  }, [hydrated, serviceUnavailable, session]);
+  }, [hydrated, unavailableAt, route, session]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, session, login, logout, override }),
+    () => ({ status, session, login, refresh: login, logout, override }),
     [status, session, login, logout, override],
   );
 

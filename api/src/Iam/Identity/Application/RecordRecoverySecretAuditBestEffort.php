@@ -41,6 +41,13 @@ use Throwable;
  * request-derived string that would reach `json_encode` on a path whose whole contract is that it cannot
  * throw.
  *
+ * **Post-commit does not mean unserialised: every row is written under the subject's `identity_user` row lock**,
+ * through {@see IdentityRowLock}, which says why that keeps a row naming the subject from committing after an
+ * erasure's pass over the trail. An identity the locked read no longer finds is owed no row, for the same reason.
+ * The wait is paid on a request that has already done its work — the mint's response is being built, the
+ * redemption has already established or refused its session — and it is bounded, so it can delay the answer but
+ * never withhold it.
+ *
  * **The report goes to the always-on `observability` channel**, bound in `services.yaml` because deptrac
  * refuses this layer a dependency on the container's attributes. On the default channel it would not be read:
  * prod routes that through `fingers_crossed`, which discards its buffer unless a record at `error` or above
@@ -48,14 +55,10 @@ use Throwable;
  * discarded line into a flush of every record the request accumulated, on a request that is a person's own
  * authenticated session. The report call is itself real I/O, so it is wrapped by
  * {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that nothing escapes may not throw.
- *
- * **Each write runs behind a lock on the subject's `identity_user` row, via {@see IdentityRowSerialiser}, and
- * is skipped when the row is gone**, for the reason {@see RecordLockoutAuditBestEffort} gives. The compensated
- * redemption is where that is more than a race on paper: one of the refusals it answers is the identity
- * vanishing under the locked pass, so the row it would write is precisely one about an erasure in flight.
  */
 final readonly class RecordRecoverySecretAuditBestEffort
 {
+    use ReportsAbsentSubject;
     use ReportsAuditFailureSafely;
 
     private const string MINTED_ACTION = 'RECOVERY_SECRET_MINTED';
@@ -69,8 +72,8 @@ final readonly class RecordRecoverySecretAuditBestEffort
     private const string REDEMPTION_INTERRUPTED_ACTION = 'RECOVERY_SECRET_REDEMPTION_INTERRUPTED';
 
     public function __construct(
+        private IdentityRowLock $identityRows,
         private AuditLogger $auditLogger,
-        private IdentityRowSerialiser $identityRows,
         private LoggerInterface $logger,
     ) {
     }
@@ -115,7 +118,7 @@ final readonly class RecordRecoverySecretAuditBestEffort
     }
 
     /**
-     * The report names the action in its CONTEXT rather than in four separate messages: the token is a
+     * The report names the action and the phase in its CONTEXT rather than in separate messages: the token is a
      * closed constant of this class, so it identifies which transition lost its row without becoming a
      * per-transition sentence somebody has to keep in step. Nothing else is put there — the user id is
      * deliberately absent, since a line asserting that a person's audit row went missing may not answer by
@@ -123,18 +126,29 @@ final readonly class RecordRecoverySecretAuditBestEffort
      */
     private function record(string $action, string $userId): void
     {
+        $phase = self::PHASE_LOCK;
+
         try {
-            $this->identityRows->whileLive($userId, function () use ($action, $userId): void {
+            $held = $this->identityRows->whileHeld($userId, function () use ($action, $userId, &$phase): void {
+                $phase = self::PHASE_WRITE;
                 $this->auditLogger->log(
                     $action,
                     AuditLevel::SECURITY,
                     AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
                 );
+                $phase = self::PHASE_COMMIT;
             });
+
+            if (!$held) {
+                $this->reportSafely(fn () => $this->logger->info(
+                    'Recovery-secret transition committed; no security audit row owed, the identity is gone.',
+                    ['action' => $action, 'phase' => self::PHASE_SUBJECT_ABSENT],
+                ));
+            }
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
-                'Recovery-secret transition committed; security audit projection skipped (write failed).',
-                ['action' => $action, 'exception' => $throwable],
+                'Recovery-secret transition committed; security audit projection skipped.',
+                ['action' => $action, 'phase' => $phase, 'exception' => $throwable],
             ));
         }
     }

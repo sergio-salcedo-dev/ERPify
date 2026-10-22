@@ -39,8 +39,8 @@ trait BuildsFailureHandler
             new InlineTransactionManager(),
             new FixedClock(SystemClock::now()),
             new RecordLockoutAuditBestEffort(
+                new InMemoryIdentityRowLock($repository),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
         );
@@ -74,14 +74,15 @@ trait BuildsFailureHandler
         $transactionManager = $this->createStub(TransactionManager::class);
         $transactionManager->method('transactional')->willThrowException($translated);
 
+        $repository = new InMemoryUserRepository(UserMother::create());
         $registrar = new LoginAttemptRegistrar(
-            new InMemoryUserRepository(UserMother::create()),
+            $repository,
             new RecordingEventBus(),
             $transactionManager,
             new FixedClock(SystemClock::now()),
             new RecordLockoutAuditBestEffort(
+                new InMemoryIdentityRowLock($repository),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
         );

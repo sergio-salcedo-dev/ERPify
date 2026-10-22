@@ -22,6 +22,12 @@ use Throwable;
  * logger. A brute-force defence that its own observability can switch off is the wrong trade in a control
  * whose entire purpose is observability.
  *
+ * **Post-commit does not mean unserialised: the row is written under the subject's `identity_user` row lock**,
+ * through {@see IdentityRowLock}, which says why that keeps a row naming the subject from committing after an
+ * erasure's pass over the trail. The transaction is the lock's own, never the registrar's, and it is opened on
+ * the connection rather than through the entity manager: a failed INSERT, a lock wait that times out or a failed
+ * COMMIT rolls back this projection alone, flushes nothing the request still holds and leaves the manager open.
+ *
  * `Throwable` and not `DbalException`: {@see \Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter}
  * encodes metadata with `JSON_THROW_ON_ERROR`, so a `JsonException` can leave the writer, and it is not a DBAL
  * type. Escaping here it would surface as a 500 on exactly the tenth failed attempt of a resolved identity
@@ -55,22 +61,17 @@ use Throwable;
  *
  * The report itself is wrapped, via {@see ReportsAuditFailureSafely}: a catch whose entire purpose is that
  * nothing escapes may not throw, and the report call is real I/O.
- *
- * **The write runs behind a lock on the subject's `identity_user` row, via {@see IdentityRowSerialiser}, and is
- * skipped when the row is gone.** Post-commit means outside every transaction that holds the subject, so an
- * erasure could otherwise complete its trail passes between the lockout's commit and this insert and leave
- * the row naming an identity that no longer exists. The lock and the skip are inside the swallow: a lock
- * timeout is one more way for the projection to be lost, never a reason for the refusal to become a 500.
  */
 final readonly class RecordLockoutAuditBestEffort
 {
+    use ReportsAbsentSubject;
     use ReportsAuditFailureSafely;
 
     private const string LOCKED_ACTION = 'USER_LOCKED';
 
     public function __construct(
+        private IdentityRowLock $identityRows,
         private AuditLogger $auditLogger,
-        private IdentityRowSerialiser $identityRows,
         private LoggerInterface $logger,
     ) {
     }
@@ -80,21 +81,36 @@ final readonly class RecordLockoutAuditBestEffort
      * the resource columns, which the erasure chain rewrites alongside `actor_id`. No metadata: the expiry is
      * already in the event payload, and request-derived strings here would reach `json_encode` on a path the
      * caller cannot afford to have throw.
+     *
+     * An identity the locked read no longer finds has been erased since the lockout committed, and it is owed
+     * no row: writing one would name a subject whose erasure has already run its pass over the trail. That
+     * outcome is reported at `info`, without the id, so the missing row is explained rather than silent.
      */
     public function record(string $userId): void
     {
+        $phase = self::PHASE_LOCK;
+
         try {
-            $this->identityRows->whileLive($userId, function () use ($userId): void {
+            $held = $this->identityRows->whileHeld($userId, function () use ($userId, &$phase): void {
+                $phase = self::PHASE_WRITE;
                 $this->auditLogger->log(
                     self::LOCKED_ACTION,
                     AuditLevel::SECURITY,
                     AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $userId),
                 );
+                $phase = self::PHASE_COMMIT;
             });
+
+            if (!$held) {
+                $this->reportSafely(fn () => $this->logger->info(
+                    'Lockout committed; no security audit row owed, the identity is gone.',
+                    ['phase' => self::PHASE_SUBJECT_ABSENT],
+                ));
+            }
         } catch (Throwable $throwable) {
             $this->reportSafely(fn () => $this->logger->error(
-                'Lockout committed; security audit projection skipped (write failed).',
-                ['exception' => $throwable],
+                'Lockout committed; security audit projection skipped.',
+                ['phase' => $phase, 'exception' => $throwable],
             ));
         }
     }

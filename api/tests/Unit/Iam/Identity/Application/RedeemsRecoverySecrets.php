@@ -188,8 +188,8 @@ trait RedeemsRecoverySecrets
             $users,
             $secrets,
             new RecordRecoverySecretAuditBestEffort(
+                new InMemoryIdentityRowLock(),
                 $this->auditLogger,
-                InMemoryIdentityRowLock::serialiser(),
                 $this->logger,
             ),
             new RevokeCurrentSessionBestEffort(

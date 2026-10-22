@@ -9,17 +9,16 @@ export interface ChangePasswordCommand {
 /**
  * Port for the signed-in identity: resolving it from the gated `who-am-i`
  * endpoint and changing its own credential. The adapter owns the HTTP calls and
- * the 401 and 503 mappings, so the access layer depends on this domain contract (DIP) and
+ * the 401 mapping, so the access layer depends on this domain contract (DIP) and
  * never touches `fetch` / status codes.
  */
 export interface IdentityRepository {
   /**
-   * The signed-in identity, or `null` when there is no live session (401). Rejects with
-   * `IdentityServiceUnavailableError` when the server answered 503 `service-unavailable` (a
-   * dependency it needs to decide the request, typically its session store, is unreachable), and
-   * with the transport's own error for anything else (offline, a body that does not parse, any
-   * other status) — so "not signed in", "the server cannot tell" and "could not ask" stay three
-   * different answers.
+   * The signed-in identity, or `null` when there is no live session (401).
+   *
+   * Rejects with `IdentityUnavailableError` when the server, or a gateway in front of it, says it
+   * cannot decide (502/503/504): that is an outage, not a missing session, and the caller must not
+   * treat it as one. Any other failure rejects with whatever the transport raised.
    */
   me(): Promise<Identity | null>;
 

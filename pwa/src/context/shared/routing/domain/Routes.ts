@@ -34,16 +34,14 @@ export const Routes = {
    * itself all address it, so the literal must not drift between them.
    */
   PROFILE: "/backoffice/profile",
-  /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
-  STATUS: "/status",
   /**
-   * Public maintenance page (503). Where a guarded route sends the user when `/me` answered
-   * 503 `service-unavailable` — a visitor who may still be signed in gains nothing from a sign-in
-   * form that would answer the same outage. The guard carries the blocked target in `?next=` so
-   * the page can return there once the server answers again.
-   * It must stay outside every guard, or that redirect would loop.
+   * Public "Service unavailable" page. Where a guarded route goes when the server — or a gateway in
+   * front of it — answers that it cannot resolve the session (502/503/504) — distinct from
+   * {@link LOGIN}, which the same outage would refuse.
    */
   MAINTENANCE: "/maintenance",
+  /** Public service status page (Atlassian-style). Unauthenticated, like {@link HOME}. */
+  STATUS: "/status",
   /**
    * Dev / QA tools hub. Cross-referenced from the frontoffice navbar
    * and the backoffice sidebar (and from inside the dev-tools module

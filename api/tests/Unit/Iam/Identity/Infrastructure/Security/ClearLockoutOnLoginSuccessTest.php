@@ -106,8 +106,8 @@ final class ClearLockoutOnLoginSuccessTest extends TestCase
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
             new RecordLockoutAuditBestEffort(
+                new InMemoryIdentityRowLock($repository),
                 new RecordingAuditLogger(),
-                InMemoryIdentityRowLock::serialiser(),
                 new NullLogger(),
             ),
         );

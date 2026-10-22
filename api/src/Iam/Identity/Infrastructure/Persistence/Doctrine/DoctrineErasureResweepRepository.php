@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine;
 
+use DateTimeImmutable;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Entity\ErasureResweep;
 use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
@@ -61,12 +63,14 @@ final readonly class DoctrineErasureResweepRepository implements ErasureResweepR
     }
 
     #[Override]
-    public function deleteForSubject(string $subjectId): void
+    public function deleteForSubject(string $subjectId, DateTimeImmutable $scheduledAt): void
     {
         $this->entityManager->createQueryBuilder()
             ->delete(ErasureResweep::class, 'r')
             ->where('r.subjectId = :subjectId')
+            ->andWhere('r.createdAt = :scheduledAt')
             ->setParameter('subjectId', $subjectId)
+            ->setParameter('scheduledAt', $scheduledAt, Types::DATETIME_IMMUTABLE)
             ->getQuery()
             ->execute()
         ;

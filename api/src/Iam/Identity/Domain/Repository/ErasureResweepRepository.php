@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Domain\Repository;
 
+use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\ErasureResweep;
 
 interface ErasureResweepRepository
@@ -24,7 +25,8 @@ interface ErasureResweepRepository
 
     /**
      * By the subject's id rather than by the entity, so a row read before an earlier transaction of the same
-     * tick rolled back — and the EntityManager was reset under it — can still be deleted.
+     * tick rolled back — and the EntityManager was reset under it — can still be deleted. Only while it is still
+     * the scheduling read at `$scheduledAt`: a re-erasure that restarted the window since keeps its row.
      */
-    public function deleteForSubject(string $subjectId): void;
+    public function deleteForSubject(string $subjectId, DateTimeImmutable $scheduledAt): void;
 }

@@ -21,7 +21,6 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
-use Symfony\Component\Messenger\EventListener\StopWorkerOnTimeLimitListener;
 use Symfony\Component\Messenger\Handler\HandlerDescriptor;
 use Symfony\Component\Messenger\Handler\HandlersLocatorInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -197,7 +196,7 @@ final class MessengerConsumerContext extends AbstractContext
 
     /**
      * A consume the scenario named a count for has to have read that many messages. Fewer pending than
-     * asked for is not a shorter run: the time-limit listener stops the worker, nothing throws and the
+     * asked for is not a shorter run: the worker's time limit stops it, nothing throws and the
      * exit code is 0, so the step reports success over a queue it never drained.
      *
      * Only the `I consume N …` phrasings go through here. {@see iExecuteCommandWithOptions()} models raw
@@ -275,7 +274,6 @@ final class MessengerConsumerContext extends AbstractContext
         // scenarios on a shared dispatcher, and the bus (hence the handlers) runs independently of it.
         $dispatcher = new EventDispatcher();
         $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener($limit, $logger));
-        $dispatcher->addSubscriber(new StopWorkerOnTimeLimitListener($timeLimit, $logger));
 
         $consumed = 0;
         $countOne = static function () use (&$consumed): void {
@@ -289,7 +287,7 @@ final class MessengerConsumerContext extends AbstractContext
         $exitCode = 0;
 
         try {
-            $worker->run(['sleep' => 50_000]);
+            $worker->run(['sleep' => 50_000, 'time_limit' => $timeLimit]);
         } catch (Throwable $throwable) {
             // A Worker has no exit code of its own; "it threw" is the only failure signal there is,
             // and RunOutcomeContext documents that as what "the last run should fail" means here.

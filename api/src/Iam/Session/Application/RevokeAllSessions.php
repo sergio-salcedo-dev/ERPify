@@ -15,6 +15,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * Bulk-revokes every active session of a user — the "force re-login everywhere" capability the password-reset
  * flow consumes to invalidate all sessions after a credential change. A directed UPDATE plus a single
  * {@see AllSessionsRevoked}, committed together.
+ *
+ * The identity is held first, through {@see SessionSubjectLock}, as a login holds it: every caller revokes after
+ * its own commit, so an erasure of the same person can land in between, and the event would then append the
+ * erased person's id after the erasure rewrote the business log. Held first, the erasure waits for this to
+ * commit and rewrites what it wrote; arriving second, this finds no identity and has nothing left to revoke.
  */
 final readonly class RevokeAllSessions
 {
@@ -23,6 +28,7 @@ final readonly class RevokeAllSessions
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private SessionSubjectLock $subjectLock,
     ) {
     }
 
@@ -31,6 +37,10 @@ final readonly class RevokeAllSessions
         Uuid::ensure($userId);
 
         $this->transactionManager->transactional(function () use ($userId): void {
+            if (!$this->subjectLock->holdsLive($userId)) {
+                return;
+            }
+
             // Ordered first, so this UPDATE acquires the user's active rows in the id order the two "revoke the
             // others" paths lock them in, rather than in whatever order the scan meets them — which is the
             // cycle a suspension racing the suspended user's own "sign out my other devices" would close.

@@ -5,45 +5,115 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Closure;
-use Erpify\Iam\Identity\Application\IdentityRowSerialiser;
-use Erpify\Iam\Identity\Domain\Repository\IdentityRowLock;
+use Erpify\Iam\Identity\Application\IdentityRowLock;
+use Erpify\Iam\Identity\Domain\Email;
+use Erpify\Iam\Identity\Domain\Entity\User;
+use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Override;
 
 /**
- * {@see IdentityRowLock} over a set of erased ids: every other id answers live, so a test that is not about
- * the erasure window gets the write it always got, and one that is names the subject it erased.
+ * In-memory {@see IdentityRowLock}: runs the operation inline, and records what a single-threaded test can say
+ * about a lock — that it was asked for, in which order against the other tables, and whether a write happened
+ * while it was held ({@see $holding}, read by {@see RowLockAwareAuditLogger}).
+ *
+ * Existence is answered by the repository it is given, so an identity a test never seeded is absent under the
+ * lock exactly as it is to every other reader; with no repository every id is present and no address resolves,
+ * which is what a test asserting only the write needs. That the lock really makes a rival erasure wait is not a
+ * claim this double can carry: Postgres's, in
+ * {@see \Erpify\Tests\Functional\Iam\Identity\LateAuditWriterErasureSerialisationFunctionalTest}.
  *
  * @internal
  */
 final class InMemoryIdentityRowLock implements IdentityRowLock
 {
-    /** @var list<string> every id a lock was asked for, in order */
-    public array $locked = [];
+    /**
+     * Each lock asked for, keyed by what named it — the id, or the canonical address.
+     *
+     * @var list<string>
+     */
+    public array $lockRequests = [];
 
-    /** @var list<string> */
-    public array $gone = [];
+    /** The transactions this lock opened, which are its own and never the caller's. */
+    public int $transactionsOpened = 0;
 
-    /** Runs when the lock is asked for, before it answers — the seam an ordering test journals through. */
+    /** True only while an operation runs under the lock. */
+    public bool $holding = false;
+
+    /** Simulates an identity erased before the lock was granted. */
+    public bool $goneUnderLock = false;
+
+    /** Runs as the lock is taken, before the operation — a test can throw from it to fail the lock itself. */
     public ?Closure $onLock = null;
 
-    /**
-     * A serialiser over `$rows`, or over a fresh double treating every subject as live — the latter for the
-     * many tests that build a recorder only because the use case under test needs one.
-     */
-    public static function serialiser(?self $rows = null): IdentityRowSerialiser
+    /** Runs once the operation has returned, as the transaction commits — a test can throw from it to fail COMMIT. */
+    public ?Closure $onRelease = null;
+
+    public ?LockOrderJournal $lockOrderJournal = null;
+
+    public function __construct(private readonly ?UserRepository $users = null)
     {
-        return new IdentityRowSerialiser($rows ?? new self(), new InlineTransactionManager());
     }
 
     #[Override]
-    public function lockIfLive(string $userId): bool
+    public function whileHeld(string $userId, callable $operation): bool
     {
-        $this->locked[] = $userId;
+        return $this->inTransaction($userId, function () use ($userId, $operation): bool {
+            if (!$this->exists($userId)) {
+                return false;
+            }
+
+            $operation();
+
+            return true;
+        });
+    }
+
+    #[Override]
+    public function whileHeldByEmail(Email $email, callable $operation): void
+    {
+        $this->inTransaction($email->toString(), function () use ($email, $operation): bool {
+            $user = $this->goneUnderLock ? null : $this->users?->findByEmail($email);
+            $operation($user instanceof User ? $user->getId() : null);
+
+            return true;
+        });
+    }
+
+    /**
+     * @param callable(): bool $body
+     */
+    private function inTransaction(string $key, callable $body): bool
+    {
+        ++$this->transactionsOpened;
+        $this->lockRequests[] = $key;
+        $this->lockOrderJournal?->locked(LockOrderJournal::IDENTITY_USER);
 
         if ($this->onLock instanceof Closure) {
-            ($this->onLock)($userId);
+            ($this->onLock)();
         }
 
-        return !\in_array($userId, $this->gone, true);
+        $this->holding = true;
+
+        try {
+            $result = $body();
+
+            if ($this->onRelease instanceof Closure) {
+                ($this->onRelease)();
+            }
+
+            return $result;
+        } finally {
+            $this->holding = false;
+        }
+    }
+
+    private function exists(string $userId): bool
+    {
+        if ($this->goneUnderLock) {
+            return false;
+        }
+
+        return !$this->users instanceof UserRepository || $this->users->findById($userId) instanceof User;
     }
 }

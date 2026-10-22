@@ -12,7 +12,6 @@ import { VIEWPORT_DESKTOP, VIEWPORT_MOBILE } from "./constants";
  *   fixture in `app/(errors)/dev-throw/page.tsx`).
  * - The `<ErrorActions>` row's pathname-aware primary CTA (`Return home`
  *   vs `Return to BackOffice`).
- * - The maintenance page's `?next=` way back for an anonymous visitor.
  *
  * Out of scope
  * - Production redaction of `error.message` is a build-time guard
@@ -70,12 +69,12 @@ const STATIC_PAGES: ReadonlyArray<StaticErrorPageCase> = [
     expectedHttpStatus: 200,
   },
   {
-    name: "503 — maintenance",
+    name: "502/503/504 — service unavailable",
     url: "/maintenance",
     testId: "maintenance",
-    status: "Error 503",
-    title: "Service temporarily unavailable",
-    descriptionContains: "can't be reached right now",
+    status: "Temporary outage",
+    title: "Service unavailable",
+    descriptionContains: "cannot reach one of its services",
     expectedHttpStatus: 200,
   },
   {
@@ -171,20 +170,6 @@ test.describe("Error pages — pathname-aware primary CTA", () => {
     await expect(page.getByTestId("not-found")).toBeVisible();
     await expect(page.getByTestId("error-actions__home-link")).toBeVisible();
     await expect(page.getByTestId("error-actions__backoffice-link")).not.toBeVisible();
-  });
-});
-
-test.describe("Error pages — maintenance way back", () => {
-  test.use({ viewport: VIEWPORT_DESKTOP, storageState: { cookies: [], origins: [] } });
-
-  // A visit the guard parked here carries `?next=`. With the server answering again and no live
-  // session, the page hands the visitor to the sign-in form with the blocked target intact.
-  test("an anonymous visitor parked on /maintenance is sent to sign in, keeping next", async ({
-    page,
-  }) => {
-    await page.goto("/maintenance?next=/backoffice");
-
-    await expect(page).toHaveURL("/login?next=%2Fbackoffice");
   });
 });
 
