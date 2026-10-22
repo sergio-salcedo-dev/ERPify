@@ -202,7 +202,7 @@ export default function BanksListPage() {
             size="sm"
             onClick={() => {
               // Fire-and-forget: the handler resolves all errors internally.
-              handleDeleteErrorRefresh();
+              void handleDeleteErrorRefresh();
             }}
             aria-label="Refresh list"
             title="Refresh the banks list"
