@@ -201,8 +201,22 @@ jobs:
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
 
-      - name: Run Behat
-        run: make php.behat
+      # One run, instrumented: the `coverage` profile inherits the default one whole (suite, contexts,
+      # strict result interpretation — an undefined step still exits non-zero under it), so this is the
+      # gate AND the Clover report the sonar job imports. Measured locally at 93 s against 46 s
+      # uninstrumented, which is cheaper than running the suite twice the way api-test does: PHPUnit
+      # needs its uninstrumented pass to enforce a memory ceiling and warnings coverage mode relaxes,
+      # and Behat has neither.
+      - name: Run Behat (+ Clover coverage)
+        run: make php.behat.coverage
+
+      - name: Upload Behat coverage (clover)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: php-behat-coverage
+          path: api/var/coverage/behat-clover.xml
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Debug
         if: failure()
@@ -597,13 +611,13 @@ jobs:
   # separate Dependabot secret store, so SONAR_TOKEN resolves empty and the scan
   # can only ever fail "Not authorized". Skipping forfeits no analysis — Dependabot
   # touches lockfiles and pinned action digests, never analysed source.
-  # Imports the coverage reports produced by api-test (Clover) and pwa-node
-  # (lcov) as build artifacts, so the scan reports Coverage on New Code. Both
-  # reports carry repo-root-relative file paths (api/src/…, pwa/src/…) that
+  # Imports the coverage reports produced by api-test and api-behat (Clover) and
+  # pwa-node (lcov) as build artifacts, so the scan reports Coverage on New Code.
+  # All three reports carry repo-root-relative file paths (api/src/…, pwa/src/…) that
   # resolve against this job's checkout. Still non-gating.
   sonar:
     name: SonarCloud
-    needs: [api-test, pwa-node]
+    needs: [api-test, api-behat, pwa-node]
     if: >-
       (github.event_name != 'pull_request'
       || github.event.pull_request.head.repo.full_name == github.repository)
@@ -624,6 +638,12 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: php-coverage
+          path: api/var/coverage
+
+      - name: Download Behat coverage (clover)
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: php-behat-coverage
           path: api/var/coverage
 
       - name: Download PWA coverage (lcov)
