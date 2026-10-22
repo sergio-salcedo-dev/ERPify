@@ -13,6 +13,7 @@ use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
+use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
@@ -123,6 +124,11 @@ final class ErasureWaitsForAnInFlightSessionRevocationFunctionalTest extends Ker
             'DELETE FROM identity_user WHERE id = CAST(:id AS UUID)',
             ['id' => $this->subjectId],
         );
+        // The committed erasure also scheduled its re-sweep, which holds the subject's id.
+        $connection->executeStatement(
+            'DELETE FROM identity_erasure_resweep WHERE subject_id = CAST(:id AS UUID)',
+            ['id' => $this->subjectId],
+        );
         $connection->close();
 
         $this->outside = null;
@@ -188,6 +194,7 @@ final class ErasureWaitsForAnInFlightSessionRevocationFunctionalTest extends Ker
             new RecordingAuditLogger(),
             $this->service(ActorContextFactory::class),
             $this->service(TransactionManager::class),
+            $this->service(ErasureResweepRepository::class),
         );
     }
 

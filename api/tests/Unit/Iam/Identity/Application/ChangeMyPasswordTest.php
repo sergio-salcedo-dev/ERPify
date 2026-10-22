@@ -22,6 +22,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingSessionSubjectLock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -323,6 +324,7 @@ final class ChangeMyPasswordTest extends TestCase
                     new RecordingEventBus(),
                     new InlineTransactionManager(),
                     $clock,
+                    new RecordingSessionSubjectLock(),
                 ),
                 new NullLogger(),
             ),

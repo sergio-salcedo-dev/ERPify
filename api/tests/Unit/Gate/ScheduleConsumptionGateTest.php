@@ -250,8 +250,8 @@ final class ScheduleConsumptionGateTest extends TestCase
         $this->assertContains($declared, [null, ScheduleConsumption::SCHEDULER_CONSUMER_REPLICAS], \sprintf(
             'Service `%s` in %s declares %d replicas, and only %d is permitted. Every tick comes from an '
             . 'in-process clock and no schedule carries `->lock()`, so a second replica can duplicate a tick '
-            . 'rather than share it — and one of the nine mails a person. A count of 0 fails here too: a '
-            . 'scheduler nobody runs is the same nine controls missing, reported by nothing.',
+            . 'rather than share it — and one of the ten mails a person. A count of 0 fails here too: a '
+            . 'scheduler nobody runs is the same ten controls missing, reported by nothing.',
             $consumer,
             $composeFile,
             $declared,

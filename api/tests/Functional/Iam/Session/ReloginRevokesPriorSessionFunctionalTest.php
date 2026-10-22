@@ -166,10 +166,11 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
     }
 
     /**
-     * Another identity logging in over the same cookie: the row that cookie correlated is revoked although it is
-     * not the new identity's, because only this cookie could reach it and its correlation is being overwritten.
+     * Another identity logging in over the same cookie (a shared browser): the row that cookie correlated belongs
+     * to the first member, so it is left live for its owner and no event about them is written by a request they
+     * did not make.
      */
-    public function testALoginAsAnotherMemberOverTheSameCookieRevokesTheFirstMembersSession(): void
+    public function testALoginAsAnotherMemberOverTheSameCookieLeavesTheFirstMembersSessionAlive(): void
     {
         $this->otherUserId = Uuid::generate();
         $this->otherEmail = \sprintf('relogin-other-%s@erpify.test', \str_replace('-', '', $this->otherUserId));
@@ -181,9 +182,9 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
 
         $this->login($this->otherEmail);
 
-        $this->assertSame([], $this->sessionIdsIn('ACTIVE'), 'the first member keeps no live session');
-        $this->assertSame($first, $this->sessionIdsIn('REVOKED'));
-        $this->assertSame(1, $this->revokedEventCount($first[0]));
+        $this->assertSame($first, $this->sessionIdsIn('ACTIVE'), "the first member's session is still theirs");
+        $this->assertSame([], $this->sessionIdsIn('REVOKED'));
+        $this->assertSame(0, $this->revokedEventCount($first[0]), 'and nothing announced a revocation of it');
 
         $otherActive = $this->sessionIdsIn('ACTIVE', $this->otherUserId);
         $this->assertCount(1, $otherActive, 'the second member holds exactly one live session');
