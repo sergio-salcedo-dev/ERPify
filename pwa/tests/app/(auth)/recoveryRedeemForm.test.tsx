@@ -48,6 +48,10 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 
 import { RecoveryRedeemForm } from "@/app/(auth)/_components/RecoveryRedeemForm";
 import RecoveryPage, { metadata } from "@/app/(auth)/recovery/page";
+import {
+  clearRecoveryRedeemed,
+  peekRecoveryRedeemed,
+} from "@/context/backoffice/user/application/recoveryRedeemedNotice";
 
 const SECRET = "0190b1c2d3e47f5a8b6c1d2e3f4a5b60.super-secret-verifier";
 const INVALID_SECRET_MESSAGE =
@@ -70,7 +74,11 @@ beforeEach(() => {
   repoRedeem.mockClear();
   outcome = { kind: RedeemRecoverySecretOutcomeKind.REDEEMED };
   online = true;
+  clearRecoveryRedeemed();
 });
+
+const SIGNED_IN_TOAST =
+  "Signed in with your recovery secret. We've signed out your other sessions.";
 
 /**
  * The window between the server render and the hydration commit is the whole subject here. In
@@ -128,7 +136,19 @@ describe("RecoveryRedeemForm — presenting the secret", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice"));
     expect(repoRedeem).toHaveBeenCalledWith(SECRET);
     expect(login).toHaveBeenCalledTimes(1);
-    expect(toastSuccess).toHaveBeenCalledWith("Signed in");
+    expect(toastSuccess).toHaveBeenCalledWith(SIGNED_IN_TOAST);
+  });
+
+  it("marks the one-shot dashboard notice only once the session is confirmed, before leaving", async () => {
+    push.mockImplementationOnce(() => {
+      // Observed at the moment of navigating: the dashboard reads the mark on its first mount.
+      expect(peekRecoveryRedeemed()).toBe(true);
+    });
+    render(<RecoveryRedeemForm />);
+    submit();
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice"));
+    expect(peekRecoveryRedeemed()).toBe(true);
   });
 
   it("never puts the secret anywhere but the field it was typed into", async () => {
@@ -196,6 +216,7 @@ describe("RecoveryRedeemForm — refusals", () => {
     expect(push).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+    expect(peekRecoveryRedeemed()).toBe(false);
     // The form stays: a typo and a spent secret are indistinguishable here, and the typo is the
     // recoverable one.
     expect(screen.getByTestId("recovery-redeem-form")).toBeInTheDocument();
@@ -213,6 +234,7 @@ describe("RecoveryRedeemForm — refusals", () => {
     expect(screen.queryByTestId("recovery-redeem-form")).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+    expect(peekRecoveryRedeemed()).toBe(false);
   });
 
   it("surfaces the neutral retryable error when the request throws, never blaming the secret", async () => {
@@ -237,6 +259,9 @@ describe("RecoveryRedeemForm — refusals", () => {
     expect(await screen.findByTestId("recovery-redeem-form__unconfirmed")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+    // The dashboard's next-step notice speaks only after a confirmed sign-in; the unconfirmed
+    // copy is left as it was and says nothing about the password.
+    expect(peekRecoveryRedeemed()).toBe(false);
   });
 
   it("tells the unconfirmed user not to re-present a secret that is already spent", async () => {

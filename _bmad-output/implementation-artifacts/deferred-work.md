@@ -581,3 +581,9 @@ source_spec: `spec-dw-48-serialise-late-audit-writers-on-identity.md`
 severity: medium
 archived: 2026-10-21
 
+### DW-70: Ningún test de navegador cubre el traspaso canje → dashboard que lleva el aviso de una sola vez.
+origin: spec-deferred c17d56e100da
+location: pwa/src/context/backoffice/user/application/recoveryRedeemedNotice.ts
+source_spec: `rr-2-evict-first-rotate-second-guidance.md`
+reason: El aviso depende de que el módulo `recoveryRedeemedNotice.ts` sobreviva a `router.push` (navegación de cliente de Next). Los tests unitarios marcan y leen el flag en el mismo grafo de módulos, así que una regresión a navegación dura o a una segunda instancia del chunk seguiría en verde. Lo zanja un spec de Playwright que canjee un secreto en `/recovery` y vea `dashboard__recovery-next-step` en `/backoffice`; hoy `pwa/tests/e2e` no tiene nada de recuperación.
+status: open
