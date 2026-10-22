@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
-use PHPUnit\Framework\Attributes\CoversNothing;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Log\LogLevel;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -20,7 +21,7 @@ use Symfony\Component\HttpFoundation\Request;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
-#[CoversNothing]
+#[CoversClass(ExceptionResponder::class)]
 final class ExceptionResponderFunctionalTest extends WebTestCase
 {
     private const string UUID_V7_REGEX = '/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/';

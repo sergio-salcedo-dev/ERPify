@@ -44,34 +44,34 @@ export class MockHttpClient implements HttpClient {
     });
   }
 
-  async post<TBody, T>(
+  post<TBody, T>(
     _url: string,
     _body: TBody,
     _validate?: ResponseGuard<T>,
     _options?: RequestOptions,
   ): Promise<T> {
-    return {} as T;
+    return Promise.resolve({} as T);
   }
 
-  async put<TBody, T>(
+  put<TBody, T>(
     _url: string,
     _body: TBody,
     _validate?: ResponseGuard<T>,
     _options?: RequestOptions,
   ): Promise<T> {
-    return {} as T;
+    return Promise.resolve({} as T);
   }
 
-  async patch<TBody, T>(
+  patch<TBody, T>(
     _url: string,
     _body: TBody,
     _validate?: ResponseGuard<T>,
     _options?: RequestOptions,
   ): Promise<T> {
-    return {} as T;
+    return Promise.resolve({} as T);
   }
 
-  async delete(_url: string, _options?: RequestOptions): Promise<void> {
-    return;
+  delete(_url: string, _options?: RequestOptions): Promise<void> {
+    return Promise.resolve();
   }
 }
