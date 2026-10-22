@@ -9,6 +9,9 @@ import type { MintedRecoverySecret, RecoverySecretStatus } from "./RecoverySecre
  * The adapter owns the HTTP calls and the envelope; every rejection surfaces as the
  * transport's `HttpError`, so callers read the problem `type` and never a status code.
  */
+/** The container key the {@link RecoverySecretRepository} port is bound under. */
+export const RECOVERY_SECRET_REPOSITORY_KEY = "RecoverySecretRepository";
+
 export interface RecoverySecretRepository {
   /** Whether a secret exists and, if so, when it was minted and when it expires. */
   read(): Promise<RecoverySecretStatus>;

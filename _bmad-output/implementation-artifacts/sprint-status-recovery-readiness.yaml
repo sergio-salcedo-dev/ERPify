@@ -1,5 +1,5 @@
 # generated: 2026-09-28
-# last_updated: 2026-10-21
+# last_updated: 2026-10-22
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
@@ -15,7 +15,7 @@
 # RR-2 is `backlog` with no spec yet; #1001, whose behaviour its redemption copy states, merged 2026-09-28.
 
 generated: 2026-09-28
-last_updated: 2026-10-21
+last_updated: 2026-10-22
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -23,6 +23,6 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   epic-recovery-readiness: in-progress
-  rr-1-recovery-secret-readiness-warning: ready-for-dev
+  rr-1-recovery-secret-readiness-warning: done
   rr-2-evict-first-guidance: backlog
   epic-recovery-readiness-retrospective: optional

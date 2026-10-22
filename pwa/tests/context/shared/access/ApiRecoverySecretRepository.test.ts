@@ -29,7 +29,7 @@ function httpClient(overrides: Partial<HttpClient>): HttpClient {
 async function statusGuard(): Promise<CapturedGuard> {
   const get = vi
     .fn()
-    .mockResolvedValue({ data: { exists: false, mintedAt: null, expiresAt: null } });
+    .mockResolvedValue({ data: { exists: false, live: false, mintedAt: null, expiresAt: null } });
   await new ApiRecoverySecretRepository(httpClient({ get })).read();
   return get.mock.calls[0][1] as CapturedGuard;
 }
@@ -44,7 +44,7 @@ async function mintedGuard(): Promise<CapturedGuard> {
 
 describe("ApiRecoverySecretRepository", () => {
   it("read() asks the status path and hands back the envelope's data untouched", async () => {
-    const status = { exists: false, mintedAt: null, expiresAt: null };
+    const status = { exists: false, live: false, mintedAt: null, expiresAt: null };
     const get = vi.fn().mockResolvedValue({ data: status });
 
     const result = await new ApiRecoverySecretRepository(httpClient({ get })).read();
@@ -127,10 +127,14 @@ describe("ApiRecoverySecretRepository — the status envelope guard", () => {
   it("refuses a body that claims a secret without saying when it was minted or when it dies", async () => {
     const guard = await statusGuard();
 
-    expect(guard({ data: { exists: true, mintedAt: MINTED_AT } })).toBe(false);
-    expect(guard({ data: { exists: true, expiresAt: EXPIRES_AT } })).toBe(false);
-    expect(guard({ data: { exists: true, mintedAt: MINTED_AT, expiresAt: null } })).toBe(false);
-    expect(guard({ data: { exists: true, mintedAt: null, expiresAt: EXPIRES_AT } })).toBe(false);
+    expect(guard({ data: { exists: true, live: true, mintedAt: MINTED_AT } })).toBe(false);
+    expect(guard({ data: { exists: true, live: true, expiresAt: EXPIRES_AT } })).toBe(false);
+    expect(
+      guard({ data: { exists: true, live: true, mintedAt: MINTED_AT, expiresAt: null } }),
+    ).toBe(false);
+    expect(
+      guard({ data: { exists: true, live: true, mintedAt: null, expiresAt: EXPIRES_AT } }),
+    ).toBe(false);
   });
 
   it("refuses a body that denies a secret while carrying its instants anyway", async () => {
@@ -138,19 +142,45 @@ describe("ApiRecoverySecretRepository — the status envelope guard", () => {
 
     // The two states are exclusive on the wire; admitting the contradiction would let the
     // surface pick which half of the body to believe.
-    expect(guard({ data: { exists: false, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } })).toBe(
+    expect(
+      guard({ data: { exists: false, live: false, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } }),
+    ).toBe(false);
+  });
+
+  it("refuses a body that leaves out whether the secret is live, or says so in anything but a boolean", async () => {
+    const guard = await statusGuard();
+
+    // The readiness warning reads `live` and nothing else; a body without it would leave that
+    // surface to guess, and the guess it must never make is recomputing expiry client-side.
+    expect(guard({ data: { exists: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } })).toBe(
+      false,
+    );
+    expect(guard({ data: { exists: false, mintedAt: null, expiresAt: null } })).toBe(false);
+    expect(
+      guard({ data: { exists: true, live: "true", mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } }),
+    ).toBe(false);
+  });
+
+  it("refuses a body that calls a secret live while denying it exists", async () => {
+    const guard = await statusGuard();
+
+    expect(guard({ data: { exists: false, live: true, mintedAt: null, expiresAt: null } })).toBe(
       false,
     );
   });
 
   it.each([
     {
-      label: "a secret with both instants",
-      body: { data: { exists: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } },
+      label: "a live secret with both instants",
+      body: { data: { exists: true, live: true, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } },
+    },
+    {
+      label: "a lapsed secret with both instants",
+      body: { data: { exists: true, live: false, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT } },
     },
     {
       label: "no secret, both instants null",
-      body: { data: { exists: false, mintedAt: null, expiresAt: null } },
+      body: { data: { exists: false, live: false, mintedAt: null, expiresAt: null } },
     },
   ])("admits $label", async ({ body }) => {
     expect((await statusGuard())(body)).toBe(true);
@@ -164,11 +194,11 @@ describe("ApiRecoverySecretRepository — the status envelope guard", () => {
     { label: "an envelope whose data is a string", body: { data: "text" } },
     {
       label: "a data object with no exists flag",
-      body: { data: { mintedAt: null, expiresAt: null } },
+      body: { data: { live: false, mintedAt: null, expiresAt: null } },
     },
     {
       label: "an exists flag that is not a boolean",
-      body: { data: { exists: "true", mintedAt: null, expiresAt: null } },
+      body: { data: { exists: "true", live: false, mintedAt: null, expiresAt: null } },
     },
   ])("refuses $label", async ({ body }) => {
     expect((await statusGuard())(body)).toBe(false);

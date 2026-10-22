@@ -1123,7 +1123,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       await mockBanksApi(page, { list: "empty" });
       await page.goto("/backoffice");
 
-      const aside = page.locator("aside");
+      const aside = page.getByTestId("bo-layout__sidebar");
       const treasuryItem = aside.getByRole("button", { name: "Treasury" });
       await expect(treasuryItem).toBeVisible();
       await treasuryItem.click();

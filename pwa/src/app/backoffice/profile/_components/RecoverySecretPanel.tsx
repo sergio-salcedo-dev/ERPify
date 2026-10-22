@@ -86,6 +86,7 @@ export function RecoverySecretPanel() {
     if (current.exists) {
       return (
         <ExistingSecret
+          live={current.live}
           mintedAt={current.mintedAt}
           expiresAt={current.expiresAt}
           revoking={revoking}
@@ -93,7 +94,14 @@ export function RecoverySecretPanel() {
         />
       );
     }
-    return <MintRecoverySecretForm onMinted={handleMinted} onProblem={handleMintProblem} />;
+    return (
+      <div className="recovery-secret__empty flex flex-col gap-3">
+        <p className="text-foreground text-sm leading-relaxed" data-testid="recovery-secret__empty">
+          You don&apos;t have a recovery secret yet. Create one now, while you can still sign in.
+        </p>
+        <MintRecoverySecretForm onMinted={handleMinted} onProblem={handleMintProblem} />
+      </div>
+    );
   };
 
   return (
@@ -115,6 +123,14 @@ export function RecoverySecretPanel() {
         is what gets you back in — so store it away from the device you sign in with.
       </p>
 
+      {mintProblem?.type === RECOVERY_SECRET_ALREADY_EXISTS ? (
+        <p
+          className="text-foreground text-sm leading-relaxed"
+          data-testid="recovery-secret__already-exists"
+        >
+          You already have a recovery secret. To replace it, revoke it first.
+        </p>
+      ) : null}
       {mintProblem ? (
         <MutationError
           problem={mintProblem}
@@ -218,55 +234,45 @@ function MintedSecretNotice({
 /**
  * The account holds a secret: what is known about it, and the only action left — destroying it.
  *
- * **The badge is derived, not fixed.** Expiry does not delete the row and no sweep does either, so
- * a lapsed secret is still what the read returns and still what blocks a second mint. Labelling it
- * `Active` unconditionally tells the one person who depends on this channel that they hold a way
- * back in when they hold nothing, and leaves the way out — revoke, then create another —
- * unmentioned on the surface that is supposed to state it.
+ * **The badge is the server's verdict, not a fixed label and not a clock reading.** Expiry does
+ * not delete the row and no sweep does either, so a lapsed secret is still what the read returns
+ * and still what blocks a second mint. Labelling it `Active` unconditionally tells the one person
+ * who depends on this channel that they hold a way back in when they hold nothing; deciding it
+ * here from `expiresAt` against this device's clock would be a second rule beside the one the
+ * redemption applies. `live` is that one rule, as the server judged it at the read.
  */
 function ExistingSecret({
+  live,
   mintedAt,
   expiresAt,
   revoking,
   onRevoke,
 }: Readonly<{
+  live: boolean;
   mintedAt: string;
   expiresAt: string;
   revoking: boolean;
   onRevoke: (currentPassword: string) => Promise<void>;
 }>) {
-  const lapsed = hasLapsed(expiresAt);
-
   return (
     <div
       className="recovery-secret__existing border-border bg-card space-y-3 rounded-lg border p-4"
       data-testid="recovery-secret__existing"
     >
       <StatusBadge
-        variant={lapsed ? "danger" : "success"}
-        label={lapsed ? "Expired" : "Active"}
+        variant={live ? "success" : "danger"}
+        label={live ? "Active" : "Expired"}
         testId="recovery-secret__state"
       />
       <SecretInstants mintedAt={mintedAt} expiresAt={expiresAt} />
       <p className="text-muted-foreground text-sm leading-relaxed">
-        {lapsed
-          ? "This recovery secret has expired and will no longer sign you in. Revoke it and create another, which is the only way to replace it."
-          : "An account holds one recovery secret at a time. To replace this one, revoke it first and then create another."}
+        {live
+          ? "An account holds one recovery secret at a time. To replace this one, revoke it first and then create another."
+          : "This recovery secret has expired and no longer signs you in. Revoke it, then create a new one. An account holds one secret at a time."}
       </p>
       <RevokeRecoverySecretDialog revoking={revoking} onRevoke={onRevoke} />
     </div>
   );
-}
-
-/**
- * Whether the expiry the API reported is already behind us. An unparseable instant reads as NOT
- * lapsed: the row is the API's to judge, and claiming "Expired" from a date this surface could not
- * read would be the same false confidence in the other direction.
- */
-function hasLapsed(expiresAt: string): boolean {
-  const lapsesAt = Date.parse(expiresAt);
-
-  return !Number.isNaN(lapsesAt) && lapsesAt <= Date.now();
 }
 
 /**

@@ -83,6 +83,9 @@ function playwrightWorkers(): number | undefined {
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Leaves the E2E administrator holding a live recovery secret, so the back office's readiness
+  // warning does not stand in every spec's <main>; see the file for why it reads before it mints.
+  globalSetup: "./tests/e2e/global-setup.ts",
   outputDir: "reports/playwright/test-results",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

@@ -7,9 +7,11 @@ import { ViewStatus } from "@/context/shared/view-state/domain/ViewState";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import type { MintedRecoverySecret, RecoverySecretStatus } from "../domain/RecoverySecret";
-import type { RecoverySecretRepository } from "../domain/RecoverySecretRepository";
-
-const RECOVERY_SECRET_REPOSITORY_KEY = "RecoverySecretRepository";
+import {
+  RECOVERY_SECRET_REPOSITORY_KEY,
+  type RecoverySecretRepository,
+} from "../domain/RecoverySecretRepository";
+import { useRecoveryReadinessPublisher } from "./useRecoveryReadiness";
 
 function genericProblem(detail: string): ProblemDetails {
   return {
@@ -52,6 +54,11 @@ export interface RecoverySecretState {
  * A successful mint is folded in through {@link RecoverySecretState.applyMinted} rather than
  * re-reading: the 201 already carries the authoritative instants, so a second GET would ask
  * the server to repeat itself.
+ *
+ * Every status this hook learns — its own read, a revoke, a mint — is also published to the
+ * back-office shell's readiness warning, which is how that warning leaves the moment a secret
+ * is minted here without the shell asking again. A just-minted secret is live and a revoked
+ * one is gone; both are what the server's own answer just said, not a clock reading.
  */
 export function useRecoverySecret(): RecoverySecretState {
   const repository = (): RecoverySecretRepository =>
@@ -62,6 +69,17 @@ export function useRecoverySecret(): RecoverySecretState {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [revokeProblem, setRevokeProblem] = useState<ProblemDetails | null>(null);
+  const publish = useRecoveryReadinessPublisher();
+  // Read through a ref so the callbacks below stay stable across renders.
+  const publishRef = useRef(publish);
+  useEffect(() => {
+    publishRef.current = publish;
+  }, [publish]);
+
+  const learn = useCallback((next: RecoverySecretStatus): void => {
+    setStatus(next);
+    publishRef.current(next);
+  }, []);
 
   // Monotonic request token. `mountedRef` answers "is this component still here"; it says nothing
   // about ORDER, so with two reads in flight — a retry pressed twice, or the 409's `reload()`
@@ -84,7 +102,7 @@ export function useRecoverySecret(): RecoverySecretState {
     try {
       const result = await repository().read();
       if (!mountedRef.current || token !== requestRef.current) return;
-      setStatus(result);
+      learn(result);
       // "No secret yet" is a state this surface renders (it offers the mint), never an empty
       // state — an `EmptyState` here would replace the one control the user came for.
       setState(ViewStatus.READY);
@@ -94,7 +112,7 @@ export function useRecoverySecret(): RecoverySecretState {
       setState(ViewStatus.ERROR);
     }
     // repository() reads a container singleton; it is stable across renders.
-  }, []);
+  }, [learn]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -106,8 +124,17 @@ export function useRecoverySecret(): RecoverySecretState {
     setRevokeProblem(null);
     try {
       await repository().revoke(currentPassword);
+      const gone: RecoverySecretStatus = {
+        exists: false,
+        live: false,
+        mintedAt: null,
+        expiresAt: null,
+      };
+      // Published even if this surface has gone: the secret is gone either way, and the shell
+      // outlives the page that revoked it.
+      publishRef.current(gone);
       if (!mountedRef.current) return;
-      setStatus({ exists: false, mintedAt: null, expiresAt: null });
+      setStatus(gone);
     } catch (error) {
       if (!mountedRef.current) return;
       setRevokeProblem(toProblem(error));
@@ -116,9 +143,12 @@ export function useRecoverySecret(): RecoverySecretState {
     }
   }, []);
 
-  const applyMinted = useCallback((minted: MintedRecoverySecret) => {
-    setStatus({ exists: true, mintedAt: minted.mintedAt, expiresAt: minted.expiresAt });
-  }, []);
+  const applyMinted = useCallback(
+    (minted: MintedRecoverySecret) => {
+      learn({ exists: true, live: true, mintedAt: minted.mintedAt, expiresAt: minted.expiresAt });
+    },
+    [learn],
+  );
 
   const dismissRevokeProblem = useCallback(() => setRevokeProblem(null), []);
   const reload = useCallback(() => {

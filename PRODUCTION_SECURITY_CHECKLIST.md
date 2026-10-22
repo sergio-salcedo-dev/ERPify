@@ -1269,7 +1269,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       role or status change aimed at its own identity, which is refused (ii).
       **What still survives, each outside what an eviction can reach:**
       **(i) An identity with no live secret** — never minted, spent and not yet re-minted, or lapsed (a lapsed
-      row counts as none, although `GET /me/recovery-secret` still reports it and minting over it answers 409
+      row counts as none — `GET /me/recovery-secret` reports it as `exists: true, live: false` — and minting over it answers 409
       until it is revoked). The composition is then intact: another administrator's `users.unlock` clears the
       lock only until the attacker's next ten failures re-seal it — seconds, not a lockout window — and for a
       **sole administrator** even that lever is absent (nobody else holds `users.unlock`, and the product
@@ -1317,7 +1317,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       Until #602 closes, what the product owes is **(1) getting every administrator to mint a recovery secret,
       re-mint after every redemption, and warning while none is live**, and **(2) ordering guidance for an
       owner who can still sign in — evict first, rotate second** — in the UI copy and the password-changed
-      mail; the redemption flow needs none, because it evicts on its own.
+      mail; the redemption flow needs none, because it evicts on its own. The warning half of (1) exists: every
+      back-office page tells an `ADMIN` session whose secret is not live (none, spent or lapsed — the server's
+      `live`, never a client clock) so, in a non-dismissible `<aside>` that leaves the moment a mint answers. It
+      warns; it does not close (i).
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an

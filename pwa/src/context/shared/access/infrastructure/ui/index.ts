@@ -4,3 +4,4 @@ export { RequireAuth } from "./RequireAuth";
 export { DevSessionSwitcher } from "./DevSessionSwitcher";
 export { MySessions } from "./MySessions";
 export { SecuritySignal } from "./SecuritySignal";
+export { RecoveryReadinessProvider } from "./RecoveryReadinessProvider";

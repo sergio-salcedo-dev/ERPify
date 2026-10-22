@@ -13,7 +13,7 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     test.use({ viewport: VIEWPORT_DESKTOP });
 
     test("shows core nav and Account items", async ({ page }) => {
-      const aside = page.locator("aside");
+      const aside = page.getByTestId("bo-layout__sidebar");
       await expect(aside.getByRole("button", { name: "Dashboard" })).toBeVisible();
       await expect(aside.getByRole("button", { name: "User Profile" })).toBeVisible();
       await clickUntilVisible(
@@ -26,7 +26,7 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     });
 
     test("reaches the profile page from the Account group", async ({ page }) => {
-      const aside = page.locator("aside");
+      const aside = page.getByTestId("bo-layout__sidebar");
       await clickUntilVisible(
         aside.getByRole("button", { name: "User Profile" }),
         aside.getByTestId("bo-layout__sidebar-profile"),
@@ -39,7 +39,7 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     });
 
     test("expands and collapses User Profile sub-items", async ({ page }) => {
-      const aside = page.locator("aside");
+      const aside = page.getByTestId("bo-layout__sidebar");
       const userProfile = aside.getByRole("button", { name: "User Profile" });
       const notifications = aside.getByRole("button", { name: "Notifications" });
       const settings = aside.getByRole("button", { name: "Settings" });
