@@ -23,7 +23,8 @@ use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
  *
  * @extends ConstraintValidatorTestCase<EnumTypeValidator>
  */
-#[\PHPUnit\Framework\Attributes\CoversNothing]
+#[\PHPUnit\Framework\Attributes\CoversClass(EnumTypeValidator::class)]
+#[\PHPUnit\Framework\Attributes\CoversClass(EnumType::class)]
 final class EnumTypeValidatorTest extends ConstraintValidatorTestCase
 {
     private const string MESSAGE = 'The value you selected is not a valid choice.';

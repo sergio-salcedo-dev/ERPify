@@ -7,6 +7,9 @@ namespace Erpify\Tests\Functional\Backoffice\Audit\Infrastructure\Controller;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
+use Erpify\Backoffice\Audit\Application\AuditEventDetailFinder;
+use Erpify\Backoffice\Audit\Domain\Exception\AuditEventNotFound;
+use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditEventDetailController;
 use Erpify\Backoffice\Audit\Infrastructure\Http\AuditEventDetailResourceMapper;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
@@ -17,7 +20,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -33,7 +36,9 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
-#[CoversNothing]
+#[CoversClass(AuditEventDetailController::class)]
+#[CoversClass(AuditEventDetailFinder::class)]
+#[CoversClass(AuditEventNotFound::class)]
 final class AuditEventDetailFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;
