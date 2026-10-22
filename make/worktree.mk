@@ -54,6 +54,15 @@
 #                   drift silently the first time the install is updated. The
 #                   link is relative (../../../_bmad), so moving the whole tree
 #                   keeps it resolving.
+#                   And it links .bmad-loop/policy.toml -> the main checkout's.
+#                   `bmad-loop init` gitignores it as machine-specific, so a
+#                   worktree had none and a `bmad-loop run` there fell back to the
+#                   built-in defaults — `--permission-mode bypassPermissions` and
+#                   [scm] isolation = "none" — whatever the primary's policy said
+#                   (measured with `run --dry-run`: bypass from the worktree,
+#                   acceptEdits from the primary). bmad-loop reads the link; its
+#                   own writes replace it atomically with a regular file, so an
+#                   edit made from inside a worktree stays in that worktree.
 #
 # worktree.remove / worktree.remove-all:
 # NAME=<dir|path|branch>  selects the worktree by its directory basename under
@@ -204,6 +213,15 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
 		ln -s ../../../_bmad "$$path/_bmad"; \
 		echo "→ linked _bmad -> the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
+	fi; \
+	if [ -f "$$main/.bmad-loop/policy.toml" ]; then \
+		if [ ! -e "$$path/.bmad-loop/policy.toml" ]; then \
+			mkdir -p "$$path/.bmad-loop"; \
+			ln -s ../../../../.bmad-loop/policy.toml "$$path/.bmad-loop/policy.toml"; \
+			echo "→ linked .bmad-loop/policy.toml -> the main checkout's (gitignored; without it bmad-loop runs on its built-in defaults)"; \
+		fi; \
+	else \
+		echo "! the main checkout holds no .bmad-loop/policy.toml — a bmad-loop run in this worktree would use the built-in defaults: --permission-mode bypassPermissions, in place on the checked-out branch"; \
 	fi; \
 	if [ "$$START" = "true" ]; then \
 		echo "→ bringing up stack erpify-$$dir"; \
