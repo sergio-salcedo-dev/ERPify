@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\Resource\RecoverySecretResource;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use LogicException;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,6 +32,9 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * project already applies elsewhere: there is no decision, no transaction and no invariant here — one lookup
  * and a projection. Wrapping it would add a class whose body is the line below.
  *
+ * `live` is read against the injected clock — the same one redemption judges the secret by — so the profile
+ * and the shell's readiness warning say "expired" exactly when a redemption would start refusing it.
+ *
  * The unlocked finder is deliberate: a locking read would take a row lock for a page render, and the
  * `ForUpdate` pair exists precisely so that the resolving lookups authorize nothing.
  */
@@ -42,6 +46,7 @@ final readonly class GetMyRecoverySecretController
     public function __construct(
         private RecoverySecretRepository $secrets,
         private ResourceResponder $resourceResponder,
+        private Clock $clock,
     ) {
     }
 
@@ -52,11 +57,12 @@ final readonly class GetMyRecoverySecretController
         $secret = $this->secrets->findByUserId($identityId);
 
         if (!$secret instanceof RecoverySecret) {
-            return $this->resourceResponder->respond(new RecoverySecretResource(false, null, null));
+            return $this->resourceResponder->respond(new RecoverySecretResource(false, false, null, null));
         }
 
         return $this->resourceResponder->respond(new RecoverySecretResource(
             true,
+            $secret->isLiveAt($this->clock->now()),
             $secret->getCreatedAt()->format(DateTimeInterface::ATOM),
             $secret->expiresAt()->format(DateTimeInterface::ATOM),
         ));

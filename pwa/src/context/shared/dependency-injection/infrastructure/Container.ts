@@ -65,7 +65,10 @@ import type { IdentityRepository } from "@/context/shared/access/domain/Identity
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
 import type { SessionsRepository } from "@/context/shared/access/domain/SessionsRepository";
 import { ApiRecoverySecretRepository } from "@/context/shared/access/infrastructure/ApiRecoverySecretRepository";
-import type { RecoverySecretRepository } from "@/context/shared/access/domain/RecoverySecretRepository";
+import {
+  RECOVERY_SECRET_REPOSITORY_KEY,
+  type RecoverySecretRepository,
+} from "@/context/shared/access/domain/RecoverySecretRepository";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
@@ -305,7 +308,7 @@ container
 // surface. A port of its own rather than more methods on IdentityRepository — minting a
 // second credential is not a way of resolving who you are.
 container
-  .bind<RecoverySecretRepository>("RecoverySecretRepository")
+  .bind<RecoverySecretRepository>(RECOVERY_SECRET_REPOSITORY_KEY)
   .to(ApiRecoverySecretRepository)
   .inSingletonScope();
 

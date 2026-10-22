@@ -351,6 +351,10 @@ Drawer (default) or dialog. Title + subtitle + body (read or edit) + footer acti
 
 Dot-first anatomy (Linear style): a 6 px hue dot + an **always-neutral label** (`--color-muted-foreground`, 11 px medium) on a `--color-muted` full-pill, 20 px tall. The hue lives ONLY in the dot; the previous tinted-text-on-tinted-bg anatomy measured 2.19–3.90:1 and failed WCAG 1.4.3. Dot fills: `success`/`warning` use the darkened `--color-status-dot-*` tokens (≥3:1 over white and over `--color-row-selected` — the raw semantic tones fall short at 6 px); `danger`/`info` reuse their semantics (already ≥3:1); `neutral` uses `--color-text-subtle` (decorative). CVA-driven; cannot pass arbitrary colors. Color is never the sole signal — the label always rides along.
 
+### `<NoticeBanner>`
+
+A standing notice: the `<StatusBadge>` hue dot (`aria-hidden`), one neutral sentence and the link that resolves it, on `--color-card` with a bottom border. It is a named `<aside>` landmark (`label` is required) and **never a live region** — no `role="status"`/`alert`, no `<output>`, no `aria-live` — because a notice that stands on every page would re-announce itself on every navigation. **Not dismissible**: following the link is what resolves it. In the back-office shell it is the **first child of `<main>`**, so the focus a navigation moves to `<main>` reaches it first. Its link goes through `safeHref`.
+
 ### `<CorrelationIdChip>`
 
 Geist Mono (`font-mono`), the full ID — never clipped; on a narrow surface it wraps at the hyphens — as one click-to-copy token: `bg-muted/40`, `border border-border`, `rounded`, muted text that turns foreground on hover. 11 px at the default `xs` size, 12 px at `sm`; only the optional label is `font-medium`. A 2-second affordance follows each copy — a check on success, a destructive `X` on failure — and both are spoken through the shared announcer (below). Copies through `useCopyToClipboard`, the same path as `<CopyButton>`. First-class to every error and audit surface.

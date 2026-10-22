@@ -46,7 +46,7 @@ test.describe("BackOffice - App Shell", () => {
   });
 
   test("persists the sidebar collapse state across reload", async ({ page }) => {
-    const aside = page.locator("aside");
+    const aside = page.getByTestId("bo-layout__sidebar");
     await expect(aside).toHaveAttribute("data-sidebar-open", "true");
 
     await page.getByTestId("bo-layout__topbar-toggle").click();
@@ -57,7 +57,7 @@ test.describe("BackOffice - App Shell", () => {
   });
 
   test("toggles the sidebar with Ctrl/Cmd+B", async ({ page }) => {
-    const aside = page.locator("aside");
+    const aside = page.getByTestId("bo-layout__sidebar");
     await expect(aside).toHaveAttribute("data-sidebar-open", "true");
 
     await page.keyboard.press("Control+b");

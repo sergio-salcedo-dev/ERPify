@@ -196,7 +196,7 @@
                 "host": ["{{base_url}}"],
                 "path": ["api", "v1", "me", "recovery-secret"]
               },
-              "description": "Whether the caller holds one, and the two instants that bound it \u2014 never the secret itself. The plaintext is legible exactly once, in the mint response."
+              "description": "Whether the caller holds one, whether it is live (false when none exists, and false for an expired row that still occupies the slot \u2014 the same rule redemption applies), and the two instants that bound it \u2014 never the secret itself. The plaintext is legible exactly once, in the mint response."
             },
             "response": []
           },
