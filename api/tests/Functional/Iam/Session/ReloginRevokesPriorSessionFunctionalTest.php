@@ -14,6 +14,7 @@ use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -166,8 +167,10 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
     }
 
     /**
-     * Another identity logging in over the same cookie: the row that cookie correlated is revoked although it is
-     * not the new identity's, because only this cookie could reach it and its correlation is being overwritten.
+     * Another identity logging in over the same cookie (a shared browser): the row that cookie correlated is
+     * revoked although it is not the new identity's, because once the second login commits it has no bearer left
+     * — the firewall migrated the native session, and the first member's other browser holds a row of its own,
+     * which stays live.
      */
     public function testALoginAsAnotherMemberOverTheSameCookieRevokesTheFirstMembersSession(): void
     {
@@ -176,15 +179,21 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->seedAnOrganizationMember($this->otherUserId, $this->otherEmail, self::PASSWORD);
 
         $this->login();
-        $first = $this->sessionIdsIn('ACTIVE');
-        $this->assertCount(1, $first);
-        $firstMembersCookies = $this->client->getCookieJar()->all();
+        $elsewhere = $this->sessionIdsIn('ACTIVE');
+        $this->assertCount(1, $elsewhere);
+        $elsewhereCookies = $this->client->getCookieJar()->all();
+
+        $this->client->getCookieJar()->clear();
+        $this->login();
+        $shared = \array_values(\array_diff($this->sessionIdsIn('ACTIVE'), $elsewhere));
+        $this->assertCount(1, $shared);
+        $sharedCookies = $this->client->getCookieJar()->all();
 
         $this->login($this->otherEmail);
 
-        $this->assertSame([], $this->sessionIdsIn('ACTIVE'), 'the first member keeps no live session');
-        $this->assertSame($first, $this->sessionIdsIn('REVOKED'));
-        $this->assertSame(1, $this->revokedEventCount($first[0]));
+        $this->assertSame($elsewhere, $this->sessionIdsIn('ACTIVE'), "the first member's other browser keeps its row");
+        $this->assertSame($shared, $this->sessionIdsIn('REVOKED'));
+        $this->assertSame(1, $this->revokedEventCount($shared[0]));
 
         $otherActive = $this->sessionIdsIn('ACTIVE', $this->otherUserId);
         $this->assertCount(1, $otherActive, 'the second member holds exactly one live session');
@@ -194,25 +203,23 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->assertSame($otherActive[0], $listed[0]['id']);
         $this->assertTrue($listed[0]['current']);
 
-        // Revoking is right only because the row had no other bearer: the cookie the first member held before
-        // the second login, replayed as it was, admits nobody.
-        $this->client->getCookieJar()->clear();
-
-        foreach ($firstMembersCookies as $firstMemberCookie) {
-            $this->client->getCookieJar()->set($firstMemberCookie);
-        }
-
+        // The premise the revocation rests on, independently of it: the shared browser's earlier cookie, replayed
+        // as it was, carries no identity at all. Refused as `session-expired` it would still be a bearer whose
+        // registry row merely happens to be revoked.
+        $this->replaceCookies($sharedCookies);
         $this->service(EntityManagerInterface::class)->clear();
         $this->client->request(Request::METHOD_GET, self::SESSIONS_PATH, server: ['HTTP_ACCEPT' => 'application/json']);
         $replayed = $this->client->getResponse();
         $this->assertSame(Response::HTTP_UNAUTHORIZED, $replayed->getStatusCode(), (string) $replayed->getContent());
+        $problem = \json_decode((string) $replayed->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($problem);
+        $this->assertSame('unauthenticated', $problem['type'] ?? null);
 
-        // And the first member, signing in from another browser, sees no phantom of the shared one.
-        $this->client->getCookieJar()->clear();
-        $this->login();
+        // And the first member's other browser lists no phantom of the shared one.
+        $this->replaceCookies($elsewhereCookies);
         $ownListed = $this->mySessions();
         $this->assertCount(1, $ownListed, "the first member's list shows the shared browser's session as gone");
-        $this->assertNotSame($first[0], $ownListed[0]['id']);
+        $this->assertSame($elsewhere[0], $ownListed[0]['id']);
     }
 
     /**
@@ -299,6 +306,18 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
             'CREATE TRIGGER ' . self::FAULT . ' BEFORE INSERT ON iam_session FOR EACH ROW'
             . " WHEN (NEW.user_id = '" . $this->userId . "'::uuid) EXECUTE FUNCTION " . self::FAULT . '()',
         );
+    }
+
+    /**
+     * @param array<Cookie> $cookies
+     */
+    private function replaceCookies(array $cookies): void
+    {
+        $this->client->getCookieJar()->clear();
+
+        foreach ($cookies as $cookie) {
+            $this->client->getCookieJar()->set($cookie);
+        }
     }
 
     private function login(?string $email = null): void

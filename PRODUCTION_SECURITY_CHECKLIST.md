@@ -2061,7 +2061,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       the rows that exist when they run, and a request that loaded the subject before the identity row went can
       commit one afterwards. Three review rounds each found more writers able to. The session writers among
       them — `StartSession` and the revocations — are serialised with the erasure (the item above, and the
-      erasure purging sessions before the business-log pass), which leaves the access log and the four
+      erasure purging sessions before the business-log pass; a re-login that revokes another identity's
+      correlated row is serialised with that owner's erasure by the row lock alone), which leaves the access log and the four
       request-boundary security audit listeners on the actor axis as the live class. An enumeration that failed
       three times is not a control, so that class is closed by mechanism instead, and the mechanism backs up
       the serialised writers too: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
@@ -2074,7 +2075,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       reset-token, recovery-secret, membership and invitation purges are not repeated, because their late
       writers contend on `identity_user` or `iam_invitation` and so cannot commit after the erasure. The late writers of `Iam/Identity` that run after their own
       commit stay serialised on `identity_user` (§7, the item above), which closes their window outright rather than bounding
-      it. What remains, **accepted by Sergio (product owner) on 2026-10-21 together with the mechanism**:
+      it. What remains, **accepted by Sergio (product owner) on 2026-10-21 together with the mechanism** (an earlier record dated it 2026-10-06, which could not be traced to him):
       - **a row committed after the subject's window closed is not reached.** Nothing bounds how long a
         request runs — `max_execution_time` does not count time spent waiting on the database, and neither
         Caddy nor Postgres sets a timeout — so the hour is a margin chosen far above any sane request, not a

@@ -73,20 +73,36 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
     }
 
     /**
-     * The row was reachable only through this cookie, whose correlation is about to be overwritten — so it is
-     * revoked whoever owns it, and no other session of either identity is touched.
+     * Once this login commits the correlated row has no bearer left, so it is revoked whoever owns it and its
+     * `SessionRevoked` is published as for the identity's own — while no other session of either identity is
+     * touched.
      */
     public function testTheCorrelatedSessionIsRevokedWhoeverOwnsItAndNoOtherSessionIsTouched(): void
     {
-        $previous = SessionMother::active(userId: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c70');
+        $previousOwner = '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c70';
+        $previous = SessionMother::active(userId: $previousOwner);
+        $previous->pullDomainEvents();
+
         $sibling = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c71');
+        $previousOwnersOtherDevice = SessionMother::active(
+            id: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c72',
+            userId: $previousOwner,
+        );
 
-        $sessions = new InMemorySessionRepository($previous, $sibling);
+        $sessions = new InMemorySessionRepository($previous, $sibling, $previousOwnersOtherDevice);
 
-        $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
+        $sessionId = $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
 
         $this->assertSame(SessionStatus::REVOKED, $previous->status());
+        $this->assertSame(
+            [
+                [self::REVOKED, SessionMother::DEFAULT_ID],
+                [self::STARTED, $sessionId->toString()],
+            ],
+            $this->published(),
+        );
         $this->assertSame(SessionStatus::ACTIVE, $sibling->status(), 'this is not a log-out-everywhere');
+        $this->assertSame(SessionStatus::ACTIVE, $previousOwnersOtherDevice->status(), 'nor one for its owner');
         $this->assertSame([], $sessions->revokeAllCalls);
         $this->assertSame([], $sessions->revokeOthersCalls);
     }
