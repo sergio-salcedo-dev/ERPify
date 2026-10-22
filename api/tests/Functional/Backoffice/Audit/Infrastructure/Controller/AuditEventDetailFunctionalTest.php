@@ -257,6 +257,40 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     }
 
     /**
+     * A map has the shape of a sealed diff whether or not anything sealed it, so on a row that is not `change`
+     * — the one level only the change-capture listener mints — it is withheld whole, keys included, however
+     * exactly it imitates a diff. Seeded by raw SQL because `AuditLogEntry` refuses to build such an entry,
+     * which is the population this read-side rule exists for: rows that reached the table by another road.
+     *
+     * @throws JsonException
+     */
+    public function testADiffShapedMapOnARowThatIsNotAChangeRowIsWithheldWhole(): void
+    {
+        $id = Uuid::generate();
+        $this->connection()->executeStatement(
+            'INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, metadata, occurred_on) '
+            . "VALUES (CAST(:id AS UUID), 'activity', 'BANK_UPDATED', 'user', CAST(:actorId AS UUID), "
+            . 'CAST(:correlationId AS UUID), CAST(:metadata AS JSONB), NOW())',
+            [
+                'id' => $id,
+                'actorId' => self::ACTOR_ID,
+                'correlationId' => Uuid::generate(),
+                'metadata' => \json_encode(
+                    ['changes' => ['jane.doe@example.test' => ['old' => 'jane.doe@example.test', 'new' => 'x']]],
+                    JSON_THROW_ON_ERROR,
+                ),
+            ],
+        );
+
+        $data = $this->detail($id);
+
+        $this->assertArrayHasKey('metadata', $data);
+        $this->assertIsArray($data['metadata']);
+        $this->assertSame(AuditEventDetailResourceMapper::WITHHELD, $data['metadata']['changes'] ?? null);
+        $this->assertStringNotContainsString('jane.doe', (string) $this->client->getResponse()->getContent());
+    }
+
+    /**
      * @param array<string, mixed> $data
      *
      * @return array<string, mixed>
