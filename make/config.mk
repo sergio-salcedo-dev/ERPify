@@ -46,8 +46,10 @@ ifeq ($(IS_LINKED_WORKTREE),true)
 	| tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')
   COMPOSE_PROJECT_NAME ?= erpify-$(WORKTREE_SLUG)
   # Ephemeral host ports for dev-overlay worktree stacks only; never touch the
-  # fixed ports a real staging/prod deploy needs.
-  ifeq ($(filter $(ENV),prod staging),)
+  # fixed ports a real staging/prod deploy needs. `deploy.local` is evaluated
+  # without ENV=prod and is prod all the same: these exports would reach its
+  # nested `make ENV=prod` calls and publish the rehearsal on random ports.
+  ifeq ($(filter $(ENV),prod staging)$(filter deploy.local%,$(MAKECMDGOALS)),)
     HTTP_PORT       ?= 0
     HTTPS_PORT      ?= 0
     HTTP3_PORT      ?= 0
