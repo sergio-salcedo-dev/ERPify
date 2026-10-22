@@ -11,6 +11,7 @@ use Behat\Config\Suite;
 use Behat\Gherkin\GherkinCompatibilityMode;
 use DVDoug\Behat\CodeCoverage\Extension as CodeCoverageExtension;
 use Erpify\Kernel;
+use Erpify\Tests\Support\AcceptanceEntryPoints;
 use Erpify\Tests\Behat\Context\DoctrineContext;
 use Erpify\Tests\Behat\Context\EntityManagerContext;
 use Erpify\Tests\Behat\Context\EventStoreContext;
@@ -129,14 +130,15 @@ return (new Config())
     // The acceptance lane's line coverage, for SonarCloud next to PHPUnit's Clover. A profile of its own
     // rather than part of `default` because the extension needs a coverage driver, which the image ships
     // switched off: under `default` every ordinary run would print that no driver is available. Behat
-    // merges a named profile over `default`, so this one inherits the suite, the contexts and the kernel
-    // and adds only the collector — strict result interpretation included, which is why CI can gate on
-    // this run. Use `make php.behat.coverage`, which turns Xdebug on and keeps Behat from dropping it.
+    // merges a named profile over `default`, so this one inherits the suite, the contexts, the kernel and
+    // strict result interpretation, which is why CI can gate on this run; it adds only the collector. Use
+    // `make php.behat.coverage`, which turns Xdebug on and keeps Behat from dropping it.
     //
-    // Line coverage only, as PHPUnit's report is: under Xdebug the extension otherwise turns on branch and
-    // path collection, which Sonar's Clover import does not read.
-    // Uncovered files are left out because PHPUnit's report already lists every file under `src/`, and
-    // Sonar adds the two reports' hits per line.
+    // It credits ENTRY POINTS only — see AcceptanceEntryPoints for why. Sonar merges the two reports per
+    // line by logical OR, so whatever this filter admits counts as covered regardless of PHPUnit's
+    // attribution; everything else a scenario traverses is credited only by an attributed PHPUnit test.
+    // Line coverage only: under Xdebug the extension otherwise collects branches and paths, which Sonar's
+    // Clover import does not read.
     ->withProfile(
         (new Profile('coverage'))
             ->withExtension(new Extension(CodeCoverageExtension::class, [
@@ -145,9 +147,7 @@ return (new Config())
                 'filter' => [
                     'includeUncoveredFiles' => false,
                     'include' => [
-                        'directories' => [
-                            '%paths.base%/src' => null,
-                        ],
+                        'files' => AcceptanceEntryPoints::files(),
                     ],
                 ],
                 'reports' => [
