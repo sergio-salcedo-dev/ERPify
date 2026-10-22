@@ -45,15 +45,20 @@
 #                   sweep run from a worktree seeded without them answered
 #                   "Unknown command: /bmad-loop-sweep" twice and sat idle until
 #                   its session timeout, and `bmad-loop validate` reported ok.
-#                   It also links _bmad -> the main checkout's install. /_bmad is
-#                   gitignored too, so no worktree ever had it, and every bmad
+#                   It also copies _bmad from the main checkout's install. /_bmad
+#                   is gitignored too, so no worktree ever had it, and every bmad
 #                   skill dies at activation: it resolves the workflow block via
 #                   _bmad/scripts/resolve_customization.py and its config via
-#                   _bmad/bmm/config.yaml. Linked, not copied, so one installed
-#                   version and one config serve every worktree — a copy would
-#                   drift silently the first time the install is updated. The
-#                   link is relative (../../../_bmad), so moving the whole tree
-#                   keeps it resolving.
+#                   _bmad/bmm/config.yaml. Copied, not linked: with
+#                   [scm] isolation = "worktree", bmad-loop seeds _bmad into its
+#                   own per-story worktree and cannot follow a link that leaves
+#                   the project, so a run from a linked worktree pauses before
+#                   its first dev session (measured on the rr-2 run). A link also
+#                   let every worktree write the primary's _bmad/render/. The
+#                   copy is a snapshot taken with the bmad-* skills above, so
+#                   the two stay a matching pair; an install updated afterwards
+#                   reaches a worktree only when it is recreated. _bmad/render/
+#                   is a cache each session regenerates and is left out.
 #                   And it links .bmad-loop/policy.toml -> the main checkout's.
 #                   `bmad-loop init` gitignores it as machine-specific, so a
 #                   worktree had none and a `bmad-loop run` there fell back to the
@@ -210,9 +215,13 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 		echo "! the main checkout holds no bmad-* skills in any root — run the BMad installer there; /bmad-* will be Unknown command in this worktree"; \
 	fi; \
 	"$(PROJECT_ROOT)/scripts/seed-bmad-loop-skills.sh" "$$main" "$$path" || true; \
-	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
-		ln -s ../../../_bmad "$$path/_bmad"; \
-		echo "→ linked _bmad -> the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
+	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ] && [ ! -L "$$path/_bmad" ]; then \
+		if cp -a "$$main/_bmad" "$$path/_bmad" && rm -rf "$$path/_bmad/render"; then \
+			echo "→ copied _bmad from the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
+		else \
+			rm -rf "$$path/_bmad"; \
+			echo "! could not copy _bmad from the main checkout — every /bmad-* skill will fail at activation in this worktree"; \
+		fi; \
 	fi; \
 	if [ -f "$$main/.bmad-loop/policy.toml" ]; then \
 		if [ ! -e "$$path/.bmad-loop/policy.toml" ]; then \
