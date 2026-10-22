@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
-use PHPUnit\Framework\Attributes\CoversNothing;
+use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\RateLimitListener;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,7 +38,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  *
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(RateLimitListener::class)]
 final class RateLimitListenerFunctionalTest extends WebTestCase
 {
     private const string ENDPOINT = '/api/v1/health';
