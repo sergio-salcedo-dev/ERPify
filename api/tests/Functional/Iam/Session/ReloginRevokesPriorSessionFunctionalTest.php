@@ -166,11 +166,10 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
     }
 
     /**
-     * Another identity logging in over the same cookie (a shared browser): the row that cookie correlated belongs
-     * to the first member, so it is left live for its owner and no event about them is written by a request they
-     * did not make.
+     * Another identity logging in over the same cookie: the row that cookie correlated is revoked although it is
+     * not the new identity's, because only this cookie could reach it and its correlation is being overwritten.
      */
-    public function testALoginAsAnotherMemberOverTheSameCookieLeavesTheFirstMembersSessionAlive(): void
+    public function testALoginAsAnotherMemberOverTheSameCookieRevokesTheFirstMembersSession(): void
     {
         $this->otherUserId = Uuid::generate();
         $this->otherEmail = \sprintf('relogin-other-%s@erpify.test', \str_replace('-', '', $this->otherUserId));
@@ -179,12 +178,13 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->login();
         $first = $this->sessionIdsIn('ACTIVE');
         $this->assertCount(1, $first);
+        $firstMembersCookies = $this->client->getCookieJar()->all();
 
         $this->login($this->otherEmail);
 
-        $this->assertSame($first, $this->sessionIdsIn('ACTIVE'), "the first member's session is still theirs");
-        $this->assertSame([], $this->sessionIdsIn('REVOKED'));
-        $this->assertSame(0, $this->revokedEventCount($first[0]), 'and nothing announced a revocation of it');
+        $this->assertSame([], $this->sessionIdsIn('ACTIVE'), 'the first member keeps no live session');
+        $this->assertSame($first, $this->sessionIdsIn('REVOKED'));
+        $this->assertSame(1, $this->revokedEventCount($first[0]));
 
         $otherActive = $this->sessionIdsIn('ACTIVE', $this->otherUserId);
         $this->assertCount(1, $otherActive, 'the second member holds exactly one live session');
@@ -193,6 +193,26 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->assertCount(1, $listed, "the second member's list names only its own session");
         $this->assertSame($otherActive[0], $listed[0]['id']);
         $this->assertTrue($listed[0]['current']);
+
+        // Revoking is right only because the row had no other bearer: the cookie the first member held before
+        // the second login, replayed as it was, admits nobody.
+        $this->client->getCookieJar()->clear();
+
+        foreach ($firstMembersCookies as $firstMemberCookie) {
+            $this->client->getCookieJar()->set($firstMemberCookie);
+        }
+
+        $this->service(EntityManagerInterface::class)->clear();
+        $this->client->request(Request::METHOD_GET, self::SESSIONS_PATH, server: ['HTTP_ACCEPT' => 'application/json']);
+        $replayed = $this->client->getResponse();
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $replayed->getStatusCode(), (string) $replayed->getContent());
+
+        // And the first member, signing in from another browser, sees no phantom of the shared one.
+        $this->client->getCookieJar()->clear();
+        $this->login();
+        $ownListed = $this->mySessions();
+        $this->assertCount(1, $ownListed, "the first member's list shows the shared browser's session as gone");
+        $this->assertNotSame($first[0], $ownListed[0]['id']);
     }
 
     /**
