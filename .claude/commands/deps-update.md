@@ -7,7 +7,7 @@ Batch the open dependabot PRs into a single branch. Dependabot opens **one PR pe
 dependency**, which is wrong whenever one bump spans several pin sites, or whenever
 two packages are coupled through an API neither declares — those PRs cannot go green
 individually, no matter how long you wait or how many times you rerun them.
-`.github/dependabot.yaml` fires **weekly** across four ecosystems, so this runs often.
+`.github/dependabot.yaml` fires **weekly** across five ecosystems, so this runs often.
 
 Arguments: `$ARGUMENTS` may contain `--dry-run` to report only (change nothing,
 create nothing).
@@ -31,10 +31,13 @@ The ecosystem is the segment **immediately after `dependabot/`** in `headRefName
 | `github_actions` | GitHub Actions | `.github/workflows/*.yml` |
 | `composer` | Composer | `api/composer.json` + `api/composer.lock` |
 | `docker` | Docker base images | `api/Dockerfile`, `pwa/Dockerfile` |
+| `docker_compose` | Compose service images | `compose.yaml` (`postgres`), `compose.dev.yaml` (`mailpit`) |
 
 **Never substring-match the ref.** `dependabot/github_actions/docker/bake-action-7.3.0`
 is a *github_actions* bump whose action is published by `docker/`; matching on
-`docker` sends it down the Dockerfile path and it silently does nothing.
+`docker` sends it down the Dockerfile path and it silently does nothing. The same
+holds for a *prefix* match: `docker_compose` starts with `docker`, so compare the
+whole segment for equality.
 
 Composer bumps may already arrive grouped (`… in the composer group across 1
 directory`). Do not re-split a group — treat it as one unit.
@@ -262,6 +265,36 @@ Official images live under `library/<image>`; a vendor image is `<owner>/<image>
 routine; a bump whose two sides land in *different* suites is a distro upgrade
 wearing a digest bump's clothes, and belongs in its own PR with the user's call.
 
+**Docker Compose.** Service images are pinned as `<image>:<tag>@sha256:<digest>` —
+`postgres` in `compose.yaml`, `axllent/mailpit` in `compose.dev.yaml` — and a
+`docker_compose` PR moves **tag and digest together**, so copy the whole reference
+from its diff. `compose.prod.yaml` declares no `image:` on `database`: production runs
+the `compose.yaml` postgres pin, so that one bump is a production change.
+
+Verify the digest by what kind of tag it carries, because the Hub lookup above only
+answers for one of them. An **immutable** tag (`v1.31.5`) must resolve on Docker Hub
+to exactly the pinned digest:
+
+```bash
+curl -s "https://hub.docker.com/v2/repositories/<owner>/<image>/tags/<tag>" \
+ | python3 -c "import sys,json; print(json.load(sys.stdin).get('digest'))"
+```
+
+A **floating** tag (`18-alpine`) is rebuilt upstream and stops matching as soon as it is —
+measured on 2026-10-22, the correct `postgres:18-alpine` pin already differed from the
+Hub's current digest — so a mismatch there proves nothing. Prove the digest exists and
+read what it actually runs instead:
+
+```bash
+docker buildx imagetools inspect <image>@sha256:<digest> | head -3
+docker run --rm <image>@sha256:<digest> postgres --version   # mailpit: `version`
+```
+
+A postgres bump that changes the **major** (`18` → `19`) is not a digest bump: a
+`PGDATA` initialised by one major does not start under the next without
+`pg_upgrade`. It belongs in its own PR with the user's call, exactly as a Debian
+suite change does.
+
 ## 7. Assert the lockfile gained nothing — and moved everything
 
 For npm and Composer, compare the resolved lock against `main` and prove that
@@ -310,6 +343,7 @@ make <target> > /tmp/gate.log 2>&1; echo "<target> EXIT=$?"
 | npm, when `@playwright/test` moved | `cd pwa && ./node_modules/.bin/playwright test --list` — proves the new version parses `playwright.config.ts` and discovers every spec without needing browsers. Use the local binary: `npx playwright` may fetch a standalone package instead. |
 | composer | `make php.quality`, `make ci.api` |
 | docker | build the stage that carries the pin (below), or lean on the `API Build (Docker)` CI job |
+| docker_compose | `make docker.up`, then read the running version back (below) |
 | github_actions only | nothing local — CI is the gate |
 
 The full E2E suite is CI's job unless the user asks for it locally.
@@ -329,6 +363,23 @@ docker rmi deps-probe:prod
 
 The `os-release` read is the load-bearing half: a digest that silently crossed a
 Debian suite builds exactly as green as one that did not.
+
+**For a compose pin it is the other way round: `make docker.up` is the gate.** Those
+images are pulled, not built, so the dev stack runs exactly the reference you changed —
+`postgres` from `compose.yaml` and `mailpit` from `compose.dev.yaml`. Bring it up from
+the worktree and read the version from the running container, not from the file:
+
+```bash
+make docker.up > /tmp/gate-compose.log 2>&1; echo "docker.up EXIT=$?"
+P=$(make -s docker.info | awk -F': ' '/COMPOSE_PROJECT_NAME/{print $2}')
+docker compose -p "$P" exec database postgres --version
+docker compose -p "$P" exec mailpit /mailpit version
+docker compose -p "$P" images database mailpit   # IMAGE ID = the pinned digest's prefix
+```
+
+The `-p` is not optional. A worktree's stack runs under `erpify-<slug>` while a bare
+`docker compose` takes its project name from the directory, so it answers
+`service "database" is not running` against a stack that is up.
 
 ## 9. Security review
 
