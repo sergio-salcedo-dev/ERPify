@@ -81,11 +81,13 @@ src/Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand.php => Erp
 
 # Session minting on login → two published seams. The LoginSuccessEvent listener (Iam/Identity
 # Infrastructure) is the post-admission orchestrator: it mints the server-side session via the published
-# StartSession use case (Iam/Session), failing closed with that context's SessionStoreUnavailable marker, and
+# StartSession use case (Iam/Session), failing closed with that context's SessionStoreUnavailable marker (an
+# outage) or SessionAdmissionUnresolvable (an identity with no organization to scope its session), and
 # resolves the admission-time organization via the published FindUserOrganizationId read use case (Organization).
 # It hands only primitives downstream, so Iam/Session stays unaware of SecurityUser and of Organization.
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Application\StartSession
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
+src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionAdmissionUnresolvable
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Organization\Membership\Application\FindUserOrganizationId
 
 # Session minting holds the identity it names. StartSession (Iam/Session) declares the SessionSubjectLock port it

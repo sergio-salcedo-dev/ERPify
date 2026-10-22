@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Organization\Membership\Application;
 
 use Erpify\Organization\Membership\Application\FindUserOrganizationId;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
-use Erpify\Organization\Membership\Domain\Exception\MembershipNotFound;
+use Erpify\Organization\Membership\Domain\Exception\MembershipCardinalityViolated;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -30,13 +30,32 @@ final class FindUserOrganizationIdTest extends TestCase
         $this->assertSame($organizationId, $resolved);
     }
 
-    public function testRaisesMembershipNotFoundWhenTheUserHasNoMembership(): void
+    /**
+     * The absence is an answer the caller interprets in its own vocabulary, so the seam reports it rather than
+     * raising an exception of this context across the boundary.
+     */
+    public function testAnswersNullWhenTheUserHasNoMembership(): void
     {
-        $finder = new FindUserOrganizationId(new InMemoryMembershipRepository());
+        $memberships = new InMemoryMembershipRepository();
+        $memberships->save(Membership::grant(Uuid::generate(), Uuid::generate(), Uuid::generate()));
 
-        $this->expectException(MembershipNotFound::class);
+        $this->assertNull((new FindUserOrganizationId($memberships))->of(Uuid::generate()));
+    }
 
-        $finder->of(Uuid::generate());
+    /**
+     * Several memberships are a broken invariant, not an answer: the seam lets the refusal through rather than
+     * resolving the user to either organization.
+     */
+    public function testAUserWithSeveralMembershipsIsRefusedRatherThanResolved(): void
+    {
+        $userId = Uuid::generate();
+        $memberships = new InMemoryMembershipRepository();
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, Uuid::generate()));
+        $memberships->save(Membership::grant(Uuid::generate(), $userId, Uuid::generate()));
+
+        $this->expectException(MembershipCardinalityViolated::class);
+
+        (new FindUserOrganizationId($memberships))->of($userId);
     }
 
     public function testRejectsAMalformedUserIdBeforeTheLookup(): void

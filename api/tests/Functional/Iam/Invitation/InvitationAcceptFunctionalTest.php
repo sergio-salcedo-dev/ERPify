@@ -23,6 +23,7 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsSessionIdRotation;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
@@ -49,6 +50,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversClass(\Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DoctrineInvitationRepository::class)]
 final class InvitationAcceptFunctionalTest extends WebTestCase
 {
+    use AssertsSessionIdRotation;
     use ComparesOpaqueRefusals;
     use ResolvesContainerServices;
 
@@ -110,6 +112,21 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
 
         // The login path minted the first session — exactly one, no silent double-mint.
         $this->assertCount(1, $this->service(SessionRepository::class)->findByUserId($userId));
+    }
+
+    /**
+     * Accepting signs the device in, so a session id fixed in the browser beforehand must not survive it.
+     */
+    public function testAcceptingSignsTheDeviceInOnASessionIdItDidNotBring(): void
+    {
+        [, $token] = $this->seedSentInvitation();
+
+        $this->client->getCookieJar()->clear();
+        $planted = $this->plantSessionId($this->client);
+        $this->send($token, self::ORIGIN);
+
+        $this->assertStatus(Response::HTTP_NO_CONTENT);
+        $this->assertSessionIdRotatedAwayFrom($this->client, $planted);
     }
 
     public function testAllSixDeadTokenCasesReturnOneUniformInvalidToken(): void
@@ -177,6 +194,11 @@ final class InvitationAcceptFunctionalTest extends WebTestCase
     private function post(string $token, string $origin): void
     {
         $this->client->getCookieJar()->clear();
+        $this->send($token, $origin);
+    }
+
+    private function send(string $token, string $origin): void
+    {
         $this->client->request(
             \Symfony\Component\HttpFoundation\Request::METHOD_POST,
             self::ACCEPT_PATH,

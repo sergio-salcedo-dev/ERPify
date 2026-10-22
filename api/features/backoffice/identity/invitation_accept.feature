@@ -179,8 +179,12 @@ Feature: Accept an invitation
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
     And there should have 1 records in SQL result
 
+  # The refusal is only worth something if nothing behind it moved: the identity, the invitation, the session
+  # registry and the business log are each read back, because a 401 answered AFTER the accept committed would
+  # pass a status-only check.
   Scenario: An accept with no CSRF token header is refused before the token is even read
     Given I remove "X-CSRF-Token" header
+    And the stored events are cleared
     When I send a POST request to "/backoffice/invitations/accept" with body:
     """
     {
@@ -193,3 +197,9 @@ Feature: Accept an invitation
     And the header "Set-Cookie" should not exist
     And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'iris@erpify.test' AND status = 'INVITED'"
     And there should have 1 records in SQL result
+    And I execute the SQL query "SELECT id FROM iam_invitation WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90' AND status = 'SENT'"
+    And there should have 1 records in SQL result
+    And I execute the SQL query "SELECT id FROM iam_session WHERE user_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70'"
+    And there should have 0 records in SQL result
+    And there should be 0 events stored named "erpify.iam.invitation.accepted"
+    And there should be 0 events stored named "erpify.iam.session.started"

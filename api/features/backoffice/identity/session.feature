@@ -95,7 +95,13 @@ Feature: Server-side session registry and admission gate
   # own catch-up, and routing OtherSessionsRevoked to `async` removes it — both are anticipated paths, not
   # regressions. If this reds on a change that touched neither controller, re-derive the number rather than
   # reading the scenario name as a diagnosis.
+  #
+  # A second device is seeded because the bulk fact is published only over a revocation that flipped a row:
+  # with the current session the only one, the event-store write and its catch-up would drop out of the count
+  # and the budget would stop covering the path a real sign-out takes.
   Scenario: Signing out other devices reads the admitted session without re-running its lookup
+    Given I execute the SQL query "INSERT INTO iam_session (id, user_id, organization_id, status, expires_at, device, created_at, updated_at) VALUES ('0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5dfd', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', 'ACTIVE', NOW() + INTERVAL '1 day', 'A second device', NOW(), NOW())"
+    And I reset the stats for all doctrine connections
     When I send a "POST" request to "/sessions/revoke-others"
     Then the response status code should be 204
     And 10 requests got executed only for doctrine connection "default"

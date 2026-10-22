@@ -21,6 +21,8 @@ final class RevokeAllSessionsTest extends TestCase
 {
     private const string NOW = '2026-07-10T12:00:00+00:00';
 
+    private const string OTHER_ID = '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c7e';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -29,7 +31,10 @@ final class RevokeAllSessionsTest extends TestCase
 
     public function testBulkRevokesEverySessionOfTheUserAndPublishesTheBulkFact(): void
     {
-        $sessions = new InMemorySessionRepository();
+        $sessions = new InMemorySessionRepository(
+            SessionMother::active(),
+            SessionMother::active(id: self::OTHER_ID),
+        );
         $eventBus = new RecordingEventBus();
         $revokeAll = new RevokeAllSessions(
             $sessions,
@@ -42,8 +47,34 @@ final class RevokeAllSessionsTest extends TestCase
         $revokeAll->revoke(SessionMother::DEFAULT_USER_ID);
 
         $this->assertSame([SessionMother::DEFAULT_USER_ID], $sessions->revokeAllCalls);
+        $this->assertSame([], $sessions->findByUserId(SessionMother::DEFAULT_USER_ID));
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(AllSessionsRevoked::class, $eventBus->publishedEvents[0]);
+    }
+
+    /**
+     * The event states that sessions were revoked. An identity with none active — a suspension of somebody who
+     * never signed in, a reset by somebody signed out everywhere — flips no row, so it records no fact, and the
+     * call still completes as the success it is.
+     */
+    public function testRevokingAnIdentityWithNoActiveSessionPublishesNothing(): void
+    {
+        $revoked = SessionMother::active(id: self::OTHER_ID);
+        $revoked->revoke();
+
+        $sessions = new InMemorySessionRepository($revoked);
+        $eventBus = new RecordingEventBus();
+
+        (new RevokeAllSessions(
+            $sessions,
+            $eventBus,
+            new InlineTransactionManager(),
+            FixedClock::at(self::NOW),
+            new RecordingSessionSubjectLock(),
+        ))->revoke(SessionMother::DEFAULT_USER_ID);
+
+        $this->assertSame([SessionMother::DEFAULT_USER_ID], $sessions->revokeAllCalls, 'the revocation still ran');
+        $this->assertSame([], $eventBus->publishedEvents);
     }
 
     /**

@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use Erpify\Iam\Session\Application\StartSession;
 use Erpify\Iam\Session\Domain\Enum\SessionStatus;
-use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
+use Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
@@ -79,8 +79,8 @@ final class StartSessionHoldsItsSubjectTest extends TestCase
                 null,
             );
             $this->fail('a login for an identity that no longer exists must fail closed');
-        } catch (SessionStoreUnavailable) {
-            // The failure the minting listener turns into a dropped cookie and a 503.
+        } catch (SessionSubjectNotAdmissible) {
+            // The failure the minting listener turns into a dropped cookie and a 401.
         }
 
         $this->assertSame([], $sessions->saved, 'nothing was minted or revoked');
