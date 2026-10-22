@@ -9,8 +9,11 @@
 ## —— Deploy ———————————————————————————————————————————————————————————————
 
 # Keys that MUST be set (non-empty, no CHANGE_ME placeholder) before the prod
-# stack can start. Kept in sync with .env.prod.example.
-PROD_REQUIRED_KEYS := APP_SECRET AUDIT_KEK POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB CADDY_MERCURE_JWT_SECRET SERVER_NAME NEXT_PUBLIC_API_BASE_URL SENTRY_DSN SENTRY_TRACES_SAMPLE_RATE MAILER_DSN MAILER_SECURITY_FROM
+# stack can start: every `${VAR:?…}` compose.prod.yaml interpolates, read from
+# the file rather than listed here, so a key the stack requires cannot be missed
+# by the check. Comment lines are skipped (the header quotes `${VAR:?msg}`).
+# ProdEnvTemplateGateTest holds .env.prod.example to the same set.
+PROD_REQUIRED_KEYS := $(sort $(shell sed -e '/^[[:space:]]*\#/d' -e 's/[[:space:]]\#.*//' $(PROJECT_ROOT)/compose.prod.yaml | grep -oE '\$$\{[A-Z0-9_]+:\?' | tr -d '$${:?'))
 
 prod.env.check: ## Validate .env.prod.local holds every required prod secret (fails on missing file / unset / placeholder)
 	@file="$(PROJECT_ROOT)/$(PROD_ENV_FILE)"; \
@@ -18,6 +21,10 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 		echo "✗ $(PROD_ENV_FILE) not found at repo root."; \
 		echo "  Copy the template and fill in every CHANGE_ME value:"; \
 		echo "    cp .env.prod.example $(PROD_ENV_FILE)"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(PROD_REQUIRED_KEYS)" ]; then \
+		echo "✗ No required keys derived from compose.prod.yaml — refusing to validate against an empty set."; \
 		exit 1; \
 	fi; \
 	missing=""; \
