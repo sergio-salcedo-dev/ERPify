@@ -3,11 +3,12 @@ mercure:
         default:
             url: '%env(default::MERCURE_URL)%'
             public_url: '%env(default::MERCURE_PUBLIC_URL)%'
-            # The hub is the one embedded in the FrankenPHP image, which ships dunglas/mercure 0.x
-            # (`frankenphp build-info`), so it speaks the 0.x protocol: its tokens carry the `mercure`
-            # claim and subscribers authorise through the `mercureAuthorization` cookie and `?topic=`.
-            # The bundle defaults to protocol 1.0, whose `authorization_details` tokens a 0.x hub
-            # refuses — publishing would fail at runtime. Move this together with the hub.
+            # The hub is the one embedded in the FrankenPHP image: dunglas/mercure 1.x (`frankenphp
+            # build-info`), run with `protocol_version_compatibility 8` in frankenphp/Caddyfile so it
+            # keeps accepting the 0.x protocol this application speaks — tokens carrying the `mercure`
+            # claim, subscribers authorising through the `mercureAuthorization` cookie and `?topic=`.
+            # The bundle defaults to protocol 1.0, which changes the token shape and the cookie name the
+            # browser receives. Move this together with the hub's `issuer` block, never alone.
             protocol_version: '0.x'
             jwt:
                 secret: '%env(MERCURE_JWT_SECRET)%'

@@ -66,7 +66,7 @@ final class BankRealtimeAuthorizeControllerTest extends TestCase
     private function authorize(): Response
     {
         // The protocol the configured hub is pinned to (`config/packages/mercure.yaml`); the library
-        // itself defaults to 1.0, whose tokens the embedded 0.x hub refuses.
+        // itself defaults to 1.0, a different token shape and cookie name than the embedded hub expects.
         $authorization = new Authorization(new HubRegistry(new Hub(
             self::HUB_URL,
             new StaticTokenProvider('subscriber-token-unused-by-createCookie'),

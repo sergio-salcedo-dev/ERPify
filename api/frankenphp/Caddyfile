@@ -90,6 +90,14 @@
 		publisher_jwt {env.MERCURE_PUBLISHER_JWT_KEY} {env.MERCURE_PUBLISHER_JWT_ALG}
 		# Subscriber JWT key
 		subscriber_jwt {env.MERCURE_SUBSCRIBER_JWT_KEY} {env.MERCURE_SUBSCRIBER_JWT_ALG}
+		# The embedded hub is dunglas/mercure 1.x, which refuses to start with the two keys above unless
+		# compatibility mode is named. The application speaks the 0.x protocol (`protocol_version: '0.x'` in
+		# api/config/packages/mercure.yaml): its tokens carry the `mercure` claim, its subscriber cookie is
+		# `mercureAuthorization` and it subscribes with `?topic=`. Mode 8 is what keeps all three working, and
+		# it validates such a token exactly as the 0.x hub did — no `aud`, no `exp` required. Leaving it means
+		# moving the keys into an `issuer` block and the bundle to protocol 1.0 in the same change; either
+		# half alone stops every publish and every private subscription.
+		protocol_version_compatibility 8
 		# Allow anonymous subscribers (double-check that it's what you want)
 		anonymous
 		# Enable the subscription API (double-check that it's what you want)

@@ -1196,6 +1196,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Superseded 2026-10-20:** mercure-bundle 0.6 defaults to protocol 1.0, which the embedded 0.x
       hub refuses, so `config/packages/mercure.yaml` pins `protocol_version: '0.x'` explicitly and
       `MercureHubProtocolFunctionalTest` asserts it on the container's own hub.
+      **Superseded 2026-10-22:** the FrankenPHP 1.13 image (taken for PHP 8.5.12, CVE-2026-109618 /
+      CVE-2026-109619) embeds dunglas/mercure 1.x, which refuses to boot with top-level
+      `publisher_jwt`/`subscriber_jwt` unless compatibility mode is named. `frankenphp/Caddyfile`
+      sets `protocol_version_compatibility 8`, which validates a 0.x token as the 0.x hub did (no `aud`,
+      no `exp` required) — no stricter and no looser than before. Measured against the v1.13.2 binary:
+      a `mercure`-claim publish is accepted, a wrong key and a missing token are 401, a private update
+      reaches the `mercureAuthorization` cookie on `?topic=` and not an anonymous subscriber. Residual:
+      the hub also accepts a 1.0 token whose `aud` names it; moving to an `issuer` block and protocol 1.0
+      is the way out of compatibility mode, and the two move together.
       Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
       **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
       cache `v0.4.2` exits 1 with `Deprecations: 1` naming
