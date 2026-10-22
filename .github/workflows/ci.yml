@@ -35,6 +35,15 @@ jobs:
   # -------------------------
   api-build:
     name: API Build (Docker)
+    # Skipped on dependabot pull requests, and every job downstream with it (api-test,
+    # api-behat, pwa-e2e, the report and sonar `need` this one). Those PRs are almost
+    # never merged as opened: /deps-update re-resolves them into one batch PR, which
+    # runs this workflow in full — measured over 30 days, 43 of 44 were closed unmerged
+    # while their CI billed ~1,650 minutes that decided nothing. Keyed on the PR's
+    # AUTHOR rather than `github.actor`, so a human re-running one does not change the
+    # verdict; a bump that must merge as opened gets the full graph with
+    # `gh workflow run ci.yml --ref <its branch>` (workflow_dispatch is not a PR event).
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -233,52 +242,19 @@ jobs:
           echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
-  # API SECURITY (ERPify Semgrep taint rules — parallel, non-gating for now)
+  # STATIC (ShellCheck + the ERPify Semgrep rules — no stack, no application image)
   # -------------------------
-  api-semgrep:
-    name: API Security (Semgrep)
+  # One job rather than two because each takes seconds and a job is billed by the
+  # started minute: apart they were 7 s and 33 s, billed 1 min each, ~630 min a
+  # month for 40 s of work. They share nothing but the checkout, and ShellCheck runs
+  # first so its gating verdict never waits on the scanner.
+  static:
+    name: Static (ShellCheck + Semgrep)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
       security-events: write # upload SARIF to code scanning
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # No stack and no application image: the ruleset is local YAML and the
-      # scanner is a pinned container, so this job needs neither the registry nor
-      # a Semgrep account. It stays out of the php.quality.dry-run sweep because
-      # it runs in its own container rather than the php one.
-      - name: Rule fixtures
-        run: make semgrep.test
-
-      # Non-gating while the rules bed in — findings are visible in code scanning
-      # and in this job's log, but a false positive must not block a merge. Flip
-      # to gating (drop continue-on-error) once a few PRs have run clean.
-      - name: Scan api/src
-        continue-on-error: true
-        run: make semgrep.sarif
-
-      - name: Upload SARIF
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
-        with:
-          sarif_file: .semgrep/erpify-rules.sarif
-          category: erpify-semgrep
-
-  # -------------------------
-  # SHELL LINT (host tool, no stack, no container)
-  # -------------------------
-  shell-lint:
-    name: Shell (ShellCheck)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -299,11 +275,35 @@ jobs:
       - name: Lint tracked shell scripts
         run: make shell.lint
 
+      # The ruleset is local YAML and the scanner is a pinned container, so this
+      # needs neither the registry nor a Semgrep account. It stays out of the
+      # php.quality.dry-run sweep because it runs in its own container rather than
+      # the php one.
+      - name: Semgrep rule fixtures
+        run: make semgrep.test
+
+      # Non-gating while the rules bed in — findings are visible in code scanning
+      # and in this job's log, but a false positive must not block a merge. Flip
+      # to gating (drop continue-on-error) once a few PRs have run clean.
+      - name: Semgrep scan of api/src
+        continue-on-error: true
+        run: make semgrep.sarif
+
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          sarif_file: .semgrep/erpify-rules.sarif
+          category: erpify-semgrep
+
   # -------------------------
   # PWA NODE (isolated, fast)
   # -------------------------
   pwa-node:
     name: PWA (Node)
+    # Skipped on dependabot pull requests for the reason api-build gives.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -414,7 +414,7 @@ jobs:
           # stack), the E2E user is never created, and the login setup fails with a 401.
           COMPOSE_PROJECT_NAME: erpify-e2e
           # Indirect through env (not inline ${{ }}) so the run block never expands
-          # a workflow expression into shell — the safe pattern used in ci-summary.
+          # a workflow expression into shell — the safe pattern used in ci-status.
           SHARD: ${{ matrix.shard }}
           TOTAL_SHARDS: ${{ strategy.job-total }}
         run: make pwa.test.e2e CI_SHARD="$SHARD" CI_TOTAL_SHARDS="$TOTAL_SHARDS"
@@ -599,7 +599,7 @@ jobs:
   # CI-based analysis on SonarCloud (sergio-salcedo-dev_ERPify). Requires the
   # project's "Automatic Analysis" to be turned OFF in the SonarCloud UI
   # (Project Settings ▸ Analysis Method) — the two are mutually exclusive and a
-  # scan errors out while AA is enabled. Deliberately kept out of the ci-success
+  # scan errors out while AA is enabled. Deliberately kept out of the ci-status
   # gate: a red Quality Gate informs, it does not block merges.
   #
   # Token hygiene: SONAR_TOKEN (a project-scoped analysis token) is a repo
@@ -658,28 +658,34 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # -------------------------
-  # CI SUMMARY (aggregate — always renders)
+  # CI STATUS (summary + the strict gate, one job — burn-in reported, never gating)
   # -------------------------
-  ci-summary:
-    name: CI Summary
+  # One job rather than a summary and a gate apart: each took 3 s and was billed a
+  # minute. Also stricter than the gate it replaces, which ran only when every need
+  # succeeded — so a red upstream left it SKIPPED, and a skipped check reads as green.
+  # This one always runs and decides from the results: a gating job that failed or
+  # was cancelled fails it, and so does api-build, because a failed build SKIPS the
+  # jobs that need it rather than failing them.
+  ci-status:
+    name: CI Status
     if: always()
-    needs: [api-build, api-test, api-behat, api-semgrep, shell-lint, pwa-node, pwa-e2e, pwa-burn-in, sonar]
+    needs: [api-build, api-test, api-behat, static, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
 
     steps:
-      - name: Render summary
+      - name: Render summary and decide
         env:
           R_API_BUILD: ${{ needs.api-build.result }}
           R_API_TEST: ${{ needs.api-test.result }}
           R_API_BEHAT: ${{ needs.api-behat.result }}
-          R_API_SEMGREP: ${{ needs.api-semgrep.result }}
-          R_SHELL_LINT: ${{ needs.shell-lint.result }}
+          R_STATIC: ${{ needs.static.result }}
           R_PWA_NODE: ${{ needs.pwa-node.result }}
           R_PWA_E2E: ${{ needs.pwa-e2e.result }}
           R_PWA_BURNIN: ${{ needs.pwa-burn-in.result }}
           R_SONAR: ${{ needs.sonar.result }}
+          DEPENDABOT_PR: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}
         run: |
           {
             echo "## CI Execution Summary"
@@ -689,8 +695,7 @@ jobs:
             echo "| API Build       | $R_API_BUILD |"
             echo "| API Tests       | $R_API_TEST |"
             echo "| API Behat       | $R_API_BEHAT |"
-            echo "| API Semgrep     | $R_API_SEMGREP |"
-            echo "| Shell (ShellCheck) | $R_SHELL_LINT |"
+            echo "| Static          | $R_STATIC |"
             echo "| PWA (Node)      | $R_PWA_NODE |"
             echo "| PWA (E2E)       | $R_PWA_E2E |"
             echo "| PWA (Burn-In)   | $R_PWA_BURNIN |"
@@ -704,14 +709,19 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # -------------------------
-  # FINAL STATUS (strict gate — burn-in deliberately excluded)
-  # -------------------------
-  ci-success:
-    name: CI Status
-    needs: [api-test, api-behat, shell-lint, pwa-node, pwa-e2e]
-    runs-on: ubuntu-latest
-    permissions: {}
-    steps:
-      - name: Success
-        run: echo "All checks passed successfully!"
+          # A dependabot PR ran only the static job, so it is NOT validated — and saying
+          # so in red is the point: a skipped graph would otherwise read as a green one.
+          if [ "$DEPENDABOT_PR" = "true" ]; then
+            echo "::error::Dependabot PR: the test graph was skipped on purpose. Batch it with /deps-update, or run the full CI on its branch (gh workflow run ci.yml --ref <branch>) before merging it as opened."
+            exit 1
+          fi
+
+          status=0
+          for pair in "api-build:$R_API_BUILD" "api-test:$R_API_TEST" "api-behat:$R_API_BEHAT" \
+                      "static:$R_STATIC" "pwa-node:$R_PWA_NODE" "pwa-e2e:$R_PWA_E2E"; do
+            case "${pair#*:}" in
+              success) ;;
+              *) echo "::error::${pair%%:*} is ${pair#*:}"; status=1 ;;
+            esac
+          done
+          exit "$status"

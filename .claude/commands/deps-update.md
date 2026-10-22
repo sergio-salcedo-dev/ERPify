@@ -20,6 +20,11 @@ gh pr list --state open --author app/dependabot --limit 100 \
 ```
 
 If fewer than two PRs come back, say so and STOP — one bump needs no batching.
+**But it does need its CI before it merges**: on a dependabot PR, `ci.yml` runs only the
+static job and `CI Status` is red by design (the test graph is skipped — those PRs are
+normally re-resolved here, and the batch PR is the run that validates). Run the full
+graph on its branch with `gh workflow run ci.yml --ref <headRefName>` and merge only
+on that run's green.
 
 ## 2. Classify by ecosystem — by path segment, never by substring
 
@@ -182,8 +187,10 @@ Whether to take those rewrites wholesale, take them selectively (a skip list in
 
 ## 4. Report
 
-Print a table: PR / ecosystem / files / CI conclusion / **batch-blocking?** (yes when
-3A or 3B applies). Name every red and which class it is — the multi-pin split (3A), the
+Print a table: PR / ecosystem / files / **batch-blocking?** (yes when 3A or 3B applies).
+There is no per-PR CI column: a dependabot PR runs only the static job, so its
+`CI Status` is red for every one of them and says nothing about the bump — the
+batch PR's run, and the local checks in step 7, are where a bump is judged. Name every red and which class it is — the multi-pin split (3A), the
 private-API coupling (3B), or real work the bump demands (3C) — and say how you told them
 apart. For a suspected 3B, the A/B is the answer, not the error text.
 
