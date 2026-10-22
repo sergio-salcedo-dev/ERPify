@@ -90,6 +90,17 @@ describe("ApiLoginRepository.login", () => {
     ["a 502 bad-gateway", HttpStatus.BAD_GATEWAY, "bad-gateway"],
     ["a 503 service-unavailable", HttpStatus.SERVICE_UNAVAILABLE, "service-unavailable"],
     ["a 504 gateway-timeout", HttpStatus.GATEWAY_TIMEOUT, "gateway-timeout"],
+    [
+      "a 500 session-admission-unresolvable",
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      "session-admission-unresolvable",
+    ],
+    [
+      "a 500 membership-cardinality-violated",
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      "membership-cardinality-violated",
+    ],
+    ["an unmapped 5xx", 599, "unhandled-exception"],
   ])(
     "maps %s to request-failed (retryable, not a credentials error)",
     async (_label, status, type) => {
@@ -107,7 +118,7 @@ describe("ApiLoginRepository.login", () => {
   it.each([
     ["401 unauthenticated", HttpStatus.UNAUTHORIZED, "unauthenticated"],
     ["a 403 with an unrecognised type", HttpStatus.FORBIDDEN, "some-other-type"],
-    ["a 500", HttpStatus.INTERNAL_SERVER_ERROR, "server-error"],
+    ["a 429", HttpStatus.TOO_MANY_REQUESTS, "rate-limited"],
   ])("collapses %s to invalid-credentials (neutrality)", async (_label, status, type) => {
     const post = vi.fn().mockRejectedValue(new HttpError(problem(status, type)));
 

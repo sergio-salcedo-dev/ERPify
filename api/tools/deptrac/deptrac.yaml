@@ -584,6 +584,7 @@ deptrac:
         Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener:
             - Erpify\Iam\Session\Application\StartSession
             - Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
+            - Erpify\Iam\Session\Domain\Exception\SessionAdmissionUnresolvable
             - Erpify\Organization\Membership\Application\FindUserOrganizationId
         Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalSessionSubjectLock:
             - Erpify\Iam\Session\Application\SessionSubjectLock

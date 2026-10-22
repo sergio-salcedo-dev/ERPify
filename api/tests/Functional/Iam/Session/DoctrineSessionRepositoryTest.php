@@ -176,11 +176,12 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
 
             $current = SessionId::fromString($currentId);
             $other = SessionId::fromString($otherId);
-            $this->repository->revokeOthersForUser($userId, $current);
+            $this->assertSame(1, $this->repository->revokeOthersForUser($userId, $current), 'one row flipped');
             $this->entityManager->clear();
 
             $this->assertInstanceOf(Session::class, $this->repository->findActiveById($current));
             $this->assertNotInstanceOf(Session::class, $this->repository->findActiveById($other));
+            $this->assertSame(0, $this->repository->revokeOthersForUser($userId, $current), 'nothing left to flip');
         });
     }
 
@@ -192,10 +193,11 @@ final class DoctrineSessionRepositoryTest extends KernelTestCase
             $this->repository->save($this->activeSession($id, $userId, '+1 hour'));
             $this->entityManager->clear();
 
-            $this->repository->revokeAllForUser($userId);
+            $this->assertSame(1, $this->repository->revokeAllForUser($userId), 'one row flipped');
             $this->entityManager->clear();
 
             $this->assertNotInstanceOf(Session::class, $this->repository->findActiveById(SessionId::fromString($id)));
+            $this->assertSame(0, $this->repository->revokeAllForUser($userId), 'a revoked row is not flipped twice');
         });
     }
 
