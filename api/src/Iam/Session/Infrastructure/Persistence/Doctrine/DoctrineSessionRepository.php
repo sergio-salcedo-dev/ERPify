@@ -153,15 +153,15 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     }
 
     #[Override]
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): int
     {
-        $this->bulkRevokeActive($userId, $currentSessionId);
+        return $this->bulkRevokeActive($userId, $currentSessionId);
     }
 
     #[Override]
-    public function revokeAllForUser(string $userId): void
+    public function revokeAllForUser(string $userId): int
     {
-        $this->bulkRevokeActive($userId, null);
+        return $this->bulkRevokeActive($userId, null);
     }
 
     #[Override]
@@ -222,8 +222,10 @@ final readonly class DoctrineSessionRepository implements SessionRepository
     /**
      * Directed UPDATE flipping every currently-active session of the user to `REVOKED` (optionally excluding
      * the one in hand). Runs as SQL without hydrating the aggregates — the bulk path never needs their events.
+     *
+     * @return int the number of rows flipped
      */
-    private function bulkRevokeActive(string $userId, ?SessionId $except): void
+    private function bulkRevokeActive(string $userId, ?SessionId $except): int
     {
         $now = $this->clock->now();
 
@@ -244,10 +246,7 @@ final readonly class DoctrineSessionRepository implements SessionRepository
             $queryBuilder->andWhere('s.id != :current')->setParameter('current', $except->toString());
         }
 
-        // The count is discarded — the port returns void — but it is still narrowed. Asserting that a bulk
-        // statement yielded a count is meaningful whatever anyone does with the number, and exempting the
-        // one caller that ignores it is what a rule would have to grow a signature-shaped hole for.
-        AffectedRows::from(
+        return AffectedRows::from(
             $this->convertingStoreFailure(static fn (): mixed => $queryBuilder->getQuery()->execute()),
         );
     }

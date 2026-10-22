@@ -47,8 +47,8 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         SystemClock::set(new FixedClock(new DateTimeImmutable(self::NOW)));
         $sessions = new InMemorySessionRepository(SessionMother::active());
 
-        $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID);
-
+        $this->assertSame(1, $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID), "the UPDATE's row count");
+        $this->assertSame(0, $sessions->revokeAllForUser(SessionMother::DEFAULT_USER_ID), 'a revoked row stays put');
         $this->assertNotInstanceOf(
             Session::class,
             $sessions->findActiveById(SessionId::fromString(SessionMother::DEFAULT_ID)),
@@ -65,11 +65,12 @@ final class InMemorySessionRepositoryBulkRevocationContractTest extends TestCase
         $other = SessionMother::active(id: Uuid::generate(), expiresAt: $now->modify('+1 hour'));
         $sessions = new InMemorySessionRepository($current, $other);
 
-        $sessions->revokeOthersForUser(
+        $revoked = $sessions->revokeOthersForUser(
             SessionMother::DEFAULT_USER_ID,
             SessionId::fromString(SessionMother::DEFAULT_ID),
         );
 
+        $this->assertSame(1, $revoked, 'the spared session is not counted');
         $this->assertSame([$current], $sessions->findByUserId(SessionMother::DEFAULT_USER_ID));
         $this->assertSame(SessionStatus::ACTIVE, $current->status());
         $this->assertSame(SessionStatus::REVOKED, $other->status());

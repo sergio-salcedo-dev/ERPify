@@ -23,7 +23,10 @@ final class RecordingSessionSubjectLock implements SessionSubjectLock
      */
     public array $calls = [];
 
-    /** What every call answers: false plays an identity erased before the lock was granted. */
+    /**
+     * What every call answers: false plays an identity erased — or, for {@see holdsAdmissible()}, also one no
+     * longer `ACTIVE` — before the lock was granted.
+     */
     public bool $live = true;
 
     public function __construct(
@@ -38,5 +41,11 @@ final class RecordingSessionSubjectLock implements SessionSubjectLock
         $this->calls[] = [$userId, \count($this->sessions->saved ?? []), $this->transactions->open ?? false];
 
         return $this->live;
+    }
+
+    #[Override]
+    public function holdsAdmissible(string $userId): bool
+    {
+        return $this->holdsLive($userId);
     }
 }
