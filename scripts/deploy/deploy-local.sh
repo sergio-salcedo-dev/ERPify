@@ -27,8 +27,9 @@ ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 HEALTH_PATH="${HEALTH_PATH:-/api/v1/health}"
 CA_PATH_IN_CONTAINER="/data/caddy/pki/authorities/local/root.crt"
 CA_OUT="erpify-local-root-ca.crt"
-# Make `docker compose` target the same project make uses, regardless of cwd basename.
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
+# Its own project, never dev's: see LOCAL_PROD_PROJECT in make/deploy.mk. Exported so
+# the nested `make` calls and `docker compose` below act on the same one.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify-prodlocal}"
 
 DRY_RUN=0
 SKIP_MIGRATIONS=0
@@ -63,8 +64,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-MAKE="make ENV=prod PROD_ENV_FILE=$ENV_FILE"
-COMPOSE="docker compose --env-file $ENV_FILE -f compose.yaml -f compose.prod.yaml"
+MAKE="make COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME ENV=prod PROD_ENV_FILE=$ENV_FILE"
+COMPOSE="docker compose -p $COMPOSE_PROJECT_NAME --env-file $ENV_FILE -f compose.yaml -f compose.prod.yaml"
 OS="$(uname -s)"
 
 # —— 1. Preflight ——————————————————————————————————————————————————————————

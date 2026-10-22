@@ -89,8 +89,18 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
 
+# The local rehearsal runs as its own compose project. In the primary checkout dev
+# and ENV=prod both resolve to `erpify`, so sharing it hands the rehearsal dev's
+# volumes: a Postgres initialised with dev's password (the prod one is refused)
+# and dev's data underneath prod's migrations. Not applied to ENV=prod at large,
+# because a VPS deploy keeps the `erpify` project its volumes already belong to.
+LOCAL_PROD_PROJECT ?= erpify-prodlocal
+
 deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
-	@bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
+	@COMPOSE_PROJECT_NAME=$(LOCAL_PROD_PROJECT) bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
+
+deploy.local.down: ## Stop the local prod rehearsal (its volumes are kept); required before `make app.dev`, which needs the same ports
+	@$(MAKE) --no-print-directory COMPOSE_PROJECT_NAME=$(LOCAL_PROD_PROJECT) ENV=prod docker.down
 
 deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA + Chromium NSS). Run with sudo: `sudo make deploy.local.trust`
 	@bash $(PROJECT_ROOT)/scripts/deploy/trust-local.sh
@@ -101,4 +111,4 @@ backup.prod: ## Prod backup: verified pg_dump of the database (knobs: BACKUP_DIR
 restore.prod: ## Restore a backup (STAMP=<stamp>, omit to list) — DESTRUCTIVE, for the restore drill / pre-prod check (knobs: BACKUP_DIR, RESTORE_YES, ALLOW_PROD_RESTORE)
 	@STAMP="$(STAMP)" bash $(PROJECT_ROOT)/scripts/deploy/restore-prod.sh
 
-.PHONY: prod.env.check deploy.local deploy.local.trust backup.prod restore.prod
+.PHONY: prod.env.check deploy.local deploy.local.down deploy.local.trust backup.prod restore.prod
