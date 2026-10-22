@@ -23,8 +23,8 @@ import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 
 const IDENTITY_REPOSITORY_KEY = "IdentityRepository";
 
-// Evict first, rotate second: the change only asks the other sessions to sign out, best effort, so an intruder's
-// session that survives that request would hold the new password.
+// Evict first, rotate second: until the change commits, a stolen session that is still signed in can keep acting
+// on the account and drain the per-identity proof budget this form spends, so it is signed out before, not after.
 const ACTIVE_SESSIONS_PATH = `${Routes.PROFILE}/sessions`;
 
 // The sign-out of the other sessions is requested best-effort and the 204 carries no word on whether it

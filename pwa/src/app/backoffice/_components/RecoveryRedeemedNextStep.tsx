@@ -20,8 +20,9 @@ const LINK_CLASS = "text-foreground font-medium underline underline-offset-4";
  *
  * Its own named `<aside>` rather than a `NoticeBanner`, because it needs two links: changing the
  * password from the profile requires the current one, so a user who no longer knows it is sent to
- * Forgot password, which works while signed in. Deliberately not a live region — the toast already
- * announced the sign-in.
+ * Forgot password, which opens while signed in; completing it signs this session out too, since a
+ * reset revokes every session, so the user signs back in with the new password. Deliberately not a
+ * live region — the toast already announced the sign-in.
  *
  * Mounted by the page rather than the layout: the layout survives navigation, so the notice would
  * stand there until a reload instead of showing once.

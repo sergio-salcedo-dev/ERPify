@@ -140,15 +140,16 @@ describe("RecoveryRedeemForm — presenting the secret", () => {
   });
 
   it("marks the one-shot dashboard notice only once the session is confirmed, before leaving", async () => {
+    // Observed at the moment of navigating: the dashboard reads the mark on its first mount.
+    let markedWhenLeaving: boolean | undefined;
     push.mockImplementationOnce(() => {
-      // Observed at the moment of navigating: the dashboard reads the mark on its first mount.
-      expect(peekRecoveryRedeemed()).toBe(true);
+      markedWhenLeaving = peekRecoveryRedeemed();
     });
     render(<RecoveryRedeemForm />);
     submit();
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice"));
-    expect(peekRecoveryRedeemed()).toBe(true);
+    expect(markedWhenLeaving).toBe(true);
   });
 
   it("never puts the secret anywhere but the field it was typed into", async () => {
@@ -260,7 +261,7 @@ describe("RecoveryRedeemForm — refusals", () => {
     expect(push).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
     // The dashboard's next-step notice speaks only after a confirmed sign-in; the unconfirmed
-    // copy is left as it was and says nothing about the password.
+    // copy says nothing about the password.
     expect(peekRecoveryRedeemed()).toBe(false);
   });
 

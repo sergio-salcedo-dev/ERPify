@@ -80,6 +80,10 @@ describe("LoginForm — ways back in", () => {
     const link = screen.getByTestId("login-form__recovery-link");
     expect(link).toHaveTextContent("Use a recovery secret");
     expect(link).toHaveAttribute("href", "/recovery");
+    expect(screen.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
+      "href",
+      "/forgot-password",
+    );
   });
 });
 

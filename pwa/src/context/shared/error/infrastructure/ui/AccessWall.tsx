@@ -58,7 +58,7 @@ const RECOVER_ACTION: AccessWallAction = {
 // the same email address the lockout is, so whoever can hold the account locked can drain that budget
 // too. A recovery secret is keyed by nothing the attacker knows. Without this action the only two
 // edges this screen offers are the two the attack already closes, and the channel built for exactly
-// this moment is reachable only by typing a URL nobody was told about.
+// this moment is one the locked user has to go back to the sign-in page to find.
 const REDEEM_RECOVERY_SECRET_ACTION: AccessWallAction = {
   testId: "redeem-recovery-secret",
   href: Routes.RECOVERY,

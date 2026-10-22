@@ -18,7 +18,9 @@ deferred:
       de cliente de Next). Los tests unitarios marcan y leen el flag en el mismo grafo de módulos, así que
       una regresión a navegación dura o a una segunda instancia del chunk seguiría en verde. Lo zanja un
       spec de Playwright que canjee un secreto en `/recovery` y vea `dashboard__recovery-next-step` en
-      `/backoffice`; hoy `pwa/tests/e2e` no tiene nada de recuperación.
+      `/backoffice`. (Corregido en la code review de #1087: `pwa/tests/e2e` sí tiene recuperación —
+      `fixtures/recovery-secret-api.ts` y `backoffice/recovery-readiness-real-api.spec.ts`, ambos sobre el
+      admin compartido.) Plegado en la épica como la historia `rr-3`; no está en `deferred-work.md`.
     location: >-
       pwa/src/context/backoffice/user/application/recoveryRedeemedNotice.ts
     severity: medium (unverified)
@@ -151,6 +153,19 @@ deferred:
   - `[low]` `[patch]` (intent) §7 no coincide con el código sobre cuándo se pierde el aviso — mismo grupo y mismo arreglo que la fila de edge.
   - `[false]` `[reject]` (intent) La guía del mail solo sirve a quien tiene secreto — carried, misma razón que la fila de blind.
   - `[maybe-false]` `[reject]` (intent) El `<aside>` lleva «Open your profile» además del literal, y el toast no se comprueba contra «safe» — carried: los extras los fija la spec y el toast se asevera por cadena exacta.
+
+### 2026-10-22 — bmad-code-review on PR #1087 (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance Auditor)
+- verdicts: 0 high, 0 medium; ACs 1–5 hold; every `patch` applied in the PR.
+- `[low]` `[patch]` (blind) The `ACTIVE_SESSIONS_PATH` comment said a surviving intruder session would hold the new password — false: `SecurityUser::isEqualTo` compares the hash, so it is de-authenticated natively. Rewritten to the real reason (it keeps acting and drains the proof budget until the change commits).
+- `[low]` `[patch]` (blind) The notice's Forgot password link: completing a reset revokes every session, this one included — said in the docblock. The copy is the contract's literal (AC3).
+- `[low]` `[patch]` (blind) The "marked before leaving" test asserted inside the `push` mock — now records the value and asserts it after.
+- `[low]` `[patch]` (blind+acceptance) Login links now go through `safeHref`, like the other new links; the test pins that *Forgot password?* survived.
+- `[low]` `[patch]` (blind) The mail test also refuses "is now safe", "is now secure", "is secure".
+- `[low]` `[patch]` (acceptance) Two change-relative test comments ("left as it was", "replaces the bare contact us line") rewritten.
+- `[low]` `[patch]` (verification-gap) `AccessWall.tsx` and its test called the locked wall the only door to `/recovery`; the sign-in page now links it.
+- `[low]` `[patch]` (edge) A session probe that fails while the dashboard shows the notice unmounts it, and the consumed mark does not come back. Rare and a code fix adds state; recorded in §7 instead of fixed. §7's paragraph reflowed (one line ran to 147 columns).
+- `[low]` `[patch]` (blind+acceptance) The `deferred:` block's premise was false — `pwa/tests/e2e` has recovery fixtures; annotated, and pointed at `rr-3`. rr-3 gained the toast and negative case, and names seeding the dedicated identity as its first decision.
+- `[false]` (blind) "DW-70 is nowhere and the diff does not touch `deferred-work.md`" — bmad-loop's commit added it and `8f2346e0` removed it; the net diff is zero by design.
 
 ## Design Notes
 

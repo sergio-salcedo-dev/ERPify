@@ -71,6 +71,9 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
             'all your open sessions',
             'previous password',
             'no longer works',
+            'is now safe',
+            'is now secure',
+            'is secure',
         ];
 
         foreach ($unguaranteed as $claim) {
@@ -93,7 +96,7 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertStringContainsString($textGuidance, $text);
         $this->assertStringContainsString('If neither works, contact ' . self::FROM . ' immediately.', $text);
         $this->assertGuidancePrecedesTheFallback($text, $textGuidance);
-        // The guidance replaces the bare "contact us" line rather than sitting beside it.
+        // One "if this was not you" line: the guidance, with the contact as its fallback.
         $this->assertSame(1, \substr_count($text, 'If this was not you'));
 
         // The HTML wraps the sentence across lines; compare it with its whitespace collapsed.
