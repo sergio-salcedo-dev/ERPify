@@ -1,7 +1,8 @@
 # Story RR-2: "Evict first, rotate second" on every surface that tells a user what to do next
 
-Status: backlog — unblocked: #1001 (redemption evicting every other session, which the redemption copy
-states) merged on 2026-09-28
+Status: tracked by `bmad-loop` in `stories/rr-2-*.md` of this folder — this file is `SPEC.md`'s companion
+contract and carries no status of its own. Unblocked: #1001 (redemption evicting every other session, which
+the redemption copy states) merged on 2026-09-28.
 
 ## Story
 

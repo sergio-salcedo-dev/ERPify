@@ -4,7 +4,14 @@ baseline_commit: 0a4d328c194a5aa2e242e789251c956aeb454de1
 
 # Story: make the sprint board legible to bmad-loop
 
-Status: ready-for-dev
+Status: done — convention in `CLAUDE.md` (bmad working artifacts): a new epic is a `bmad-spec` folder run with
+`bmad-loop run --spec`; the board format yields, the per-epic scoping does not. recovery-readiness migrated
+to `_bmad-output/specs/spec-recovery-readiness/` as the first open story the orchestrator can dispatch.
+Measured 2026-10-22, bmad-loop 0.13.1, on the committed tree: `bmad-loop validate --spec
+_bmad-output/specs/spec-recovery-readiness` exits 0 with `stories mode OK: 1 stories` and `bmad-build-auto supports
+folder+id dispatch`; `bmad-loop run --spec … --dry-run` exits 0 and schedules story `rr-2` as `pending`. Stories mode
+prints no `actionable` count: the dry-run's `pending` story is its equivalent. The key regexes below were measured
+on 0.12.0 and re-read unchanged in 0.13.1.
 
 ## Story
 
