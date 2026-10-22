@@ -531,8 +531,7 @@ source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
 reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
 status: done 2026-10-03
-resolution: verified a real gap and fixed in #1037: neither anonymiser nor crypto-shredding reaches a non-map metadata.changes, so AuditEventDetailResourceMapper withholds its content (scalar → '[unsealed value withheld]', list → same-length list) while keeping the shape; a map with clear-text personal fields is still served as stored (PRODUCTION_SECURITY_CHECKLIST.md §7)
-amendment: 2026-10-22, PR pending (fix/shared-audit-changes-provenance-mr88) — product decision after an external consult (option c, both sides): the detail mapper serves a `changes` map only on a `change` row and withholds it whole elsewhere; AuditLogEntry refuses `changes` on any other level so it is never stored; ChangeLevelProvenanceGateTest pins the producers of AuditLevel::CHANGE and the single audit_log insert path. §7 now covers only a `change` row that bypassed PiiDiffSealer
+resolution: verified a real gap in #1037: neither anonymiser nor crypto-shredding reaches metadata.changes. Closed in #1077 by product decision (option c, both sides): the detail mapper serves a `changes` map only on a `change` row and withholds any other non-empty `changes` whole; AuditLogEntry refuses `changes` on any other level so it is never stored; ChangeLevelProvenanceGateTest pins the producers of AuditLevel::CHANGE and the single audit_log append path. PRODUCTION_SECURITY_CHECKLIST.md §7 keeps only a `change` row that bypassed PiiDiffSealer
 
 ### DW-64: event_store.payload se escribe como array JSON `[]` para eventos cuyo toPrimitives() está vacío (p.ej. BankDeletedDomainEvent).
 
