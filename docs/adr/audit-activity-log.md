@@ -1,7 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
 > **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-22 (D4 — the row's level as the provenance of
-> `metadata.changes`; 2026-10-06: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
+> `metadata.changes`; 2026-10-21: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -686,10 +686,10 @@ eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo eve
 cuando corren. Una petición que cargó al sujeto antes de que desapareciera su fila de identidad puede confirmar
 otra después. Tres rondas de revisión encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de
 ser un control. Los de sesión —`StartSession` y las revocaciones, en `event_store` e `iam_session`— quedan
-serializados con el borrado (`SessionSubjectLock`, y el borrado purga las sesiones antes del log de negocio); la
+serializados con el borrado (`SessionSubjectLock`, y el borrado purga las sesiones antes del log de negocio; un re-login que revoca la fila correlada de otra identidad queda serializado con el borrado de esa dueña sólo por el bloqueo de la fila); la
 clase viva es el log de acceso y los cuatro escritores de auditoría del borde de la petición en el eje de actor.
 
-**Decisión** (Sergio, 2026-10-06). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
+**Decisión** (Sergio, 2026-10-21; un registro anterior la fechaba el 2026-10-06, sin rastro de que la tomara él). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
 propia transacción, y sólo si su identidad estaba viva —la misma condición que el pase de `event_store`, que
 casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
 `identity_maintenance`, repite para cada sujeto aún programado —una **hora** desde que el borrado construyó su

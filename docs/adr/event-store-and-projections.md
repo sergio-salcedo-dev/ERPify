@@ -126,8 +126,9 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
   `git grep -l 'eventBus->publish(' api/src` (25 clases), leyendo si cada `publish` va precedido en su
   transacción de una lectura con bloqueo (`…ForUpdate(` o `lock…(` de un repositorio), 15 clases la toman en
   todos sus caminos, 2 solo en alguno (`LoginAttemptRegistrar::clear()` y `StartSession` sin sesión previa
-  correlada) y 8 en ninguno; desde entonces `StartSession` bloquea siempre la identidad que nombra
-  (`SessionSubjectLock::holdsLive()`, que esa búsqueda léxica no ve), así que hoy son 16, 1 y 8 (los siete casos de uso de `Bank`/`BankAccount` y `SendInvitation`) — y es una
+  correlada) y 8 en ninguno; desde entonces `StartSession` bloquea siempre la identidad que inicia sesión
+  (`SessionSubjectLock::holdsLive()`, que esa búsqueda léxica no ve; el `SessionRevoked` de una fila correlada de otra identidad
+  lo precede el bloqueo de esa fila), así que hoy son 16, 1 y 8 (los siete casos de uso de `Bank`/`BankAccount` y `SendInvitation`) — y es una
   cota superior, porque una lectura con bloqueo no tiene por qué ser la del
   agregado cuyo stream se anexa (`AcceptInvitation` anexa al del usuario bajo el lock de la invitación). Ni el
   índice: `event_store_stream_version_uniq` incluye `tenant_id`, que hoy se escribe siempre `NULL`, y

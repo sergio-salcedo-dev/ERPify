@@ -30,12 +30,13 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * expiry, and a row the retention sweep removes only once that expiry is 90 days behind it (~97 days after the
  * login). So the session the bag correlated, if it is still admissible, is revoked in the SAME
  * transaction that persists the new one, and its {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} is
- * published beside the new session's start: both land or neither does. It is revoked only when it belongs to
- * the identity signing in (product-owner decision, 2026-10-03): another person's row on a shared browser is left
- * live for its owner, so no request publishes a `SessionRevoked` about a person who did not make it. That row is
- * no longer reachable through this cookie, and stays in its owner's "my sessions", revocable from any other
- * device, until the sweep bound below. Only that one row is touched; this is not a "log out everywhere", and
- * revoking a single row by id takes no set lock, so it cannot close a lock cycle with a bulk revocation.
+ * published beside the new session's start: both land or neither does. It is revoked whichever identity owns
+ * it, because once this login commits the row has no bearer left: the firewall migrated the native session, so
+ * the cookie that correlated it now carries the new session, and its owner's other devices each hold a row of
+ * their own, which this does not touch. The holder of that cookie could already revoke it as the current session,
+ * so no capability is granted. The `SessionRevoked` it publishes therefore names a person who may not be the one
+ * signing in. Only that one row is touched; this is not a "log out everywhere", and revoking a single row by id
+ * takes no set lock, so it cannot close a lock cycle with a bulk revocation.
  *
  * That row is read under its row lock ({@see SessionRepository::lockActiveById()}), because the read decides
  * whether a `SessionRevoked` is published. Read unlocked, a rival that revokes or deletes the row between this
@@ -45,7 +46,11 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * the person that outlives the erasure. Locked, the rival either waits for this transaction or has committed
  * first, and then the row no longer reads as admissible and nothing is published for it. Against an erasure
  * that waits, the event this commits is still reached, because the erasure purges sessions before it
- * pseudonymises the business log (`FulfilIdentityErasure`).
+ * pseudonymises the business log (`FulfilIdentityErasure`). That row lock is also all that serialises an erasure
+ * of the row's owner when another identity is signing in, since {@see SessionSubjectLock} holds only the latter.
+ * It cannot close a cycle with that erasure: this login takes the signing-in identity's row and then the
+ * correlated session's, while the erasure takes its own subject's row and then that subject's sessions, and
+ * neither waits for the other's identity row.
  *
  * The identity itself is held first, through {@see SessionSubjectLock}, so a login racing that identity's erasure
  * either commits before the erasure purges sessions and pseudonymises the business log — and is then purged and
@@ -92,7 +97,7 @@ final readonly class StartSession
                 throw SessionStoreUnavailable::storeUnreachable();
             }
 
-            $revoked = $this->revokePrevious($previousId, $userId);
+            $revoked = $this->revokePrevious($previousId);
 
             $this->sessions->save($session);
             $this->eventBus->publish(...$revoked, ...$session->pullDomainEvents());
@@ -105,12 +110,12 @@ final readonly class StartSession
 
     /**
      * Revokes and saves the session the bag correlated before this login, returning the events it recorded so
-     * they are published with the new session's; nothing when there was no correlation, the row is no longer
-     * admissible once its lock is held, or it belongs to another identity.
+     * they are published with the new session's; nothing when there was no correlation or the row is no longer
+     * admissible once its lock is held.
      *
      * @return list<DomainEvent>
      */
-    private function revokePrevious(?SessionId $previousId, string $userId): array
+    private function revokePrevious(?SessionId $previousId): array
     {
         if (!$previousId instanceof SessionId) {
             return [];
@@ -118,7 +123,7 @@ final readonly class StartSession
 
         $previous = $this->sessions->lockActiveById($previousId);
 
-        if (!$previous instanceof Session || 0 !== \strcasecmp($previous->userId(), $userId)) {
+        if (!$previous instanceof Session) {
             return [];
         }
 
