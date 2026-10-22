@@ -4,3 +4,13 @@
     Delivers CAP-2: the password-changed mail, the change-password form and the post-redemption screen
     put signing the other devices out before changing the password. The contract is the companion
     rr-2-evict-first-guidance.md.
+- id: "rr-3"
+  title: Prove the post-redemption notice survives the navigation to the dashboard in a browser
+  description: >-
+    Delivers CAP-3: a Playwright spec redeems a recovery secret on /recovery with a dedicated identity
+    and sees dashboard__recovery-next-step on /backoffice, then sees it gone after a reload. The notice
+    is handed over in module memory across Next's client navigation, which RR-2's unit tests cannot
+    observe. Also asserts the toast and that an ordinary sign-in shows no notice. Never the shared e2e
+    admin: a redemption signs out every other session of the account. pwa/tests/e2e/fixtures/
+    recovery-secret-api.ts mints against that admin's password; how the dedicated identity is seeded
+    with a password and a live secret whose plaintext the spec holds is the story's first decision.

@@ -132,9 +132,16 @@ export function LoginForm() {
       >
         Sign in
       </Button>
-      <div className="text-sm">
-        <Link href={Routes.FORGOT_PASSWORD} className="text-brand">
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <Link href={safeHref(Routes.FORGOT_PASSWORD)} className="text-brand">
           Forgot password?
+        </Link>
+        <Link
+          href={safeHref(Routes.RECOVERY)}
+          className="text-brand"
+          data-testid="login-form__recovery-link"
+        >
+          Use a recovery secret
         </Link>
       </div>
     </form>

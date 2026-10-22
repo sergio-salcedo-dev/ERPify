@@ -71,12 +71,42 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
             'all your open sessions',
             'previous password',
             'no longer works',
+            'is now safe',
+            'is now secure',
+            'is secure',
         ];
 
         foreach ($unguaranteed as $claim) {
             $this->assertStringNotContainsString($claim, $text);
             $this->assertStringNotContainsString($claim, $html);
         }
+    }
+
+    public function testBothBodiesSayEvictFirstBeforeFallingBackToTheSecurityMailbox(): void
+    {
+        $email = $this->send();
+        $text = $email->getTextBody();
+        $html = $email->getHtmlBody();
+
+        $this->assertIsString($text);
+        $this->assertIsString($html);
+
+        $textGuidance = 'If this was not you, use your recovery secret or reset your password from the sign-in page — '
+            . 'either one signs every other device out. Then set a new password.';
+        $this->assertStringContainsString($textGuidance, $text);
+        $this->assertStringContainsString('If neither works, contact ' . self::FROM . ' immediately.', $text);
+        $this->assertGuidancePrecedesTheFallback($text, $textGuidance);
+        // One "if this was not you" line: the guidance, with the contact as its fallback.
+        $this->assertSame(1, \substr_count($text, 'If this was not you'));
+
+        // The HTML wraps the sentence across lines; compare it with its whitespace collapsed.
+        $flatHtml = (string) \preg_replace('/\s+/u', ' ', $html);
+        $htmlGuidance = 'If this was not you, use your recovery secret or reset your password from the sign-in page — '
+            . '<strong>either one signs every other device out</strong>. Then set a new password.';
+        $this->assertStringContainsString($htmlGuidance, $flatHtml);
+        $this->assertStringContainsString('If neither works, contact ' . self::FROM . ' immediately.', $flatHtml);
+        $this->assertGuidancePrecedesTheFallback($flatHtml, $htmlGuidance);
+        $this->assertSame(1, \substr_count($flatHtml, 'If this was not you'));
     }
 
     public function testRendersThroughTheSharedChrome(): void
@@ -108,6 +138,16 @@ final class SymfonyPasswordChangedEmailSenderTest extends TestCase
         $this->assertInstanceOf(Email::class, $email);
 
         return $email;
+    }
+
+    private function assertGuidancePrecedesTheFallback(string $body, string $guidance): void
+    {
+        $guidanceAt = \strpos($body, $guidance);
+        $fallbackAt = \strpos($body, 'contact ' . self::FROM . ' immediately');
+
+        $this->assertIsInt($guidanceAt);
+        $this->assertIsInt($fallbackAt);
+        $this->assertLessThan($fallbackAt, $guidanceAt);
     }
 
     /**
