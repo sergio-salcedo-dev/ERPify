@@ -13,7 +13,7 @@ use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
  * Drives one of `identity_maintenance`'s scheduled jobs directly through its handler, the same shape
  * {@see EventStoreContext} already uses to drive a projection rebuild without the scheduler's own timing.
  *
- * The schedule mixes four jobs on independent cadences behind one Postgres-backed checkpoint
+ * The schedule mixes five jobs on independent cadences behind one Postgres-backed checkpoint
  * (see {@see \Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\IdentityMaintenanceSchedule}), so
  * which message a real tick of `scheduler_identity_maintenance` yields next is not something a scenario can
  * pin without becoming a test of the clock rather than of the handler. Invoking the handler in-process is

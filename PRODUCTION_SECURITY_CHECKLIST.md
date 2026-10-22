@@ -425,8 +425,9 @@ you change anything here.
       defeated by an in-flight write:** `activity` entries are written synchronously (ADR
       D3.1), so audit PII never sits queued in `messenger_messages` (nor in the shared
       `failed` transport) where a later consume could re-insert an already-anonymised
-      `actor_id` after the erasure `UPDATE` (issue #376). The only residual is the
-      request-duration window a request already in flight shares with `security`/`change`.
+      `actor_id` after the erasure `UPDATE` (issue #376). What a request already in flight
+      can still commit afterwards — shared with `security`/`change` — is rewritten by the
+      erasure re-sweep (§7, ADR D4.2).
       Retention by level
       (`activity` vs `security`, the scheduled prune — the table's only `DELETE`) is
       tracked separately; the `change` level carries a 5-year floor. A live PII table must
@@ -976,7 +977,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       holds `FOR UPDATE` from its administrator re-check to its commit, ahead of the trail pass; so each row
       either commits first and is redacted, or waits and finds no subject. A login holds the same row
       (`SessionSubjectLock`) before it writes its session, so a session and its `SessionStarted` are purged and
-      rewritten with the rest or never written. Pinned against a second Postgres connection holding and deleting
+      rewritten with the rest or never written; a bulk revocation (`RevokeAllSessions`, after a role, status or
+      password change) holds it too, so its `AllSessionsRevoked` is rewritten with the rest or never written.
+      Pinned against a second Postgres connection holding and deleting
       the row in `LateAuditWriterErasureSerialisationFunctionalTest` and `LoginRacingAnErasureFunctionalTest`.
       `SubjectAuditWriteSerialisationGateTest` pins every site under `Iam/Identity/Application` that writes an
       audit row naming its subject, and reds one written without a serialising mechanism. What stays open:
@@ -2038,6 +2041,48 @@ mitigated state. Accepting one means recording who accepted it and against which
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
 
+- [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
+      on its next tick — unless it commits after the subject's window closed.** The erasure's passes reach
+      the rows that exist when they run, and a request that loaded the subject before the identity row went can
+      commit one afterwards. Three review rounds each found more writers able to. The session writers among
+      them — `StartSession` and the revocations — are serialised with the erasure (the item above, and the
+      erasure purging sessions before the business-log pass), which leaves the access log and the four
+      request-boundary security audit listeners on the actor axis as the live class. An enumeration that failed
+      three times is not a control, so that class is closed by mechanism instead, and the mechanism backs up
+      the serialised writers too: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
+      `ResweepErasedSubjects` re-runs the actor, resource, business-log and session passes for every subject
+      still scheduled, on the five-minute `identity_maintenance` schedule, whoever wrote the row
+      (`docs/adr/audit-activity-log.md` D4.2). A subject's window is one hour from the instant the erasure built
+      its row, inside the erasure's transaction — so a slow erasure commit shortens the post-commit coverage —
+      and "next tick" means the next one the single `scheduler_worker` actually runs: a tick waiting behind
+      another, a restart or a stopped worker delays it. The re-sweep repeats only those four passes; the
+      reset-token, recovery-secret, membership and invitation purges are not repeated, because their late
+      writers contend on `identity_user` or `iam_invitation` and so cannot commit after the erasure. The late writers of `Iam/Identity` that run after their own
+      commit stay serialised on `identity_user` (§7, the item above), which closes their window outright rather than bounding
+      it. What remains, **accepted by Sergio (product owner) on 2026-10-06 together with the mechanism**:
+      - **a row committed after the subject's window closed is not reached.** Nothing bounds how long a
+        request runs — `max_execution_time` does not count time spent waiting on the database, and neither
+        Caddy nor Postgres sets a timeout — so the hour is a margin chosen far above any sane request, not a
+        guarantee;
+      - **a Postgres timeout would not close that either**: the `kernel.terminate` writers insert in
+        autocommit, after the request's own work, so no statement or transaction timeout reaches the late
+        insert itself;
+      - **the subject's real id stays in `identity_erasure_resweep` until the first successful tick after its
+        window closes** — an hour and up to one period on a healthy scheduler, longer while a subject's sweep
+        keeps failing or the scheduler is down. The column has a named owner of its erasure (the re-sweep
+        deletes the row on the tick that closes its window) and a detective source that reports a row older
+        than two windows;
+      - **a late row gets the tick's own fresh pseudonym**, not the erasure's, so it does not link to the rest
+        of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
+        vetoes.
+      Re-affirm or close before the first customer.
+- [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
+      subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
+      nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
+      covered the fields the classifier marks, written through `PiiDiffSealer`. A row written by raw SQL, or
+      before sealing existed, can therefore keep a person's data in clear for as long as the row is retained.
+      Telling such a map apart needs the field classification at read time. Nothing in this deployment writes
+      one today; close it (re-seal or redact by classification) or accept it before the first customer.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

@@ -30,9 +30,11 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * expiry, and a row the retention sweep removes only once that expiry is 90 days behind it (~97 days after the
  * login). So the session the bag correlated, if it is still admissible, is revoked in the SAME
  * transaction that persists the new one, and its {@see \Erpify\Iam\Session\Domain\Event\SessionRevoked} is
- * published beside the new session's start: both land or neither does. It is revoked whichever identity owns
- * it — that row was reachable only through this cookie, whose holder could already revoke it as the current
- * session, so no capability is granted. Only that one row is touched; this is not a "log out everywhere", and
+ * published beside the new session's start: both land or neither does. It is revoked only when it belongs to
+ * the identity signing in (product-owner decision, 2026-10-03): another person's row on a shared browser is left
+ * live for its owner, so no request publishes a `SessionRevoked` about a person who did not make it. That row is
+ * no longer reachable through this cookie, and stays in its owner's "my sessions", revocable from any other
+ * device, until the sweep bound below. Only that one row is touched; this is not a "log out everywhere", and
  * revoking a single row by id takes no set lock, so it cannot close a lock cycle with a bulk revocation.
  *
  * That row is read under its row lock ({@see SessionRepository::lockActiveById()}), because the read decides
@@ -90,7 +92,7 @@ final readonly class StartSession
                 throw SessionStoreUnavailable::storeUnreachable();
             }
 
-            $revoked = $this->revokePrevious($previousId);
+            $revoked = $this->revokePrevious($previousId, $userId);
 
             $this->sessions->save($session);
             $this->eventBus->publish(...$revoked, ...$session->pullDomainEvents());
@@ -103,12 +105,12 @@ final readonly class StartSession
 
     /**
      * Revokes and saves the session the bag correlated before this login, returning the events it recorded so
-     * they are published with the new session's; nothing when there was no correlation or the row is no longer
-     * admissible once its lock is held.
+     * they are published with the new session's; nothing when there was no correlation, the row is no longer
+     * admissible once its lock is held, or it belongs to another identity.
      *
      * @return list<DomainEvent>
      */
-    private function revokePrevious(?SessionId $previousId): array
+    private function revokePrevious(?SessionId $previousId, string $userId): array
     {
         if (!$previousId instanceof SessionId) {
             return [];
@@ -116,7 +118,7 @@ final readonly class StartSession
 
         $previous = $this->sessions->lockActiveById($previousId);
 
-        if (!$previous instanceof Session) {
+        if (!$previous instanceof Session || 0 !== \strcasecmp($previous->userId(), $userId)) {
             return [];
         }
 

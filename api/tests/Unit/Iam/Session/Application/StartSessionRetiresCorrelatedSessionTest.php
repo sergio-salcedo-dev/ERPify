@@ -72,13 +72,10 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
         $this->assertTrue($sessionId->equals($reference), 'the correlation now names the new session');
     }
 
-    /**
-     * The row was reachable only through this cookie, whose correlation is about to be overwritten — so it is
-     * revoked whoever owns it, and no other session of either identity is touched.
-     */
-    public function testTheCorrelatedSessionIsRevokedWhoeverOwnsItAndNoOtherSessionIsTouched(): void
+    /** Only the correlated row is touched: this is not a "log out everywhere". */
+    public function testNoOtherSessionOfTheIdentityIsTouched(): void
     {
-        $previous = SessionMother::active(userId: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c70');
+        $previous = SessionMother::active();
         $sibling = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c71');
 
         $sessions = new InMemorySessionRepository($previous, $sibling);
@@ -89,6 +86,24 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
         $this->assertSame(SessionStatus::ACTIVE, $sibling->status(), 'this is not a log-out-everywhere');
         $this->assertSame([], $sessions->revokeAllCalls);
         $this->assertSame([], $sessions->revokeOthersCalls);
+    }
+
+    /**
+     * A shared browser: the correlated row belongs to another person, so it is left live for its owner and the
+     * login publishes nothing about them — only its own start.
+     */
+    public function testACorrelatedSessionOfAnotherIdentityIsLeftLiveAndUnannounced(): void
+    {
+        $previous = SessionMother::active(userId: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c70');
+        $previous->pullDomainEvents();
+
+        $sessions = new InMemorySessionRepository($previous);
+
+        $sessionId = $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
+
+        $this->assertSame(SessionStatus::ACTIVE, $previous->status());
+        $this->assertSame([$sessionId->toString()], $this->savedIds($sessions));
+        $this->assertSame([[self::STARTED, $sessionId->toString()]], $this->published());
     }
 
     #[DataProvider('provideACorrelationToAnInadmissibleSessionOnlyMintsCases')]

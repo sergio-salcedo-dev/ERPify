@@ -24,7 +24,9 @@ use PHPUnit\Framework\TestCase;
  *  - `locking-read` — every call of the method holding the site sits inside a `->transactional(` closure, after
  *    a `->…ForUpdate(` read in that same closure;
  *  - `creates-subject` — every call of it follows a `User::invite(` in the same method, so the audited identity
- *    is created in the transaction that writes the row and no erasure can hold or reach it first.
+ *    is created in the transaction that writes the row and no erasure can hold or reach it first;
+ *  - `erasure-pass` — not a write: the resource is the target of an anonymising pass over the trail
+ *    (`->beginForSubject(`), the use {@see FulfilIdentityErasure} makes of it, and reaches no `->log(`.
  *
  * Anything else is `unserialised`, and the per-file population is PINNED: a writer added without a lock reds
  * as `unserialised`, and a writer added with one reds too until it is listed — which is what keeps the sweep
@@ -54,10 +56,11 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
         'RecordLockoutNoticeAuditBestEffort.php' => 'row-lock',
         'RecordRecoverySecretAuditBestEffort.php' => 'row-lock',
         'RecordRecoveryThrottleAuditBestEffort.php' => 'row-lock',
+        'ResweepErasedSubjects.php' => 'erasure-pass',
         'UnlockUserAccount.php' => 'locking-read',
     ];
 
-    private const int SITES = 7;
+    private const int SITES = 8;
 
     #[Test]
     public function everySubjectAuditWriteIsSerialisedWithTheSubjectsRow(): void
@@ -119,6 +122,36 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
                 }
                 private function subject(string $id): AuditResource {
                     return AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $id);
+                }
+            }
+            PHP));
+    }
+
+    #[Test]
+    public function aPassTargetThatIsNeverLoggedIsNoWrite(): void
+    {
+        $this->assertSame(['erasure-pass'], $this->mechanismsOf(<<<'PHP'
+            <?php
+            final class A {
+                public function sweep(string $id): void {
+                    $subject = AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $id);
+                    $run = $this->trail->beginForSubject($subject);
+                    $this->log('X', null, ['rows' => $run->affectedRows]);
+                }
+            }
+            PHP));
+    }
+
+    #[Test]
+    public function aPassTargetThatIsAlsoLoggedIsAWrite(): void
+    {
+        $this->assertSame(['unserialised'], $this->mechanismsOf(<<<'PHP'
+            <?php
+            final class A {
+                public function sweep(string $id): void {
+                    $subject = AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $id);
+                    $this->trail->beginForSubject($subject);
+                    $this->log('X', $subject, []);
                 }
             }
             PHP));

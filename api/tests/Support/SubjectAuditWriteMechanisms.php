@@ -12,10 +12,13 @@ namespace Erpify\Tests\Support;
  *  - `locking-read` — every call of the method holding the write sits inside a `->transactional(` argument list,
  *    after a `->…ForUpdate(` call in that same list;
  *  - `creates-subject` — every call of it follows a `User::invite(` in the same method;
+ *  - `erasure-pass` — no write at all: the resource is assigned to a variable handed to `->beginForSubject(`,
+ *    the target of an anonymising pass over the trail, and that variable reaches no `->log(` in the file;
  *  - `unserialised` — none of these.
  *
  * Lexical, and nothing more: it never asks which row a `ForUpdate` read locks, nor follows a call through a
- * callable, a trait or another file.
+ * callable, a trait or another file. `erasure-pass` matches the variable by NAME across the file, so a second
+ * variable of that name logged in another method reds the pass target too — the conservative direction.
  *
  * @internal test support
  */
@@ -26,6 +29,8 @@ final class SubjectAuditWriteMechanisms
     public const string LOCKING_READ = 'locking-read';
 
     public const string CREATES_SUBJECT = 'creates-subject';
+
+    public const string ERASURE_PASS = 'erasure-pass';
 
     public const string UNSERIALISED = 'unserialised';
 
@@ -54,6 +59,10 @@ final class SubjectAuditWriteMechanisms
     {
         if (self::within($site, $lockSpans)) {
             return self::ROW_LOCK;
+        }
+
+        if (self::isErasurePassTargetAt($tokens, $site)) {
+            return self::ERASURE_PASS;
         }
 
         $callers = self::callsOf($tokens, $tokens->enclosingFunctionAt($site));
@@ -138,6 +147,44 @@ final class SubjectAuditWriteMechanisms
                 && $tokens->isMethodCallAt($index)
                 && 0 === \strcasecmp($method, $tokens->textAt($index + 1)),
         ));
+    }
+
+    /**
+     * `$var = AuditResource::of(…)` where `$var` is the first argument of a `->beginForSubject(` and appears in
+     * no `->log(` argument list anywhere in the file.
+     */
+    private static function isErasurePassTargetAt(SignificantPhpTokens $tokens, int $site): bool
+    {
+        if ('=' !== $tokens->textAt($site - 1) || T_VARIABLE !== $tokens->idAt($site - 2)) {
+            return false;
+        }
+
+        $variable = $tokens->textAt($site - 2);
+
+        return self::isPassedToBeginForSubject($tokens, $variable) && !self::reachesALog($tokens, $variable);
+    }
+
+    private static function isPassedToBeginForSubject(SignificantPhpTokens $tokens, string $variable): bool
+    {
+        return \array_any(
+            $tokens->indices(),
+            static fn (int $index): bool => $tokens->isMethodCallAt($index)
+                && 'beginForSubject' === $tokens->textAt($index + 1)
+                && $variable === $tokens->textAt($index + 3),
+        );
+    }
+
+    private static function reachesALog(SignificantPhpTokens $tokens, string $variable): bool
+    {
+        foreach (self::argumentSpans($tokens, ['log']) as [$open, $close]) {
+            for ($index = $open; $index < $close; ++$index) {
+                if ($variable === $tokens->textAt($index)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static function isLockingReadAt(SignificantPhpTokens $tokens, int $index): bool

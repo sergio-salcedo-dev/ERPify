@@ -19,6 +19,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingSessionSubjectLock;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -385,7 +386,13 @@ final class ChangeUserRolesTest extends TestCase
         $clock = new FixedClock(SystemClock::now());
 
         return new RevokeSessionsBestEffort(
-            new RevokeAllSessions($sessions, new RecordingEventBus(), new InlineTransactionManager(), $clock),
+            new RevokeAllSessions(
+                $sessions,
+                new RecordingEventBus(),
+                new InlineTransactionManager(),
+                $clock,
+                new RecordingSessionSubjectLock(),
+            ),
             new NullLogger(),
         );
     }

@@ -30,14 +30,19 @@ const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
  * `/me` probe resolves, the provider is `hydrating` and guards render nothing —
  * no protected UI is shown on the strength of a default. Once resolved, an ACTIVE
  * session is `authenticated`; no live session (401) or any other failure
- * (network, client timeout, malformed body, another 5xx) is `unauthenticated`.
- * There is no seeded default and no auto-admin.
+ * (network, client timeout, malformed body, another 5xx) is `unauthenticated`, unless an
+ * outage is already known (below). There is no seeded default and no auto-admin.
  *
  * `unavailable` is the server, or a gateway in front of it, saying it cannot decide (502/503/504):
  * the session store is unreachable, so sending the user to sign in would land them on a form the
  * same outage refuses. The verdict holds only for the route it was observed on — the provider
  * outlives client navigations, so on the next route it reads `hydrating` again until a fresh probe
  * answers.
+ *
+ * Once an outage is known, only an answer ends it: a 200 or a 401 decides, while a probe that got
+ * no decision — a network error, a client timeout, a malformed body — keeps the visitor on the
+ * outage instead of signing them out. The gateway that just reported the outage is the likeliest
+ * reason that probe went unanswered, and the sign-in form sits behind it too.
  *
  * Probes are sequenced: the cold probe, a per-route re-probe and `login()`/`refresh()` each take a
  * ticket when they START, and only the most recently started one may apply its answer.
@@ -99,11 +104,11 @@ export interface AuthContextValue {
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
 /**
- * What one `/me` probe established. Two fields rather than `Session | null` so the
- * catch cannot collapse "no live session" and "the server could not decide" into
- * one value again.
+ * What one `/me` probe established. Separate fields rather than `Session | null` so the
+ * catch cannot collapse "no live session", "the server could not decide" and "no decision
+ * reached us" into one value again.
  */
-type Probe = { session: Session | null; unavailable: boolean };
+type Probe = { session: Session | null; unavailable: boolean; decided: boolean };
 
 /** A started probe and the ticket it took; see the provider's docblock. */
 type TicketedProbe = { ticket: number; answer: Promise<Probe> };
@@ -151,6 +156,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   // on mount: a boolean would outlive the outage and bounce every later client navigation back to
   // maintenance.
   const [unavailableAt, setUnavailableAt] = useState<string | null>(null);
+  // Read by `applyProbe`, which must not re-create on every verdict change.
+  const unavailableAtRef = useRef(unavailableAt);
+  useEffect(() => {
+    unavailableAtRef.current = unavailableAt;
+  }, [unavailableAt]);
 
   // Outside the App Router `usePathname()` is null; that is still one route.
   const route = usePathname() ?? "";
@@ -167,12 +177,20 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const resolveSession = useCallback(async (): Promise<Probe> => {
     try {
       const identity = await identityRepository.me();
-      return { session: identity ? sessionFromIdentity(identity) : null, unavailable: false };
+      return {
+        session: identity ? sessionFromIdentity(identity) : null,
+        unavailable: false,
+        decided: true,
+      };
     } catch (error) {
       // The adapter already maps 401 to null and a 502/503/504 to
       // IdentityUnavailableError: an outage, not a missing session. Any other
-      // failure (network, malformed body) is treated as "no live session".
-      return { session: null, unavailable: error instanceof IdentityUnavailableError };
+      // failure (network, malformed body) decided nothing; `applyProbe` reads it.
+      return {
+        session: null,
+        unavailable: error instanceof IdentityUnavailableError,
+        decided: false,
+      };
     }
   }, [identityRepository]);
 
@@ -203,10 +221,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
   }, []);
 
-  // Stamped with the route current when the probe ANSWERED, not when it started.
+  // Stamped with the route current when the probe ANSWERED, not when it started. A probe that
+  // decided nothing while an outage is known keeps that outage; see the provider's docblock.
   const applyProbe = useCallback((probe: Probe): void => {
+    const outageKnown = unavailableAtRef.current !== null;
+    const unavailable = probe.unavailable || (!probe.decided && outageKnown);
     setSession(probe.session);
-    setUnavailableAt(probe.unavailable ? routeRef.current : null);
+    setUnavailableAt(unavailable ? routeRef.current : null);
     setHydrated(true);
   }, []);
 

@@ -118,7 +118,7 @@ status: open
 
 origin: migrated from legacy ledger ("Deferred from: G-5 — ids de persona fuera del `event_store` (2026-08-04)"), 2026-09-24
 location: api/src/Shared/Event/Infrastructure (DbalEventStoreSubjectAnonymiser)
-reason: payload::text ILIKE '%uuid%' cannot use any index (would need GIN + pg_trgm) and runs holding the erasure chain's locks; free today at zero rows and no production. Measure before it matters; not a blocker.
+reason: payload::text ILIKE '%uuid%' cannot use any index (would need GIN + pg_trgm) and runs holding the erasure chain's locks; free today at zero rows and no production. Measure before it matters; not a blocker. Since #1037 the erasure re-sweep repeats the same scan for every subject in its window on each five-minute tick (about 13 scans per erasure, one per subject per tick, on the single scheduler worker, while holding that subject's audit_log row locks), so the trigger is a re-sweep tick taking more than ~30 s or an event_store of millions of rows; the answer then is a trigram index, not a design change.
 status: open
 
 **(api/Shared/Event — tiempo de lock) El `UPDATE` del borrado hace un scan secuencial y corre dentro de la transacción del erase.** El predicado `payload::text ILIKE '%uuid%'` no lo puede servir ninguno de los cinco índices de la tabla (haría falta GIN + `pg_trgm`), y el `OR` fuerza el scan igualmente. Hoy es gratis —la tabla está a cero filas y no hay producción— pero cuando tenga volumen ese scan corre sosteniendo los locks que la cadena ya tiene sobre `identity_user`, `audit_log`, sesiones, membresía e invitaciones. Medir antes de que importe; no es un blocker.
@@ -530,7 +530,8 @@ location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceM
 source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
 reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
-status: open
+status: done 2026-10-03
+resolution: verified a real gap and fixed in #1037: neither anonymiser nor crypto-shredding reaches a non-map metadata.changes, so AuditEventDetailResourceMapper withholds its content (scalar → '[unsealed value withheld]', list → same-length list) while keeping the shape; a map with clear-text personal fields is still served as stored (PRODUCTION_SECURITY_CHECKLIST.md §7)
 
 ### DW-64: event_store.payload se escribe como array JSON `[]` para eventos cuyo toPrimitives() está vacío (p.ej. BankDeletedDomainEvent).
 

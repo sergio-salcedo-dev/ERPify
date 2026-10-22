@@ -196,12 +196,16 @@ describe("ApiAuditEventDetailRepository response guard", () => {
 });
 
 /**
- * A `changes` stored as `null` or a scalar is served verbatim by the API and carries no `{old, new}` pair, so
- * it degrades to an unreadable diff rather than losing the whole event. A list or a malformed map may carry
- * real pairs, so it stays drift and still rejects (reasoning: `docs/adr/audit-activity-log.md`, D4).
+ * The API withholds the content of a `changes` that is not a map but keeps its shape: a scalar arrives as
+ * {@link WITHHELD}, a non-empty list as a list of the same length holding only it, `null` as `null`. A `null`
+ * or a scalar carries no `{old, new}` pair, so it degrades to an unreadable diff rather than losing the whole
+ * event. A list or a malformed map is a diff builder that lost its field names, so it stays drift and still
+ * rejects (reasoning: `docs/adr/audit-activity-log.md`, D4).
  */
 describe("ApiAuditEventDetailRepository null/scalar changes", () => {
-  const CORRUPT_CHANGES = [null, "x", "", 7, 0, 1.5, true, false];
+  /** What the API serves in place of each value of a `changes` that is not a map. */
+  const WITHHELD = "[unsealed value withheld]";
+  const CORRUPT_CHANGES = [null, WITHHELD, "x", "", 7, 0, 1.5, true, false];
 
   it.each(CORRUPT_CHANGES)("admits a row whose changes is %j", (changes) => {
     expect(
@@ -239,14 +243,15 @@ describe("ApiAuditEventDetailRepository null/scalar changes", () => {
     expect(detail).not.toHaveProperty("changesUnreadable");
   });
 
-  it.each([[[]], [[1]], [[{ old: "a", new: "b" }]], [{ name: { old: "a" } }]])(
-    "still rejects a changes shaped like a list or a malformed map (%j)",
-    (changes) => {
-      expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { changes } } })).toBe(
-        false,
-      );
-    },
-  );
+  it.each([
+    [[]],
+    [[1]],
+    [[WITHHELD, WITHHELD]],
+    [[{ old: "a", new: "b" }]],
+    [{ name: { old: "a" } }],
+  ])("still rejects a changes shaped like a list or a malformed map (%j)", (changes) => {
+    expect(isAuditEventDetailResponse({ data: { ...DETAIL, metadata: { changes } } })).toBe(false);
+  });
 });
 
 /**
