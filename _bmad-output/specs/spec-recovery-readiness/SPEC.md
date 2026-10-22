@@ -28,6 +28,11 @@ before changing the password, so a new password is never handed to a session tha
     "sign the other devices out" before "change the password".
   - **success:** The companion's acceptance criteria 1–5 hold: both mail bodies and both PWA surfaces carry
     the copy, the stale §7 clause is rewritten, and `ui-copy-language` stays green.
+- **CAP-3** — RR-3
+  - **intent:** A browser test proves the one-time post-redemption notice survives the client navigation
+    from `/recovery` to the back-office dashboard.
+  - **success:** A Playwright spec with a dedicated identity redeems a secret, sees
+    `dashboard__recovery-next-step`, and no longer sees it after a reload.
 
 ## Constraints
 
