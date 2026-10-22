@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Session\Application\StartSession;
+use Erpify\Iam\Session\Domain\Exception\SessionAdmissionUnresolvable;
 use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Organization\Membership\Application\FindUserOrganizationId;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -24,8 +26,20 @@ use Throwable;
  * {@see LoginController} still answers 204 — minting neither couples to nor rewrites the login response.
  *
  * Fail-closed: if minting or the membership lookup throws, there is no live session, so the native cookie
- * is dropped explicitly (Symfony does not roll it back on its own) and the login answers the same 503 the gate
- * uses — "no `Session` row ⇒ no session".
+ * is dropped explicitly (Symfony does not roll it back on its own) whatever the failure — "no `Session` row ⇒
+ * no session". What the login then ANSWERS depends on what failed, because each answer tells the client and
+ * the operator something different:
+ *
+ * - EVERY `Doctrine\DBAL\Exception` is the gate's own 503 `service-unavailable` — a lost connection and a
+ *   malformed statement alike, by the convention `DoctrineSessionRepository::convertingStoreFailure()` applies
+ *   to its own statements. The membership adapter raises DBAL untranslated, and so does the subject lock the
+ *   minting takes outside the session repository, so it is translated here, where the session's vocabulary is;
+ * - an identity with no membership is {@see SessionAdmissionUnresolvable} (500), a data gap no retry fixes;
+ * - an identity erased, suspended or deactivated while the login was in flight is refused by the mint itself
+ *   with a 401, under the identity's row lock;
+ * - anything else — the session store's own 503, a broken membership invariant, a programming error —
+ *   propagates as it was raised: relabelling the last two as an outage would invite a retry that cannot
+ *   succeed.
  */
 #[AsEventListener(event: LoginSuccessEvent::class, priority: self::PRIORITY)]
 final readonly class SessionMintingSuccessListener
@@ -55,14 +69,17 @@ final readonly class SessionMintingSuccessListener
         $request = $event->getRequest();
 
         try {
-            $organizationId = $this->findUserOrganizationId->of($userId);
+            $organizationId = $this->findUserOrganizationId->of($userId)
+                ?? throw SessionAdmissionUnresolvable::noOrganization();
             $device = UserAgentDeviceLabel::fromUserAgent($request->headers->get('User-Agent'));
 
             $this->startSession->start($userId, $organizationId, $device, $request->getClientIp());
         } catch (Throwable $throwable) {
             $request->getSession()->invalidate();
 
-            throw SessionStoreUnavailable::storeUnreachable($throwable);
+            throw $throwable instanceof DbalException
+                ? SessionStoreUnavailable::storeUnreachable($throwable)
+                : $throwable;
         }
     }
 }

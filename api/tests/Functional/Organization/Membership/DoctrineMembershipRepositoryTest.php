@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Organization\Membership;
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Organization\Membership\Domain\Exception\MembershipCardinalityViolated;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DoctrineMembershipRepository;
 use Erpify\Organization\Organization\Domain\Entity\Organization;
 use Erpify\Organization\Organization\Infrastructure\Persistence\Doctrine\DoctrineOrganizationRepository;
@@ -62,6 +63,35 @@ final class DoctrineMembershipRepositoryTest extends KernelTestCase
             $this->assertInstanceOf(Membership::class, $found);
             $this->assertSame($userId, $found->userId());
             $this->assertSame($organizationId, $found->organizationId());
+        });
+    }
+
+    /**
+     * The UNIQUE index on `user_id` is what holds the invariant, so the second row is only reachable with it
+     * gone — dropped inside the rolled-back transaction, which restores it with everything else. Reading the
+     * first match instead would hand the login path an organization chosen by scan order.
+     */
+    public function testAUserWithTwoMembershipsIsRefusedRatherThanResolvedToEitherOrganization(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $index = $this->connection->fetchOne(
+                "SELECT indexname FROM pg_indexes WHERE tablename = 'membership'"
+                . " AND indexdef LIKE 'CREATE UNIQUE INDEX % (user_id)'",
+            );
+            $this->assertIsString($index, 'the one-membership-per-user index this test removes no longer exists');
+            $this->connection->executeStatement(
+                \sprintf('DROP INDEX %s', $this->connection->quoteSingleIdentifier($index)),
+            );
+
+            $userId = Uuid::generate();
+            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $this->provisionOrganization()));
+            $this->repository->save(Membership::grant(Uuid::generate(), $userId, $this->provisionOrganization()));
+
+            $this->entityManager->clear();
+
+            $this->expectException(MembershipCardinalityViolated::class);
+
+            $this->repository->findByUserId($userId);
         });
     }
 

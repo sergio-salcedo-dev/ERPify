@@ -18,7 +18,8 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * current session is never self-expelled. The revocation is a directed UPDATE (no per-session aggregate
  * hydration), so a single coarse {@see OtherSessionsRevoked} — carrying the kept (current) session id so a
  * consumer never mistakes it for a full revoke — is emitted rather than one event per row. Both commit in one
- * transaction.
+ * transaction, and the event only when a row was flipped: with the session in hand the only active one,
+ * nothing was revoked and nothing is recorded.
  *
  * **The session in hand must still be alive when the decision is taken, and that is checked under the lock,
  * not at admission.** The gate admitted the request when it arrived; between that read and this UPDATE another
@@ -51,7 +52,10 @@ final readonly class RevokeOtherSessions
                 throw SessionNoLongerActive::forRequest();
             }
 
-            $this->sessions->revokeOthersForUser($userId, $currentSessionId);
+            if (0 === $this->sessions->revokeOthersForUser($userId, $currentSessionId)) {
+                return;
+            }
+
             $this->eventBus->publish(
                 new OtherSessionsRevoked($userId, $currentSessionId->toString(), occurredOn: $this->clock->now()),
             );

@@ -210,7 +210,7 @@ Monorepo with two deployables driven from repo root: `api/` (Symfony/FrankenPHP)
 
 - Critical business logic in `Domain/` and `context/<bc>/domain` **must** be unit-tested. Adapters covered by integration/e2e.
 - All existing and new tests must pass 100% before a story is done (`docs/rules/testing.md`, `bmad-agent-dev` principle).
-- CI runs the same suites as `make ci.test`, but split across jobs and invoked one by one (`php.unit.coverage`, `php.behat`, `pwa.test.unit.coverage`, `pwa.test.e2e`); the target name itself appears nowhere in `.github/workflows/ci.yml`. Verify locally with `make app.test` before pushing.
+- CI runs the same suites as `make ci.test`, but split across jobs and invoked one by one (`php.unit.coverage`, `php.behat.coverage`, `pwa.test.unit.coverage`, `pwa.test.e2e`); the target name itself appears nowhere in `.github/workflows/ci.yml`. Verify locally with `make app.test` before pushing.
 
 ### Code Quality & Style Rules
 

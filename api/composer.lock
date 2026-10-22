@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "04db4231d3479ff52ad96f36d2a8be46",
+    "content-hash": "d3346085b60e7e849570e6504c8f5511",
     "packages": [
         {
             "name": "behat/gherkin",
@@ -9184,6 +9184,84 @@
                 }
             ],
             "time": "2025-12-03T16:05:42+00:00"
+        },
+        {
+            "name": "dvdoug/behat-code-coverage",
+            "version": "v5.5.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/dvdoug/behat-code-coverage.git",
+                "reference": "1ce757bec4e47ef055d7c1d69f003b37b3bce498"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/dvdoug/behat-code-coverage/zipball/1ce757bec4e47ef055d7c1d69f003b37b3bce498",
+                "reference": "1ce757bec4e47ef055d7c1d69f003b37b3bce498",
+                "shasum": ""
+            },
+            "require": {
+                "behat/behat": "^3.27||^4.0",
+                "composer-runtime-api": "^2.0",
+                "composer/semver": "^3.0",
+                "php": "^8.3",
+                "phpunit/php-code-coverage": "^12.3||^13.0||^14.0",
+                "symfony/config": "^5.4.45||^6.4.24||^7.3||^8.0",
+                "symfony/console": "^5.4.45||^6.4.24||^7.3||^8.0",
+                "symfony/dependency-injection": "^5.4.45||^6.4.24||^7.3||^8.0",
+                "symfony/event-dispatcher": "^5.4.45||^6.4.24||^7.0.3||^8.0"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.88.2",
+                "phpunit/phpunit": "^12.3||^13.0",
+                "symfony/filesystem": "^5.4.45||^6.4.24||^7.3||^8.0"
+            },
+            "suggest": {
+                "ext-pcov": "PCOV allows you to collect line coverage only, but is faster than Xdebug",
+                "ext-xdebug": "Xdebug allows you to collect line, branch and path coverage"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "DVDoug\\Behat\\CodeCoverage\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-2-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Doug Wright",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Generate Code Coverage reports for Behat tests",
+            "homepage": "https://behat.cc",
+            "keywords": [
+                "BDD",
+                "Behat",
+                "clover",
+                "cobertura",
+                "code",
+                "code-coverage",
+                "coverage",
+                "report",
+                "reports",
+                "scenario",
+                "test",
+                "tests"
+            ],
+            "support": {
+                "issues": "https://github.com/dvdoug/behat-code-coverage/issues",
+                "source": "https://github.com/dvdoug/behat-code-coverage/tree/v5.5.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/dvdoug",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-06-28T19:06:28+00:00"
         },
         {
             "name": "ergebnis/agent-detector",

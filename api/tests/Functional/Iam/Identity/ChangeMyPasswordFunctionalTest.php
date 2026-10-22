@@ -9,7 +9,10 @@ use Erpify\Iam\Identity\Infrastructure\Http\ChangeMyPasswordRequest;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDevice;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsSessionIdRotation;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
+use Erpify\Tests\Functional\SeedsAnOrganizationMember;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -44,7 +47,9 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversClass(PasswordHasher::class)]
 final class ChangeMyPasswordFunctionalTest extends WebTestCase
 {
+    use AssertsSessionIdRotation;
     use AuthenticatesFunctionalRequests;
+    use SeedsAnOrganizationMember;
 
     /** A dedicated identity, so replacing its credential cannot disturb the shared functional users. */
     private const string EMAIL = 'change-my-password@erpify.test';
@@ -54,6 +59,8 @@ final class ChangeMyPasswordFunctionalTest extends WebTestCase
     private const string NEW_PASSWORD = 'a-brand-new-strong-password';
 
     private const string ENDPOINT = '/api/v1/me/password';
+
+    private const string LOGIN_ENDPOINT = '/api/v1/backoffice/login';
 
     public function testItReplacesTheCredentialAndRevokesTheSessionThatAskedForIt(): void
     {
@@ -74,6 +81,51 @@ final class ChangeMyPasswordFunctionalTest extends WebTestCase
         );
         $this->assertNotSame($before, $this->storedHash(), 'the stored credential must actually have moved');
         $this->assertSame(0, $this->activeSessionCount(), 'the change revokes every session it found');
+    }
+
+    /**
+     * The change re-authenticates the device it was asked from, so the session id that device held — the one an
+     * attacker who fixed it before the victim signed in would also hold — must not carry the new login.
+     *
+     * Signed in through the real `json_login` and seeded as an organization member, unlike the cases above:
+     * `loginUser` runs no authenticator, and an identity with no membership cannot be minted a session, whose
+     * fail-closed path drops the native session and regenerates its id by itself — which is a rotation this
+     * assertion would credit to the re-login.
+     */
+    public function testTheReauthenticatedDeviceIsHandedASessionIdItDidNotHold(): void
+    {
+        $client = self::createClient();
+        $client->disableReboot();
+
+        $userId = Uuid::generate();
+        $email = \sprintf('rotation-%s@erpify.test', \str_replace('-', '', $userId));
+        $this->seedAnOrganizationMember($userId, $email, self::CURRENT_PASSWORD);
+
+        try {
+            $client->request(
+                Request::METHOD_POST,
+                self::LOGIN_ENDPOINT,
+                server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ORIGIN' => 'http://localhost'],
+                content: (string) \json_encode(['email' => $email, 'password' => self::CURRENT_PASSWORD]),
+            );
+            $this->assertTrue($client->getResponse()->isSuccessful(), (string) $client->getResponse()->getContent());
+            $held = $this->sessionIdHeldBy($client);
+
+            $this->postChange($client);
+
+            $this->assertSame(
+                Response::HTTP_NO_CONTENT,
+                $client->getResponse()->getStatusCode(),
+                (string) $client->getResponse()->getContent(),
+            );
+            $this->assertSessionIdRotatedAwayFrom($client, $held);
+        } finally {
+            $this->functionalConnection()->executeStatement(
+                'DELETE FROM iam_session WHERE user_id = CAST(:id AS uuid)',
+                ['id' => $userId],
+            );
+            $this->forgetTheOrganizationMember($userId, $email);
+        }
     }
 
     public function testAWrongCurrentPasswordIsRefusedWithoutTouchingTheCredential(): void

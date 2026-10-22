@@ -6,7 +6,7 @@
 #   php.unit / php.behat / php.test
 
 .PHONY: php.unit php.unit.coverage \
-		php.behat \
+		php.behat php.behat.coverage \
 		php.test \
 		php.bench
 
@@ -58,6 +58,23 @@ php.unit.coverage: db.test.prepare ## PHPUnit with clover coverage → api/var/c
 # absent from every other way the suite is invoked. BehatSuiteCoverageGateTest pins it there.
 php.behat: ## Behat (strict via behat.dist.php: an undefined step fails); pass c='…', example: php.behat c='features/backoffice/bank/get.feature'
 	@$(PHP_BEHAT) vendor/bin/behat --format=pretty $(c)
+
+# Clover report of the acceptance lane for SonarCloud, beside php.unit.coverage's. Most controllers and
+# Doctrine adapters are exercised only here, so without it they read as 0 % covered however many scenarios
+# drive them. The `coverage` profile in api/behat.dist.php adds the collector; XDEBUG_MODE=coverage gives it
+# a driver, and `--xdebug` keeps it: Behat otherwise re-executes itself without the extension (composer's
+# xdebug-handler), and the collector then reports that no driver is available and writes nothing.
+#
+# CI runs this target INSTEAD of php.behat, so it is a gate as well as a report: the profile inherits the
+# default one whole, strict result interpretation included (an undefined step exits 1 under both).
+#
+# Paths are rewritten to repo-root-relative for the reason php.unit.coverage gives, and inside the
+# container: the collector creates var/coverage/ there as root on a fresh checkout, so a host sed cannot
+# write beside it. memory_limit=1G for the reason php.unit.coverage gives.
+COVERAGE_BEHAT_CLOVER := var/coverage/behat-clover.xml
+php.behat.coverage: ## Behat with clover coverage → api/var/coverage/behat-clover.xml (Xdebug coverage mode; the run CI gates on)
+	@$(PHP_BEHAT_COVERAGE) php -d memory_limit=1G vendor/bin/behat --profile=coverage --xdebug --format=progress $(c)
+	@$(PHP_CONT) sed -i 's#name="[^"]*/api/src/#name="api/src/#g' $(COVERAGE_BEHAT_CLOVER)
 
 ## —— benchmarks ——
 

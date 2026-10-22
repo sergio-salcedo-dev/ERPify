@@ -6,7 +6,7 @@ namespace Erpify\Iam\Session\Application;
 
 use DateInterval;
 use Erpify\Iam\Session\Domain\Entity\Session;
-use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
+use Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
@@ -22,7 +22,7 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *
  * The correlation is written through {@see CurrentSessionReference} only AFTER the transaction commits, so a
  * failed persist never leaves an `iamSessionId` pointing at a session that does not exist. The minting caller
- * treats any throw as fail-closed (invalidate the native session + 503).
+ * treats any throw as fail-closed: it invalidates the native session before the failure answers.
  *
  * A re-login from the same browser keeps the native session's attributes (the firewall migrates the session
  * rather than clearing it), so the bag may still correlate an earlier session. Overwriting that correlation
@@ -52,12 +52,14 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * correlated session's, while the erasure takes its own subject's row and then that subject's sessions, and
  * neither waits for the other's identity row.
  *
- * The identity itself is held first, through {@see SessionSubjectLock}, so a login racing that identity's erasure
- * either commits before the erasure purges sessions and pseudonymises the business log — and is then purged and
- * rewritten with the rest — or finds the identity gone and mints nothing. Without it a login admitted an instant
- * before the erasure would leave a session row and a `SessionStarted` naming a person who no longer exists. A
- * login that arrives second is refused like a store failure: the caller already turns any throw into a dropped
- * cookie and a 503, and an identity erased mid-login has no session to fall back on either way.
+ * The identity itself is held first, through {@see SessionSubjectLock::holdsAdmissible()}, so a login racing that
+ * identity's erasure or a change of its status lands on one side of it. Committing first, it is purged and
+ * rewritten with the rest by the erasure, or revoked by the revoke-everything a suspension runs after its own
+ * commit. Arriving second, it finds the identity gone or no longer `ACTIVE` and mints nothing. Without it a login
+ * admitted an instant before the erasure would leave a session row and a `SessionStarted` naming a person who no
+ * longer exists, and one admitted an instant before a suspension would leave that identity a live session for its
+ * whole TTL. A login that arrives second is refused with {@see SessionSubjectNotAdmissible} (401): the caller
+ * drops the cookie as it does on any minting failure.
  *
  * Two residuals remain, both bounded the same way — an unreachable `ACTIVE` row the sweep removes once its expiry
  * is 90 days behind it, ~97 days after the login. A post-commit failure to write the new correlation leaves the
@@ -82,7 +84,7 @@ final readonly class StartSession
     }
 
     /**
-     * @throws SessionStoreUnavailable when the identity no longer exists once its row is held
+     * @throws SessionSubjectNotAdmissible when the identity is gone or no longer `ACTIVE` once its row is held
      */
     public function start(string $userId, string $organizationId, string $device, ?string $ip): SessionId
     {
@@ -93,8 +95,8 @@ final readonly class StartSession
         $previousId = $this->currentSession->get();
 
         $this->transactionManager->transactional(function () use ($userId, $session, $previousId): void {
-            if (!$this->subjectLock->holdsLive($userId)) {
-                throw SessionStoreUnavailable::storeUnreachable();
+            if (!$this->subjectLock->holdsAdmissible($userId)) {
+                throw SessionSubjectNotAdmissible::atMint();
             }
 
             $revoked = $this->revokePrevious($previousId);
