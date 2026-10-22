@@ -1,0 +1,6 @@
+- id: "2"
+  title: Evict first, rotate second on every surface that tells a user what to do next
+  description: >-
+    Delivers CAP-2: the password-changed mail, the change-password form and the post-redemption screen
+    put signing the other devices out before changing the password. The contract is the companion
+    rr-2-evict-first-guidance.md.
