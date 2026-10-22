@@ -50,6 +50,7 @@ make profiler.dump-server           # Start the var-dumper server: collects dump
 make php.test                       # PHPUnit + Behat. Pass c='…' for extra args.
 make php.unit c='--filter SomeTest' # PHPUnit only.
 make php.behat c='features/...'     # Behat only.
+make php.behat.coverage             # Behat + Clover for SonarCloud (api/var/coverage/behat-clover.xml).
 make php.bench                      # Opt-in performance-budget benchmarks (default php.unit skips).
 make php.quality                    # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS.
 make php.stan                       # PHPStan only — REQUIRED on every PHP file you change.
