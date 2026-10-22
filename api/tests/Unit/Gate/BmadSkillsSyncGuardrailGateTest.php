@@ -17,7 +17,7 @@ use Symfony\Component\Process\Process;
  * **Why it runs the script instead of reading it.** The sync's only automated check was `make shell.lint`,
  * and shellcheck is a linter: it observes no classification, no removal, no backup and no restore. Both
  * defects this gate pins were measured on the shipped version, each with every gate in the repository green
- * and the `Shell (ShellCheck)` job passing:
+ * and the ShellCheck step of CI passing:
  *
  *  - a directory the source lacked was deleted with **exit 0** whenever git had history at the same path,
  *    which separates PATHS rather than AUTHORS, so hand-written content at a retired skill's name went with
