@@ -570,10 +570,13 @@ you change anything here.
       transaction, so a concurrent reset and a concurrent change serialise on it. Post-commit, in this order:
       **every session is revoked** (`RevokeSessionsBestEffort`, containment first) then the password-changed mail
       is sent (best-effort, so a hung mailer can neither roll the change back nor hold the revoked sessions open);
-      `Security::login()` afterwards mints a replacement registry session with the anti-fixation `migrate(true)`
-      regeneration, so the device that made the change walks away signed in. That teardown is **best-effort by
-      construction**: it swallows its own failure and the 204 carries no word on it, so "every other device is
-      out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
+      `Security::login()` afterwards mints a replacement registry session with the anti-fixation id rotation, so
+      the device that made the change walks away signed in on an id it did not hold. The rotation is applied by
+      the `RotateSessionIdOnLogin` listener on every `main` login: the firewall's own `migrate(true)` skips a
+      login as the identity the session already carried — this flow, and `POST /login` from a signed-in
+      device — so without it the id held before would carry the new login.
+      That teardown is **best-effort by construction**: it swallows its own failure and the 204 carries no word
+      on it, so "every other device is out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
       mail both point at _Active sessions_ instead of asserting it. The login is likewise contained (a failure
       logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
       can no longer succeed). `Security::login()` re-enters only `checkPreAuth`, so it does **not** re-run the
@@ -976,8 +979,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       the subject's `identity_user` row lock (`IdentityRowLock`, `FOR KEY SHARE`), which `FulfilIdentityErasure`
       holds `FOR UPDATE` from its administrator re-check to its commit, ahead of the trail pass; so each row
       either commits first and is redacted, or waits and finds no subject. A login holds the same row
-      (`SessionSubjectLock`) before it writes its session, so a session and its `SessionStarted` are purged and
-      rewritten with the rest or never written; a bulk revocation (`RevokeAllSessions`, after a role, status or
+      (`SessionSubjectLock::holdsAdmissible()`, `FOR SHARE` with an `ACTIVE` predicate) before it writes its
+      session, so a session and its `SessionStarted` are purged and rewritten with the rest or never written —
+      and a status change in flight is waited for, so a suspension's revoke-everything never runs before a
+      session minted alongside it (`LoginRacingASuspensionFunctionalTest`); a bulk revocation (`RevokeAllSessions`, after a role, status or
       password change) holds it too, so its `AllSessionsRevoked` is rewritten with the rest or never written.
       Pinned against a second Postgres connection holding and deleting
       the row in `LateAuditWriterErasureSerialisationFunctionalTest` and `LoginRacingAnErasureFunctionalTest`.

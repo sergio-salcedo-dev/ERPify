@@ -64,15 +64,15 @@ final class RevokingOnFirstLockSessionRepository implements SessionRepository
     }
 
     #[Override]
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): int
     {
-        $this->inner->revokeOthersForUser($userId, $currentSessionId);
+        return $this->inner->revokeOthersForUser($userId, $currentSessionId);
     }
 
     #[Override]
-    public function revokeAllForUser(string $userId): void
+    public function revokeAllForUser(string $userId): int
     {
-        $this->inner->revokeAllForUser($userId);
+        return $this->inner->revokeAllForUser($userId);
     }
 
     #[Override]

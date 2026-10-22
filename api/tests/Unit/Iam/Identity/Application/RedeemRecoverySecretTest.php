@@ -55,6 +55,8 @@ final class RedeemRecoverySecretTest extends TestCase
         $users = new InMemoryUserRepository($user);
         $secrets = new InMemoryRecoverySecretRepository();
         $generated = $this->mintFor($secrets, UserMother::DEFAULT_ID);
+        // A session the redemption has to evict: with none, the eviction flips no row and records no fact.
+        $this->mintSession(UserMother::DEFAULT_ID);
         $eventBus = new RecordingEventBus();
 
         $this->useCase($users, $secrets, $eventBus)->redeem($generated->plaintext(), $this->sessionSeam());

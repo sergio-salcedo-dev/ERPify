@@ -22,7 +22,8 @@ use Erpify\Tests\DataFixtures\UserFixtureFactory;
  * `loginUser`, so no authenticator runs and nothing the login path emits is observable.
  *
  * The membership is not scenery. Establishing a session resolves the caller's organization through it, so an
- * identity with no membership answers 503 at the door and the credential exchange never happens.
+ * identity with no membership answers 500 `session-admission-unresolvable` at the door and the credential
+ * exchange never happens.
  *
  * **Seeded from a clean slate, not reused.** This suite shares one database with no rollback, so an
  * idempotent lookup-then-create looks safer and is not: a row already holding the id under another email

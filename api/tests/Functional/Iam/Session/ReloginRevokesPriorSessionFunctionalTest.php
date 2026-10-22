@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Application\StartSession;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsSessionIdRotation;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Functional\SeedsAnOrganizationMember;
 use Override;
@@ -34,8 +35,10 @@ use Symfony\Component\HttpFoundation\Response;
  * @internal
  */
 #[CoversClass(StartSession::class)]
+#[CoversClass(\Erpify\Iam\Identity\Infrastructure\Security\RotateSessionIdOnLogin::class)]
 final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
 {
+    use AssertsSessionIdRotation;
     use ResolvesContainerServices;
     use SeedsAnOrganizationMember;
 
@@ -108,6 +111,20 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->assertCount(1, $listed, '"my sessions" shows no phantom device');
         $this->assertSame($active[0], $listed[0]['id']);
         $this->assertTrue($listed[0]['current']);
+    }
+
+    /**
+     * The firewall skips its own `migrate(true)` when the browser is already signed in as the identity that
+     * logs in again, so the id it held would carry the new login; the rotation listener closes that.
+     */
+    public function testASecondLoginFromTheSameBrowserIsHandedASessionIdItDidNotHold(): void
+    {
+        $this->login();
+        $held = $this->sessionIdHeldBy($this->client);
+
+        $this->login();
+
+        $this->assertSessionIdRotatedAwayFrom($this->client, $held);
     }
 
     public function testALoginFromAnotherBrowserLeavesTheFirstBrowsersSessionAlive(): void

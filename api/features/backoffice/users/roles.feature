@@ -61,7 +61,9 @@ Feature: Assign an identity's roles
     And 25 requests got executed for doctrine connection "default"
 
   # Roles are orthogonal to the identity lifecycle, so a suspended member is re-roled like any other — the new
-  # set simply stays inert until the identity can act again.
+  # set simply stays inert until the identity can act again. sam holds no registry session (the fixtures seat
+  # one per login a scenario uses, and a suspended identity is never one), so the revocation the change runs
+  # flips no row and records no all-revoked: that event states that sessions were revoked.
   Scenario: A suspended member can still be re-roled
     Given I am logged in as an administrator
     And the stored events are cleared
@@ -75,6 +77,7 @@ Feature: Assign an identity's roles
     And the JSON node "data.status" should be equal to "SUSPENDED"
     And the JSON node "data.roles[0]" should be equal to "VIEWER"
     And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61" named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
   # Duplicates collapse to the set the identity already holds, so this is the redundant-save path: it answers
   # with the detail but must not write, emit or — the reason it matters — tear down live sessions.
