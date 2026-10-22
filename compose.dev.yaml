@@ -146,7 +146,9 @@ services:
       # No brace-globs here: compose's ${VAR-default} ends at the first `}`.
       FRANKENPHP_WORKER_CONFIG: "${FRANKENPHP_WORKER_CONFIG-watch /app/api/src/**/*.php}"
       FRANKENPHP_SITE_CONFIG: "${FRANKENPHP_SITE_CONFIG-hot_reload /app/api/src/**/*.php /app/api/config/**/*.yaml /app/api/config/**/*.php}"
-      MERCURE_EXTRA_DIRECTIVES: demo
+      # `debugger`, not `playground`: the playground also opens publishing to every origin and renames the
+      # default cookie, which is not the hub the application talks to anywhere else.
+      MERCURE_EXTRA_DIRECTIVES: debugger
       # Sends the access log to a file the test suite can read, so the gate over it can assert an
       # EFFECT (send a request, read the line that was written) instead of the shape of a config
       # block. It sets the DESTINATION only: `{$CADDY_SERVER_LOG_OPTIONS}` expands ahead of
