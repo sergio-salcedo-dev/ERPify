@@ -270,6 +270,7 @@ final class ErasureLockOrderTest extends TestCase
             new RecordingAuditLogger(),
             new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),
+            new InMemoryErasureResweepRepository(),
         );
     }
 

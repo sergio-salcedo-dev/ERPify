@@ -14,6 +14,7 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Infrastructure\Persistence\OrderedAuditSubjectTrailErasure;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryActiveAdministratorDirectory;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryErasureResweepRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
@@ -199,6 +200,7 @@ final class EraseIdentitySubjectCommandTest extends TestCase
             $audit,
             new FixedActorContextFactory(ActorContext::system()),
             new InlineTransactionManager(),
+            new InMemoryErasureResweepRepository(),
         ));
     }
 }

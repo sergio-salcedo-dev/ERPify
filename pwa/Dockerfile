@@ -24,8 +24,11 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install --global npm@12.0.1
 
 COPY package.json package-lock.json ./
+COPY docker/install-deps.sh docker/
 
-RUN npm ci
+# Also writes the stamp the dev container's start compares against, so a stack
+# whose volume was seeded from this layer skips the reinstall (docker/install-deps.sh).
+RUN sh docker/install-deps.sh
 
 # Development image (use with bind-mount of ./pwa → /app/pwa, or run standalone)
 FROM base AS dev
@@ -39,11 +42,12 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# `npm ci` (not `install`): base already ran it, and the persistent
-# pwa_node_modules volume keeps deps across restarts. `ci` is deterministic and,
-# unlike `install`, never rewrites the bind-mounted package-lock.json — which
-# would leave it root-owned on the host.
-CMD ["sh", "-c", "npm ci && npx next dev --turbo -H 0.0.0.0 -p 3000"]
+# docker/install-deps.sh runs `npm ci` only when the persistent pwa_node_modules
+# volume was not installed from this lockfile, Node and npm: base already ran it,
+# and a fresh volume is seeded from that layer. `ci` (not `install`) because it is
+# deterministic and, unlike `install`, never rewrites the bind-mounted
+# package-lock.json — which would leave it root-owned on the host.
+CMD ["sh", "-c", "sh docker/install-deps.sh && npx next dev --turbo -H 0.0.0.0 -p 3000"]
 
 FROM base AS builder
 

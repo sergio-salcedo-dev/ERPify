@@ -16,6 +16,7 @@ use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingSessionSubjectLock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -156,7 +157,13 @@ final class CompletePasswordResetNotificationTest extends TestCase
             $users,
             $tokens,
             new RevokeSessionsBestEffort(
-                new RevokeAllSessions($sessions, new RecordingEventBus(), new InlineTransactionManager(), $clock),
+                new RevokeAllSessions(
+                    $sessions,
+                    new RecordingEventBus(),
+                    new InlineTransactionManager(),
+                    $clock,
+                    new RecordingSessionSubjectLock(),
+                ),
                 new NullLogger(),
             ),
             new SendPasswordChangedEmailBestEffort($emails, new NullLogger()),

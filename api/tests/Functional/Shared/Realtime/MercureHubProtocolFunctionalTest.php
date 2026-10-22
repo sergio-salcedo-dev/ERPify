@@ -14,10 +14,11 @@ use Symfony\Component\Mercure\ProtocolVersion;
 
 /**
  * The hub the container builds speaks the protocol of the hub it talks to. That hub is the one embedded in
- * the FrankenPHP image, a 0.x release, while the bundle defaults to 1.0 — so the version comes from
- * `config/packages/mercure.yaml` alone, and a 1.0 token is one the hub refuses: every publish fails at
- * runtime and every subscriber cookie is ignored. The unit tests of the authorize controllers build their
- * own hub and the acceptance lane swaps in a recording double, so neither would notice the pin going.
+ * the FrankenPHP image, a 1.x release run in compatibility mode for the 0.x protocol (`frankenphp/Caddyfile`),
+ * while the bundle defaults to 1.0 — so the version comes from `config/packages/mercure.yaml` alone, and
+ * losing it would change the token shape and the cookie name the browser receives behind a hub configured
+ * for neither. The unit tests of the authorize controllers build their own hub and the acceptance lane swaps
+ * in a recording double, so neither would notice the pin going.
  *
  * Read through {@see HubRegistry}, which is what `Authorization` and the publishers resolve, rather than
  * through `HubInterface`, which the test environment aliases to that double.
@@ -52,8 +53,12 @@ final class MercureHubProtocolFunctionalTest extends KernelTestCase
 
         $claims = $this->payload($factory->create([new Grant([Grant::ACTION_SUBSCRIBE], ['urn:test:topic'])]));
 
-        $this->assertArrayHasKey('mercure', $claims, 'a 0.x hub authorises from the `mercure` claim');
-        $this->assertArrayNotHasKey('authorization_details', $claims, 'the protocol 1.0 claim a 0.x hub ignores');
+        $this->assertArrayHasKey('mercure', $claims, 'the 0.x protocol authorises from the `mercure` claim');
+        $this->assertArrayNotHasKey(
+            'authorization_details',
+            $claims,
+            'the protocol 1.0 claim this application does not speak',
+        );
     }
 
     /**

@@ -10,6 +10,7 @@ use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingSessionSubjectLock;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
@@ -64,7 +65,13 @@ final class RevokeSessionsBestEffortTest extends TestCase
         $clock = new FixedClock(SystemClock::now());
 
         return new RevokeSessionsBestEffort(
-            new RevokeAllSessions($sessions, new RecordingEventBus(), new InlineTransactionManager(), $clock),
+            new RevokeAllSessions(
+                $sessions,
+                new RecordingEventBus(),
+                new InlineTransactionManager(),
+                $clock,
+                new RecordingSessionSubjectLock(),
+            ),
             $logger,
         );
     }

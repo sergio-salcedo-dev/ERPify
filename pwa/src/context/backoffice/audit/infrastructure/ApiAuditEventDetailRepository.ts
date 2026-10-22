@@ -72,11 +72,15 @@ function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
  * object is not.
  *
  * **A `changes` that is `null` or a scalar degrades to an unreadable diff instead of rejecting.** The API
- * serves the stored value verbatim, so a corrupt row reaches this guard as-is, and refusing it would lose
- * the whole event over a field the UI only uses to paint the diff. A list or a malformed map still rejects:
- * it may carry real `{old, new}` pairs, and degrading it would drop them silently — the full reasoning is
- * the audit ADR (`docs/adr/audit-activity-log.md`, D4). {@link toMetadata} removes the value from the typed
- * slot, and {@link toAuditEventDetail} flags the detail `changesUnreadable`.
+ * never serves the content of a `changes` that is not a map — a scalar arrives as the withheld marker, a
+ * non-empty list as a list of the same length holding only that marker, `null` as `null` — but it keeps the
+ * shape, and the shape is the corruption signal this guard reads, so the split below holds unchanged. A
+ * `null` or a scalar carries no `{old, new}` pair, and refusing it would lose the whole event over a field
+ * the UI only uses to paint the diff. A list or a malformed map still rejects: a list in that position is a
+ * failure of the diff builder — pairs that lost their field name — and degrading it to an unreadable diff
+ * would present a row whose shape can no longer be believed as a minor gap; the full reasoning is the audit
+ * ADR (`docs/adr/audit-activity-log.md`, D4). {@link toMetadata} removes the value from the typed slot, and
+ * {@link toAuditEventDetail} flags the detail `changesUnreadable`.
  *
  * **`operation` is deliberately NOT validated here.** It is an enum the API owns, so a release that adds a
  * fourth kind reaches this client before the client knows the name; rejecting the row would turn a value the

@@ -213,7 +213,8 @@ services:
   # (PruneHandledDomainEventsMessage, the failure-transport PruneFailedMessagesMessage, the hourly
   # ReportDeadLetterBacklogMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage,
   # the person-reference ReconcilePersonReferencesMessage, the stored-identity InspectStoredIdentityMessage,
-  # the session PruneRetiredSessionsMessage and the five-minute NotifyLockedIdentitiesMessage) from an
+  # the session PruneRetiredSessionsMessage, the five-minute NotifyLockedIdentitiesMessage and the five-minute
+  # erasure ResweepErasedSubjectsMessage) from an
   # in-process clock, so running it on the scaled `messenger_worker` pool would emit one tick per replica.
   # This list is prose and nothing recomputes it: the schedule gate reasons by transport NAME, so a tick
   # missing here is invisible to every check. It has drifted twice; add yours when you add the message.
@@ -226,7 +227,7 @@ services:
   # `->stateful()` but not `->lock()`ed, so the checkpoint does not serialise them: it is SHARED STATE, not
   # exclusion. `MessageGenerator` re-reads the pool each poll and suppresses a tick the other replica already
   # saved, so a second replica CAN duplicate rather than always duplicating — the window runs from the
-  # winner's `acquire()` to its `save()`, which happens after the handler returns. The eight idempotent
+  # winner's `acquire()` to its `save()`, which happens after the handler returns. The nine idempotent
   # sweeps would mostly collapse in that race; this one holds the window open for an SMTP exchange, which is
   # why it is the tick that decides the pin.
   # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` + `scheduler_identity_maintenance`

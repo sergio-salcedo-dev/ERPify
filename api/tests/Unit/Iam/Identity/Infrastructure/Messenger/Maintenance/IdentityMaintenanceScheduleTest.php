@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\InspectStoredIdenti
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\NotifyLockedIdentitiesMessage;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\PruneRetiredSessionsMessage;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\ReconcilePersonReferencesMessage;
+use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\ResweepErasedSubjectsMessage;
 use Erpify\Tests\Support\ScheduledTicks;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -30,7 +31,7 @@ final class IdentityMaintenanceScheduleTest extends TestCase
         // survives the payload becoming another message and it survives `1 day` becoming `1 year`, which
         // are precisely the two ways this control silently stops being the control it is named after.
         //
-        // It is also the ONLY red for the wiring of the three ticks that mint no transport of their own.
+        // It is also the ONLY red for the wiring of the four ticks that mint no transport of their own.
         // Folding a tick into an existing schedule adds no transport, so `make php.lint.schedule-consumption`
         // stays green whether the message is registered here or not, and nothing else in the tree would
         // notice its removal.
@@ -38,7 +39,8 @@ final class IdentityMaintenanceScheduleTest extends TestCase
         // The periods differ on purpose: five minutes tracks a lock that lives fifteen, while a daily sweep
         // would meet a given lockout only by coincidence. Two of the others observe durable state, and the
         // session prune is daily because its windows are 30 and 90 days — a finer cadence would re-run a
-        // DELETE that matched nothing.
+        // DELETE that matched nothing. The erasure re-sweep's five minutes is the bound a late row naming an
+        // erased subject survives, so a slower period would widen what the product owner accepted.
         $this->assertSame(
             [
                 // Sorted by the helper, so the order here is alphabetical and not the declaration order.
@@ -46,6 +48,7 @@ final class IdentityMaintenanceScheduleTest extends TestCase
                 NotifyLockedIdentitiesMessage::class . ' @ every 5 minutes',
                 PruneRetiredSessionsMessage::class . ' @ every 1 day',
                 ReconcilePersonReferencesMessage::class . ' @ every 1 day',
+                ResweepErasedSubjectsMessage::class . ' @ every 5 minutes',
             ],
             ScheduledTicks::describe($schedule),
         );

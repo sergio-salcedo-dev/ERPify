@@ -41,7 +41,7 @@ Decision vs. description: an ADR is the only place the discarded alternatives an
 
 ## ADR file shape
 
-- **Language: English.** ADRs are authored in English — the exception to the repo's Spanish documentation default (`document_output_language: Spanish`). The lifecycle header below is already English; legacy Spanish ADR bodies migrate to English when the file is next touched (boy-scout).
+- **Language: English for new ADRs and for every header.** ADRs are the exception to the repo's Spanish documentation default (`document_output_language: Spanish`): a new ADR is written in English, and the lifecycle header below is English everywhere. A decision added to an existing ADR is written in the language of the body that hosts it — one English section among Spanish ones is worse than either uniform state — so a legacy Spanish body stays Spanish until it is translated as an effort of its own, never bundled into an unrelated change.
 - Filename: topic in kebab-case (see above).
 - First lines: a header blockquote carrying lifecycle —
   `> **Status:** … · **Date:** YYYY-MM-DD · **Scope:** …`, plus

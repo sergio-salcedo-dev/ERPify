@@ -1,6 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-09-28 (D3 reviewed — request-boundary
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-06 (D4.2 — deferred re-sweep of the
+> erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -268,7 +269,9 @@ ser más barato que un write a BD y la absorción de picos deja de ser gratis �
 `activity` (y, con ella, la pregunta del tombstone). Hoy, con transporte Doctrine, la cola era coste neto.
 
 Descartado: *tombstone* consultado en la escritura (reintroduce la tabla de mapeo que D4 rompe). Descartado: barrido
-periódico que re-anonimiza (convierte un invariante en convergencia eventual gobernada por la frecuencia de un cron).
+periódico que re-anonimiza (convierte un invariante en convergencia eventual gobernada por la frecuencia de un cron)
+— para la cola que aquí se retira; D4.2 lo adopta para lo que una petición en vuelo confirma tras el borrado, donde
+no había invariante que perder.
 Descartado: documentar la ventana async como riesgo residual (no sustituye a cerrarla).
 
 ### D4 — Niveles, retención diferenciada, append-only y GDPR
@@ -460,6 +463,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   para no reescribir un valor jamás capturado como evidencia de una redacción que no ocurrió. Y **no-nulo no
   basta**: `SealedAuditEntryFactory` solo comprueba `null`, así que una cabecera `User-Agent:` vacía sella
   `''`; la guarda es por tanto no-nulo **y** no-vacío.
+  **Las filas del log de acceso escritas en `kernel.terminate` quedan fuera del bloqueo de `identity_user`**
+  que serializa a los escritores tardíos de `Iam/Identity` (arriba, «Quién queda fuera del seam»): ninguna ruta
+  declara un tipo-persona como recurso, pero una petición del propio sujeto en vuelo durante el borrado puede
+  confirmar su fila de actor tras el pase de actor, y `Shared/Audit` no puede tomar `identity_user` sin cruzar de
+  contexto. Esa fila la reescribe el re-barrido de D4.2 en el siguiente tick, si se confirma dentro de la hora que
+  sigue al borrado.
   **Lo que este paso no alcanza, dicho para que no se lea como cobertura total:** el throttle de recuperación
   también emite filas anónimas **sin recurso** cuando la dirección no resuelve a nadie, igual que toda fila
   anónima del log de acceso. Ningún statement del eje de recurso puede casarlas —no hay sujeto al que
@@ -524,21 +533,29 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
   cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
-  camino importa porque esa acción tiene dos escritores, y el del CLI de actor escribe sólo dos claves.
+  camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
+  re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
   **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
   `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
-  históricas. Tres formas se sirven tal cual, y ninguna la produce el capturador: una **lista no vacía**, a
-  propósito —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
-  `null` o un escalar. El mapper sella una forma y nunca la fabrica ni la borra, así que ninguna de las tres
-  se reescribe en el cable. El cliente no las trata igual: la lista (y un mapa con un par `{old,new}` mal
-  formado) sigue rechazando el sobre entero, porque puede llevar pares `{old,new}` reales que perdieron el
-  nombre de campo —un fallo del constructor del diff— y degradarla tiraría en silencio datos de cambio
-  reales; un `null` o un escalar no lleva ningún par que perder, así que el cliente admite el sobre, retira
+  históricas. Tres formas que el capturador nunca produce conservan su **forma** en el cable: una **lista no
+  vacía** —envolverla la serviría como `{"0": …}`, un mapa que el cliente aceptaría ocultando la deriva—, y un
+  `null` o un escalar. El mapper no las convierte en mapa ni las borra, así que la señal de corrupción llega
+  intacta (su contenido no, ver abajo). El cliente no las trata igual: la lista (y un mapa con un par
+  `{old,new}` mal formado) sigue rechazando el sobre entero, porque una lista en esa posición es un fallo del
+  constructor del diff —pares que perdieron el nombre de campo— y degradarla a «diff ilegible» presentaría
+  como dato menor una fila cuya forma ya no se puede creer; un `null` o un escalar no lleva ningún par, así
+  que el cliente admite el sobre, retira
   `changes` del slot tipado y marca el detalle como **diff ilegible** (`changesUnreadable`), que el drawer
   pinta con un aviso propio y nunca como «No changes recorded» —eso afirmaría que la escritura no cambió
-  nada, y para un diff desconocido es falso—. Coste declarado: el valor crudo no se muestra en la UI; sigue
-  en el cable para quien investigue.
+  nada, y para un diff desconocido es falso—. **Ninguna de las tres sirve su contenido:** sólo un mapa se
+  sella por campo y ningún paso de borrado reescribe `metadata` (los anonimizadores tocan columnas; el
+  crypto-shredding sólo alcanza un valor cifrado), así que un valor guardado fuera de un mapa sobreviviría
+  en claro al borrado de la persona que nombra. El mapper conserva la **forma** —el escalar sigue escalar,
+  la lista sigue lista con la misma longitud, `null` sigue `null`— y sustituye cada valor por
+  `AuditEventDetailResourceMapper::WITHHELD`, que no es el centinela de borrado porque nada se borró.
+  Coste declarado: el valor crudo no está en el cable; quien investigue una fila corrupta la lee de la
+  tabla.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
@@ -642,6 +659,73 @@ vida», justo la mezcla de ejes que D7 evita.
 **Trigger de revisita.** Cuando aparezca un **segundo** evento de cumplimiento
 (`GDPR_EXPORT_COMPLETED`, `GDPR_ERASURE_FAILED`, …), introducir una **estructura tipada** para esos
 eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo evento de cumplimiento).
+
+### D4.2 — Re-barrido diferido de los pases de borrado (enmienda D3.1 y D4)
+
+**Contexto.** Los pases del borrado (D4, D4.1 y el del log de negocio de
+[`event-store-and-projections.md`](event-store-and-projections.md), D12) reescriben las filas que **existen**
+cuando corren. Una petición que cargó al sujeto antes de que desapareciera su fila de identidad puede confirmar
+otra después. Tres rondas de revisión encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de
+ser un control. Los de sesión —`StartSession` y las revocaciones, en `event_store` e `iam_session`— quedan
+serializados con el borrado (`SessionSubjectLock`, y el borrado purga las sesiones antes del log de negocio); la
+clase viva es el log de acceso y los cuatro escritores de auditoría del borde de la petición en el eje de actor.
+
+**Decisión** (Sergio, 2026-10-06). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
+propia transacción, y sólo si su identidad estaba viva —la misma condición que el pase de `event_store`, que
+casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
+`identity_maintenance`, repite para cada sujeto aún programado —una **hora** desde que el borrado construyó su
+fila, hasta el primer tick con éxito tras cerrarse— los pases de actor, recurso, log de negocio y sesiones, una transacción por sujeto, en el orden de bloqueo del borrado (auditoría, sesiones, log de negocio). El tick que cierra la ventana barre
+una última vez y borra la fila en la misma transacción. Un sujeto que falla no detiene a los demás: el fallo se
+captura por sujeto, el tick sigue y al final lanza una excepción que cuenta los fallos sin citar su texto —un
+mensaje del driver podría llevar el id—; el sujeto que falló conserva su fila y se reintenta en el siguiente tick.
+Si el fallo terminara el tick, como los sujetos van del más antiguo al más reciente, uno persistente dejaría sin
+barrer a todos los posteriores y sus ids sobrevivirían a la ventana. Cubre la **clase**, no una lista: da igual quién
+escribió la fila.
+
+- **No añade mutaciones.** Los pases son los de D4 y D12, sin cambios e idempotentes —un segundo pase sobre
+  tablas limpias no casa nada—, así que el conjunto cerrado de `SanctionedLogMutationGateTest` no crece.
+- **Pseudónimo nuevo por tick**, nunca el del borrado: arrastrarlo exigiría guardarlo junto al id real, que es
+  la tabla de mapeo que D4 prohíbe aunque viva una hora. Coste aceptado: una fila tardía no enlaza con el resto
+  del rastro anonimizado del sujeto.
+- **Evidencia (D4.1).** Un tick que reescribe algo escribe `GDPR_ERASURE_EXECUTED` con
+  `anonymized_actor_id` y `resweep: true`; uno que no reescribe nada no escribe nada. Como en el borrado de un
+  sujeto que nunca actuó, ese pseudónimo puede no figurar en ninguna fila `actor_erased` —un tick que sólo borró
+  sesiones o reescribió eventos—: D4.1 se cumple en el sentido fila → evidencia, no en el inverso. Esas filas
+  son evidencia de `AuditErasureEvidence::ACTIONS` y la poda no las toca nunca: un borrado puede sumar hasta una
+  por tick de su ventana (trece), y como no llevan recurso ni comparten pseudónimo con el borrado, no se pueden
+  atribuir a él. Es la consecuencia directa de no guardar el mapeo, no un descuido.
+- **La fila pendiente guarda el id real** hasta el primer tick con éxito tras cerrarse su ventana: una hora y
+  hasta un periodo con el scheduler sano, más mientras su barrido falle o el scheduler esté parado. Es una referencia a persona con
+  dueño de su borrado (el re-barrido) en `api/.person-reference-policy`, y su fuente detectiva sólo lista las
+  filas que superan dos ventanas: una fila en ventana es el instrumento del propio borrado, y listarla daría una
+  falsa divergencia por cada borrado.
+- **Un segundo borrado del mismo id reinicia la ventana** (`ON CONFLICT (subject_id) DO UPDATE`) en vez de fallar
+  sobre el índice único: una identidad recreada con un id fijo —fixtures, seeds— y borrada otra vez dentro de la
+  hora tumbaba el borrado con el id del sujeto en la línea `DETAIL` del driver, es decir, en la respuesta y en el log.
+- **Programado, nunca encolado.** El mensaje no lleva payload; un id de persona en un transporte es lo que
+  `api/.persistent-transport-policy` prohíbe.
+
+**Lo que no cubre:** una fila confirmada más de una hora después del borrado —la hora cuenta desde que la fila
+pendiente se construye dentro de la transacción del borrado, no desde su commit—. Ni Caddy, ni Postgres ni
+`max_execution_time` (que no cuenta la espera en base de datos) acotan una petición, y un timeout de Postgres
+tampoco lo arreglaría: los escritores de `kernel.terminate` insertan en autocommit tras responder, fuera de toda
+transacción, así que la hora es un margen, no una garantía. Tampoco repite las purgas de tokens de reset,
+secretos de recuperación, membresías e invitaciones: sus escritores contienden con el borrado sobre
+`identity_user` o `iam_invitation`, y cada una de esas columnas tiene su propia fuente detectiva. Registrado en
+`PRODUCTION_SECURITY_CHECKLIST.md` §7.
+
+**Revierte** el «Descartado: barrido periódico que re-anonimiza» de D3.1, sólo para esta clase. Allí había una
+cola que retirar, y retirarla cerraba la ventana. Aquí no hay cola: la alternativa era aceptar sin límite una
+enumeración que ya falló tres veces. La convergencia eventual acotada a una cadencia sustituye a esa aceptación;
+no sustituye a ningún invariante que existiera.
+
+Descartado: **bloquear en el sumidero** (cada escritor toma `identity_user`). El escritor llega al sumidero
+reteniendo filas de sesión mientras el borrado bloquea primero `identity_user`, así que el orden se invierte y se
+abre un interbloqueo; además serializa cada petición de cada usuario. Descartado: **sólo un gate de
+completitud** sobre la lista de escritores. Prueba que la lista está escrita, no que esté completa, y su
+incompletitud es justo el defecto. Descartado: **una huella del id** en la tabla pendiente. El espacio de ids es
+enumerable, así que es un oráculo de re-identificación (D3.1). Descartado: **un mensaje diferido** por sujeto.
+Pondría un id de persona en `messenger_messages`, con reintento y transporte `failed` incluidos.
 
 ### D5 — Ubicación: backbone en `Shared/`, consulta en `Backoffice/Audit/`
 

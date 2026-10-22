@@ -14,6 +14,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
+use Erpify\Tests\Unit\Iam\Session\Application\RecordingSessionSubjectLock;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -129,6 +130,7 @@ final class AdministratorSetLockOrderTest extends TestCase
                 new RecordingEventBus(),
                 new InlineTransactionManager(),
                 new FixedClock(SystemClock::now()),
+                new RecordingSessionSubjectLock(),
             ),
             new NullLogger(),
         );

@@ -178,6 +178,48 @@ describe("AuthProvider", () => {
     expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
   });
 
+  it("refresh() keeps the unavailable verdict when its re-probe gets no answer", async () => {
+    me.mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    let resolved: unknown = "unset";
+    await act(async () => {
+      resolved = await result.current.refresh();
+    });
+
+    expect(me).toHaveBeenCalledTimes(2);
+    expect(resolved).toBeNull();
+    expect(result.current.status).toBe(AuthStatus.UNAVAILABLE);
+  });
+
+  it("a navigation re-probe with no answer keeps the outage on the new route", async () => {
+    me.mockRejectedValueOnce(unavailable()).mockRejectedValueOnce(new Error("network down"));
+
+    const { result, rerender } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+
+    nav.pathname = "/backoffice/banks";
+    rerender();
+
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAVAILABLE));
+    expect(me).toHaveBeenCalledTimes(2);
+  });
+
+  it("a probe with no answer still reads unauthenticated when no outage is known", async () => {
+    me.mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("network down"));
+
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.status).toBe(AuthStatus.UNAUTHENTICATED);
+  });
+
   it("logout() clears the unavailable verdict", async () => {
     me.mockRejectedValue(unavailable());
 
