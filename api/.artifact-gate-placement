@@ -136,6 +136,7 @@ tests/Unit/Gate/BoundedContainerLogRetentionGateTest.php :: home
 tests/Unit/Gate/BoundedContextGateTest.php :: home
 tests/Unit/Gate/BufferedChannelAmplificationGateTest.php :: home
 tests/Unit/Gate/CaddyfileAccessLogRedactionGateTest.php :: home
+tests/Unit/Gate/ChangeLevelProvenanceGateTest.php :: home
 tests/Unit/Gate/ComposerStabilityGateTest.php :: home
 tests/Unit/Gate/ConfirmationGuardAdjacencyGateTest.php :: home
 tests/Unit/Gate/ConsoleCommandCarrierGateTest.php :: home
@@ -180,6 +181,7 @@ tests/Unit/Gate/PublicAccessExemptionRulesGateTest.php :: home
 tests/Unit/Gate/QueryBudgetExclusionMarkerGateTest.php :: home
 tests/Unit/Gate/ReadSideProjectionGateTest.php :: home
 tests/Unit/Gate/RedactionVocabularyParityTest.php :: home
+tests/Unit/Gate/SanctionedLogAppendRulesGateTest.php :: home
 tests/Unit/Gate/SanctionedLogMutationBlindSpotGateTest.php :: home
 tests/Unit/Gate/SanctionedLogMutationGateTest.php :: home
 tests/Unit/Gate/SanctionedLogMutationRulesGateTest.php :: home

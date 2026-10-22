@@ -2091,13 +2091,15 @@ mitigated state. Accepting one means recording who accepted it and against which
         of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
         vetoes.
       Re-affirm or close before the first customer.
-- [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
-      subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
-      nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
-      covered the fields the classifier marks, written through `PiiDiffSealer`. A row written by raw SQL, or
-      before sealing existed, can therefore keep a person's data in clear for as long as the row is retained.
-      Telling such a map apart needs the field classification at read time. Nothing in this deployment writes
-      one today; close it (re-seal or redact by classification) or accept it before the first customer.
+- [ ] **A `change` row's `metadata.changes` map holding a personal field in clear is served by the audit detail
+      route past its subject's erasure.** Nothing on the erasure path reaches `metadata`, so the route reads the
+      row's level as the diff's provenance: a map is served only on a `change` row and withheld whole on every
+      other, `AuditLogEntry` refuses a `changes` key outside that level so no other writer can store one, and
+      `ChangeLevelProvenanceGateTest` holds the producers of that level and the `audit_log` insert path closed.
+      What remains is a `change` row that never went through `PiiDiffSealer`: one written before sealing
+      existed, or inserted directly in the database. Telling such a map apart needs the field classification
+      at read time. Nothing in this deployment holds one today; close it (re-seal or redact by classification)
+      or accept it before the first customer.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

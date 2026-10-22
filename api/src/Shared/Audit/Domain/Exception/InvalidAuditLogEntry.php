@@ -9,8 +9,8 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 /**
  * Thrown when an {@see \Erpify\Shared\Audit\Application\AuditLogEntry} is built with an
  * invariant-breaking field: a blank `action` or `resourceType`, a non-UUID `resourceId` (the
- * `audit_log.resource_id` column is a `uuid`), or an `action`/`resourceType` longer than the
- * `audit_log` column width.
+ * `audit_log.resource_id` column is a `uuid`), an `action`/`resourceType` longer than the
+ * `audit_log` column width, or a `metadata.changes` on an entry whose level is not `change`.
  *
  * Deliberately marker-less: the `action` is minted by the calling module as a constant, so
  * a blank or over-long value is a server-side programming fault, not bad client input.
@@ -47,6 +47,15 @@ final class InvalidAuditLogEntry extends DomainException
             type: self::TYPE,
             title: 'Audit log entry resource id must be a UUID.',
             context: ['field' => 'resourceId'],
+        );
+    }
+
+    public static function changesOnlyOnAChangeEntry(string $level): self
+    {
+        return new self(
+            type: self::TYPE,
+            title: 'Audit log entry metadata.changes is reserved for change-level entries.',
+            context: ['field' => 'metadata.changes', 'level' => $level],
         );
     }
 

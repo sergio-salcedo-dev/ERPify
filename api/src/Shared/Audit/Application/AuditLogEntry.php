@@ -25,6 +25,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * rewritten on the way in, so the literal is written by an erasure alone; a row stored without that rewrite
  * may still hold a client-sent literal, and on any row the erasure flags are what attribute it (see
  * {@see AuditRedaction}).
+ *
+ * **`metadata.changes` belongs to a `change` entry alone.** That key is the field diff, and only the
+ * change-capture listener seals its personal values before they reach storage; any other caller would write
+ * it in clear, where no erasure pass reaches it — both anonymisers rewrite columns, never `metadata`, and
+ * crypto-shredding only matters to a value encrypted under the destroyed key. Refusing it here, where every
+ * row the writer persists is built, closes that path for every caller rather than for the one public logger,
+ * and it is what lets the detail route read the level as the diff's provenance.
  */
 final readonly class AuditLogEntry
 {
@@ -33,6 +40,9 @@ final readonly class AuditLogEntry
      * over-long value fails here with an actionable error instead of in the Postgres INSERT.
      */
     private const int MAX_FIELD_LENGTH = 100;
+
+    /** The `metadata` key holding the field diff, which only a `change` entry may carry. */
+    public const string CHANGES_KEY = 'changes';
 
     /**
      * @param array<string, mixed> $metadata
@@ -82,6 +92,10 @@ final readonly class AuditLogEntry
 
         if ($resource instanceof AuditResource) {
             self::guardFieldLength('resourceType', $resource->type);
+        }
+
+        if (AuditLevel::CHANGE !== $level && \array_key_exists(self::CHANGES_KEY, $metadata)) {
+            throw InvalidAuditLogEntry::changesOnlyOnAChangeEntry($level->value);
         }
 
         return new self(

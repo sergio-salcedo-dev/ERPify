@@ -253,7 +253,7 @@ function ChangesBody({ detail }: Readonly<{ detail: AuditEventDetail }>) {
 function UnreadableChanges() {
   return (
     <p className="text-muted-foreground text-xs" data-testid="audit-entry-drawer__diff--unreadable">
-      {"Diff unavailable — the stored change record is not a field-by-field diff."}
+      {"Diff unavailable — this change record cannot be shown."}
     </p>
   );
 }

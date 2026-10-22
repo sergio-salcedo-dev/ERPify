@@ -74,7 +74,9 @@ function isAuditWriteOperation(value: unknown): value is AuditWriteOperation {
  * **A `changes` that is `null` or a scalar degrades to an unreadable diff instead of rejecting.** The API
  * never serves the content of a `changes` that is not a map — a scalar arrives as the withheld marker, a
  * non-empty list as a list of the same length holding only that marker, `null` as `null` — but it keeps the
- * shape, and the shape is the corruption signal this guard reads, so the split below holds unchanged. A
+ * shape, and the shape is the corruption signal this guard reads, so the split below holds unchanged. On a row
+ * whose level is not `change` any non-empty `changes`, a map included, arrives as that marker alone, because
+ * only a `change` row's diff was sealed; it degrades the same way, so this path is load-bearing for maps too. A
  * `null` or a scalar carries no `{old, new}` pair, and refusing it would lose the whole event over a field
  * the UI only uses to paint the diff. A list or a malformed map still rejects: a list in that position is a
  * failure of the diff builder — pairs that lost their field name — and degrading it to an unreadable diff

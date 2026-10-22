@@ -47,7 +47,7 @@ final class AuditChangeDiff
             $changes[$field] = ['old' => $this->scalarize($change[0]), 'new' => $this->scalarize($change[1])];
         }
 
-        return ['changes' => $changes];
+        return [AuditLogEntry::CHANGES_KEY => $changes];
     }
 
     private function scalarize(mixed $value): bool|float|int|string|null

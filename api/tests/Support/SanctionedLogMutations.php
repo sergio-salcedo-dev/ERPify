@@ -40,31 +40,19 @@ final class SanctionedLogMutations
      */
     public static function in(string $source): array
     {
-        $expressions = new PhpStringExpressions($source);
-        $found = [];
-        $count = $expressions->count();
-        $index = 0;
+        return self::scan($source, ['UPDATE', 'DELETE'], self::mutationsInSql(...));
+    }
 
-        while ($index < $count) {
-            $call = DbalTableApiCalls::at($expressions, $index, self::TABLE_REFERENCE);
-
-            if (null !== $call) {
-                $found[] = $call;
-            }
-
-            [$text, $next] = $expressions->at($index);
-
-            if (null === $text) {
-                ++$index;
-
-                continue;
-            }
-
-            \array_push($found, ...self::mutationsInSql($text));
-            $index = $next;
-        }
-
-        return $found;
+    /**
+     * The appends, in order of appearance, that the source issues against either log, as `"INSERT <table>"` —
+     * an `INSERT INTO <log>` statement, upserts included, and DBAL's `->insert('<log>', …)`. The complement of
+     * {@see in()}, read by the same machinery so the two never disagree about what names a log.
+     *
+     * @return list<string>
+     */
+    public static function appendsIn(string $source): array
+    {
+        return self::scan($source, ['INSERT'], self::insertsInSql(...));
     }
 
     /**
@@ -114,6 +102,51 @@ final class SanctionedLogMutations
         }
 
         return $discrepancies;
+    }
+
+    /**
+     * @param list<string>                   $dbalVerbs the table-level DBAL methods to report
+     * @param callable(string): list<string> $inSql     the descriptors one SQL text yields
+     *
+     * @return list<string>
+     */
+    private static function scan(string $source, array $dbalVerbs, callable $inSql): array
+    {
+        $expressions = new PhpStringExpressions($source);
+        $found = [];
+        $count = $expressions->count();
+        $index = 0;
+
+        while ($index < $count) {
+            $call = DbalTableApiCalls::at($expressions, $index, self::TABLE_REFERENCE, $dbalVerbs);
+
+            if (null !== $call) {
+                $found[] = $call;
+            }
+
+            [$text, $next] = $expressions->at($index);
+
+            if (null === $text) {
+                ++$index;
+
+                continue;
+            }
+
+            \array_push($found, ...$inSql($text));
+            $index = $next;
+        }
+
+        return $found;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function insertsInSql(string $sql): array
+    {
+        \preg_match_all('/\bINSERT\s+INTO\s+' . self::TABLE_REFERENCE . '/i', $sql, $matches);
+
+        return \array_map(static fn (string $table): string => 'INSERT ' . \strtolower($table), $matches[1]);
     }
 
     /**

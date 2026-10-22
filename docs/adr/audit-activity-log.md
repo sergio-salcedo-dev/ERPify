@@ -1,7 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-06 (D4.2 — deferred re-sweep of the
-> erasure passes; 2026-09-28: D3 reviewed — request-boundary
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-22 (D4 — the row's level as the provenance of
+> `metadata.changes`; 2026-10-06: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -535,7 +535,8 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
   re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
-  **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
+  **En el cable, un `changes` vacío —o con claves, en una fila `change`— es un objeto JSON** —`{}` cuando el
+  diff queda vacío—.
   `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
   históricas. Tres formas que el capturador nunca produce conservan su **forma** en el cable: una **lista no
@@ -556,6 +557,24 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `AuditEventDetailResourceMapper::WITHHELD`, que no es el centinela de borrado porque nada se borró.
   Coste declarado: el valor crudo no está en el cable; quien investigue una fila corrupta la lee de la
   tabla.
+  **Un mapa sólo se sirve en una fila `change`: el nivel es la procedencia del diff, la forma no.** Un mapa
+  tiene la forma de un diff sellado lo haya sellado alguien o no, así que servir todo mapa entregaría en
+  claro un `{"email": {"old": …}}` escrito por cualquier otro camino, que además sobreviviría al borrado por
+  la razón de arriba. El nivel sí lo prueba, y lo sostienen tres mecanismos: sólo
+  `AuditWriteCaptureListener` acuña una entrada `change` y `SymfonyAuditLogger` rechaza ese nivel;
+  `AuditLogEntry::create()` rechaza la clave `changes` en cualquier otro nivel, de modo que tampoco llega a
+  **guardarse** —el defecto de RGPD es el almacenamiento, no sólo el cable—; y `ChangeLevelProvenanceGateTest`
+  fija el conjunto cerrado de ficheros que nombran `AuditLevel::CHANGE`, prohíbe acuñar un nivel desde un
+  string y exige que `src` inserte en `audit_log` sólo a través del escritor de `AuditLogEntry`. En una fila
+  que no es `change` el mapper retiene **entero** como `WITHHELD` escalar cualquier `changes` no vacío, mapa o
+  lista —claves incluidas, porque vienen del mismo escritor sin sellar y una clave puede nombrar a una persona
+  igual que un valor—, y el cliente lo degrada a diff ilegible. La lista conserva su forma sólo en una fila
+  `change`, donde sólo puede ser un fallo del constructor del diff y el rechazo del sobre es la señal; en otra
+  fila ningún constructor de diff la escribió, y rechazar el sobre escondería un registro de actividad o de
+  seguridad tras el error de un escritor. Descartadas: decidir sólo en lectura (el dato seguiría guardado en
+  claro) y sólo en escritura (no cubre filas ya guardadas ni las escritas por SQL a mano). Residual: una fila
+  `change` escrita antes de existir el sellado o directamente en la base de datos —
+  `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
 `X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
