@@ -1,9 +1,8 @@
 ---
 id: SPEC-recovery-readiness
 companions:
-  - ../../implementation-artifacts/rr-2-evict-first-guidance.md
-sources:
-  - ../../implementation-artifacts/rr-1-recovery-secret-readiness-warning.md
+  - rr-2-evict-first-guidance.md
+sources: []
 ---
 
 > **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate. Source documents listed in frontmatter are for traceability — consult them only if you need narrative rationale or prose color this contract intentionally omits.

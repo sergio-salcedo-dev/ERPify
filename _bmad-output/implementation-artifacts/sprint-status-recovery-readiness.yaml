@@ -7,7 +7,8 @@
 
 # FROZEN 2026-10-22 — this epic is tracked in _bmad-output/specs/spec-recovery-readiness/ (SPEC.md +
 # stories.yaml), the shape `bmad-loop run --spec` dispatches. The keys below are its state at migration and
-# are not updated any more; whether RR-2 shipped is read from git. Kept as history, never deleted.
+# are not updated any more: RR-2's live status is the folder's stories/rr-2-*.md, and whether it shipped is
+# read from git. The two keys below will read in-progress/backlog for ever by design. Kept as history.
 #
 # SCOPED SPRINT FILE — the recovery-readiness epic only (the product half of GitHub #602).
 # Separate from sprint-status.yaml on purpose: bmad-build/bmad-sprint-planning resolve the canonical file
@@ -16,7 +17,7 @@
 #
 # Story Status: backlog → ready-for-dev → in-progress → review → done
 # A story moves to `done` when the three-layer code review of the complete task is done.
-# RR-2 is `backlog` with no spec yet; #1001, whose behaviour its redemption copy states, merged 2026-09-28.
+# RR-2 was `backlog` at migration; its spec now lives in the spec folder (see FROZEN above); #1001, whose behaviour its redemption copy states, merged 2026-09-28.
 
 generated: 2026-09-28
 last_updated: 2026-10-22

@@ -1,4 +1,4 @@
-- id: "2"
+- id: "rr-2"
   title: Evict first, rotate second on every surface that tells a user what to do next
   description: >-
     Delivers CAP-2: the password-changed mail, the change-password form and the post-redemption screen
