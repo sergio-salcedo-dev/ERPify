@@ -29,9 +29,9 @@ use Symfony\Component\Yaml\Yaml;
  *
  * **Merge semantics are read rather than assumed.** Compose merges SERVICE maps across files, so a service an
  * overlay merely extends inherits `compose.yaml`'s block untouched and does not need to respell it — while a
- * service an overlay is the first to INTRODUCE (`mailpit` in dev, `scheduler_worker` in prod) has no base to
- * inherit from and would ship unbounded. Checking each file in isolation would demand redundant blocks;
- * checking only `compose.yaml` would miss both of those. This resolves the way Compose does.
+ * service an overlay is the first to INTRODUCE (`mailpit` in dev and in the rehearsal overlay, `scheduler_worker`
+ * in prod) has no base to inherit from and would ship unbounded. Checking each file in isolation would demand
+ * redundant blocks; checking only `compose.yaml` would miss both of those. This resolves the way Compose does.
  *
  * @internal
  */
@@ -168,11 +168,11 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
 
     /**
      * The anchor cannot cross files, so each overlay respells the bound for the services it introduces — and
-     * a value respelled by hand is a value that drifts. Three files quietly disagreeing would mean the
+     * a value respelled by hand is a value that drifts. Files quietly disagreeing would mean the
      * environment a record actually lands in decides how long it is kept.
      */
     #[Test]
-    public function theThreeFilesAgreeOnTheBound(): void
+    public function theFilesAgreeOnTheBound(): void
     {
         foreach (self::COMPOSE_FILES as $composeFile) {
             foreach ($this->declaredBoundsIn($composeFile) as $service => $logging) {

@@ -23,11 +23,11 @@ use PHPUnit\Framework\TestCase;
  * A required key may carry a usable default only when it is listed in {@see self::DEFAULTED}: those are
  * non-secret identities or tunables an operator is expected to keep. Adding one is a deliberate edit here.
  * Values are compared the way Compose reads them, with one pair of surrounding quotes removed, and a key the
- * template declares twice is refused because `prod.env.check` reads the first occurrence and Compose the last.
+ * template declares twice is refused because Compose silently takes the last, hiding which value runs.
  *
  * A green proves the template is complete and that its secrets are placeholders, and that the keys whose
  * guard is a security control ({@see self::PINNED_SECRETS}) are still required. It says nothing about an
- * operator's `.env.prod.local`, which `ProdEnvSupportScriptGateTest` pins the check for, nor about a
+ * operator's `.env.prod.local`, which `ProdEnvCheckGateTest` pins the check for, nor about a
  * variable compose reads with a fallback (`${VAR:-…}`), which the stack does not require.
  *
  * @internal
@@ -162,7 +162,7 @@ final class ProdEnvTemplateGateTest extends TestCase
             [],
             $duplicated,
             \sprintf(
-                '%s declares these keys more than once; `prod.env.check` reads the first and Compose the last: %s',
+                '%s declares these keys more than once; Compose silently takes the last: %s',
                 self::TEMPLATE,
                 \implode(', ', $duplicated),
             ),

@@ -8,7 +8,7 @@
 #
 # DESTRUCTIVE: runs pg_restore (in a single transaction) over the live database.
 # It is meant first for the **restore drill and pre-prod verification** — prove a
-# backup restores on the erpify.local rehearsal or a scratch worktree stack
+# backup restores on the erpify.local rehearsal (project erpify-prodlocal)
 # before you ever need it for real. The dump is fully verified up front, so a
 # corrupt backup is caught before any live data is touched, and the run refuses
 # to proceed without an explicit confirmation. The writers are restarted on any
@@ -67,14 +67,11 @@ flock -n 9 || { log_error "a backup or restore is already running (lock: $BACKUP
 # as non-production. A real domain, an IP, or a bare internal hostname all gate
 # the stricter production confirmation below — an unrecognised target must never
 # silently fall through to the scriptable non-prod path.
-SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true)"
-IS_PROD=0
-for host in $SERVER_NAME; do
-  case "$host" in
-    *.local|*.localhost|localhost|127.0.0.1|::1) : ;;
-    *) IS_PROD=1 ;;
-  esac
-done
+# Read as Compose reads it (lib/prod-env.sh): the last occurrence wins, and a
+# duplicated SERVER_NAME counts as production.
+SERVER_NAME="$(prod_env_value SERVER_NAME "$ENV_FILE" 2>/dev/null || true)"
+IS_PROD=1
+prod_server_is_local "$ENV_FILE" && IS_PROD=0
 
 # —— Resolve the stamp ————————————————————————————————————————————————————
 if [[ -z "$STAMP" ]]; then
