@@ -1,7 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-22 (D4 — the row's level as the provenance of
-> `metadata.changes`; 2026-10-21: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-23 (D4 — the closed, shaped and bounded
+> vocabulary of `metadata`; 2026-10-22: D4 — the row's level as the provenance of `metadata.changes`; 2026-10-21: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -515,16 +515,36 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   ya tiene anonimizador. La asimetría es la razón: ninguna mutación de este conjunto entra en el JSON, así
   que un id de persona en `metadata` sobrevive al borrado que lo escribió, mientras que en el eje de recurso
   lo reescribe el anonimizador que ese mismo borrado ya ejecuta, en la misma transacción.
-  **Lo que sostiene la invariante no es un gate**, y la elección está argumentada: un pseudónimo es un UUID
-  indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería el contrato de
-  `anonymized_actor_id` (D4.1), y prohibir **por nombre de clave** sería una declaración que se comprueba a
-  sí misma. Lo sostiene un testigo de aceptación falsable en `api/features/backoffice/users/erase.feature`.
-  **Trigger de revisita vigente:** **cualquier** camino de escritura que vuelva a meter un id de persona en
-  `metadata`. Decía «un segundo», y estaba descontado en uno: tras el cambio no queda ninguno, así que «el
-  segundo» se habría negado a dispararse ante la primera regresión — que es exactamente recrear la fuga que
-  esta decisión cerró. Lo que la Regla de Tres protege es el **registro declarativo de claves**, y para eso
-  la cuenta que importa es cuántos caminos existen a la vez, no cuántos han existido.
-  **Las dos claves de una fila `change`, y por qué ambas caben en la invariante:** `changes` —el diff campo
+  **Lo que sostiene que no entre un id de persona sigue sin ser un gate**, y la elección está argumentada: un
+  pseudónimo es un UUID indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería
+  el contrato de `anonymized_actor_id` (D4.1). Lo sostiene un testigo de aceptación falsable en
+  `api/features/backoffice/users/erase.feature`. **Trigger de revisita vigente:** **cualquier** camino de
+  escritura que vuelva a meter un id de persona en `metadata`.
+  **Lo que sí está cerrado es el vocabulario (2026-10-23).** La Regla de Tres que protegía el registro
+  declarativo de claves se cumplió hace tiempo —hoy son catorce ficheros que escriben `metadata` no vacío y veinticuatro claves—, y
+  `AuditMetadataKey` (`Shared/Audit/Domain`) es ese registro: cada clave con la **forma** de su valor
+  (`AuditMetadataShape`: un recuento, un flag, un nombre de ruta, un token del servidor, un pseudónimo, un
+  scope `<Tipo>:<uuid>`, nombres de rol, un instante ATOM, el diff de cambio, la operación). Lo impone
+  `AuditLogEntry::create()` —clave desconocida, valor fuera de forma, o `changes`/`operation` fuera de una fila
+  `change`, todo `InvalidAuditLogEntry`, sin marcador y por tanto un fallo de programación visible—, y la
+  objeción de arriba a «prohibir por nombre de clave» no lo alcanza por dos razones. **Dónde:** el
+  constructor es el único punto por el que pasan todas las filas, también las del capturador de cambios que
+  no pasa por `log()` y las tres cuyas claves se calculan lejos de la llamada (`StoredIdentityDrift`,
+  `AuditTrailReadAuditListener::metadataFor()`, el ternario de `lockedUntil`); un barrido textual de
+  `log(...)` nacía ciego a ellas, y por eso se descartó el registro en fichero con gate al modo de
+  `.audit-resource-types`. **Qué:** la forma, no el nombre, es lo que da contenido a la declaración —una clave
+  `route` sin forma admitiría una ruta con un id dentro—. Dos formas admiten texto que el servidor no eligió y
+  están nombradas como tales: los valores crudos que la sonda de integridad no pudo explicar (el operador
+  repara la cadena que se le mostró) y el diff, cuyos campos personales llegan sellados. El sentido inverso
+  —una clave que deja de escribirse y sigue admitida— lo lee `AuditMetadataVocabularyLivenessGateTest`.
+  **Y está acotado**, como `action` y `user_agent` por su ancho de columna: 16 KiB medidos como UTF-8 sin
+  escapar, lo que guarda un `jsonb`. El mayor `metadata` legítimo es una actualización de `Bank` con sus tres
+  columnas de nombre al ancho máximo en caracteres de cuatro bytes, 4 792 bytes, y un test lo construye y lo
+  admite: la cota existe para rechazar a un productor que empiece a volcar un cuerpo o una lista, nunca a uno
+  que llene sus columnas, porque una fila `change` rechazada hace fallar la escritura que la produjo. Coste
+  declarado: `orphan_role_values` no tiene cota propia, así que una tabla `identity_user` con valores de rol
+  corruptos suficientes para pasar de 16 KiB deja el hallazgo sin fila de auditoría; el comando ya lo imprime
+  antes de escribirla y avisa del fallo, que es la conducta que tenía ante cualquier error del rastro.
   a campo, con los valores clasificados `#[PersonalData]` sellados por `PiiDiffSealer`— y su hermana
   `operation`, el nombre del caso de `AuditWriteOperation` (`CREATED`/`UPDATED`/`DELETED`), que el sellado
   deja intacta. `operation` es un discriminante de la clase de escritura, no un cuerpo de entidad, y existe
@@ -838,7 +858,7 @@ actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audi
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
-metadata        jsonb        sin payload sensible
+metadata        jsonb        sin payload sensible; claves y formas de AuditMetadataKey, ≤ 16 KiB (D4)
 ip              varchar(45)  NULL
 user_agent      string       NULL
 actor_erased    boolean      NOT NULL — false al insertar (writer); true tras erasure GDPR (D4.1), fijado en
