@@ -257,8 +257,11 @@ dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
 **Alcance de esa decisión: el `INSERT` de `activity`, no toda contención de la aplicación.** El argumento mide un
 write concreto —una fila, autocommit, esquema con solo PK— y para ése se sostiene. No cubre la transacción del
 borrado GDPR, que tiene otra forma: `FulfilIdentityErasure` corre el pase de actor, el pase de recurso y el
-anonimizador del `event_store` bajo una sola transacción, y el último es un `payload::text ILIKE` que fuerza scan
-secuencial sobre filas que el outbox está insertando en paralelo. Ahí las clases reintentables sí son plausibles.
+anonimizador del `event_store` bajo una sola transacción, y el último reescribe y bloquea filas de la tabla en la
+que el outbox está insertando en paralelo. Desde la enmienda de 2026-10-23 a D12 de
+[`event-store-and-projections.md`](./event-store-and-projections.md) las encuentra con un índice y no con un scan
+secuencial, lo que acorta la transacción pero no elimina esa concurrencia: el `UPDATE` sigue tomando locks de fila
+mientras dura el borrado. Ahí las clases reintentables sí son plausibles.
 **Lo que se añade no es reintento** —la decisión de arriba sigue intacta— **sino traducción**:
 `DoctrineTransactionManager` convierte cualquier `RetryableException` de DBAL en `TransientTransactionFailure`, o
 sea 503 `transient-transaction-failure`, de modo que un `40P01` deja de salir como 500 `unhandled-exception`. El

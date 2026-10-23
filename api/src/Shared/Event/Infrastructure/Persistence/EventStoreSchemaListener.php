@@ -24,6 +24,13 @@ use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
  * `autoincrement` identity (still DB-assigned), and `recorded_on`/`metadata` are populated by the
  * writer ({@see DbalEventStore::append()}) rather than by a column default. The behaviour is
  * equivalent; only the literal DDL differs.
+ *
+ * The two GIN indexes over `event_store_uuids(payload)` / `event_store_uuids(metadata)` that the GDPR erasure
+ * reads ({@see DbalEventStoreSubjectAnonymiser}) are NOT declared here, and cannot be: DBAL models no
+ * expression index, and its introspection joins `pg_attribute` on `attnum`, which is 0 for an expression
+ * column — measured, so the indexes and the function behind them are invisible to `schema:validate` and to
+ * `schema:update --dump-sql`, which therefore neither require nor drop them. Their migration owns them, and
+ * `EventStoreUuidIndexSchemaFunctionalTest` is what proves they exist.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
 final class EventStoreSchemaListener extends InjectedTableSchemaListener
