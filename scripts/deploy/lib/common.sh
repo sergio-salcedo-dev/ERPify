@@ -19,8 +19,9 @@ log_warn()    { echo -e "${YELLOW}! ${*}${NC}"; return 0; }
 log_error()   { echo -e "${RED}✗ ${*}${NC}" >&2; return 0; }
 
 compose() {
-  docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$ENV_FILE" \
-    -f compose.yaml -f compose.prod.yaml "$@"
+  local files
+  read -ra files <<< "$(prod_compose_files "$ENV_FILE")"
+  docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$ENV_FILE" "${files[@]}" "$@"
   return $?
 }
 

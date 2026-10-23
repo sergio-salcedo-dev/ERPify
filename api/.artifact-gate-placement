@@ -113,6 +113,8 @@
 
 tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
 tests/Unit/Gate/ConfigReferenceGateReadsHeadGateTest.php :: home
+tests/Unit/Gate/ProdEnvSupportScriptGateTest.php :: home
+tests/Unit/Gate/ProdEnvTemplateGateTest.php :: home
 tests/Unit/Gate/SentryReleaseWiringGateTest.php :: home
 tests/Unit/Gate/TestDatabaseGuardGateTest.php :: home
 tests/Unit/Gate/AcceptedRiskTagRulesGateTest.php :: home

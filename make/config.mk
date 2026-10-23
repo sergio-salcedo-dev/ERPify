@@ -34,6 +34,21 @@ DB_SERVICE   ?= database
 # Everything below is `?=`/overridable: exporting COMPOSE_PROJECT_NAME or any
 # *_PORT in your environment or on the command line wins.
 
+# A prod/staging env file whose site TLS is Caddy's internal CA is the local
+# rehearsal (erpify.local): it runs as `erpify-prodlocal`, never on dev's
+# `erpify` volumes, and loads compose.rehearsal.yaml (its own mailpit). Any other
+# profile leaves the name to the rules below — `erpify` in the primary checkout,
+# `erpify-<slug>` in a worktree — exactly as before. The reading is
+# scripts/deploy/lib/prod-env.sh's, shared with every deploy script.
+PROD_ENV_FILE ?= .env.prod.local
+PROD_ENV_PATH := $(if $(filter /%,$(PROD_ENV_FILE)),$(PROD_ENV_FILE),$(PROJECT_ROOT)/$(PROD_ENV_FILE))
+ifneq ($(filter $(ENV),prod staging),)
+  PROD_TLS_PROFILE := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" profile "$(PROD_ENV_PATH)")
+  ifeq ($(PROD_TLS_PROFILE),internal)
+    COMPOSE_PROJECT_NAME ?= erpify-prodlocal
+  endif
+endif
+
 # True only inside a linked worktree (git-common-dir's parent != this checkout).
 # Resolves a possibly-relative --git-common-dir against PROJECT_ROOT.
 IS_LINKED_WORKTREE := $(shell cd "$(PROJECT_ROOT)" 2>/dev/null && \
@@ -46,8 +61,10 @@ ifeq ($(IS_LINKED_WORKTREE),true)
 	| tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')
   COMPOSE_PROJECT_NAME ?= erpify-$(WORKTREE_SLUG)
   # Ephemeral host ports for dev-overlay worktree stacks only; never touch the
-  # fixed ports a real staging/prod deploy needs.
-  ifeq ($(filter $(ENV),prod staging),)
+  # fixed ports a real staging/prod deploy needs. `deploy.local` is evaluated
+  # without ENV=prod and is prod all the same: these exports would reach its
+  # nested `make ENV=prod` calls and publish the rehearsal on random ports.
+  ifeq ($(filter $(ENV),prod staging)$(filter deploy.local%,$(MAKECMDGOALS)),)
     HTTP_PORT       ?= 0
     HTTPS_PORT      ?= 0
     HTTP3_PORT      ?= 0
@@ -78,7 +95,6 @@ endif
 # Compose interpolation (`${VAR}` in a compose file) only reads the shell env
 # or `--env-file`/default `.env` — NOT a service's `env_file:` — so prod
 # secrets MUST flow through this wiring, not an `env_file:` on a service.
-PROD_ENV_FILE ?= .env.prod.local
 ifeq ($(ENV),prod)
   COMPOSE_FILES := -f compose.yaml -f compose.prod.yaml
   ENV_FILE_ARGS := --env-file $(PROD_ENV_FILE)
@@ -88,6 +104,12 @@ else ifeq ($(ENV),staging)
 else
   COMPOSE_FILES := -f compose.yaml -f compose.dev.yaml
   ENV_FILE_ARGS :=
+endif
+# The rehearsal's own overlay (mailpit), only for a tls-internal env file. It
+# declares nothing but mailpit — BoundedContainerLogRetentionGateTest pins that —
+# so the worker stacks ScheduleConsumptionGateTest reads are the ones above.
+ifeq ($(PROD_TLS_PROFILE),internal)
+  COMPOSE_FILES += -f compose.rehearsal.yaml
 endif
 
 # The Sentry release of a prod/staging deploy: the checkout's commit SHA, handed

@@ -325,7 +325,7 @@ secrets:
 
 # frontend: host-facing + inter-service. backend: internal-only (no egress,
 # no host port) so the database is fully isolated. mailpit lives in the dev
-# overlay only, so naming networks here never touches dev.
+# overlay and in compose.rehearsal.yaml, never here, so a public host runs none.
 networks:
   frontend:
   backend:

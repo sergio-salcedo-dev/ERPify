@@ -259,7 +259,13 @@ To stand the prod profile up on a LAN box or laptop at `https://erpify.local`:
 ```bash
 cp .env.prod.example .env.prod.local   # fill in the CHANGE_ME secrets
 make deploy.local                      # preflight → up → migrate → smoke
+make deploy.local.down                 # stop it (volumes kept) before `make app.dev`
 ```
+
+With `tls internal` the stack runs as project `erpify-prodlocal`, never on dev's
+`erpify` volumes; on public ACME (a VPS) it keeps `erpify`
+(`scripts/deploy/lib/prod-env.sh`); the rehearsal also loads `compose.rehearsal.yaml`,
+which adds a loopback-only mailpit for its security mail.
 
 Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 [`erpify-local-test-deployment.md`](erpify-local-test-deployment.md).

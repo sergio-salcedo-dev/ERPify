@@ -9,30 +9,21 @@
 ## —— Deploy ———————————————————————————————————————————————————————————————
 
 # Keys that MUST be set (non-empty, no CHANGE_ME placeholder) before the prod
-# stack can start. Kept in sync with .env.prod.example.
-PROD_REQUIRED_KEYS := APP_SECRET AUDIT_KEK POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB CADDY_MERCURE_JWT_SECRET SERVER_NAME NEXT_PUBLIC_API_BASE_URL SENTRY_DSN SENTRY_TRACES_SAMPLE_RATE MAILER_DSN MAILER_SECURITY_FROM
+# stack can start: every required interpolation in the compose files every prod
+# stack loads, as scripts/deploy/lib/prod-env.sh derives them — the same reader
+# prod.env.check runs and ProdEnvSupportScriptGateTest executes.
+PROD_ENV_LIB := $(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh
+PROD_REQUIRED_KEYS = $(shell bash "$(PROD_ENV_LIB)" required-keys)
 
-prod.env.check: ## Validate .env.prod.local holds every required prod secret (fails on missing file / unset / placeholder)
-	@file="$(PROJECT_ROOT)/$(PROD_ENV_FILE)"; \
+prod.env.check: ## Validate .env.prod.local holds every required prod secret (fails on missing file / unset / placeholder / duplicate / wrong-length AUDIT_KEK)
+	@file="$(PROD_ENV_PATH)"; \
 	if [ ! -f "$$file" ]; then \
-		echo "✗ $(PROD_ENV_FILE) not found at repo root."; \
+		echo "✗ $(PROD_ENV_FILE) not found."; \
 		echo "  Copy the template and fill in every CHANGE_ME value:"; \
 		echo "    cp .env.prod.example $(PROD_ENV_FILE)"; \
 		exit 1; \
 	fi; \
-	missing=""; \
-	for key in $(PROD_REQUIRED_KEYS); do \
-		val=$$(grep -E "^$$key=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
-		if [ -z "$$val" ] || printf '%s' "$$val" | grep -qE '^CHANGE_ME'; then \
-			missing="$$missing $$key"; \
-		fi; \
-	done; \
-	if [ -n "$$missing" ]; then \
-		echo "✗ $(PROD_ENV_FILE) has unset or placeholder required keys:"; \
-		for k in $$missing; do echo "    - $$k"; done; \
-		echo "  Edit $(PROD_ENV_FILE) and replace every CHANGE_ME value (see .env.prod.example)."; \
-		exit 1; \
-	fi; \
+	bash "$(PROD_ENV_LIB)" check "$$file" || exit 1; \
 	pw=$$(grep -E "^POSTGRES_PASSWORD=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
 	if printf '%s' "$$pw" | grep -q '[/+=:@? ]'; then \
 		echo "✗ POSTGRES_PASSWORD contains a URL-unsafe char (/ + = : @ ? or space) — it corrupts DATABASE_URL."; \
@@ -82,8 +73,13 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
 
+# The project (erpify-prodlocal for the tls-internal rehearsal, erpify on ACME)
+# is resolved from the env file by make/config.mk and scripts/deploy/lib/prod-env.sh.
 deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
 	@bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
+
+deploy.local.down: ## Stop the prod stack deploy.local stood up (volumes kept); on the rehearsal, required before `make app.dev`, which needs the same ports
+	@$(MAKE) --no-print-directory ENV=prod docker.down
 
 deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA + Chromium NSS). Run with sudo: `sudo make deploy.local.trust`
 	@bash $(PROJECT_ROOT)/scripts/deploy/trust-local.sh
@@ -94,4 +90,4 @@ backup.prod: ## Prod backup: verified pg_dump of the database (knobs: BACKUP_DIR
 restore.prod: ## Restore a backup (STAMP=<stamp>, omit to list) — DESTRUCTIVE, for the restore drill / pre-prod check (knobs: BACKUP_DIR, RESTORE_YES, ALLOW_PROD_RESTORE)
 	@STAMP="$(STAMP)" bash $(PROJECT_ROOT)/scripts/deploy/restore-prod.sh
 
-.PHONY: prod.env.check deploy.local deploy.local.trust backup.prod restore.prod
+.PHONY: prod.env.check deploy.local deploy.local.down deploy.local.trust backup.prod restore.prod
