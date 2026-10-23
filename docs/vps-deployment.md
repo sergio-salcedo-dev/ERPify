@@ -30,7 +30,10 @@ On a VPS with a real domain:
      `tls internal` to automatic **ACME** — a publicly-trusted cert, so clients
      import **no** CA.
    - For real outbound mail, set a real `MAILER_DSN=` (the default `null://null`
-     silently discards mail) and `MAILER_FROM` / `DEFAULT_NOTIFICATION_EMAIL`.
+     silently discards mail) and `MAILER_FROM`. `DEFAULT_NOTIFICATION_EMAIL` (where
+     bank-change notices go) is **required**: `compose.prod.yaml` aborts without it.
+   - Leave `SYMFONY_TRUSTED_PROXIES` unset: FrankenPHP is the edge, so Symfony
+     trusts no hop. Set it only to the address of a load balancer you put in front.
    - **Sentry is required in prod:** set `SENTRY_DSN=` (from the Sentry MCP) and
      `SENTRY_TRACES_SAMPLE_RATE=0.2` — `make prod.env.check` and the compose `:?`
      guards abort the deploy without them. Events are tagged environment `prod`

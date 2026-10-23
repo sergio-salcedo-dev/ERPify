@@ -39,6 +39,7 @@ Defined in `compose.prod.yaml` on top of the base stack:
 - `APP_SECRET`
 - `CADDY_MERCURE_JWT_SECRET`
 - `POSTGRES_PASSWORD`
+- `DEFAULT_NOTIFICATION_EMAIL`
 
 Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_API_BASE_URL`
 origin for the deployment host.

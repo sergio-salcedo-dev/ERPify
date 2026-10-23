@@ -47,6 +47,26 @@ final class SecurityUserEqualityTest extends TestCase
         $this->assertFalse($securityUser->isEqualTo(new SecurityUser(UserMother::create(roles: [Role::VIEWER]))));
     }
 
+    public function testIsNotEqualWhenTheReloadedIdentityWasSuspended(): void
+    {
+        // A suspension changes neither credential nor roles, so this clause is what ejects a live session when
+        // the post-commit revoke that should have done it fails.
+        $securityUser = new SecurityUser(UserMother::create());
+        $suspended = UserMother::create();
+        $suspended->suspend();
+
+        $this->assertFalse($securityUser->isEqualTo(new SecurityUser($suspended)));
+    }
+
+    public function testIsNotEqualWhenTheReloadedIdentityWasDeactivated(): void
+    {
+        $securityUser = new SecurityUser(UserMother::create());
+        $deactivated = UserMother::create();
+        $deactivated->deactivate();
+
+        $this->assertFalse($securityUser->isEqualTo(new SecurityUser($deactivated)));
+    }
+
     public function testIsEqualWhenTheSameRolesArriveInADifferentOrder(): void
     {
         // Role order is a property of the JSON column, not of the identity: ejecting live sessions over a

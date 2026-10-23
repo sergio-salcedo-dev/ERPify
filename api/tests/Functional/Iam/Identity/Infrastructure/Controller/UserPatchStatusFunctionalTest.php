@@ -217,11 +217,12 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
     }
 
     /**
-     * Takes the seated administrator out of the active-admin pool beneath its live session. The admission gate
-     * reads the session row and never the identity's status, so the actor stays admitted while no longer
-     * counting as an active administrator — the only sequential shape in which another administrator can be the
-     * last one, since an actor may not target itself. The shape the guard exists for, two administrators
-     * acting on each other concurrently, cannot be driven over sequential HTTP.
+     * Takes the seated administrator out of the active-admin pool and re-seats its session from the suspended
+     * row, so the actor stays admitted while no longer counting as an active administrator — the only
+     * sequential shape in which another administrator can be the last one, since an actor may not target itself.
+     * The re-seat is required: the firewall drops a session whose copy of the identity differs from the stored
+     * one, status included. The shape the guard exists for, two administrators acting on each other
+     * concurrently, cannot be driven over sequential HTTP.
      */
     private function suspendActorBeneathItsSession(string $actorId): void
     {
@@ -230,6 +231,7 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
             ['id' => $actorId],
         );
         $this->suspendedActorId = $actorId;
+        $this->reseatSessionFromStoredIdentity($this->client, $actorId);
     }
 
     private function reinstateSuspendedActor(): void
