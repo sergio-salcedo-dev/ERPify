@@ -9,6 +9,8 @@
 # stories.yaml), the shape `bmad-loop run --spec` dispatches. The keys below are its state at migration and
 # are not updated any more: RR-2's live status is the folder's stories/rr-2-*.md, and whether it shipped is
 # read from git. The two keys below will read in-progress/backlog for ever by design. Kept as history.
+# CLOSED 2026-10-23 — rr-2 shipped in #1087 and rr-3 in #1093; the spec folder was deleted once both merged
+# (git history keeps it).
 #
 # SCOPED SPRINT FILE — the recovery-readiness epic only (the product half of GitHub #602).
 # Separate from sprint-status.yaml on purpose: bmad-build/bmad-sprint-planning resolve the canonical file
