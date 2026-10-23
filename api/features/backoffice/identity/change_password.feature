@@ -166,20 +166,20 @@ Feature: Change my own password from a live session
     And the JSON node "violations[0].message" should be equal to "The password must not exceed 128 characters."
     And there should be 0 events stored named "erpify.iam.identity.password-changed"
 
-  # The wall the use case raises from behind the row lock, in the vocabulary the rest of the product uses for a
-  # walled identity — not the lifecycle-transition 409 nobody asked about. The session outlives the suspension
-  # (the firewall refreshes the user, it does not re-run the admission checks), so the request really does
-  # arrive here.
-  Scenario: An identity suspended while its session is alive is walled before any credential work
+  # A suspension written beneath a live session — here by SQL, so no revoke runs at all — signs that session out on
+  # its next request: the firewall compares the identity it reloads with the copy the session carries, lifecycle
+  # status included, so nothing reaches the use case. Its own wall for a suspended identity, raised from behind
+  # the row lock, is pinned by ChangeMyPasswordTest.
+  Scenario: An identity suspended while its session is alive is signed out before any credential work
     Given the stored events are cleared
     And I execute the SQL query "UPDATE identity_user SET status = 'SUSPENDED' WHERE email = 'alice@erpify.test'"
     When I send a POST request to "/me/password" with body:
     """
     { "currentPassword": "alice-password", "newPassword": "brand-new-strong-password" }
     """
-    Then the response status code should be 403
+    Then the response status code should be 401
     And the header "Content-Type" should contain "application/problem+json"
-    And the JSON node "type" should be equal to "account-suspended"
+    And the JSON node "type" should be equal to "unauthenticated"
     And there should be 0 events stored named "erpify.iam.identity.password-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
     And 0 notification emails were sent

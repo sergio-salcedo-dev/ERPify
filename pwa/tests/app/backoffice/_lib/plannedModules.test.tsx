@@ -88,6 +88,12 @@ describe("PlannedModulePage", () => {
     );
   });
 
+  it("states what the module is for when the registry gives it a summary", () => {
+    render(<PlannedModulePage module={PlannedModules.CLIENTS} />);
+
+    expect(screen.getByText(PlannedModules.CLIENTS.summary)).toBeInTheDocument();
+  });
+
   it("links to the roadmap page itself when the surface has no roadmap module", () => {
     render(<PlannedModulePage module={PlannedModules.SETTINGS} />);
 

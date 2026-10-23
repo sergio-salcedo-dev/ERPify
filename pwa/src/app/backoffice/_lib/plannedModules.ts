@@ -19,19 +19,39 @@ export interface PlannedModule {
    * "what it will cover", read from the roadmap rather than restated, so the two cannot drift.
    */
   roadmapCode?: string;
+  /** One sentence on what the module is for, shown under the heading. */
+  summary?: string;
 }
 
 const BASE = Routes.BACKOFFICE;
 
 export const PlannedModules = {
-  CLIENTS: { path: `${BASE}/clients`, heading: "Clients", roadmapCode: "1.2" },
+  CLIENTS: {
+    path: `${BASE}/clients`,
+    heading: "Clients",
+    roadmapCode: "1.2",
+    summary:
+      "Manage customer profiles, contact persons, and client relationships across sales operations.",
+  },
   FOLLOW_UPS: { path: `${BASE}/follow-ups`, heading: "Follow-ups", roadmapCode: "1.2" },
-  QUOTES: { path: `${BASE}/quotes`, heading: "Quotes", roadmapCode: "1.2c" },
+  QUOTES: {
+    path: `${BASE}/quotes`,
+    heading: "Quotes",
+    roadmapCode: "1.2c",
+    summary:
+      "Prepare commercial proposals, price estimates, and sales quotations for prospective clients.",
+  },
   ORDERS: { path: `${BASE}/orders`, heading: "Sales Orders", roadmapCode: "1.2" },
   DELIVERY_NOTES: { path: `${BASE}/delivery-notes`, heading: "Delivery Notes", roadmapCode: "1.5" },
   PRICING: { path: `${BASE}/pricing`, heading: "Price Lists", roadmapCode: "1.6" },
   COMMISSIONS: { path: `${BASE}/commissions`, heading: "Commissions", roadmapCode: "2.7" },
-  PROJECTS: { path: `${BASE}/projects`, heading: "Projects", roadmapCode: "1.3" },
+  PROJECTS: {
+    path: `${BASE}/projects`,
+    heading: "Projects",
+    roadmapCode: "1.3",
+    summary:
+      "Oversee construction works, track project milestones, site assignments, and execution timelines.",
+  },
   TASKS: { path: `${BASE}/tasks`, heading: "Tasks", roadmapCode: "1.3" },
   PAVEMENT_SYSTEMS: {
     path: `${BASE}/pavement-systems`,
@@ -48,7 +68,12 @@ export const PlannedModules = {
     heading: "Technical Studies",
     roadmapCode: "1.4",
   },
-  SUPPLIERS: { path: `${BASE}/suppliers`, heading: "Suppliers", roadmapCode: "1.5" },
+  SUPPLIERS: {
+    path: `${BASE}/suppliers`,
+    heading: "Suppliers",
+    roadmapCode: "1.5",
+    summary: "Manage material vendors, subcontractor accounts, and purchasing contacts.",
+  },
   PURCHASE_ORDERS: {
     path: `${BASE}/purchase-orders`,
     heading: "Purchase Orders",
@@ -63,7 +88,13 @@ export const PlannedModules = {
   },
   STOCK: { path: `${BASE}/catalog/stock`, heading: "Stock Control", roadmapCode: "1.5" },
   DEPARTMENTS: { path: `${BASE}/catalog/departments`, heading: "Departments", roadmapCode: "1.1" },
-  INVOICES: { path: `${BASE}/invoices`, heading: "Invoicing", roadmapCode: "2.3" },
+  INVOICES: {
+    path: `${BASE}/invoices`,
+    heading: "Invoicing",
+    roadmapCode: "2.3",
+    summary:
+      "Issue customer billing documents, manage payment statuses, and track revenue collection.",
+  },
   FINANCE: { path: `${BASE}/finance`, heading: "Finance", roadmapCode: "2.3" },
   TRANSACTIONS: {
     path: `${BASE}/finance/transactions`,

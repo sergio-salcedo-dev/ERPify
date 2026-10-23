@@ -557,7 +557,7 @@ php.lint.log-carriers: ## Buffered-log carrier gate (console argv redaction + ch
 # RETENTION. No compose file declared a `logging:` block, so every container ran the json-file driver's
 # unbounded default and any record that reached it outlived the `audit_log` prune, the
 # `messenger_messages` prune and the GDPR erasure use cases — all of which have owners. Each service now
-# declares a bounded block, and this reads the three root compose files the way Compose merges them: a
+# declares a bounded block, and this reads the root compose files (compose.rehearsal.yaml included) the way Compose merges them: a
 # service an overlay merely extends inherits the base block, a service an overlay INTRODUCES has no base
 # and must spell its own. It refuses an interpolated bound for the same reason the schedule gate refuses an
 # interpolated replica count — a bound an env file can widen is not a bound — and pins the service set so

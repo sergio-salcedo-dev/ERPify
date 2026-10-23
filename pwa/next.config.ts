@@ -9,18 +9,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Allow access to remote image placeholder.
+  // No `remotePatterns`: every allowed remote host makes `/_next/image` an anonymous fetch-and-transcode proxy
+  // for that host, paid in this server's CPU and image cache. Add one only for a host the app renders from.
   images: {
     formats: ["image/avif", "image/webp"], // Optimizes image loading for PWAs
     minimumCacheTTL: 60 * 60 * 24, // 1 day in seconds, to ensure images are cached effectively for offline use
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "picsum.photos",
-        port: "",
-        pathname: "/**", // This allows any path under the hostname
-      },
-    ],
   },
   output: "standalone",
   transpilePackages: ["motion"],
@@ -64,7 +57,7 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      `connect-src 'self' ${apiOrigin} https://picsum.photos`.trim(),
+      `connect-src 'self' ${apiOrigin}`.trim(),
       "media-src 'self' data: blob:",
       "worker-src 'self' blob:",
       "manifest-src 'self'",

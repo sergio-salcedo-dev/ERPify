@@ -36,6 +36,11 @@ export function PlannedModulePage({ module }: Readonly<{ module: PlannedModule }
             testId="planned-module__status"
           />
         </div>
+        {module.summary ? (
+          <p className="planned-module__summary text-foreground max-w-prose text-sm">
+            {module.summary}
+          </p>
+        ) : null}
         <p className="planned-module__lead text-muted-foreground max-w-prose text-sm">
           This module is planned but not built yet, so there is nothing to create or edit here
           today. Nothing is broken and none of your data is affected.

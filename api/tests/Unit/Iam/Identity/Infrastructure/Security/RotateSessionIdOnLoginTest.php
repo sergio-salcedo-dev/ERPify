@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 use Erpify\Iam\Identity\Infrastructure\Security\RotateSessionIdOnLogin;
 use Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener;
 use LogicException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -41,6 +42,33 @@ final class RotateSessionIdOnLoginTest extends TestCase
 
         $this->assertNotSame(self::BROUGHT_ID, $request->getSession()->getId());
         $this->assertSame('kept', $request->getSession()->get('attribute'));
+    }
+
+    /**
+     * The native storage reports no id until the session starts, and nothing guarantees a login started it;
+     * compared unstarted, the brought id would read as already rotated and survive the login.
+     */
+    public function testASessionNotYetStartedIsStartedBeforeItsIdIsJudged(): void
+    {
+        $session = new Session(new class extends MockArraySessionStorage {
+            #[Override]
+            public function getId(): string
+            {
+                return $this->started ? parent::getId() : '';
+            }
+        });
+        $session->setId(self::BROUGHT_ID);
+
+        $request = new Request();
+        $request->setSession($session);
+        $request->cookies->set($session->getName(), self::BROUGHT_ID);
+
+        $this->listener(new SessionAuthenticationStrategy(SessionAuthenticationStrategy::MIGRATE))(
+            $this->loginSuccess($request),
+        );
+
+        $this->assertTrue($session->isStarted());
+        $this->assertNotSame(self::BROUGHT_ID, $session->getId());
     }
 
     public function testAnIdTheFirewallAlreadyRotatedIsNotRotatedTwice(): void
