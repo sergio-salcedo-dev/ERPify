@@ -585,9 +585,12 @@ deptrac:
             - Erpify\Iam\Session\Application\StartSession
             - Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
             - Erpify\Iam\Session\Domain\Exception\SessionAdmissionUnresolvable
+            - Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible
+            - Erpify\Iam\Session\Domain\SubjectAdmission
             - Erpify\Organization\Membership\Application\FindUserOrganizationId
         Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalSessionSubjectLock:
             - Erpify\Iam\Session\Application\SessionSubjectLock
+            - Erpify\Iam\Session\Domain\SubjectAdmission
         Erpify\Iam\Invitation\Application\AcceptInvitation:
             - Erpify\Iam\Identity\Domain\Repository\UserRepository
             - Erpify\Iam\Identity\Domain\HashedPassword

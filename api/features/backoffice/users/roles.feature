@@ -6,8 +6,8 @@ Feature: Assign an identity's roles
   # ADMIN-only (users.changeRoles). The payload is the complete resulting set, so re-sending the set an identity
   # already holds is a legitimate no-op — unlike the status endpoint, where a same-state PATCH is a 409, because
   # a role set is not unidirectional. A change that actually replaces the set records exactly one identity event
-  # and revokes the identity's sessions (an all-revoked event); neither is routed to the async worker, so the
-  # outbox stays empty (no realtime consumer). The guard is only consulted when the change would demote an
+  # and revokes the identity's sessions, which records an all-revoked event only when a live session was there
+  # to flip; neither is routed to the async worker, so the outbox stays empty (no realtime consumer). The guard is only consulted when the change would demote an
   # active administrator.
   Background:
     Given I add "Content-Type" header equal to "application/json"

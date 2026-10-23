@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use Doctrine\DBAL\Exception as DbalException;
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener;
 use Erpify\Iam\Session\Application\StartSession;
@@ -12,6 +14,7 @@ use Erpify\Iam\Session\Domain\Exception\SessionAdmissionUnresolvable;
 use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
 use Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
+use Erpify\Iam\Session\Domain\SubjectAdmission;
 use Erpify\Organization\Membership\Application\FindUserOrganizationId;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
 use Erpify\Organization\Membership\Domain\Exception\MembershipCardinalityViolated;
@@ -126,17 +129,33 @@ final class SessionMintingSuccessListenerTest extends TestCase
     }
 
     /**
-     * An identity suspended or erased while the login was in flight is refused by the mint itself, under the
-     * identity's row lock, and that 401 reaches the client as raised.
+     * An identity walled while the login was in flight is refused by the mint itself, under the identity's row
+     * lock, and answered with the wall the firewall shows when the write lands first; an erased one keeps the
+     * mint's uniform 401, indistinguishable from a wrong password.
+     *
+     * @param class-string<Throwable> $answer
      */
-    public function testAnIdentityNoLongerAdmissibleAtTheMintIsRefusedAsRaised(): void
-    {
-        $this->subjectLock->live = false;
+    #[DataProvider('provideAnIdentityNoLongerAdmissibleAtTheMintMeetsItsWallCases')]
+    public function testAnIdentityNoLongerAdmissibleAtTheMintMeetsItsWall(
+        SubjectAdmission $reason,
+        string $answer,
+    ): void {
+        $this->subjectLock->admission = $reason;
 
         $thrown = $this->failingLogin($this->memberOfAnOrganization());
 
-        $this->assertInstanceOf(SessionSubjectNotAdmissible::class, $thrown);
+        $this->assertInstanceOf($answer, $thrown);
         $this->assertFailedClosed();
+    }
+
+    /**
+     * @return iterable<string, array{SubjectAdmission, class-string<Throwable>}>
+     */
+    public static function provideAnIdentityNoLongerAdmissibleAtTheMintMeetsItsWallCases(): iterable
+    {
+        yield 'suspended → 403 account-suspended' => [SubjectAdmission::Suspended, AccountSuspended::class];
+        yield 'deactivated → 403 account-deactivated' => [SubjectAdmission::Deactivated, AccountDeactivated::class];
+        yield 'gone → the uniform 401' => [SubjectAdmission::Gone, SessionSubjectNotAdmissible::class];
     }
 
     #[DataProvider('provideAnUnexpectedFailurePropagatesUntouchedCases')]
