@@ -14,7 +14,7 @@
 #   RETENTION_DAYS         local retention             (default 14)
 #   BACKUP_MIN_FREE_MB     min free space preflight    (default 500)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
-#   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/project.sh)
+#   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/prod-env.sh)
 #   BACKUP_SYNC_CMD        optional offsite hook, run after a successful backup
 #                          (e.g. 'rclone sync /var/backups/erpify remote:erpify-backups')
 #
@@ -28,8 +28,8 @@ ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 MIN_FREE_MB="${BACKUP_MIN_FREE_MB:-500}"
-# shellcheck source=scripts/deploy/lib/project.sh
-source "$REPO_ROOT/scripts/deploy/lib/project.sh"
+# shellcheck source=scripts/deploy/lib/prod-env.sh
+source "$REPO_ROOT/scripts/deploy/lib/prod-env.sh"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(prod_project_name "$ENV_FILE")}"
 
 source "$REPO_ROOT/scripts/deploy/lib/common.sh"

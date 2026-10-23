@@ -28,7 +28,7 @@ make docker.worker.cache.reset  # Drop the messenger_worker's PRIVATE compiled-c
 make docker.prune        # Prune ALL Docker images/volumes/containers system-wide (destructive).
 make prod.env.check      # Validate .env.prod.local has all required prod secrets (no placeholders).
 make deploy.local        # Stand up the PROD profile at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance).
-make deploy.local.down   # Stop the local prod rehearsal (project erpify-prodlocal, volumes kept) — before `make app.dev`.
+make deploy.local.down   # Stop the stack deploy.local stood up (rehearsal: erpify-prodlocal; ACME host: erpify), volumes kept — before `make app.dev`.
 sudo make deploy.local.trust  # Privileged client-trust steps (hosts + system CA + Chromium NSS); targets $SUDO_USER. Don't `sudo make deploy.local`.
 make backup.prod         # Prod backup: verified pg_dump of the database (BACKUP_DIR, RETENTION_DAYS, BACKUP_SYNC_CMD). Runbook: docs/vps-deployment.md § Backups.
 STAMP=<s> make restore.prod  # Restore (DESTRUCTIVE) for the drill / pre-prod check; verifies the dump. Prod target needs ALLOW_PROD_RESTORE=1 + typed confirm. Runbook: § Backups.

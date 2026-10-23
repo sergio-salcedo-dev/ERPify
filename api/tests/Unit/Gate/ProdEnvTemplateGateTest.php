@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Gate;
 
+use Erpify\Tests\Support\ProdEnvScript;
 use Erpify\Tests\Support\RepositoryRoot;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
@@ -12,9 +13,10 @@ use PHPUnit\Framework\TestCase;
 /**
  * Every key the prod stack requires is declared by `.env.prod.example`, and a copied template fails the check.
  *
- * Compose aborts on a required interpolation left unset — `${VAR:?…}` or `${VAR?…}` in either file the prod
- * stack loads — and `make prod.env.check` derives its required set from those same interpolations. The
- * template is the third copy and the only hand-written one: it is what an operator copies to
+ * Compose aborts on a required interpolation left unset — `${VAR:?…}` or `${VAR?…}` in either file every prod
+ * stack loads. The set is read by executing `scripts/deploy/lib/prod-env.sh required-keys`, the reader
+ * `make prod.env.check` runs, so this gate and the check cannot disagree about it. The template is the only
+ * hand-written copy: it is what an operator copies to
  * `.env.prod.local`, so a key it omits is discovered by the deploy failing, and a key it ships with a
  * plausible-looking value passes the check and runs the stack on that value.
  *
@@ -23,24 +25,16 @@ use PHPUnit\Framework\TestCase;
  * Values are compared the way Compose reads them, with one pair of surrounding quotes removed, and a key the
  * template declares twice is refused because `prod.env.check` reads the first occurrence and Compose the last.
  *
- * A green proves the template is complete and that its secrets are placeholders. It says nothing about an
- * operator's `.env.prod.local`, which is `prod.env.check`'s subject; nothing about a variable compose reads
- * with a fallback (`${VAR:-…}`), which the stack does not require; and nothing about whether make's own
- * derivation in `make/deploy.mk` agrees with this one — it is a second reading of the same files, kept in
- * step by review, because the php container this suite runs in has no host `make`.
+ * A green proves the template is complete and that its secrets are placeholders, and that the keys whose
+ * guard is a security control ({@see self::PINNED_SECRETS}) are still required. It says nothing about an
+ * operator's `.env.prod.local`, which `ProdEnvSupportScriptGateTest` pins the check for, nor about a
+ * variable compose reads with a fallback (`${VAR:-…}`), which the stack does not require.
  *
  * @internal
  */
 #[CoversNothing]
 final class ProdEnvTemplateGateTest extends TestCase
 {
-    /**
-     * The files the prod stack loads, in the order `make/config.mk` passes them.
-     *
-     * @var list<string>
-     */
-    private const array PROD_COMPOSE_FILES = ['compose.yaml', 'compose.prod.yaml'];
-
     private const string TEMPLATE = '.env.prod.example';
 
     private const string PLACEHOLDER_PREFIX = 'CHANGE_ME';
@@ -59,9 +53,33 @@ final class ProdEnvTemplateGateTest extends TestCase
     ];
 
     /**
-     * A floor rather than the exact count, so the derivation below cannot pass by finding nothing.
+     * Secrets whose `:?` guard is the control a security record names, so losing the guard must go red even
+     * while the template still declares the key.
+     *
+     * @var list<string>
      */
-    private const int MINIMUM_REQUIRED_KEYS = 10;
+    private const array PINNED_SECRETS = [
+        'APP_SECRET',
+        'AUDIT_KEK',
+        'CADDY_MERCURE_JWT_SECRET',
+        'MAILER_DSN',
+        'MAILER_SECURITY_FROM',
+        'POSTGRES_PASSWORD',
+        'SENTRY_DSN',
+    ];
+
+    #[Test]
+    public function theSecuritySecretsAreStillRequired(): void
+    {
+        $lost = \array_values(\array_diff(self::PINNED_SECRETS, $this->requiredKeys()));
+
+        $this->assertSame(
+            [],
+            $lost,
+            'These secrets no longer carry a required guard in the prod compose files, so a deploy without '
+            . 'them starts: ' . \implode(', ', $lost),
+        );
+    }
 
     #[Test]
     public function theTemplateDeclaresEveryKeyTheProdStackRequires(): void
@@ -152,40 +170,15 @@ final class ProdEnvTemplateGateTest extends TestCase
     }
 
     /**
-     * Read the way `make/deploy.mk` reads it: whole comment lines are skipped, both required forms count.
-     *
      * @return list<string>
      */
     private function requiredKeys(): array
     {
-        $keys = [];
+        $result = ProdEnvScript::run($this->root(), ['required-keys']);
+        $this->assertSame(0, $result['exit'], 'prod-env.sh required-keys failed: ' . $result['stderr']);
 
-        foreach (self::PROD_COMPOSE_FILES as $file) {
-            foreach (\explode("\n", $this->read($file)) as $line) {
-                if (1 === \preg_match('/^\s*#/', $line)) {
-                    continue;
-                }
-
-                \preg_match_all('/\$\{([A-Z0-9_]+):?\?/', $line, $matches);
-
-                foreach ($matches[1] as $key) {
-                    $keys[$key] = true;
-                }
-            }
-        }
-
-        $keys = \array_keys($keys);
-        \sort($keys);
-        $this->assertGreaterThanOrEqual(
-            self::MINIMUM_REQUIRED_KEYS,
-            \count($keys),
-            \sprintf(
-                'Only %d required keys were read from %s. Either the derivation broke, or the stack legitimately '
-                . 'requires fewer keys and MINIMUM_REQUIRED_KEYS should come down with it.',
-                \count($keys),
-                \implode(' + ', self::PROD_COMPOSE_FILES),
-            ),
-        );
+        $keys = \array_values(\array_filter(\explode("\n", \trim($result['stdout']))));
+        $this->assertNotSame([], $keys, 'prod-env.sh derived no required keys from the prod compose files.');
 
         return $keys;
     }
@@ -225,7 +218,7 @@ final class ProdEnvTemplateGateTest extends TestCase
         return $value;
     }
 
-    private function read(string $relativePath): string
+    private function root(): string
     {
         $root = RepositoryRoot::path();
         $this->assertNotNull(
@@ -234,7 +227,12 @@ final class ProdEnvTemplateGateTest extends TestCase
             . 'in compose.dev.yaml.',
         );
 
-        $contents = \file_get_contents($root . '/' . $relativePath);
+        return $root;
+    }
+
+    private function read(string $relativePath): string
+    {
+        $contents = \file_get_contents($this->root() . '/' . $relativePath);
         $this->assertIsString($contents, \sprintf('Cannot read "%s" at the repository root.', $relativePath));
 
         return $contents;

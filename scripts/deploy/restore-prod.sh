@@ -24,7 +24,7 @@
 #   STAMP                  dump to restore (or pass as $1); omit to list options
 #   BACKUP_DIR             source directory            (default /var/backups/erpify)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
-#   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/project.sh)
+#   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/prod-env.sh)
 #   RESTORE_YES            set to 1 to skip confirmation — NON-production only
 #   ALLOW_PROD_RESTORE     set to 1 to permit a restore when SERVER_NAME is non-local
 #
@@ -36,8 +36,8 @@ cd "$REPO_ROOT"
 
 ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"
-# shellcheck source=scripts/deploy/lib/project.sh
-source "$REPO_ROOT/scripts/deploy/lib/project.sh"
+# shellcheck source=scripts/deploy/lib/prod-env.sh
+source "$REPO_ROOT/scripts/deploy/lib/prod-env.sh"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(prod_project_name "$ENV_FILE")}"
 STAMP="${1:-${STAMP:-}}"
 

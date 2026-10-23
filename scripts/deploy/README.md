@@ -13,7 +13,7 @@ This directory holds the scripts for the prod / staging profile:
 
 `deploy.sh` does **not** bring the stack up — run `make deploy.local` for the
 initial stand-up, then use `deploy.sh` for subsequent redeploys. Every script
-here resolves the compose project from the env file (`lib/project.sh`):
+here resolves the compose project and overlays from the env file (`lib/prod-env.sh`):
 `tls internal` → `erpify-prodlocal`, public ACME → `erpify`; an exported
 `COMPOSE_PROJECT_NAME` wins. The full
 runbook (secret setup, TLS trust, VPS promotion) is in

@@ -22,8 +22,9 @@ cp .env.prod.example .env.prod.local
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)   # hex: it goes raw into DATABASE_URL
 #   CADDY_MERCURE_JWT_SECRET=$(openssl rand -base64 48)
 #   AUDIT_KEK=$(openssl rand -base64 24)        # exactly 32 bytes; -hex 32 / -base64 32 are wrong
-#   MAILER_DSN=smtp://mailpit:1025              # the stack's own mailpit
-#   MAILER_SECURITY_FROM=security@erpify.local  # a no-reply@ address is refused
+#   MAILER_DSN=smtp://mailpit:1025              # compose.rehearsal.yaml's mailpit
+#   MAILER_SECURITY_FROM=security@erpify.dev    # a real TLD: .local/.test/.example/
+#                                               # .invalid/localhost and no-reply@ are refused
 #   SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN         # erpify-api-prod / erpify-pwa-prod client keys
 # Keep SERVER_NAME=erpify.local and CADDY_SERVER_EXTRA_DIRECTIVES=tls internal.
 # Generate the secrets ONCE: Postgres keeps the password it initialised its volume
@@ -69,17 +70,25 @@ The rehearsal runs as its own compose project, **`erpify-prodlocal`**, never as
 dev's `erpify`: sharing it hands prod dev's volumes, and Postgres — which applies
 `POSTGRES_PASSWORD` only when it initialises a volume — then refuses the prod
 password. The project follows the env file's TLS profile
-(`scripts/deploy/lib/project.sh`): `tls internal` is the rehearsal, public ACME a
-real host, which keeps `erpify`. Every `make … ENV=prod` target resolves it on its
-own, so nothing needs the name spelled out; a bare `docker compose` does, with
-`-p erpify-prodlocal`. It is one project per machine, whichever checkout runs it,
-and it binds the same ports 80/443 as dev — `make deploy.local.down` before
-`make app.dev`, and `make docker.down` before `make deploy.local`.
+(`scripts/deploy/lib/prod-env.sh`): `tls internal` is the rehearsal, which also
+loads `compose.rehearsal.yaml` — a mailpit for its security mail, UI on
+`http://127.0.0.1:8025`; anything else keeps the checkout's own project. Every
+`make … ENV=prod` target resolves both on its own, so nothing needs them spelled
+out; a bare `docker compose` does, as below. It is one project per machine,
+whichever checkout runs it, and it binds the same ports 80/443 as dev —
+`make deploy.local.down` before `make app.dev`, `make docker.down` before
+`make deploy.local` (which refuses to start while another project holds them).
+
+Promoting this same box to a public host moves it to another project: clearing
+`CADDY_SERVER_EXTRA_DIRECTIVES` makes it `erpify`, on fresh volumes, so run
+`make deploy.local.down` **before** editing the file, and expect the rehearsal's
+data to stay behind in `erpify-prodlocal_*`.
 
 A rehearsal stood up before the project split lives under `erpify` on dev's
 volumes: stop it with `COMPOSE_PROJECT_NAME=erpify make ENV=prod docker.down`,
-reset dev's database if prod migrations reached it, and re-run the trust step —
-the new project's Caddy volume mints a new internal CA.
+then `make db.reset` (dev's database, re-seeded) if prod migrations reached it,
+and re-run the trust step — the new project's Caddy volume mints a new internal
+CA.
 
 Re-running it is safe (idempotent). Flags: `--dry-run` (print steps, change
 nothing), `--skip-migrations`, `--no-trust` (skip the CA export / NSS / guidance
@@ -105,7 +114,8 @@ With `tls internal`, Caddy mints the site cert from its own CA. Export the root
 and import it so browsers/clients show a valid certificate:
 
 ```bash
-docker compose -p erpify-prodlocal --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
+docker compose -p erpify-prodlocal --env-file .env.prod.local \
+    -f compose.yaml -f compose.prod.yaml -f compose.rehearsal.yaml \
     cp php:/data/caddy/pki/authorities/local/root.crt ./erpify-local-root-ca.crt
 ```
 
@@ -179,7 +189,7 @@ Inside the repo, only `./erpify-local-root-ca.crt` is written (gitignored).
 
 - `https://erpify.local` loads the PWA, with a valid (internally-trusted) lock.
 - `https://erpify.local/api/v1/health` returns `200`.
-- `docker compose -p erpify-prodlocal --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml ps`
+- `make ENV=prod docker.ps` (or `docker compose -p erpify-prodlocal --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml -f compose.rehearsal.yaml ps`)
   shows every service healthy.
 
 ## Inspect the database (psql or a GUI client)
