@@ -9,6 +9,7 @@ use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
+use Erpify\Iam\Session\Domain\SubjectAdmission;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\DomainEvent;
 use Erpify\Shared\Event\Domain\EventBus;
@@ -52,19 +53,19 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * correlated session's, while the erasure takes its own subject's row and then that subject's sessions, and
  * neither waits for the other's identity row.
  *
- * The identity itself is held first, through {@see SessionSubjectLock::holdsAdmissible()}, so a login racing that
+ * The identity itself is held first, through {@see SessionSubjectLock::holdForAdmission()}, so a login racing that
  * identity's erasure or a change of its status lands on one side of it. Committing first, it is purged and
  * rewritten with the rest by the erasure, or revoked by the revoke-everything a suspension runs after its own
  * commit. Arriving second, it finds the identity gone or no longer `ACTIVE` and mints nothing. Without it a login
  * admitted an instant before the erasure would leave a session row and a `SessionStarted` naming a person who no
  * longer exists, and one admitted an instant before a suspension would leave that identity a live session for its
- * whole TTL. A login that arrives second is refused with {@see SessionSubjectNotAdmissible} (401): the caller
- * drops the cookie as it does on any minting failure.
+ * whole TTL.
  *
- * Two residuals remain, both bounded the same way — an unreachable `ACTIVE` row the sweep removes once its expiry
- * is 90 days behind it, ~97 days after the login. A post-commit failure to write the new correlation leaves the
- * NEW row unreachable. A mint the store refuses rolls the revocation back with it, while the minting listener
- * drops the cookie, so the EARLIER row is then left `ACTIVE` and equally unreachable.
+ * **A refused mint still retires the session the bag correlated, and commits that.** The minting caller drops the
+ * native session on any failure, so once this returns the earlier row has no bearer either way — the same reason
+ * the success path revokes it, and the cookie that carried it is the same proof of possession. The refusal is
+ * therefore returned out of the transaction rather than thrown inside it, which would roll the revocation back,
+ * and raised as {@see SessionSubjectNotAdmissible} once it has committed, with no correlation written.
  *
  * The TTL is an absolute cap: there is no idle-timeout enforcement, so this ceiling is the sole bound on a
  * session's lifetime.
@@ -94,16 +95,29 @@ final readonly class StartSession
 
         $previousId = $this->currentSession->get();
 
-        $this->transactionManager->transactional(function () use ($userId, $session, $previousId): void {
-            if (!$this->subjectLock->holdsAdmissible($userId)) {
-                throw SessionSubjectNotAdmissible::atMint();
-            }
+        $admission = $this->transactionManager->transactional(
+            function () use ($userId, $session, $previousId): SubjectAdmission {
+                $admission = $this->subjectLock->holdForAdmission($userId);
+                $revoked = $this->revokePrevious($previousId);
 
-            $revoked = $this->revokePrevious($previousId);
+                if (SubjectAdmission::Admissible !== $admission) {
+                    if ([] !== $revoked) {
+                        $this->eventBus->publish(...$revoked);
+                    }
 
-            $this->sessions->save($session);
-            $this->eventBus->publish(...$revoked, ...$session->pullDomainEvents());
-        });
+                    return $admission;
+                }
+
+                $this->sessions->save($session);
+                $this->eventBus->publish(...$revoked, ...$session->pullDomainEvents());
+
+                return $admission;
+            },
+        );
+
+        if (SubjectAdmission::Admissible !== $admission) {
+            throw SessionSubjectNotAdmissible::atMint($admission);
+        }
 
         $this->currentSession->set($sessionId);
 

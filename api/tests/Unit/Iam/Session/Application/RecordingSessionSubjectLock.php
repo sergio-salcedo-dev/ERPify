@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use Erpify\Iam\Session\Application\SessionSubjectLock;
+use Erpify\Iam\Session\Domain\SubjectAdmission;
 use Override;
 
 /**
@@ -17,17 +18,18 @@ use Override;
 final class RecordingSessionSubjectLock implements SessionSubjectLock
 {
     /**
-     * Per call: the user id, how many sessions had been saved, and whether a transaction was open.
+     * Per call: the user id, how many sessions had been saved, whether a transaction was open, and which of the
+     * two holds was asked for — a login and a revocation take different strengths, so a test can tell them apart.
      *
-     * @var list<array{string, int, bool}>
+     * @var list<array{string, int, bool, string}>
      */
     public array $calls = [];
 
-    /**
-     * What every call answers: false plays an identity erased — or, for {@see holdsAdmissible()}, also one no
-     * longer `ACTIVE` — before the lock was granted.
-     */
+    /** What {@see holdsLive()} answers: false plays an identity erased before the lock was granted. */
     public bool $live = true;
+
+    /** What {@see holdForAdmission()} answers: anything but admissible plays a write that won the race. */
+    public SubjectAdmission $admission = SubjectAdmission::Admissible;
 
     public function __construct(
         private readonly ?InMemorySessionRepository $sessions = null,
@@ -38,14 +40,34 @@ final class RecordingSessionSubjectLock implements SessionSubjectLock
     #[Override]
     public function holdsLive(string $userId): bool
     {
-        $this->calls[] = [$userId, \count($this->sessions->saved ?? []), $this->transactions->open ?? false];
+        $this->record($userId, 'holdsLive');
 
         return $this->live;
     }
 
     #[Override]
-    public function holdsAdmissible(string $userId): bool
+    public function holdForAdmission(string $userId): SubjectAdmission
     {
-        return $this->holdsLive($userId);
+        $this->record($userId, 'holdForAdmission');
+
+        return $this->admission;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function methodsCalled(): array
+    {
+        return \array_column($this->calls, 3);
+    }
+
+    private function record(string $userId, string $method): void
+    {
+        $this->calls[] = [
+            $userId,
+            \count($this->sessions->saved ?? []),
+            $this->transactions->open ?? false,
+            $method,
+        ];
     }
 }

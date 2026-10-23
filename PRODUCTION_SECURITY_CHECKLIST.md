@@ -980,10 +980,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       the subject's `identity_user` row lock (`IdentityRowLock`, `FOR KEY SHARE`), which `FulfilIdentityErasure`
       holds `FOR UPDATE` from its administrator re-check to its commit, ahead of the trail pass; so each row
       either commits first and is redacted, or waits and finds no subject. A login holds the same row
-      (`SessionSubjectLock::holdsAdmissible()`, `FOR SHARE` with an `ACTIVE` predicate) before it writes its
-      session, so a session and its `SessionStarted` are purged and rewritten with the rest or never written —
-      and a status change in flight is waited for, so a suspension's revoke-everything never runs before a
-      session minted alongside it (`LoginRacingASuspensionFunctionalTest`); a bulk revocation (`RevokeAllSessions`, after a role, status or
+      (`SessionSubjectLock::holdForAdmission()`, `FOR SHARE`, reading the status it waited for) before it writes
+      its session, so a session and its `SessionStarted` are purged and rewritten with the rest or never
+      written — and a status write in flight is waited for, so a suspension's revoke-everything never runs before
+      a session minted alongside it (`LoginRacingASuspensionFunctionalTest`, which observes the wait in
+      `pg_stat_activity` rather than timing it); a bulk revocation (`RevokeAllSessions`, after a role, status or
       password change) holds it too, so its `AllSessionsRevoked` is rewritten with the rest or never written.
       Pinned against a second Postgres connection holding and deleting
       the row in `LateAuditWriterErasureSerialisationFunctionalTest` and `LoginRacingAnErasureFunctionalTest`.
@@ -2174,6 +2175,24 @@ mitigated state. Accepting one means recording who accepted it and against which
       the owner on #1036); a batch handler, and a leak after the worker's running tick, are not contained (none
       exists today); only the default connection is covered.
 
+- [ ] **A minted session can still end unreachable, in two narrow ways, and the mint's admission rule lives
+      twice.** `StartSession` retires the session the device's cookie carried in the same transaction that
+      mints the new one — and, when the identity no longer admits a login once its row is held, it still
+      commits that retirement before refusing, since the minting listener drops the native session either way
+      and the cookie is the same proof of possession the success path relies on. What stays open is bounded by
+      `PruneRetiredSessions` (~97 days after the login, see §6): **(a)** a failure writing the new correlation
+      after the commit leaves the NEW row `ACTIVE` with no cookie naming it; **(b)** a store failure that rolls
+      the mint back rolls the retirement back with it, while the listener still drops the cookie, so the
+      EARLIER row is left `ACTIVE` and equally unreachable. Neither grants anything — no bearer holds either
+      row — but each is listed in _Active sessions_ as a device until the sweep removes it. **The login waits
+      behind any open write of the identity's row** (`FOR SHARE` in `DbalSessionSubjectLock`): the status,
+      role, password, reset, recovery and unlock writers and the failed-login counter already take the row
+      `FOR UPDATE`, which `FOR KEY SHARE` waited for too; the invitation acceptance, the lockout-notice stamp
+      and the password-rehash swap take only a plain `UPDATE`, so a login now also waits for those
+      single-statement writes. **The admission rule is coupled** to `User::ensureActive()`, because the session
+      context may not read the aggregate: `DbalSessionSubjectLockAdmissionTest` holds the two in agreement over
+      every `IdentityStatus` case and reds on a new one, but a rule changed consistently in both places passes,
+      and review is the only control on whether that change is right.
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
