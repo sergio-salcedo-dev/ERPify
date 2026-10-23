@@ -9,11 +9,15 @@
 ## —— Deploy ———————————————————————————————————————————————————————————————
 
 # Keys that MUST be set (non-empty, no CHANGE_ME placeholder) before the prod
-# stack can start: every `${VAR:?…}` compose.prod.yaml interpolates, read from
-# the file rather than listed here, so a key the stack requires cannot be missed
-# by the check. Comment lines are skipped (the header quotes `${VAR:?msg}`).
+# stack can start: every required interpolation (`${VAR:?…}` or `${VAR?…}`) in
+# the two files the prod stack loads, read from them rather than listed here.
+# Whole comment lines are skipped (compose.prod.yaml's header quotes the form).
 # ProdEnvTemplateGateTest holds .env.prod.example to the same set.
-PROD_REQUIRED_KEYS := $(sort $(shell sed -e '/^[[:space:]]*\#/d' -e 's/[[:space:]]\#.*//' $(PROJECT_ROOT)/compose.prod.yaml | grep -oE '\$$\{[A-Z0-9_]+:\?' | tr -d '$${:?'))
+PROD_REQUIRED_KEYS := $(sort $(shell cat $(PROJECT_ROOT)/compose.yaml $(PROJECT_ROOT)/compose.prod.yaml 2>/dev/null | sed -e '/^[[:space:]]*\#/d' | grep -oE '\$$\{[A-Z0-9_]+:?\?' | tr -d '$${:?'))
+
+# A value as Compose reads it: first occurrence, CR and outer whitespace removed,
+# one pair of surrounding quotes stripped. $$1 = key, $$2 = file.
+PROD_ENV_VALUE = grep -E "^$$1=" "$$2" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//' -e 's/^"\(.*\)"$$/\1/' -e "s/^'\(.*\)'$$/\1/"
 
 prod.env.check: ## Validate .env.prod.local holds every required prod secret (fails on missing file / unset / placeholder)
 	@file="$(PROJECT_ROOT)/$(PROD_ENV_FILE)"; \
@@ -29,8 +33,8 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 	fi; \
 	missing=""; \
 	for key in $(PROD_REQUIRED_KEYS); do \
-		val=$$(grep -E "^$$key=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
-		if [ -z "$$val" ] || printf '%s' "$$val" | grep -qE '^CHANGE_ME'; then \
+		val=$$(set -- "$$key" "$$file"; $(PROD_ENV_VALUE)); \
+		if [ -z "$$val" ] || printf '%s' "$$val" | grep -qE '^CHANGE_ME|examplePublicKey@'; then \
 			missing="$$missing $$key"; \
 		fi; \
 	done; \
@@ -38,6 +42,12 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 		echo "✗ $(PROD_ENV_FILE) has unset or placeholder required keys:"; \
 		for k in $$missing; do echo "    - $$k"; done; \
 		echo "  Edit $(PROD_ENV_FILE) and replace every CHANGE_ME value (see .env.prod.example)."; \
+		exit 1; \
+	fi; \
+	kek=$$(set -- AUDIT_KEK "$$file"; $(PROD_ENV_VALUE)); \
+	if [ "$$(printf '%s' "$$kek" | wc -c)" -ne 32 ]; then \
+		echo "✗ AUDIT_KEK must be exactly 32 bytes — got $$(printf '%s' "$$kek" | wc -c)."; \
+		echo "  Generate with: openssl rand -base64 24   (-hex 32 and -base64 32 are the wrong length)"; \
 		exit 1; \
 	fi; \
 	pw=$$(grep -E "^POSTGRES_PASSWORD=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
@@ -89,18 +99,13 @@ prod.env.check: ## Validate .env.prod.local holds every required prod secret (fa
 	fi; \
 	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
 
-# The local rehearsal runs as its own compose project. In the primary checkout dev
-# and ENV=prod both resolve to `erpify`, so sharing it hands the rehearsal dev's
-# volumes: a Postgres initialised with dev's password (the prod one is refused)
-# and dev's data underneath prod's migrations. Not applied to ENV=prod at large,
-# because a VPS deploy keeps the `erpify` project its volumes already belong to.
-LOCAL_PROD_PROJECT ?= erpify-prodlocal
-
+# The project (erpify-prodlocal for the tls-internal rehearsal, erpify on ACME)
+# is resolved from the env file by make/config.mk and scripts/deploy/lib/project.sh.
 deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
-	@COMPOSE_PROJECT_NAME=$(LOCAL_PROD_PROJECT) bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
+	@bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
 
-deploy.local.down: ## Stop the local prod rehearsal (its volumes are kept); required before `make app.dev`, which needs the same ports
-	@$(MAKE) --no-print-directory COMPOSE_PROJECT_NAME=$(LOCAL_PROD_PROJECT) ENV=prod docker.down
+deploy.local.down: ## Stop the prod stack deploy.local stood up (volumes kept); on the rehearsal, required before `make app.dev`, which needs the same ports
+	@$(MAKE) --no-print-directory ENV=prod docker.down
 
 deploy.local.trust: ## Run the PRIVILEGED client-trust steps (hosts + system CA + Chromium NSS). Run with sudo: `sudo make deploy.local.trust`
 	@bash $(PROJECT_ROOT)/scripts/deploy/trust-local.sh

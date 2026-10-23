@@ -27,9 +27,11 @@ ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 HEALTH_PATH="${HEALTH_PATH:-/api/v1/health}"
 CA_PATH_IN_CONTAINER="/data/caddy/pki/authorities/local/root.crt"
 CA_OUT="erpify-local-root-ca.crt"
-# Its own project, never dev's: see LOCAL_PROD_PROJECT in make/deploy.mk. Exported so
-# the nested `make` calls and `docker compose` below act on the same one.
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify-prodlocal}"
+# The project follows the env file's TLS profile (lib/project.sh); exported so the
+# nested `make` calls and `docker compose` below act on the same one.
+# shellcheck source=scripts/deploy/lib/project.sh
+source "$REPO_ROOT/scripts/deploy/lib/project.sh"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(prod_project_name "$ENV_FILE")}"
 
 DRY_RUN=0
 SKIP_MIGRATIONS=0
@@ -75,6 +77,17 @@ docker compose version >/dev/null 2>&1 || { log_error "'docker compose' v2 not a
 
 # Secret guard — fails fast with copy-from-example instructions.
 make PROD_ENV_FILE="$ENV_FILE" prod.env.check
+
+# Another project holding 80/443 (usually dev's `erpify`) makes `docker.up` die
+# on a bare port-bind error; name the stack and the fix instead.
+for port in 80 443; do
+    holder="$(docker ps --filter "publish=${port}" --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null \
+        | grep -vxF "$COMPOSE_PROJECT_NAME" | head -n1 || true)"
+    if [[ -n "$holder" ]]; then
+        log_error "Port ${port} is held by compose project '${holder}'. Stop it first (dev: 'make docker.down')."
+        exit 1
+    fi
+done
 
 # Resolve the served host from the env file (default erpify.local).
 SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"

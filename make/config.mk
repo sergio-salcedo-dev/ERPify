@@ -34,6 +34,18 @@ DB_SERVICE   ?= database
 # Everything below is `?=`/overridable: exporting COMPOSE_PROJECT_NAME or any
 # *_PORT in your environment or on the command line wins.
 
+# A prod/staging stack's project follows its env file's TLS profile: internal CA
+# (the erpify.local rehearsal) → `erpify-prodlocal`, so it never inherits dev's
+# `erpify` volumes; public ACME (a real host) → `erpify`, where its volumes
+# already live. Resolved once (`:=`), and only when nobody set the name.
+ifneq ($(filter $(ENV),prod staging),)
+  ifeq ($(origin COMPOSE_PROJECT_NAME),undefined)
+    _PROD_ENV_PATH := $(or $(PROD_ENV_FILE),.env.prod.local)
+    _PROD_ENV_PATH := $(if $(filter /%,$(_PROD_ENV_PATH)),$(_PROD_ENV_PATH),$(PROJECT_ROOT)/$(_PROD_ENV_PATH))
+    COMPOSE_PROJECT_NAME := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/project.sh" "$(_PROD_ENV_PATH)")
+  endif
+endif
+
 # True only inside a linked worktree (git-common-dir's parent != this checkout).
 # Resolves a possibly-relative --git-common-dir against PROJECT_ROOT.
 IS_LINKED_WORKTREE := $(shell cd "$(PROJECT_ROOT)" 2>/dev/null && \

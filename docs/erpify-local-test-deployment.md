@@ -21,7 +21,13 @@ cp .env.prod.example .env.prod.local
 #   APP_SECRET=$(openssl rand -hex 16)
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)   # hex: it goes raw into DATABASE_URL
 #   CADDY_MERCURE_JWT_SECRET=$(openssl rand -base64 48)
+#   AUDIT_KEK=$(openssl rand -base64 24)        # exactly 32 bytes; -hex 32 / -base64 32 are wrong
+#   MAILER_DSN=smtp://mailpit:1025              # the stack's own mailpit
+#   MAILER_SECURITY_FROM=security@erpify.local  # a no-reply@ address is refused
+#   SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN         # erpify-api-prod / erpify-pwa-prod client keys
 # Keep SERVER_NAME=erpify.local and CADDY_SERVER_EXTRA_DIRECTIVES=tls internal.
+# Generate the secrets ONCE: Postgres keeps the password it initialised its volume
+# with, and data sealed under one AUDIT_KEK is unreadable under another.
 make prod.env.check          # validates the file before you go further
 ```
 
@@ -62,11 +68,18 @@ per-client reference.
 The rehearsal runs as its own compose project, **`erpify-prodlocal`**, never as
 dev's `erpify`: sharing it hands prod dev's volumes, and Postgres — which applies
 `POSTGRES_PASSWORD` only when it initialises a volume — then refuses the prod
-password. So any command aimed at the rehearsal names that project
-(`COMPOSE_PROJECT_NAME=erpify-prodlocal make ENV=prod …`, or
-`docker compose -p erpify-prodlocal …`); a bare `make … ENV=prod` acts on `erpify`.
-It binds the same ports 80/443 as dev, so `make deploy.local.down` before
-`make app.dev`.
+password. The project follows the env file's TLS profile
+(`scripts/deploy/lib/project.sh`): `tls internal` is the rehearsal, public ACME a
+real host, which keeps `erpify`. Every `make … ENV=prod` target resolves it on its
+own, so nothing needs the name spelled out; a bare `docker compose` does, with
+`-p erpify-prodlocal`. It is one project per machine, whichever checkout runs it,
+and it binds the same ports 80/443 as dev — `make deploy.local.down` before
+`make app.dev`, and `make docker.down` before `make deploy.local`.
+
+A rehearsal stood up before the project split lives under `erpify` on dev's
+volumes: stop it with `COMPOSE_PROJECT_NAME=erpify make ENV=prod docker.down`,
+reset dev's database if prod migrations reached it, and re-run the trust step —
+the new project's Caddy volume mints a new internal CA.
 
 Re-running it is safe (idempotent). Flags: `--dry-run` (print steps, change
 nothing), `--skip-migrations`, `--no-trust` (skip the CA export / NSS / guidance
@@ -178,15 +191,15 @@ internet) by design. Two ways in, depending on what you need:
 **CLI — works everywhere, no port, nothing to open:**
 
 ```bash
-COMPOSE_PROJECT_NAME=erpify-prodlocal make ENV=prod db.shell   # interactive psql via `docker exec` into the db container
+make ENV=prod db.shell        # interactive psql via `docker exec` into the db container
 ```
 
 **GUI client (PhpStorm / DataGrip / DBeaver) — local pre-prod box:**
 
 ```bash
-COMPOSE_PROJECT_NAME=erpify-prodlocal make ENV=prod db.tunnel  # starts a throwaway socat sidecar, binds 127.0.0.1:15432
+make ENV=prod db.tunnel       # starts a throwaway socat sidecar, binds 127.0.0.1:15432
 # … connect your client, then …
-COMPOSE_PROJECT_NAME=erpify-prodlocal make ENV=prod db.tunnel.stop  # tears the sidecar down
+make ENV=prod db.tunnel.stop  # tears the sidecar down
 ```
 
 `db.tunnel` bridges the host-facing `frontend` network (to publish the port)
@@ -197,7 +210,7 @@ laptop, and it touches nothing in the running stack. Point the client at:
 | Field    | Value                                            |
 |----------|--------------------------------------------------|
 | Host     | `127.0.0.1` (or `erpify.local`)                  |
-| Port     | `15432` (override: `make db.tunnel DB_TUNNEL_PORT=5432`) |
+| Port     | `15432` (override: `make ENV=prod db.tunnel DB_TUNNEL_PORT=5432`) |
 | Database | `POSTGRES_DB` from `.env.prod.local`             |
 | User     | `POSTGRES_USER` from `.env.prod.local`           |
 | Password | `POSTGRES_PASSWORD` from `.env.prod.local`       |
@@ -228,5 +241,5 @@ ACME, deploy, verify) and remote DB access live in
 | Chrome/Chromium still says `ERR_CERT_AUTHORITY_INVALID` after `update-ca-certificates` | On Linux they use the NSS store, not the system bundle. Add the CA to `~/.pki/nssdb` with `certutil` (step 4, "Chrome / Chromium / Edge"). |
 | `erpify.local` won't resolve                     | Add the `/etc/hosts` line (step 2).                                                                                                                                |
 | php boot-loops, logs `Malformed parameter "url"` | `POSTGRES_PASSWORD` has a URL-unsafe char (`/`,`+`,`=`). Regenerate with `openssl rand -hex 24`, then `make deploy.local.down` and `docker volume rm erpify-prodlocal_database_data` so it re-inits with the new password (that volume is the rehearsal's alone — never remove `erpify_database_data`, which is dev's). |
-| Health stays non-200                             | `COMPOSE_PROJECT_NAME=erpify-prodlocal make ENV=prod docker.logs` — check `php` / `messenger_worker`.                                                                                                    |
+| Health stays non-200                             | `make ENV=prod docker.logs` — check `php` / `messenger_worker`.                                                                                                    |
 | A service won't boot after hardening             | It may need one more capability; add it deliberately and note why in `PRODUCTION_SECURITY_CHECKLIST.md`.                                                           |
