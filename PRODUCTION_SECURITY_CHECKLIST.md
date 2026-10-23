@@ -1201,22 +1201,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       requirement to `symfony/mercure ^0.6.1|^0.7`, so staying on it would have coupled the tree to
       the abandoned 0.4/0.7 pair and put a future advisory in Mercure's JWT-minting path out of
       reach. The bundle keeps `protocol_version: 0.x` by default, so the hub contract is unchanged.
+      Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
       **Superseded 2026-10-20:** mercure-bundle 0.6 defaults to protocol 1.0, which the embedded 0.x
       hub refuses, so `config/packages/mercure.yaml` pins `protocol_version: '0.x'` explicitly and
       `MercureHubProtocolFunctionalTest` asserts it on the container's own hub.
-      **Superseded 2026-10-22:** the FrankenPHP 1.13 image (taken for PHP 8.5.12, CVE-2026-109618 /
-      CVE-2026-109619) embeds dunglas/mercure 1.x, which refuses to boot with top-level
-      `publisher_jwt`/`subscriber_jwt` unless compatibility mode is named. `frankenphp/Caddyfile`
-      sets `protocol_version_compatibility 8`, which validates a 0.x token as the 0.x hub did (no `aud`,
-      no `exp` required) — no stricter and no looser than before. Measured against the v1.13.2 binary:
-      a `mercure`-claim publish is accepted, a wrong key and a missing token are 401, a private update
-      reaches the `mercureAuthorization` cookie on `?topic=` and not an anonymous subscriber. Residual:
-      the hub also accepts a 1.0 token whose `aud` names it; moving to an `issuer` block and protocol 1.0
-      is the way out of compatibility mode, and the two move together. The hub is also named
-      (`name erpify`): `SERVER_NAME` lists the origin and `php:80`, so the block yields two servers, and
-      1.x refuses two unnamed hubs; the shared name is what pools them onto one transport, so an update
-      published on `php:80` still reaches a subscriber on the origin (measured across two servers).
-      Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
+      **Superseded 2026-10-22:** the embedded hub is now dunglas/mercure 1.x in compatibility mode; what
+      that leaves open is its own item, "The embedded Mercure 1.x hub runs in compatibility mode".
       **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
       cache `v0.4.2` exits 1 with `Deprecations: 1` naming
       `HttpKernel\DependencyInjection\Extension`, and the tagged line exits 0 over 2698 tests.
@@ -1686,6 +1676,26 @@ mitigated state. Accepting one means recording who accepted it and against which
       leaks nothing — this is an injection channel into the same unrotated, un-TTL'd, unerasable sink, and it
       is pre-existing rather than introduced. Closing it needs a `log` override for the
       `http.handlers.mercure` logger, or dropping `subscriptions`.
+- [ ] **The embedded Mercure 1.x hub runs in compatibility mode, which accepts more than the
+      application speaks.** The FrankenPHP 1.13 image (taken for PHP 8.5.12, CVE-2026-109618 /
+      CVE-2026-109619, #1072) embeds dunglas/mercure v1.1.4, which refuses top-level
+      `publisher_jwt`/`subscriber_jwt` unless compatibility mode is named, and refuses two unnamed hubs —
+      `SERVER_NAME` lists the origin and `php:80`, so the site block yields two servers. `frankenphp/Caddyfile`
+      therefore sets `protocol_version_compatibility 8` and `name erpify`; the shared name is also what pools
+      both servers onto one bolt transport. Measured against the v1.13.2 binary and the image's own binary
+      (same mercure version and build tags): a `mercure`-claim token is validated with no `aud` and no
+      `exp` required, as the 0.x hub did; a wrong key, a missing token, an expired `exp` and a foreign
+      `Origin` on a cookie publish are refused; a private update reaches the `mercureAuthorization` cookie
+      on `?topic=` and never an anonymous subscriber, across both servers. **What it accepts beyond that:**
+      a well-formed protocol-1.0 token (`typ at+jwt`, `authorization_details`) whose `aud` names the hub,
+      for publish and for subscribe, through the `__Secure-mercure_access_token` cookie it reads first.
+      **What it serves beyond that:** an unauthenticated
+      `/.well-known/oauth-protected-resource/.well-known/mercure` on every server, prod included, stating
+      the resource URL, the 1.0 cookie name and that the subscriptions API is on — informational, no
+      `Cache-Control`. Closing it means moving the keys into an `issuer` block, the bundle to protocol 1.0
+      and the PWA subscriber in one change; any half alone may break publish or subscribe **partially and
+      silently**, depending on the `aud` the bundle mints against the host the hub derives. Open; not
+      accepted.
 - [x] **A person's address is declared unmarked in 27 parameter declarations outside the pinned mail
       surface — closed by #811, extended by its follow-up (both 2026-08-20).** `#[SensitiveParameter]`
       covered only declarations named `recipientEmail` (`SensitiveRecipientAddressGateTest` pins that set);
