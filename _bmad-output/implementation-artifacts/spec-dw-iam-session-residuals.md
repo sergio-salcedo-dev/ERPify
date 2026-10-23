@@ -73,7 +73,7 @@ context:
 - [x] Trait de rotación aplicado en los cuatro flujos -- DW-38
 - [x] Asserts de no mutación en el escenario CSRF -- DW-37
 - [x] Medir la carrera login‖suspensión e informar
-- [ ] Arreglar la carrera: `holdsAdmissible()` (`FOR SHARE` + `ACTIVE`) en `SessionSubjectLock`/`DbalSessionSubjectLock`, usado por `StartSession`; excepción 401 del contexto Session; test funcional de concurrencia falsificado; docs del contrato de errores y del orden de bloqueos
+- [x] Arreglar la carrera: `holdForAdmission()` (`FOR SHARE`, lee el `status` bajo el bloqueo) en `SessionSubjectLock`/`DbalSessionSubjectLock`, usado por `StartSession`; el perdedor recibe el mismo 403 que la puerta (401 uniforme si la identidad desapareció); test funcional de concurrencia falsificado; docs del contrato de errores y del orden de bloqueos
 - [x] Docs, cerrar las cinco entradas DW y `sweep --archive`
 
 **Acceptance Criteria:**
@@ -85,7 +85,7 @@ context:
 - **DW-20 premise corrected.** The identities the features suspend/re-role/reset already hold a fixture `iam_session` (`tests/DataFixtures/Fixtures/Session.yaml`), so no feature needed seeding; the 0-sessions case is `roles.feature` "A suspended member can still be re-roled" (sam has no session). The `session.feature` query canary (10) seeds a second device, since with one session the publish path drops out (measured 4).
 - **DW-23 widened by one line.** Any raw DBAL failure during the minting maps to 503, not only the membership read: the subject lock (`DbalSessionSubjectLock`) runs raw DBAL inside `StartSession`, and narrowing would have turned its outage into a 500.
 - **DW-38 found a real gap, wider than the four flows.** `SessionStrategyListener` skips `migrate(true)` whenever the previous token names the same user with the same token class — change-password, and also a plain `POST /login` by a device already signed in as that user. First patched in `ReauthenticateDevice`; the review (BH4) showed `POST /login` stayed open, so the rotation moved to the firewall listener `RotateSessionIdOnLogin` (priority -96: after Symfony's listener, before minting at -128), which applies the configured strategy only when the id still equals the request cookie and throws on a login with no session. `ReauthenticateDevice` is back at baseline. `AssertsSessionIdRotation` (planted id seeded in the store; issued id must admit, old id must 401) covers five flows: accept, reset, redeem, change-password and `POST /login`.
-- **Login‖suspension race: measured real, fixed (user decision).** Measured with two psql sessions: under `FOR KEY SHARE` a suspension committed during a mint left `SUSPENDED` + an `ACTIVE` session living to its TTL. Minting now holds `identity_user` `FOR SHARE … AND status = 'ACTIVE'` (`SessionSubjectLock::holdsAdmissible()`); a suspension waits for the mint and its revoke-all revokes the minted row, while a mint after a committed suspension finds no admissible row and answers 401 (`SessionSubjectNotAdmissible`). `RevokeAllSessions` keeps `holdsLive()`. Lock order stays identity → session rows, the order erasure and password change already take. Pinned by `LoginRacingASuspensionFunctionalTest` (red under `FOR KEY SHARE`, without the status predicate, and with `holdsLive`).
+- **Login‖suspension race: measured real, fixed (user decision).** Measured with two psql sessions: under `FOR KEY SHARE` a suspension committed during a mint left `SUSPENDED` + an `ACTIVE` session living to its TTL. Minting reads `status` under `FOR SHARE` (`SessionSubjectLock::holdForAdmission()` → `SubjectAdmission`); a suspension waits for the mint and its revoke-all revokes the minted row, while a mint after a committed suspension is refused with the door's own 403 (`account-suspended`/`account-deactivated`), or the uniform 401 when the identity is gone. A refused mint still revokes the browser's previous session and commits before throwing. `RevokeAllSessions` keeps `holdsLive()`. Lock order stays identity → session rows, the order erasure and password change already take. Pinned by `LoginRacingASuspensionFunctionalTest` (deterministic wait via `pg_blocking_pids`; production `FOR UPDATE` writer and plain `UPDATE` writer; reverse order) and `DbalSessionSubjectLockAdmissionTest` (adapter ⇔ `ensureActive()` over every status).
 - **PWA (user decision a).** `ApiLoginRepository` maps every 5xx to `REQUEST_FAILED`; accept/reset/redeem already treated 5xx as a retryable generic error.
 
 ## Spec Change Log
@@ -114,9 +114,30 @@ Capas: Blind Hunter (BH), Edge Case Hunter (EC) y Verification Gap (VG), las tre
 | BH11+EC6 | Docblocks desfasados (`MembershipRepository`, `GrantMembership` sin `@throws`, `RedeemRecoverySecretController:37`) | low | patch |
 | BH12 | `membership-not-found` retirado sin nota | low | patch: una línea en `docs/api-error-contract.md`; grep sin consumidores en `pwa/src` |
 
+Segunda pasada: las tres capas (BH, EC, VG) como subagentes en paralelo de esta sesión, 2026-10-22, sobre el diff `b6d9a670..worktree` con la PR #1082 ya abierta (sin hilos). Dos consultas externas (ChatGPT) sobre la fuerza del bloqueo y el plan; decisión final del usuario el 2026-10-23.
+
+| # | Hallazgo | Veredicto | Evidencia / ruta |
+|---|---|---|---|
+| EC5 | Contra los escritores reales cierra la carrera el predicado, no `FOR SHARE`; propone volver a `FOR KEY SHARE` | rechazado (decisión del usuario) | Auditoría: los escritores de `identity_user` toman `FOR UPDATE` (también `LoginAttemptRegistrar.php:139`) salvo tres `UPDATE` planos de una sentencia — `AcceptInvitation`, el sello de `NotifyLockedIdentities` y el rehash `replacePasswordHashIfUnchanged()` —, a los que solo `FOR SHARE` espera. Ninguno toca `status` salvo `AcceptInvitation` (INVITED→ACTIVE); `FOR SHARE` serializa además un escritor de estado futuro con `UPDATE` plano. El test cubre las dos formas de escritura |
+| BH8 | `FOR SHARE` deja que cualquiera retrase logins con contraseñas erróneas | rechazado | El contador ya toma `FOR UPDATE`, que choca igual con `FOR KEY SHARE`; el coste extra se limita a los tres `UPDATE` planos de una sentencia y queda en §7 |
+| BH1+BH2+EC3 | El 401 nuevo se distingue del uniforme y la PWA dice «credenciales inválidas» a una cuenta suspendida | patch | El adaptador lee `status` bajo el bloqueo → `SubjectAdmission`; el listener responde 403 `account-suspended`/`account-deactivated` (contrato de `checkPostAuth`), 401 «Invalid credentials.» si la identidad desapareció. Sin relectura |
+| BH9 | Política de admisión duplicada (SQL y `ensureActive()`) | patch | Test con proveedor sobre `IdentityStatus::cases()` que exige acuerdo |
+| EC1+EC6 | Un acuñado rechazado deja ACTIVE la sesión previa del navegador | patch | `StartSession` revoca la previa también al rechazar, en la misma transacción, que confirma antes de lanzar |
+| BH6+EC2 | `RotateSessionIdOnLogin` toma una sesión sin arrancar (`getId() === ''`) por rotada | patch | Arrancarla antes de comparar, con test |
+| BH3 | El doble de bloqueo no distingue qué método usa cada caso de uso | patch | Registra el método; tests de `StartSession` y `RevokeAllSessions` |
+| BH4+EC4 | Test de la carrera: una sola ordenación y aserción de tiempo frágil | patch | Espera determinista vía `pg_stat_activity`; dos formas de escritor; orden inverso; `DEACTIVATED`; estado final de las tablas |
+| BH5 | La fixture usa un `UPDATE` crudo con literal y un `@var` incompleto | patch | Valor del enum y forma de producción como variante |
+| BH11 | `type` literal sin constante | patch | `SessionSubjectNotAdmissible::TYPE` |
+| BH10+VG | Docs desfasados (`status.feature:8`, `FetchHttpClient.ts:91-96`, spec) | patch | |
+| BH7 | `ReauthenticateDeviceBestEffort` loguea `critical` y vaciaría el buffer | rechazado | Usa `monolog.logger.observability`, canal excluido del `fingers_crossed`; comportamiento previo |
+
 ## Verification
 
 **Commands:**
 - `make php.unit c='--filter "Session|Membership|Minting|Invitation|Reset|Recovery|ChangePassword"'` -- verde
 - `make php.behat c='features/backoffice/users features/backoffice/identity'` -- verde
 - `make php.quality` -- exit 0
+- `make pwa.quality` -- exit 0
+- `make php.unit` (completo) -- 4344 tests, 3 skipped
+- `make php.behat` (completo) -- 504/504
+- `make pwa.test.unit` -- 2083/2083
