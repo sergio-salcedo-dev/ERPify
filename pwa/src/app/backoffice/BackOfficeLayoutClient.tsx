@@ -581,6 +581,7 @@ export default function BackOfficeLayoutClient({
                                 type="button"
                                 onClick={() => handleNavigation(item.path)}
                                 title={item.name}
+                                aria-current={pathname === item.path ? "page" : undefined}
                                 data-testid={item.testId ? `${item.testId}--mobile` : undefined}
                                 className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
                                   pathname === item.path
@@ -600,6 +601,7 @@ export default function BackOfficeLayoutClient({
                                       key={subItem.testId ?? subItem.path}
                                       onClick={() => handleNavigation(subItem.path, subItem.action)}
                                       title={entryLabel(subItem)}
+                                      aria-current={pathname === subItem.path ? "page" : undefined}
                                       aria-disabled={isEntryLeaving(subItem) || undefined}
                                       data-testid={
                                         subItem.testId ? `${subItem.testId}--mobile` : undefined
@@ -632,6 +634,7 @@ export default function BackOfficeLayoutClient({
                             type="button"
                             onClick={() => handleNavigation(accountMenuItem.path)}
                             title={accountMenuItem.name}
+                            aria-current={pathname === accountMenuItem.path ? "page" : undefined}
                             className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
                               pathname === accountMenuItem.path
                                 ? "bg-primary/15 text-primary"
@@ -652,6 +655,7 @@ export default function BackOfficeLayoutClient({
                                 key={subItem.testId ?? subItem.path}
                                 onClick={() => handleNavigation(subItem.path, subItem.action)}
                                 title={entryLabel(subItem)}
+                                aria-current={pathname === subItem.path ? "page" : undefined}
                                 aria-disabled={isEntryLeaving(subItem) || undefined}
                                 data-testid={
                                   subItem.testId ? `${subItem.testId}--mobile` : undefined
