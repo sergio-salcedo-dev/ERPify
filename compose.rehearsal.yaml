@@ -1,7 +1,8 @@
 # Local prod rehearsal overlay (erpify.local). Loaded on top of compose.yaml +
 # compose.prod.yaml only when the env file's site TLS is Caddy's internal CA —
-# scripts/deploy/lib/prod-env.sh decides, for make and every deploy script — so
-# a public host never runs it.
+# scripts/deploy/lib/prod-env.sh decides, for make and every deploy script. A
+# public host's env file sets the directive EMPTY, so it never loads this file;
+# one that deletes the line instead reads as `tls internal` and does.
 #
 # The rehearsal's security mail (invitations, password resets) needs an SMTP
 # server the php services can reach. The prod overlay has none, so this one adds

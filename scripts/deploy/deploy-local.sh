@@ -79,24 +79,21 @@ docker compose version >/dev/null 2>&1 || { log_error "'docker compose' v2 not a
 make PROD_ENV_FILE="$ENV_FILE" prod.env.check
 
 # A container of another project holding a host port this stack publishes
-# (usually dev's `erpify` on 80/443) makes `docker.up` die on a bare port-bind
-# error; name the holder and the fix instead. The ports are the ones compose.yaml
-# interpolates, from the shell or the env file, defaulting as it does.
-for spec in "HTTP_PORT:80" "HTTPS_PORT:443" "HTTP3_PORT:443"; do
-    var="${spec%%:*}"
-    port="${!var:-$(prod_env_value "$var" "$ENV_FILE" 2>/dev/null || true)}"
-    port="${port:-${spec#*:}}"
-    holder="$(docker ps --filter "publish=${port}" \
+# (usually dev's `erpify` on 80/443/8025) makes `docker.up` die on a bare
+# port-bind error; name the holder and the fix instead. The list, protocol
+# included, is lib/prod-env.sh's.
+while read -r published; do
+    holder="$(docker ps --filter "publish=${published}" \
         --format '{{.Label "com.docker.compose.project"}}|{{.Names}}' 2>/dev/null \
         | grep -v "^${COMPOSE_PROJECT_NAME}|" | head -n1 || true)"
     if [[ -n "$holder" ]]; then
-        log_error "Port ${port} is held by '${holder#*|}' (project '${holder%%|*}'). Stop it first (dev: 'make docker.down')."
+        log_error "Port ${published} is held by '${holder#*|}' (project '${holder%%|*}'). Stop it first (dev: 'make docker.down')."
         exit 1
     fi
-done
+done < <(prod_published_ports "$ENV_FILE")
 
 # Resolve the served host from the env file (default erpify.local).
-SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
+SERVER_NAME="$(prod_env_value SERVER_NAME "$ENV_FILE" 2>/dev/null || true)"
 SERVER_NAME="${SERVER_NAME:-erpify.local}"
 HOSTS_LINE="127.0.0.1   ${SERVER_NAME}"
 NSS_DB="$HOME/.pki/nssdb"
@@ -151,8 +148,7 @@ NSS_TRUSTED=0
 if [[ $TRUST -eq 1 ]]; then
     # Public TLS (ACME) ships no internal CA root to export — clients trust the
     # public chain, so there is nothing to install locally.
-    SERVER_DIRECTIVES="$(grep -E '^CADDY_SERVER_EXTRA_DIRECTIVES=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
-    if [[ -z "${SERVER_DIRECTIVES//[[:space:]]/}" ]]; then
+    if [[ "$(prod_tls_profile "$ENV_FILE")" != internal ]]; then
         log_info "Public/ACME TLS profile detected — clients trust the public CA; skipping internal-CA export."
     else
         log_info "Setting up client trust for the internal CA..."

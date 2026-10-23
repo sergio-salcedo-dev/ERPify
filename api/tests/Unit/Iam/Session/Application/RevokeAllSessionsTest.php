@@ -124,6 +124,11 @@ final class RevokeAllSessionsTest extends TestCase
         ))->revoke(SessionMother::DEFAULT_USER_ID);
 
         $this->assertSame([SessionMother::DEFAULT_USER_ID], \array_column($subjectLock->calls, 0));
+        $this->assertSame(
+            ['holdsLive'],
+            $subjectLock->methodsCalled(),
+            'a revocation acts on identities that stopped being active, so it holds existence and not admission',
+        );
         $this->assertSame([], $sessions->revokeAllCalls);
         $this->assertSame([], $eventBus->publishedEvents);
     }

@@ -5,7 +5,8 @@ Feature: Change an identity's status (suspend / deactivate)
 
   # ADMIN-only (users.changeStatus). Only an ACTIVE identity can transition — a same-state PATCH is a 409, not
   # the idempotent no-op a bank account allows, because the identity lifecycle is unidirectional. A successful
-  # transition records exactly one identity event and revokes the identity's sessions (an all-revoked event);
+  # transition records exactly one identity event and revokes the identity's sessions, which records an
+  # all-revoked event only when a live session was there to flip (every target here holds a fixture session);
   # neither is routed to the async worker, so the outbox stays empty (no realtime consumer).
   Background:
     Given I add "Content-Type" header equal to "application/json"
