@@ -69,7 +69,7 @@ data source keeps working.
 
 ```bash
 ssh user@your.domain
-make db.shell            # interactive psql via `docker exec` — no port, no tunnel
+make ENV=prod db.shell   # interactive psql via `docker exec` — no port, no tunnel
 ```
 
 Best for ad-hoc inspection and monitoring. Fully SSH-gated; nothing to open or
@@ -121,12 +121,12 @@ If the VPS firewall drops host→container forwarding (see caveat), publish a
 
 ```bash
 # on the VPS
-make db.tunnel            # socat sidecar → binds 127.0.0.1:15432 (loopback only)
+make ENV=prod db.tunnel   # socat sidecar → binds 127.0.0.1:15432 (loopback only)
 # from your laptop
 ssh -N -L 15432:127.0.0.1:15432 user@your.domain
 # GUI / psql → 127.0.0.1:15432
 # when done, on the VPS:
-make db.tunnel.stop
+make ENV=prod db.tunnel.stop
 ```
 
 `db.tunnel` bridges `frontend` (to publish) and `backend` (to reach the db); it
@@ -140,7 +140,7 @@ you need it — never as a standing service.
 | A — `db.shell` over SSH | none | n/a (CLI) | Quick checks, monitoring |
 | B — GUI SSH tunnel → IP | none | SSH tab + Host=`10.89.0.10` | Day-to-day GUI work |
 | C — `~/.ssh/config` forward | none | plain `127.0.0.1:15432` | One config for shell + GUI |
-| D — socat sidecar | `make db.tunnel` | plain `127.0.0.1:15432` | Firewall blocks B/C |
+| D — socat sidecar | `make ENV=prod db.tunnel` | plain `127.0.0.1:15432` | Firewall blocks B/C |
 
 ### Firewall caveat (test before relying on B/C)
 
@@ -199,8 +199,9 @@ more, and they carry the same personal data as the dump. See *Orphan object arch
 
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
-`COMPOSE_PROJECT_NAME` (default `erpify` — `make docker.info` prints the
-resolved value), `BACKUP_SYNC_CMD` (offsite hook, below).
+`COMPOSE_PROJECT_NAME` (default: from the env file's TLS profile — `erpify` on a
+public host, `erpify-prodlocal` for the `tls internal` rehearsal;
+`make ENV=prod docker.info` prints it), `BACKUP_SYNC_CMD` (offsite hook, below).
 
 ### Schedule it (cron)
 
@@ -306,8 +307,9 @@ STAMP=<stamp> make restore.prod                    # asks for confirmation
 RESTORE_YES=1 STAMP=<stamp> make restore.prod      # drills/CI: skip the prompt (NON-prod only)
 ```
 
-Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` must match
-what the backup used. If the local dump was already pruned by retention, pull
+Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME`, which
+resolves from the env file exactly as it did for the backup — set it only if
+you overrode it then. If the local dump was already pruned by retention, pull
 `db-<stamp>.dump` back from the offsite copy into `BACKUP_DIR` first.
 
 **Production guard.** Unless `SERVER_NAME` in the env file is explicitly local
@@ -353,9 +355,10 @@ fails, the writers stay stopped — rerun step 2 yourself to bring them back.
 ### Restore drill (quarterly)
 
 A backup is only proven by a restore. Once a quarter, restore the latest dump
-into a scratch stack (a worktree stack works) with
+into the `erpify.local` rehearsal — never the live host — with
 `STAMP=<stamp> make restore.prod` and confirm a record seeded before the backup
-comes back.
+comes back. The target is the env file's project (`erpify-prodlocal` for the
+rehearsal), not the checkout's, so a worktree's dev stack is never it.
 
 #### End-to-end smoke checklist
 

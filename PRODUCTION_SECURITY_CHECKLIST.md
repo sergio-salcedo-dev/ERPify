@@ -23,15 +23,16 @@ you change anything here.
 - [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were freshly
       generated (`openssl rand …`), not reused from dev.
 - [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is used as **raw 32-byte**
-      key material — the app fails fast unless the value is exactly 32 bytes long.
+      key material — `make prod.env.check` refuses any value that is not exactly 32 bytes,
+      and the app throws `InvalidKek` on the first audited write if one gets past it.
       Generate a printable 32-byte key with `openssl rand -base64 24` (24 random bytes →
       32 base64 chars, no padding); `-hex 32` (64 chars) or `-base64 32` (44 chars)
-      produce the wrong length and abort boot. Freshly generated, not reused from dev.
+      produce the wrong length. Freshly generated, not reused from dev.
       Custodied **outside the app** (env / secret manager), never beside the DEKs it
       wraps and never committed. Destroying a DEK (subject erasure) is irreversible by
       design. KEK rotation is **not yet automated**: rotating `AUDIT_KEK` in place makes
       every existing DEK unreadable, so a batch re-wrap tool is a prerequisite (not yet
-      shipped) — do not rotate the live KEK until it exists. Required in prod: listed in
+      shipped) — do not rotate the live KEK until it exists. Required in prod: checked by
       `make prod.env.check` and guarded by `${VAR:?}` on every PHP service in
       `compose.prod.yaml`, so a missing value aborts the deploy by name like the other
       prod secrets (otherwise the app boots and fails closed on the first audited write).
@@ -1166,7 +1167,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       deploy used to reach it: `MAILER_DSN` defaulted to `null://null` in every compose file and
       `MAILER_SECURITY_FROM` appeared in none, falling through to a reserved domain that receives
       nothing while passing the non-blank / non-no-reply guard. Both are now `${VAR:?}` on all three
-      prod services, listed in `PROD_REQUIRED_KEYS`, and refused at send time by
+      prod services — which puts them in `PROD_REQUIRED_KEYS`, derived from those guards — and refused at send time by
       `DeliverableSecurityTransport` (discard transport) and `SecuritySenderAddress` (reserved sender
       domain). **The residual is that non-delivery on this channel is unobservable from the outside:**
       the notice is unsolicited, so no recipient reports its absence — the `warning` its best-effort
