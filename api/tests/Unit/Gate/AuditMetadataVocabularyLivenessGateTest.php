@@ -23,13 +23,19 @@ use RuntimeException;
  * A key counts as written when the tree names it outside its declaration — as the enum case
  * (`AuditMetadataKey::Changes`), as the literal array key a producer spells (`'affected_rows' =>`), or as the
  * subscript it assigns (`$diff['operation'] = …`, which is how the change-capture listener stamps the write
- * kind beside the diff). A subscript that is only READ (`$m['unlocked'] === true`) is not a write.
+ * kind beside the diff). A subscript that is only READ (`$m['unlocked'] === true`) is not a write. A constant
+ * aliasing a case (`const string CHANGES_KEY = AuditMetadataKey::Changes->value`) is a declaration, not a
+ * write: the key is written where that constant is used as an array key or an assigned subscript.
  *
- * **What a green does NOT prove.** It is text over comment-stripped sources, so a literal `'operation' =>` in
- * an unrelated log context keeps that key alive — the tree holds three such — and a key written only through
- * a variable is invisible. It never proves a key is written to `audit_log` rather than to a sibling array,
- * and it says nothing about the shape: whether the shape still admits what the producer writes is
- * `AuditLogEntryMetadataVocabularyTest`'s claim, which holds one written value per key.
+ * **What a green does NOT prove.** It is text over comment-stripped sources, so a homonymous literal in an
+ * unrelated array keeps a key alive, and six keys cannot go red today for that reason alone: `operation`
+ * (three image-storage log contexts), `route` (search observability and the transaction-boundary listener),
+ * `lockedUntil` (the `UserLocked` event payload), `encryption_scope_id` (the writer's own column binding),
+ * `auditEventId` (a not-found exception's context) and `changes`, whose diff the change-capture path writes
+ * twice — built, then re-written sealed — and the detail route's mapper reshapes on the read side. A key
+ * written only through a variable is invisible. It never proves a key is written to `audit_log` rather than to
+ * a sibling array, and it says nothing about the shape: whether the shape still admits what the producer
+ * writes is `AuditLogEntryMetadataVocabularyTest`'s claim, which holds one written value per key.
  *
  * @internal
  */
@@ -49,8 +55,9 @@ final class AuditMetadataVocabularyLivenessGateTest extends TestCase
     }
 
     /**
-     * Falsifiability: each spelling keeps a key alive on its own, a key named only inside a comment or only
-     * inside its declaration does not, and the sweep therefore reports it.
+     * Falsifiability: each spelling keeps a key alive on its own; a key named only inside a comment, only inside
+     * its declaration, only by a constant that aliases it, or only in a subscript that is read does not, and the
+     * sweep therefore reports it.
      */
     public function testAKeyNamedOnlyInACommentOrItsDeclarationIsReportedUnwritten(): void
     {
@@ -66,6 +73,8 @@ final class AuditMetadataVocabularyLivenessGateTest extends TestCase
                         AuditMetadataKey::LockedUntil,
                         AuditMetadataKey::Unlocked,
                         AuditMetadataKey::MalformedRoles,
+                        AuditMetadataKey::AdmittedWithoutCredential,
+                        AuditMetadataKey::Refusal,
                     ],
                     true,
                 ),
@@ -74,14 +83,22 @@ final class AuditMetadataVocabularyLivenessGateTest extends TestCase
         $sources = [
             'Producer.php' => "<?php\nreturn [\n" . $everyOtherKey . "\n];\n",
             'ByCase.php' => "<?php\n\$m[AuditMetadataKey::Operation->value] = 'UPDATED';\n",
+            'AliasOnly.php' => "<?php\nfinal class A { public const string R = AuditMetadataKey::Resweep->value; }\n",
+            'Alias.php' => "<?php\nfinal class B { public const string U = AuditMetadataKey::Unlocked->value; }\n"
+                . "return [B::U => true];\n",
+            'AliasSubscript.php' => "<?php\nfinal class C { const string L = AuditMetadataKey::Refusal->value; }\n"
+                . "\$m[C::L] = 'self-erasure-forbidden';\n",
             'Comment.php' => "<?php\n// metadata: ['resweep' => true]\n",
-            'Subscript.php' => "<?php\n\$m['unlocked'] = true;\n",
-            'Read.php' => "<?php\nreturn \$m['malformed_roles'] === 0 && \$m['malformed_roles'] == 0;\n",
+            'Subscript.php' => "<?php\n\$m['malformed_roles'] = 0;\n",
+            'Read.php' => "<?php\nreturn \$m['admitted_without_credential'] === 0;\n",
             self::DECLARATION => "<?php\nenum AuditMetadataKey: string { case LockedUntil = 'lockedUntil'; }\n"
                 . "\$x = ['lockedUntil' => 1];\n",
         ];
 
-        $this->assertSame(['resweep', 'lockedUntil', 'malformed_roles'], $this->unwrittenKeysIn($sources));
+        $this->assertSame(
+            ['resweep', 'lockedUntil', 'admitted_without_credential'],
+            $this->unwrittenKeysIn($sources),
+        );
     }
 
     /**
@@ -99,14 +116,28 @@ final class AuditMetadataVocabularyLivenessGateTest extends TestCase
             }
         }
 
+        $alias = '/const\s+string\s+(\w+)\s*=\s*AuditMetadataKey::(\w+)->value/';
+        \preg_match_all($alias, $code, $aliases, PREG_SET_ORDER);
+        $code = (string) \preg_replace($alias, '', $code);
         $unwritten = [];
 
         foreach (AuditMetadataKey::cases() as $key) {
-            $byCase = \str_contains($code, 'AuditMetadataKey::' . $key->name);
-            $quoted = "'" . \preg_quote($key->value, '/') . "'";
-            $byLiteral = 1 === \preg_match('/' . $quoted . '\s*=>|\[\s*' . $quoted . '\s*\]\s*=(?!=)/', $code);
+            $spellings = ["'" . \preg_quote($key->value, '/') . "'"];
 
-            if (!$byCase && !$byLiteral) {
+            foreach ($aliases as [, $alias, $case]) {
+                if ($case === $key->name) {
+                    $spellings[] = '\b' . $alias;
+                }
+            }
+
+            $spelling = '(?:' . \implode('|', $spellings) . ')';
+            $byCase = \str_contains($code, 'AuditMetadataKey::' . $key->name);
+            $byKey = 1 === \preg_match(
+                '/' . $spelling . '\s*=>|\[\s*(?:\w+::)?' . $spelling . '\s*\]\s*=(?!=)/',
+                $code,
+            );
+
+            if (!$byCase && !$byKey) {
                 $unwritten[] = $key->value;
             }
         }

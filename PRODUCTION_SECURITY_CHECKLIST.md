@@ -982,6 +982,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
       **The pass clears what is committed when it runs**, so it is closed only together with the item below.
+- [ ] **`audit_log.metadata` is a closed vocabulary, but two of its shapes still admit text the server did
+      not choose, and none of it is erasable.** `AuditLogEntry::create()` refuses any key outside
+      `AuditMetadataKey`, any value outside its key's shape and any `metadata` over 16 KiB, so a producer
+      can no longer drop an `iban` or a request body into the one column no erasure pass rewrites. What it
+      does not close: (a) **`orphan_role_values`** carries a sample of the raw `identity_user.roles` text the
+      integrity probe could not explain — whatever the corruption wrote there, a person's email included —
+      and **the clear fields of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]`
+      field is sealed) carry what a user typed; neither is reached by the anonymisers, which rewrite columns
+      and never this JSON. (b) **A UUID under a key is indistinguishable from a person's id**: the shape
+      admits a pseudonym under `anonymized_actor_id` exactly as it would admit the real id, so what keeps a
+      person's id out is the identity erasure's acceptance witness (`features/backoffice/users/erase.feature`),
+      not the vocabulary. Decision and costs: ADR [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4.
+
 - [ ] **A row naming the subject that commits after the erasure's pass is kept out by a lock, and the gate
       over it sees one directory.** The four post-commit writers that name a `User` in `resource_id` — the
       lockout, the lockout notice, the recovery throttle and the recovery-secret projections — each write under

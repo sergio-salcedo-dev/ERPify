@@ -496,8 +496,9 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   infalsificable. **Lo que esto no es:** la derivación es una consulta que nadie ha escrito todavía, no un
   invariante comprobado — el mismo estado en que sigue el *cross-check* de D4.1. Se revisita cuando exista un
   consumidor que la haga falsificable, o si la fila llega a sellar un discriminante del solicitante; y no
-  antes, porque una novena clave libre en `metadata` gastaría el YAGNI con que este ADR aplazó pasar esa
-  estructura a tipos.
+  antes, porque una novena clave en esa fila —un caso más de `AuditMetadataKey`, revisado como todos— gastaría
+  el YAGNI con que este ADR aplazó dar a cada acción su propio conjunto tipado de claves: el vocabulario cierra
+  qué claves existen y qué forma tiene su valor, no cuáles lleva cada acción.
   **Que sea del contexto dueño lo vuelve una obligación distribuida**, así que lleva su control detectivo,
   igual que el crypto-shredding lleva el suyo: `api/.audit-resource-types` clasifica cada `resource_type`
   como persona o no, y una línea `person` declara **dos** rutas —quién lo borra y qué lo atestigua—. El gate
@@ -521,7 +522,7 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `api/features/backoffice/users/erase.feature`. **Trigger de revisita vigente:** **cualquier** camino de
   escritura que vuelva a meter un id de persona en `metadata`.
   **Lo que sí está cerrado es el vocabulario (2026-10-23).** La Regla de Tres que protegía el registro
-  declarativo de claves se cumplió hace tiempo —hoy son catorce ficheros que escriben `metadata` no vacío y veinticuatro claves—, y
+  declarativo de claves se cumplió hace tiempo —hoy son catorce ficheros que escriben `metadata` no vacío y veinticinco claves—, y
   `AuditMetadataKey` (`Shared/Audit/Domain`) es ese registro: cada clave con la **forma** de su valor
   (`AuditMetadataShape`: un recuento, un flag, un nombre de ruta, un token del servidor, un pseudónimo, un
   scope `<Tipo>:<uuid>`, nombres de rol, un instante ATOM, el diff de cambio, la operación). Lo impone
@@ -537,21 +538,24 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   están nombradas como tales: los valores crudos que la sonda de integridad no pudo explicar (el operador
   repara la cadena que se le mostró) y el diff, cuyos campos personales llegan sellados. El sentido inverso
   —una clave que deja de escribirse y sigue admitida— lo lee `AuditMetadataVocabularyLivenessGateTest`.
-  **Y está acotado**, como `action` y `user_agent` por su ancho de columna: 16 KiB medidos como UTF-8 sin
-  escapar, lo que guarda un `jsonb`. El mayor `metadata` legítimo es una actualización de `Bank` con sus tres
-  columnas de nombre al ancho máximo en caracteres de cuatro bytes, 4 792 bytes, y un test lo construye y lo
-  admite: la cota existe para rechazar a un productor que empiece a volcar un cuerpo o una lista, nunca a uno
-  que llene sus columnas, porque una fila `change` rechazada hace fallar la escritura que la produjo. Coste
-  declarado: `orphan_role_values` no tiene cota propia, así que una tabla `identity_user` con valores de rol
-  corruptos suficientes para pasar de 16 KiB deja el hallazgo sin fila de auditoría; el comando ya lo imprime
-  antes de escribirla y avisa del fallo, que es la conducta que tenía ante cualquier error del rastro.
+  **Y está acotado**, como `action` y `user_agent` por su ancho de columna: 16 KiB medidos como texto JSON con
+  Unicode y barras sin escapar —una cota superior de lo que guarda un `jsonb`: comillas, barras invertidas y
+  controles siguen contando escapados—. El mayor `metadata` legítimo es una actualización de `Bank` con sus tres
+  columnas de nombre al ancho máximo: 4 792 bytes en caracteres de cuatro bytes, unos 6,9 KB si todos fueran
+  controles escapados como `\u00XX`, y un test construye ambos y los admite: la cota existe para rechazar a un productor que empiece a volcar un cuerpo o una lista, nunca a uno
+  que llene sus columnas, porque una fila `change` rechazada hace fallar la escritura que la produjo. Por la
+  misma razón `orphan_role_values` es una **muestra** —veinte valores de 64 caracteres como máximo, con el total
+  en `orphan_role_value_count`—: su número y su longitud los decide la corrupción, y una fila rechazada por
+  tamaño dejaría el rastro sin constancia de que la deriva se detectó; el listado completo lo imprime el
+  comando.
+  **Las dos claves de una fila `change`, y por qué ambas caben en la invariante:** `changes` —el diff campo
   a campo, con los valores clasificados `#[PersonalData]` sellados por `PiiDiffSealer`— y su hermana
   `operation`, el nombre del caso de `AuditWriteOperation` (`CREATED`/`UPDATED`/`DELETED`), que el sellado
   deja intacta. `operation` es un discriminante de la clase de escritura, no un cuerpo de entidad, y existe
   porque no es derivable del diff: un update que sólo rellena campos vacíos es indistinguible de un alta
   mirando los pares `old`/`new`. Las filas escritas antes de que el capturador la estampe no la llevan, así
   que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
-  cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
+  cuenta de «una novena clave» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
   re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
@@ -697,7 +701,8 @@ vida», justo la mezcla de ejes que D7 evita.
 
 **Trigger de revisita.** Cuando aparezca un **segundo** evento de cumplimiento
 (`GDPR_EXPORT_COMPLETED`, `GDPR_ERASURE_FAILED`, …), introducir una **estructura tipada** para esos
-eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo evento de cumplimiento).
+eventos en vez de confiar en un vocabulario compartido por todas las acciones —`AuditMetadataKey` (D4)
+cierra qué claves existen y su forma, no cuáles lleva cada acción— (hoy YAGNI: un solo evento de cumplimiento).
 
 ### D4.2 — Re-barrido diferido de los pases de borrado (enmienda D3.1 y D4)
 

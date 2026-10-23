@@ -25,14 +25,18 @@ enum AuditMetadataShape
     /** The key a sealed diff value is wrapped under, so a reader can show it as sealed without the plaintext. */
     public const string SEALED_VALUE_KEY = '__enc__';
 
-    private const string ROUTE_NAME_PATTERN = '/^[A-Za-z0-9_.]{1,100}$/';
+    /*
+     * Every pattern carries `D`: without it `$` also matches before a final newline, so `"ADMIN\n"` would pass
+     * as a role name.
+     */
+    private const string ROUTE_NAME_PATTERN = '/^[A-Za-z0-9_.]{1,100}$/D';
 
     /** Kebab case, at most 64 characters: the lookahead bounds the length the repetition cannot. */
-    private const string SLUG_PATTERN = '/^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/';
+    private const string SLUG_PATTERN = '/^(?=.{1,64}$)[a-z0-9]+(?:-[a-z0-9]+)*$/D';
 
-    private const string AGGREGATE_TYPE_PATTERN = '/^[A-Z][A-Za-z0-9]{0,99}$/';
+    private const string AGGREGATE_TYPE_PATTERN = '/^[A-Z][A-Za-z0-9]{0,99}$/D';
 
-    private const string ROLE_NAME_PATTERN = '/^[A-Z][A-Z0-9_]*$/';
+    private const string ROLE_NAME_PATTERN = '/^[A-Z][A-Z0-9_]*$/D';
 
     public function admits(mixed $value): bool
     {
@@ -75,7 +79,10 @@ enum AuditMetadataShape
 
     private static function isWriteOperation(mixed $value): bool
     {
-        return \is_string($value) && \defined(AuditWriteOperation::class . '::' . $value);
+        return \is_string($value) && \array_any(
+            AuditWriteOperation::cases(),
+            static fn (AuditWriteOperation $operation): bool => $operation->name === $value,
+        );
     }
 
     private static function isEncryptionScope(mixed $value): bool
@@ -135,6 +142,10 @@ enum AuditMetadataShape
 
     private static function isDiffSide(mixed $side): bool
     {
+        if (\is_float($side)) {
+            return \is_finite($side);
+        }
+
         if (null === $side || \is_scalar($side)) {
             return true;
         }
@@ -174,10 +185,10 @@ enum AuditMetadataShape
     /** An instant in `DATE_ATOM`, the spelling the API serves every other timestamp in. */
     case Instant;
 
-    /** A list of raw stored strings an integrity probe could not explain. */
+    /** A list of raw stored strings an integrity probe could not explain — a bounded sample of them. */
     case StoredValues;
 
-    /** `<field> => {old, new}`, each side a scalar, null, or a sealed `{__enc__: <ciphertext>}`. */
+    /** `<field> => {old, new}`, each side a finite scalar, null, or a sealed `{__enc__: <ciphertext>}`. */
     case FieldDiff;
 
     /** The NAME of an {@see AuditWriteOperation} case. */

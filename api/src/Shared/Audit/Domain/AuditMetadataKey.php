@@ -17,11 +17,8 @@ namespace Erpify\Shared\Audit\Domain;
  * **The key is half of it; the shape is what makes the key mean anything.** A name alone is a declaration
  * that checks itself: `route` would admit a URL path, `refusal` a sentence, and either would carry a person's
  * identifier into the one column no erasure rewrites. Each shape admits countable or server-chosen values
- * only, except the two {@see AuditMetadataShape} names for admitting more.
- *
- * What this cannot judge is the classification itself: a UUID under {@see AnonymizedActorId} is a pseudonym
- * only because the erasure that mints it says so, and the shape cannot tell it from a real person's id. The
- * acceptance witness of the identity erasure is what holds that.
+ * only, except the two {@see AuditMetadataShape} names for admitting more. What the vocabulary does not
+ * decide is recorded in `docs/adr/audit-activity-log.md` D4.
  */
 enum AuditMetadataKey: string
 {
@@ -40,6 +37,7 @@ enum AuditMetadataKey: string
             self::RecoverySecretsDeleted,
             self::MembershipsDeleted,
             self::InvitationsDeleted,
+            self::OrphanRoleValueCount,
             self::MalformedRoles,
             self::UnreadableCredentials,
             self::AdmittedWithoutCredential => AuditMetadataShape::Count,
@@ -81,6 +79,7 @@ enum AuditMetadataKey: string
     case Unlocked = 'unlocked';
     case LockedUntil = 'lockedUntil';
     case OrphanRoleValues = 'orphan_role_values';
+    case OrphanRoleValueCount = 'orphan_role_value_count';
     case MalformedRoles = 'malformed_roles';
     case UnreadableCredentials = 'unreadable_credentials';
     case AdmittedWithoutCredential = 'admitted_without_credential';

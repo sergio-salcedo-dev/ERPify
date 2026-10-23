@@ -11,6 +11,7 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -28,14 +29,15 @@ final class AuditLogEntryMetadataBoundTest extends TestCase
     }
 
     /**
-     * The bound must sit above the largest entry a legitimate write produces, because a refused `change` entry
+     * The bound must sit above the largest `change` entry a legitimate write produces, because a refused one
      * fails the write itself. This builds that entry: a `Bank` update moving `name` and `nameNormalized` at
-     * their 255-character column width and `shortName` at 50, every character a four-byte one — the widest
-     * the columns admit — plus the three inherited fields.
+     * their 255-character column width and `shortName` at 50, plus the three inherited fields — once with
+     * every character four UTF-8 bytes, once with every character a control character JSON escapes as six.
      */
-    public function testAdmitsTheLargestEntryALegitimateWriteProduces(): void
+    #[DataProvider('provideAdmitsTheLargestChangeEntryALegitimateWriteProducesCases')]
+    public function testAdmitsTheLargestChangeEntryALegitimateWriteProduces(string $character): void
     {
-        $wide = static fn (int $length): string => \str_repeat("\u{1F3E6}", $length);
+        $wide = static fn (int $length): string => \str_repeat($character, $length);
         $changes = [
             'id' => ['old' => null, 'new' => Uuid::generate()],
             'createdAt' => ['old' => null, 'new' => '2026-10-23T12:59:47+00:00'],
@@ -50,10 +52,19 @@ final class AuditLogEntryMetadataBoundTest extends TestCase
 
         $this->assertSame($metadata, $entry->metadata);
         $this->assertLessThan(
-            AuditLogEntry::MAX_METADATA_BYTES / 3,
+            AuditLogEntry::MAX_METADATA_BYTES / 2,
             $this->storedBytes($metadata),
-            'The largest legitimate entry has grown past a third of the metadata bound; revisit the bound.',
+            'The largest legitimate change entry has grown past half the metadata bound; revisit the bound.',
         );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideAdmitsTheLargestChangeEntryALegitimateWriteProducesCases(): iterable
+    {
+        yield 'four UTF-8 bytes a character' => ["\u{1F3E6}"];
+        yield 'six escaped bytes a character' => ["\u{0001}"];
     }
 
     public function testRefusesMetadataOverItsBoundAndReportsTheMeasuredSize(): void

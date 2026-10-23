@@ -57,6 +57,7 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
             'unlocked' => false,
             'lockedUntil' => '2026-10-23T12:59:47+00:00',
             'orphan_role_values' => ['SUPERVISOR', '<null>'],
+            'orphan_role_value_count' => 2,
             'malformed_roles' => 0,
             'unreadable_credentials' => 1,
             'admitted_without_credential' => 0,
@@ -130,6 +131,7 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
         yield 'a personal field' => ['iban', 'iban'];
         yield 'a near-miss spelling' => ['lockedUntil ', '<not an identifier>'];
         yield 'a key in the wrong case' => ['Route', 'Route'];
+        yield 'an identifier with a trailing newline' => ["route\n", '<not an identifier>'];
         yield 'a key that could be a person' => ['jane.doe@example.test', '<not an identifier>'];
         yield 'a list position' => [0, '<not an identifier>'];
     }
@@ -163,6 +165,13 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
         yield 'a route path, whose segments carry ids' => ['route', '/api/v1/backoffice/users/0199a1b2/erase'];
         yield 'a route with a space' => ['route', 'audit event'];
         yield 'an empty route' => ['route', ''];
+        yield 'a route with a trailing newline' => ['route', "backoffice_bank_detail\n"];
+        yield 'a refusal with a trailing newline' => ['refusal', "self-erasure-forbidden\n"];
+        yield 'a role with a trailing newline' => ['new_roles', ["ADMIN\n"]];
+        yield 'a scope type with a trailing newline' => [
+            'encryption_scope_id',
+            "BankAccount\n:0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d",
+        ];
         yield 'a refusal written as a sentence' => ['refusal', 'You cannot change your own roles'];
         yield 'a refusal over its length' => ['refusal', \str_repeat('a', 65)];
         yield 'an audit event id that is not a UUID' => ['auditEventId', 'jane.doe@example.test'];
@@ -184,6 +193,8 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
         yield 'an instant that does not exist' => ['lockedUntil', '2026-02-30T12:59:47+00:00'];
         yield 'stored values that are not strings' => ['orphan_role_values', [42]];
         yield 'stored values as a map' => ['orphan_role_values', ['row' => 'SUPERVISOR']];
+        yield 'a diff side that is not a finite number' => ['changes', ['rate' => ['old' => 1.5, 'new' => INF]]];
+        yield 'a diff side that is not a number' => ['changes', ['rate' => ['old' => NAN, 'new' => 1.5]]];
         yield 'a diff that is a list' => ['changes', [['old' => 'a', 'new' => 'b']]];
         yield 'a diff pair missing a side' => ['changes', ['name' => ['new' => 'b']]];
         yield 'a diff pair with an extra side' => ['changes', ['name' => ['old' => 'a', 'new' => 'b', 'by' => 'x']]];

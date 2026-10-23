@@ -40,8 +40,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * route read the level as the diff's provenance.
  *
  * **And it is bounded**, as `action` and `user_agent` are by their column widths: {@see MAX_METADATA_BYTES} is
- * measured as UTF-8 JSON with nothing escaped, the bytes a `jsonb` value holds rather than the `\uXXXX`
- * spelling the writer happens to send, so a non-Latin name costs what it stores.
+ * measured as JSON text with Unicode and slashes unescaped, so a non-Latin name costs its UTF-8 bytes rather
+ * than the `\uXXXX` spelling the writer happens to send. Quotes, backslashes and control characters still count
+ * at their escaped length, so the measure is an upper bound on what a `jsonb` value stores, never below it.
  */
 final readonly class AuditLogEntry
 {
@@ -55,11 +56,12 @@ final readonly class AuditLogEntry
     public const string CHANGES_KEY = AuditMetadataKey::Changes->value;
 
     /**
-     * Over three times the largest entry a legitimate write can produce: a `Bank` update moving `name`,
-     * `nameNormalized` and `shortName` at their column widths, every character four UTF-8 bytes — 4,792 bytes,
-     * which `AuditLogEntryMetadataBoundTest` builds and admits. It refuses a producer that started
-     * dumping a body or a list; it must never refuse one that merely filled its columns, because a refused
-     * `change` entry fails the write that produced it.
+     * Over twice the largest `change` entry a legitimate write can produce, which is the case that matters: a
+     * refused `change` entry fails the write that produced it. That entry is a `Bank` update moving `name`,
+     * `nameNormalized` and `shortName` at their column widths — 4,792 bytes with every character four UTF-8
+     * bytes, about 6.9 KB if every character were one JSON escapes as `\u00XX` — and
+     * `AuditLogEntryMetadataBoundTest` builds both and admits them. The bound refuses a producer that started
+     * dumping a body or a list.
      */
     public const int MAX_METADATA_BYTES = 16_384;
 

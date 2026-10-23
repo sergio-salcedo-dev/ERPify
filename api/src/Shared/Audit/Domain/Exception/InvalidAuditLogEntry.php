@@ -30,7 +30,7 @@ final class InvalidAuditLogEntry extends DomainException
 {
     public const string TYPE = 'invalid-audit-log-entry';
 
-    private const string IDENTIFIER_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]{0,63}$/';
+    private const string IDENTIFIER_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]{0,63}$/D';
 
     public static function actionMustNotBeEmpty(): self
     {
