@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+
+// The dashboard offers the pages the session may open, so it reads the session; this file renders
+// pages outside any provider, and an anonymous session is enough to prove the module mounts.
+vi.mock("@/context/shared/access/application/useSession", () => ({
+  useSession: () => ({ session: null, status: "unauthenticated" }),
+}));
 import BankAccountsLayout, {
   metadata as bankAccountsLayoutMeta,
 } from "@/app/backoffice/bank-accounts/layout";
@@ -167,18 +173,18 @@ const PAGES: ReadonlyArray<{
   { title: "Data Dictionary", metadata: docsDictionaryPageMeta, Page: DocsDictionaryPage },
   { title: "Systems Catalog", metadata: pavementSystemsPageMeta, Page: PavementSystemsPage },
   { title: "AI Reports", metadata: aiReportsPageMeta, Page: AiReportsPage },
-  { title: "Project Management", metadata: projectsPageMeta, Page: ProjectsPage },
+  { title: "Projects", metadata: projectsPageMeta, Page: ProjectsPage },
   { title: "Price Lists", metadata: pricingPageMeta, Page: PricingPage },
   { title: "Finance", metadata: financePageMeta, Page: FinancePage },
   { title: "Cash Flow", metadata: financeCashFlowPageMeta, Page: FinanceCashFlowPage },
   { title: "Budget vs Actuals", metadata: financeControlPageMeta, Page: FinanceControlPage },
   {
-    title: "Global Transactions",
+    title: "Transactions",
     metadata: financeTransactionsPageMeta,
     Page: FinanceTransactionsPage,
   },
-  { title: "Cost Allocation", metadata: financeAccountingPageMeta, Page: FinanceAccountingPage },
-  { title: "Team Tasks", metadata: tasksPageMeta, Page: TasksPage },
+  { title: "Project Costs", metadata: financeAccountingPageMeta, Page: FinanceAccountingPage },
+  { title: "Tasks", metadata: tasksPageMeta, Page: TasksPage },
   { title: "Commissions", metadata: commissionsPageMeta, Page: CommissionsPage },
   { title: "Purchase Orders", metadata: purchaseOrdersPageMeta, Page: PurchaseOrdersPage },
   { title: "Provider Portal", metadata: providerPageMeta, Page: ProviderPage },

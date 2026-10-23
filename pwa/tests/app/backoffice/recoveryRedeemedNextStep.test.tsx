@@ -1,6 +1,11 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { StrictMode } from "react";
 import { render, screen, within } from "@testing-library/react";
+
+// The dashboard also offers the pages the session may open; no session is needed for this notice.
+vi.mock("@/context/shared/access/application/useSession", () => ({
+  useSession: () => ({ session: null, status: "unauthenticated" }),
+}));
 import { RecoveryRedeemedNextStep } from "@/app/backoffice/_components/RecoveryRedeemedNextStep";
 import BackOfficeDashboard from "@/app/backoffice/page";
 import {

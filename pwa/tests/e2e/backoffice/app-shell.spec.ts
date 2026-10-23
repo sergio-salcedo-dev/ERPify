@@ -16,9 +16,27 @@ test.describe("BackOffice - App Shell", () => {
     await expect(page.getByTestId("bo-layout__topbar-title")).toHaveText("Banks");
   });
 
-  test("shows the (placeholder) search and notifications controls", async ({ page }) => {
+  test("opens a page through the Ctrl/Cmd+K go-to palette", async ({ page }) => {
     await expect(page.getByTestId("bo-layout__topbar-search")).toBeEnabled();
-    await expect(page.getByTestId("bo-layout__topbar-notifications")).toBeEnabled();
+
+    await page.keyboard.press("Control+k");
+    const input = page.getByRole("combobox", { name: "Go to page" });
+    await expect(input).toBeFocused();
+
+    await input.fill("banks");
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(/\/backoffice\/banks$/);
+    await expect(page.getByTestId("go-to-palette")).toBeHidden();
+  });
+
+  test("leads the notifications control to its page, which says it is not built yet", async ({
+    page,
+  }) => {
+    await page.getByTestId("bo-layout__topbar-notifications").click();
+
+    await expect(page).toHaveURL(/\/backoffice\/profile\/notifications$/);
+    await expect(page.getByTestId("planned-module__status")).toHaveText("Not available yet");
   });
 
   // Logout is asserted present but never clicked: the worker's session is shared by the
