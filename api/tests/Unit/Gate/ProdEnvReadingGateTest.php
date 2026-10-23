@@ -18,9 +18,9 @@ use PHPUnit\Framework\Attributes\Test;
  * restore scripts source it — restore's production guard included. The suite cannot run host `make`, so this
  * family executes the script itself over fixture files ({@see ProdEnvScriptTestCase}).
  *
- * Blind spots shared by the family: internal TLS spelled other than `tls internal` reads as public; the project
- * an existing stack was started under is not recorded, so editing the TLS profile between a stand-up and a
- * backup moves the backup to the other project; and nothing here runs Compose or Docker.
+ * Blind spots shared by the family: internal TLS spelled other than `tls internal` reads as public, and nothing
+ * here runs Compose or Docker. What the scripts themselves leave open (the project a stack was started under is
+ * not recorded) is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
  *
  * @internal
  */
@@ -54,6 +54,9 @@ final class ProdEnvReadingGateTest extends ProdEnvScriptTestCase
         yield 'single quotes' => ["K='s'\n", 's'];
         yield 'export prefix and blanks' => ["  export K = v\n", 'v'];
         yield 'last occurrence wins' => ["K=first\nK=last\n", 'last'];
+        yield 'a value starting with a hash is kept' => ["K=#abc\n", '#abc'];
+        yield 'colon separator' => ["K: v\n", 'v'];
+        yield 'comment only is empty' => ["K= # fill in\n", ''];
         yield 'absent' => ["OTHER=1\n", null];
     }
 
@@ -77,6 +80,12 @@ final class ProdEnvReadingGateTest extends ProdEnvScriptTestCase
         yield 'one real among local' => ["SERVER_NAME=erpify.local erp.example.com\n", false];
         yield 'duplicated, last real' => ["SERVER_NAME=erpify.local\nSERVER_NAME=erp.example.com\n", false];
         yield 'duplicated, both local' => ["SERVER_NAME=erpify.local\nSERVER_NAME=localhost\n", false];
+        yield 'comma list, all local' => ["SERVER_NAME=erpify.local, localhost\n", true];
+        yield 'comma-joined, one real' => ["SERVER_NAME=prod.example.com,erpify.local\n", false];
+        yield 'scheme, port and case' => ["SERVER_NAME=https://ERPIFY.local:8443\n", true];
+        yield 'bracketed IPv6 with a port' => ["SERVER_NAME=[::1]:443\n", true];
+        yield 'a glob is a host, not a filename' => ["SERVER_NAME=erpify.local *\n", false];
+        yield 'empty' => ["SERVER_NAME=\n", false];
         yield 'absent' => ["OTHER=1\n", false];
     }
 

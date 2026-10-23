@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Gate;
 
+use Erpify\Tests\Support\ProdEnvScript;
 use Erpify\Tests\Support\ProdEnvScriptTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -19,9 +20,9 @@ use Symfony\Component\Yaml\Yaml;
  * restore scripts source it — restore's production guard included. The suite cannot run host `make`, so this
  * family executes the script itself over fixture files ({@see ProdEnvScriptTestCase}).
  *
- * Blind spots shared by the family: internal TLS spelled other than `tls internal` reads as public; the project
- * an existing stack was started under is not recorded, so editing the TLS profile between a stand-up and a
- * backup moves the backup to the other project; and nothing here runs Compose or Docker.
+ * Blind spots shared by the family: internal TLS spelled other than `tls internal` reads as public, and nothing
+ * here runs Compose or Docker. What the scripts themselves leave open (the project a stack was started under is
+ * not recorded) is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
  *
  * @internal
  */
@@ -105,15 +106,24 @@ final class ProdEnvProjectGateTest extends ProdEnvScriptTestCase
         );
     }
 
+    /**
+     * @param list<string> $emptyExports
+     */
     #[Test]
     #[DataProvider('provideItListsThePortsTheStackPublishesCases')]
-    public function itListsThePortsTheStackPublishes(string $contents, string $expected): void
-    {
-        $this->assertSame($expected, $this->answer(['published-ports', $this->envFile($contents)]));
+    public function itListsThePortsTheStackPublishes(
+        string $contents,
+        string $expected,
+        array $emptyExports = [],
+    ): void {
+        $this->assertSame(
+            $expected,
+            $this->answer(['published-ports', $this->envFile($contents)], [], $emptyExports),
+        );
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{0: string, 1: string, 2?: list<string>}>
      */
     public static function provideItListsThePortsTheStackPublishesCases(): iterable
     {
@@ -121,6 +131,11 @@ final class ProdEnvProjectGateTest extends ProdEnvScriptTestCase
         yield 'rehearsal adds mailpit' => [
             "CADDY_SERVER_EXTRA_DIRECTIVES=tls internal\n",
             "80/tcp\n443/tcp\n443/udp\n8025/tcp",
+        ];
+        yield "an empty export would fall to compose's default, not the file" => [
+            "CADDY_SERVER_EXTRA_DIRECTIVES=\nHTTP_PORT=8080\n",
+            "80/tcp\n443/tcp\n443/udp",
+            ['HTTP_PORT'],
         ];
         yield 'file overrides' => [
             "CADDY_SERVER_EXTRA_DIRECTIVES=tls internal\nHTTPS_PORT=8443\nMAILPIT_UI_PORT=18025\n",
@@ -154,11 +169,10 @@ final class ProdEnvProjectGateTest extends ProdEnvScriptTestCase
     }
 
     /**
-     * `compose.rehearsal.yaml` joins the prod stack for a tls-internal env file (scripts/deploy/lib/prod-env.sh)
-     * and is outside every stack ScheduleConsumptionGateTest reads, so it must stay outside the scheduling surface
-     * too: no
-     * service of its own may run a `messenger:consume`, declare a replica count, or reuse a worker's name and
-     * so merge over it. Its one service today is a mailpit.
+     * `compose.rehearsal.yaml` joins the prod stack for a tls-internal env file and is outside every stack
+     * ScheduleConsumptionGateTest reads, so it must stay outside the scheduling surface: no service of its own
+     * may run a `messenger:consume` (as command or entrypoint), declare a replica count or a scale, extend
+     * another service, or reuse a worker's name and so merge over it. Its one service today is a mailpit.
      */
     #[Test]
     public function theRehearsalOverlayCarriesNoWorker(): void
@@ -170,17 +184,71 @@ final class ProdEnvProjectGateTest extends ProdEnvScriptTestCase
 
         foreach ($services as $name => $definition) {
             $this->assertIsArray($definition);
-            $command = \json_encode($definition['command'] ?? null);
             $this->assertNotContains($name, ['php', 'messenger_worker', 'scheduler_worker'], \sprintf(
-                'compose.rehearsal.yaml redefines `%s`, merging over a worker this gate never sees.',
+                'compose.rehearsal.yaml redefines `%s`, merging over a worker ScheduleConsumptionGateTest never sees.',
                 $name,
             ));
-            $this->assertStringNotContainsString('messenger:consume', (string) $command, \sprintf(
-                'compose.rehearsal.yaml service `%s` consumes a transport outside every stack this gate reads.',
-                $name,
-            ));
+
+            foreach (['command', 'entrypoint'] as $key) {
+                $this->assertStringNotContainsString(
+                    'messenger:consume',
+                    (string) \json_encode($definition[$key] ?? null),
+                    \sprintf('compose.rehearsal.yaml service `%s` consumes a transport through `%s`.', $name, $key),
+                );
+            }
+
             $deploy = \is_array($definition['deploy'] ?? null) ? $definition['deploy'] : [];
             $this->assertArrayNotHasKey('replicas', $deploy);
+            $this->assertArrayNotHasKey('scale', $definition);
+            $this->assertArrayNotHasKey('extends', $definition);
         }
+    }
+
+    /**
+     * Every caller reads the env file through the script, never by its own `grep`: the scripts cannot run here,
+     * so the call sites are pinned in their source, the way make's half is above.
+     */
+    #[Test]
+    public function everyDeployScriptReadsThroughTheScript(): void
+    {
+        $pins = [
+            'scripts/deploy/restore-prod.sh' => ['/^IS_PROD=1\nprod_server_is_local "\$ENV_FILE" && IS_PROD=0$/m'],
+            'scripts/deploy/deploy-local.sh' => [
+                '/if \[\[ "\$\(prod_tls_profile "\$ENV_FILE"\)" != internal \]\]; then/',
+                '/^done < <\(prod_published_ports "\$ENV_FILE"\)$/m',
+            ],
+            'scripts/deploy/lib/common.sh' => ['/read -ra files <<< "\$\(prod_compose_files "\$ENV_FILE"\)"/'],
+            'scripts/deploy/deploy.sh' => ['/prod_env_value SERVER_NAME /'],
+            'scripts/deploy/trust-local.sh' => ['/^SERVER_NAME="\$\(prod_env_value SERVER_NAME "\$ENV_FILE"/m'],
+        ];
+
+        foreach ($pins as $file => $patterns) {
+            $source = (string) \file_get_contents($this->root() . '/' . $file);
+            $this->assertDoesNotMatchRegularExpression(
+                '/grep[^\n]*\^(SERVER_NAME|CADDY_SERVER_EXTRA_DIRECTIVES)=/',
+                $source,
+                \sprintf('%s parses the env file itself instead of asking prod-env.sh.', $file),
+            );
+
+            foreach ($patterns as $pattern) {
+                $this->assertMatchesRegularExpression($pattern, $source, \sprintf('%s: %s', $file, $pattern));
+            }
+        }
+    }
+
+    /**
+     * A checkout whose git cannot be read must fail, not answer `erpify` — that is the primary's project.
+     */
+    #[Test]
+    public function anUnreadableCheckoutFailsInsteadOfGuessing(): void
+    {
+        \mkdir($this->scratch . '/broken');
+        \file_put_contents($this->scratch . '/broken/.git', "gitdir: /nowhere/at/all\n");
+        $public = $this->envFile("CADDY_SERVER_EXTRA_DIRECTIVES=\n");
+
+        $result = ProdEnvScript::run($this->root(), ['project', $public, $this->scratch . '/broken']);
+
+        $this->assertNotSame(0, $result['exit']);
+        $this->assertSame('', \trim($result['stdout']));
     }
 }

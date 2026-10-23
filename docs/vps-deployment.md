@@ -199,8 +199,9 @@ more, and they carry the same personal data as the dump. See *Orphan object arch
 
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
-`COMPOSE_PROJECT_NAME` (default: from the env file's TLS profile — `erpify` on a
-public host, `erpify-prodlocal` for the `tls internal` rehearsal;
+`COMPOSE_PROJECT_NAME` (default: from the env file's TLS profile — the checkout's
+own project on a public host, `erpify` from a primary checkout; `erpify-prodlocal`
+for the `tls internal` rehearsal;
 `make ENV=prod docker.info` prints it), `BACKUP_SYNC_CMD` (offsite hook, below).
 
 ### Schedule it (cron)
@@ -365,7 +366,7 @@ before the backup comes back. The target is the rehearsal env file's project,
 
 #### End-to-end smoke checklist
 
-Run the whole loop on the `erpify.local` rehearsal (or a scratch worktree stack)
+Run the whole loop on the `erpify.local` rehearsal (project `erpify-prodlocal`)
 — never first on real production:
 
 - [ ] **Stand up the prod profile** — `make deploy.local` (preflight → up → migrate → smoke). Confirm the stack is healthy.

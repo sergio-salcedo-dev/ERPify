@@ -62,7 +62,7 @@ Assumes the stack is already up (`make deploy.local` on first stand-up).
 ./scripts/deploy/deploy.sh --advanced
 
 # 4. Verify
-make ENV=prod docker.logs   # php, messenger_worker, …
+make ENV=prod docker.logs   # follows every service from now; for history: docker compose -p <project> … logs php messenger_worker
 ```
 
 ## Manual Commands
@@ -94,7 +94,7 @@ HEALTH_URL=https://app.example.com/api/v1/health  # Override the health endpoint
 | **"Makefile not found"**  | Run from repo root: `cd /path/to/ERPify`              |
 | **Migrations fail**       | Check status: `make db.status` then `make db.migrate` |
 | **Health check fails**    | Wait for containers: `sleep 5 && make ENV=prod docker.ps` |
-| **Workers not reloading** | Restart: `make ENV=prod docker.restart`|
+| **Workers not reloading** | `make ENV=prod sf.messenger.stop-workers` (they exit and `restart:` brings them back) |
 
 ## CI/CD Integration
 
@@ -130,5 +130,5 @@ deploy:
 
 - Always test with `--dry-run` before production
 - Run from repository root or use full path
-- Check logs: `make ENV=prod docker.logs`
+- Check logs: `make ENV=prod docker.logs` (new lines only) or `docker compose -p <project> … logs php` for history
 - Monitor workers post-deploy for issues

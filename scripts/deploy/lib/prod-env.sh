@@ -17,10 +17,13 @@
 #   check <env-file> [<root>]         refuse a file Compose would run wrongly
 #
 # Values are read the way Compose reads an env file: an optional `export ` and
-# leading blanks are ignored, the LAST occurrence of a key wins, an unquoted
-# value loses a trailing ` # comment`, a quoted one keeps what is inside its
-# quotes. A variable exported in the calling shell beats the file for Compose,
-# and does here too for the TLS profile and the published ports.
+# leading blanks are ignored, `=` or `:` separates the key, the LAST occurrence
+# wins, an unquoted value loses a ` # comment` (a `#` after whitespace), a quoted
+# one keeps what is inside its quotes. Two things are refused by `check` rather
+# than modelled: a key declared twice, and a `$` outside single quotes, which
+# Compose would interpolate. A variable exported in the calling shell beats the
+# file for Compose, and does here too for the TLS profile and the published
+# ports — `value`, `server-is-local` and `check` read the file alone.
 #
 # Sourced for its functions, or run with a subcommand.
 
@@ -40,36 +43,52 @@ PROD_MEM_KNOBS=(PHP_MEM_LIMIT PWA_MEM_LIMIT DB_MEM_LIMIT WORKER_MEM_LIMIT SCHEDU
 # which otherwise fire only at send time.
 PROD_UNDELIVERABLE_DOMAINS=(test example invalid localhost local)
 
-# Every line declaring <key>, in file order.
-prod_env_lines() {
-  local key="$1" file="$2"
-  grep -E "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*=" "$file" 2>/dev/null
+PROD_ENV_KEY_PREFIX='^[[:space:]]*(export[[:space:]]+)?'
+PROD_ENV_KEY_SEPARATOR='[[:space:]]*[=:]'
+
+# The raw text after the separator on the LAST line declaring <key>.
+prod_env_raw() {
+  local key="$1" file="$2" line
+  [[ -r "$file" ]] || return 1
+  line="$(grep -E "${PROD_ENV_KEY_PREFIX}${key}${PROD_ENV_KEY_SEPARATOR}" "$file" 2>/dev/null | tail -n1)"
+  [[ -n "$line" ]] || return 1
+  line="$(printf '%s' "$line" | sed -E "s/${PROD_ENV_KEY_PREFIX}${key}${PROD_ENV_KEY_SEPARATOR}//")"
+  printf '%s\n' "${line%$'\r'}"
   return 0
 }
 
 prod_env_value() {
-  local key="$1" file="$2" line value
-  [[ -r "$file" ]] || return 1
-  line="$(prod_env_lines "$key" "$file" | tail -n1)"
-  [[ -n "$line" ]] || return 1
-  value="${line#*=}"
-  value="${value%$'\r'}"
-  value="${value#"${value%%[![:space:]]*}"}"
+  local raw value
+  raw="$(prod_env_raw "$1" "$2")" || return 1
+  value="${raw#"${raw%%[![:space:]]*}"}"
   if [[ "$value" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ ]] || [[ "$value" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
     value="${BASH_REMATCH[1]}"
   else
-    value="$(printf '%s' "$value" | sed -E -e 's/(^|[[:space:]]+)#.*$//' -e 's/^[[:space:]]+//' -e 's/[[:space:]]+$//')"
+    value="$(printf '%s' "$raw" | sed -E -e 's/[[:space:]]+#.*$//' -e 's/^[[:space:]]+//' -e 's/[[:space:]]+$//')"
   fi
   printf '%s\n' "$value"
   return 0
 }
 
-# The keys among <key>… that <file> declares more than once.
+# Every key <file> declares more than once — any key, not a list of them.
 prod_env_duplicates() {
-  local file="$1" key
+  [[ -r "$1" ]] || return 0
+  grep -oE "${PROD_ENV_KEY_PREFIX}[A-Za-z_][A-Za-z0-9_]*${PROD_ENV_KEY_SEPARATOR}" "$1" \
+    | sed -E -e 's/^[[:space:]]*(export[[:space:]]+)?//' -e 's/[[:space:]]*[=:]$//' \
+    | sort | uniq -d
+  return 0
+}
+
+# The keys among <key>… whose value Compose would interpolate: a `$` outside
+# single quotes.
+prod_env_interpolated() {
+  local file="$1" key raw
   shift
   for key in "$@"; do
-    [[ "$(prod_env_lines "$key" "$file" | wc -l)" -gt 1 ]] && echo "$key"
+    raw="$(prod_env_raw "$key" "$file" 2>/dev/null)" || continue
+    raw="${raw#"${raw%%[![:space:]]*}"}"
+    [[ "$raw" == \'* ]] && continue
+    [[ "$raw" == *'$'* ]] && echo "$key"
   done
   return 0
 }
@@ -97,10 +116,20 @@ prod_tls_profile() {
 
 # The project a checkout's own stacks run as: `erpify` in the primary checkout,
 # `erpify-<slug>` in a linked worktree — the rule make/config.mk applies to dev.
+# A directory with no `.git` is no checkout and keeps `erpify`; one whose git
+# cannot be read (dubious ownership under root, a pointer this host cannot
+# resolve) FAILS, because guessing `erpify` there is guessing the primary's.
 prod_checkout_project() {
   local root="${1:-$PROD_ENV_ROOT_DEFAULT}" common slug
-  common="$(cd "$root" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null || true)"
-  if [[ -n "$common" ]] && [[ "$(cd "$root" && cd "$common/.." 2>/dev/null && pwd -P)" != "$(cd "$root" && pwd -P)" ]]; then
+  if [[ ! -e "$root/.git" ]]; then
+    echo erpify
+    return 0
+  fi
+  if ! common="$(cd "$root" && git rev-parse --git-common-dir 2>/dev/null)" || [[ -z "$common" ]]; then
+    echo "prod-env.sh: cannot read the git checkout at $root — set COMPOSE_PROJECT_NAME explicitly" >&2
+    return 1
+  fi
+  if [[ "$(cd "$root" && cd "$common/.." 2>/dev/null && pwd -P)" != "$(cd "$root" && pwd -P)" ]]; then
     slug="$(basename "$root" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$//g')"
     echo "erpify-${slug}"
   else
@@ -116,10 +145,9 @@ prod_checkout_project() {
 prod_project_name() {
   if [[ "$(prod_tls_profile "$1")" == internal ]]; then
     echo erpify-prodlocal
-  else
-    prod_checkout_project "${2:-}"
+    return 0
   fi
-  return 0
+  prod_checkout_project "${2:-}"
 }
 
 prod_compose_files() {
@@ -130,11 +158,15 @@ prod_compose_files() {
   return 0
 }
 
-# The shell's value, else the file's, else compose's default.
+# The shell's value if exported (even empty), else the file's, then compose's
+# `${VAR:-default}` — so an empty export falls to the default, not the file.
 prod_port() {
   local var="$1" default="$2" file="$3" port
-  port="${!var:-}"
-  [[ -n "$port" ]] || port="$(prod_env_value "$var" "$file" 2>/dev/null || true)"
+  if [[ -n "${!var+set}" ]]; then
+    port="${!var}"
+  else
+    port="$(prod_env_value "$var" "$file" 2>/dev/null || true)"
+  fi
   echo "${port:-$default}"
   return 0
 }
@@ -149,14 +181,25 @@ prod_published_ports() {
 }
 
 # Fail safe: only an explicitly local SERVER_NAME is non-production. A real
-# domain, an IP, a bare internal hostname or a duplicated key all count as
-# production, so an unrecognised target never takes the scriptable path.
+# domain, an IP, a bare internal hostname, an empty or duplicated key all count
+# as production, so an unrecognised target never takes the scriptable path.
+# Caddy's site-address forms are understood: hosts split on blanks AND commas,
+# with an optional scheme, port or [IPv6] brackets, in any case.
 prod_server_is_local() {
   local file="$1" server host
-  [[ -z "$(prod_env_duplicates "$file" SERVER_NAME)" ]] || return 1
+  local -a hosts=()
+  prod_env_duplicates "$file" | grep -qx SERVER_NAME && return 1
   server="$(prod_env_value SERVER_NAME "$file" 2>/dev/null || true)"
-  [[ -n "$server" ]] || return 1
-  for host in $server; do
+  IFS=$', \t' read -ra hosts <<< "$server"
+  [[ ${#hosts[@]} -gt 0 ]] || return 1
+  for host in "${hosts[@]}"; do
+    host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+    host="${host#*://}"
+    if [[ "$host" == \[* ]]; then
+      host="${host#[}"; host="${host%%]*}"
+    elif [[ "$host" == *:* && "$host" != *:*:* ]]; then
+      host="${host%%:*}"
+    fi
     case "$host" in
       *.local|*.localhost|localhost|127.0.0.1|::1) : ;;
       *) return 1 ;;
@@ -166,13 +209,15 @@ prod_server_is_local() {
 }
 
 # Every `${VAR:?…}` or `${VAR?…}` outside a whole comment line, in the files
-# every prod stack loads. A missing file is an error, never a smaller set.
+# every prod stack loads plus any overlay named after <root>. A missing file is
+# an error, never a smaller set.
 prod_required_keys() {
   local root="${1:-$PROD_ENV_ROOT_DEFAULT}" f
-  for f in "${PROD_COMPOSE_BASE[@]}"; do
+  local -a files=("${PROD_COMPOSE_BASE[@]}" "${@:2}")
+  for f in "${files[@]}"; do
     [[ -r "$root/$f" ]] || { echo "prod-env.sh: cannot read $root/$f" >&2; return 1; }
   done
-  for f in "${PROD_COMPOSE_BASE[@]}"; do cat "$root/$f"; done \
+  for f in "${files[@]}"; do cat "$root/$f"; done \
     | sed -e '/^[[:space:]]*#/d' \
     | grep -oE '\$\{[A-Z0-9_]+:?\?' \
     | tr -d '$''{:?' \
@@ -197,16 +242,25 @@ prod_mem_limit_error() {
 }
 
 prod_env_check() {
-  local file="$1" root="${2:-$PROD_ENV_ROOT_DEFAULT}" keys key value missing=() duplicated kek_bytes
+  local file="$1" root="${2:-$PROD_ENV_ROOT_DEFAULT}" keys key value missing=() duplicated interpolated kek_bytes
   local sender domain pw tmo bad_mem=""
-  keys="$(prod_required_keys "$root")" || return 1
+  local -a overlays=()
+  [[ "$(prod_tls_profile "$file")" == internal ]] && overlays=("$PROD_COMPOSE_REHEARSAL")
+  keys="$(prod_required_keys "$root" "${overlays[@]}")" || return 1
   [[ -n "$keys" ]] || { echo "✗ No required keys derived from the prod compose files — refusing an empty set."; return 1; }
 
-  # shellcheck disable=SC2086 # $keys is a newline-separated list of identifiers
-  duplicated="$(prod_env_duplicates "$file" $keys CADDY_SERVER_EXTRA_DIRECTIVES MAILER_SMTP_TIMEOUT "${PROD_MEM_KNOBS[@]}")"
+  duplicated="$(prod_env_duplicates "$file")"
   if [[ -n "$duplicated" ]]; then
     echo "✗ $file declares these keys more than once (Compose uses the last, so which value runs is hidden):"
     printf '%s\n' "$duplicated" | sed 's/^/    - /'
+    return 1
+  fi
+
+  # shellcheck disable=SC2086 # $keys is a newline-separated list of identifiers
+  interpolated="$(prod_env_interpolated "$file" $keys CADDY_SERVER_EXTRA_DIRECTIVES SERVER_NAME MAILER_SMTP_TIMEOUT "${PROD_MEM_KNOBS[@]}")"
+  if [[ -n "$interpolated" ]]; then
+    echo "✗ $file has a \$ that Compose would interpolate in these keys (single-quote the value to keep it literal):"
+    printf '%s\n' "$interpolated" | sed 's/^/    - /'
     return 1
   fi
 
@@ -230,7 +284,10 @@ prod_env_check() {
   fi
 
   sender="$(prod_env_value MAILER_SECURITY_FROM "$file" | tr '[:upper:]' '[:lower:]')"
-  domain="${sender##*@}"; domain="${domain##*.}"
+  domain=""
+  if [[ "$sender" == *@* ]]; then
+    domain="${sender##*@}"; domain="${domain##*.}"
+  fi
   if [[ "$sender" == *noreply* || "$sender" == *no-reply* ]] || [[ " ${PROD_UNDELIVERABLE_DOMAINS[*]} " == *" $domain "* ]]; then
     echo "✗ MAILER_SECURITY_FROM='$sender' is refused at send time: it must be a monitored, replyable mailbox"
     echo "  on a real domain (no no-reply@, no .local/.test/.example/.invalid/localhost)."
@@ -238,8 +295,8 @@ prod_env_check() {
   fi
 
   pw="$(prod_env_value POSTGRES_PASSWORD "$file")"
-  if [[ "$pw" =~ [/+=:@?\ ] ]]; then
-    echo "✗ POSTGRES_PASSWORD contains a URL-unsafe char (/ + = : @ ? or space) — it corrupts DATABASE_URL."
+  if ! [[ "$pw" =~ ^[A-Za-z0-9._~-]+$ ]]; then
+    echo "✗ POSTGRES_PASSWORD may hold only URL-unreserved chars (A-Z a-z 0-9 . _ ~ -) — anything else corrupts DATABASE_URL."
     echo "  Regenerate URL-safe, e.g.: openssl rand -hex 24"
     return 1
   fi
@@ -277,7 +334,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
   cmd="${1:-}"; shift || true
   case "$cmd" in
     profile)         prod_tls_profile "${1:?env file}" ;;
-    project)         prod_project_name "${1:?env file}" "${2:-}" ;;
+    project)         prod_project_name "${1:?env file}" "${2:-}" || exit 1 ;;
     compose-files)   prod_compose_files "${1:?env file}" ;;
     published-ports) prod_published_ports "${1:?env file}" ;;
     server-is-local) prod_server_is_local "${1:?env file}" ;;

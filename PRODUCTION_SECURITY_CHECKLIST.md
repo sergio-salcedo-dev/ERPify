@@ -2194,6 +2194,28 @@ mitigated state. Accepting one means recording who accepted it and against which
   | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
   | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
 
+
+- [x] **A production restore could take the scriptable non-production path, closed 2026-10-23.**
+      `restore-prod.sh` classified its target from the FIRST `SERVER_NAME` in the env file, with its
+      own parser, and never refused a duplicate — `restore.prod` does not run `prod.env.check` — while
+      Compose serves the LAST. A file declaring `SERVER_NAME=erpify.local` and then a real domain, or
+      a comma-joined `prod.example.com,erpify.local` (Caddy's own list syntax, which the word split read
+      as one local token), let `RESTORE_YES=1` skip the typed confirmation and `ALLOW_PROD_RESTORE`
+      against a live database. The guard is now `scripts/deploy/lib/prod-env.sh server-is-local`: last
+      occurrence, blanks AND commas, scheme/port/brackets/case understood, and an empty, absent or
+      duplicated `SERVER_NAME` counts as production. Pinned in `ProdEnvReadingGateTest`; that the script
+      calls it is pinned in `ProdEnvProjectGateTest`. **Residual:** the guard reads the env file, not an
+      exported `SERVER_NAME`, which Compose would prefer.
+
+- [ ] **Backup and restore re-derive their compose project on every run, from the env file's TLS
+      profile.** `prod-env.sh project` answers `erpify-prodlocal` for a `tls internal` file and the
+      checkout's own project otherwise; nothing records which project a stack was STARTED under. Editing
+      `CADDY_SERVER_EXTRA_DIRECTIVES` between a stand-up and a `make backup.prod`/`restore.prod` therefore
+      moves those commands to the other project — a backup of an empty stack, or a restore into one.
+      Mitigated by the guide's rule that a box is promoted only after `make deploy.local.down`, and by
+      `make ENV=prod docker.info` printing the resolved project. Closing it means recording the project at
+      stand-up (a label or a state file) and refusing a run that resolves a different one.
+
 ## 8. Deploy & verify
 
 - [ ] `make deploy.local` (or `scripts/deploy/deploy-local.sh`) reaches a 200 on

@@ -47,6 +47,9 @@ ifneq ($(filter $(ENV),prod staging),)
   PROD_TLS_PROFILE := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" profile "$(PROD_ENV_PATH)")
   ifeq ($(origin COMPOSE_PROJECT_NAME),undefined)
     COMPOSE_PROJECT_NAME := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" project "$(PROD_ENV_PATH)" "$(PROJECT_ROOT)")
+    ifeq ($(strip $(COMPOSE_PROJECT_NAME)),)
+      $(error prod-env.sh resolved no compose project for $(PROD_ENV_PATH) — set COMPOSE_PROJECT_NAME explicitly)
+    endif
   endif
 endif
 
@@ -107,8 +110,9 @@ else
   ENV_FILE_ARGS :=
 endif
 # The rehearsal's own overlay (mailpit), only for a tls-internal env file — the
-# list prod-env.sh compose-files answers. ScheduleConsumptionGateTest refuses a
-# worker or a replica count in it, so the worker stacks it reads stay the above.
+# list prod-env.sh compose-files answers. ProdEnvProjectGateTest refuses a worker,
+# consume command or replica count in it, so the worker stacks
+# ScheduleConsumptionGateTest reads stay the ones above.
 ifeq ($(PROD_TLS_PROFILE),internal)
   COMPOSE_FILES += -f compose.rehearsal.yaml
 endif

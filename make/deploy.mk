@@ -24,7 +24,7 @@ prod.env.check: ## Validate .env.prod.local as Compose will read it (required ke
 		exit 1; \
 	fi; \
 	bash "$(PROD_ENV_LIB)" check "$$file" || exit 1; \
-	echo "✓ $$file is complete — all required keys set."
+	echo "✓ $$file passes every check."
 
 # The project — erpify-prodlocal for the tls-internal rehearsal, the checkout's own
 # otherwise — is resolved from the env file by make/config.mk via scripts/deploy/lib/prod-env.sh.
