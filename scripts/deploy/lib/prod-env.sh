@@ -116,25 +116,26 @@ prod_tls_profile() {
 
 # The project a checkout's own stacks run as: `erpify` in the primary checkout,
 # `erpify-<slug>` in a linked worktree — the rule make/config.mk applies to dev.
-# A directory with no `.git` is no checkout and keeps `erpify`; one whose git
-# cannot be read (dubious ownership under root, a pointer this host cannot
-# resolve) FAILS, because guessing `erpify` there is guessing the primary's.
+# Read from the checkout's SHAPE, never by running git: `.git` is a directory in
+# a primary checkout and a `gitdir:` file in a linked worktree. Running git would
+# make the answer depend on who runs it — as root over a checkout another user
+# owns, git refuses ("dubious ownership"), which is how a nightly backup cron
+# runs — and lifting that refusal would have root read that user's git config.
+# No `.git` at all is no checkout and keeps `erpify`; a `.git` file that is not
+# a readable `gitdir:` pointer FAILS, because guessing `erpify` there is
+# guessing the primary's project.
 prod_checkout_project() {
-  local root="${1:-$PROD_ENV_ROOT_DEFAULT}" common slug
-  if [[ ! -e "$root/.git" ]]; then
+  local root="${1:-$PROD_ENV_ROOT_DEFAULT}" slug
+  if [[ -d "$root/.git" || ! -e "$root/.git" ]]; then
     echo erpify
     return 0
   fi
-  if ! common="$(cd "$root" && git rev-parse --git-common-dir 2>/dev/null)" || [[ -z "$common" ]]; then
-    echo "prod-env.sh: cannot read the git checkout at $root — set COMPOSE_PROJECT_NAME explicitly" >&2
+  if ! grep -qE '^gitdir: ' "$root/.git" 2>/dev/null; then
+    echo "prod-env.sh: $root/.git is neither a directory nor a readable gitdir: pointer — set COMPOSE_PROJECT_NAME explicitly" >&2
     return 1
   fi
-  if [[ "$(cd "$root" && cd "$common/.." 2>/dev/null && pwd -P)" != "$(cd "$root" && pwd -P)" ]]; then
-    slug="$(basename "$root" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$//g')"
-    echo "erpify-${slug}"
-  else
-    echo erpify
-  fi
+  slug="$(basename "$(cd "$root" && pwd -P)" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$//g')"
+  echo "erpify-${slug}"
   return 0
 }
 

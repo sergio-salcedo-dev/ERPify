@@ -237,14 +237,20 @@ final class ProdEnvProjectGateTest extends ProdEnvScriptTestCase
     }
 
     /**
-     * A checkout whose git cannot be read must fail, not answer `erpify` — that is the primary's project.
+     * A `.git` that is neither a directory nor a `gitdir:` pointer must fail, not answer `erpify` — that is the
+     * primary's project. A pointer whose target this host cannot see still names a linked worktree, which is
+     * what lets the answer stay the same for root, for another user and inside a container.
      */
     #[Test]
     public function anUnreadableCheckoutFailsInsteadOfGuessing(): void
     {
-        \mkdir($this->scratch . '/broken');
-        \file_put_contents($this->scratch . '/broken/.git', "gitdir: /nowhere/at/all\n");
+        \mkdir($this->scratch . '/elsewhere');
+        \file_put_contents($this->scratch . '/elsewhere/.git', "gitdir: /nowhere/at/all\n");
         $public = $this->envFile("CADDY_SERVER_EXTRA_DIRECTIVES=\n");
+        $this->assertSame('erpify-elsewhere', $this->answer(['project', $public, $this->scratch . '/elsewhere']));
+
+        \mkdir($this->scratch . '/broken');
+        \file_put_contents($this->scratch . '/broken/.git', "not a pointer\n");
 
         $result = ProdEnvScript::run($this->root(), ['project', $public, $this->scratch . '/broken']);
 
