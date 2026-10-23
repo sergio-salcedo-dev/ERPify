@@ -2,7 +2,7 @@
 title: 'gh-1074 — residuales GDPR/borrado del ledger (DW-13, DW-14, DW-15, DW-60)'
 type: 'bugfix'
 created: '2026-10-23'
-status: 'in-review'
+status: 'done'
 baseline_commit: '2a84ac7df747869ab3146e3b0f12d37563403a42'
 route: 'dispatch'
 review_loop_iteration: 1
@@ -67,7 +67,7 @@ context:
 - [x] `EventStoreSchemaListener.php` -- docblock: el índice de expresión vive en la migración porque DBAL no lo ve (medido).
 - [x] `api/tests/Functional/Shared/Event/EventStoreSubjectAnonymiserPlanFunctionalTest.php` -- sobre una población sembrada (transacción revertida) y con `ANALYZE`, `EXPLAIN (FORMAT JSON)` del `UPDATE` real, sin ANALYZE (no ejecuta), contiene un nodo con `Index Name` = el índice de `payload`. Sin `enable_seqscan=off` ni comparación textual del plan; falsificarlo quitando el índice.
 - [x] `docs/adr/event-store-and-projections.md` D12 -- enmienda.
-- [ ] `deferred-work.md` -- solo después de abrir la PR y con los gates en verde: DW-13 y DW-15 a `done 2026-10-23` con `resolution:` y el número **real** de la PR. DW-60 cerrada como aceptada: residuo (filas anteriores con el literal `[REDACTED]` del cliente), por qué no hay backfill (mutación sancionada nueva para un literal que la atribución ya maneja), control verificado (el predicado de flags atribuye bien), quién acepta (el usuario, 2026-10-23) y reapertura (datos reales dentro de la ventana de retención de `audit_log`). DW-14 sigue abierta: evidencia (`EventStore` solo tiene `append`/`stream`; ningún agregado-persona se rehidrata; no hay flag de borrado), riesgo residual (un id de persona que se escape al borrado preventivo en `event_store` no lo detecta nadie; lo leen los proyectores al hacer replay), condición de cierre (el trigger de D12) y por qué no ahora (reabre D12). Que el trigger no haya saltado no prueba que no haya riesgo, y la entrada lo dice.
+- [x] `deferred-work.md` -- solo después de abrir la PR y con los gates en verde: DW-13 y DW-15 a `done 2026-10-23` con `resolution:` y el número **real** de la PR. DW-60 cerrada como aceptada: residuo (filas anteriores con el literal `[REDACTED]` del cliente), por qué no hay backfill (mutación sancionada nueva para un literal que la atribución ya maneja), control verificado (el predicado de flags atribuye bien), quién acepta (el usuario, 2026-10-23) y reapertura (datos reales dentro de la ventana de retención de `audit_log`). DW-14 sigue abierta: evidencia (`EventStore` solo tiene `append`/`stream`; ningún agregado-persona se rehidrata; no hay flag de borrado), riesgo residual (un id de persona que se escape al borrado preventivo en `event_store` no lo detecta nadie; lo leen los proyectores al hacer replay), condición de cierre (el trigger de D12) y por qué no ahora (reabre D12). Que el trigger no haya saltado no prueba que no haya riesgo, y la entrada lo dice.
 
 **Acceptance Criteria:**
 - Given una etiqueta borrada del texto de la ayuda, del aviso o de la línea de éxito, when corre la suite, then un test falla nombrando la propiedad.
