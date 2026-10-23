@@ -8,8 +8,8 @@ import { ensureLiveRecoverySecret } from "./fixtures/recovery-secret-api";
  * Leaves the E2E administrator holding a LIVE recovery secret before any spec runs, and fails the
  * suite if it cannot.
  *
- * The back office warns every administrator without one on every page, and the E2E user is the
- * installation's administrator: without this, that warning stands first in `<main>` on every route
+ * The back office warns every administrator without one on every page, and the E2E user is an
+ * installation administrator: without this, that warning stands first in `<main>` on every route
  * every spec visits. The one spec about the warning (`recovery-readiness-real-api`) builds its own
  * "none" state and ends live again. How the state is reached without spending the shared
  * password-proof budget needlessly is {@link ensureLiveRecoverySecret}'s.
