@@ -98,10 +98,11 @@
 		# The embedded hub is dunglas/mercure 1.x, which refuses to start with the two keys above unless
 		# compatibility mode is named. The application speaks the 0.x protocol (`protocol_version: '0.x'` in
 		# api/config/packages/mercure.yaml): its tokens carry the `mercure` claim, its subscriber cookie is
-		# `mercureAuthorization` and it subscribes with `?topic=`. Mode 8 is what keeps all three working, and
-		# it validates such a token exactly as the 0.x hub did — no `aud`, no `exp` required. Leaving it means
-		# moving the keys into an `issuer` block and the bundle to protocol 1.0 in the same change; either
-		# half alone stops every publish and every private subscription.
+		# `mercureAuthorization` and it subscribes with `?topic=`. Mode 8 is what keeps all three working: it
+		# validates such a token with no `aud` and no `exp` required. Leaving it means moving the keys into an
+		# `issuer` block, the bundle to protocol 1.0 and the PWA subscriber in one change. A half-move need not
+		# fail loudly — this mode also takes a 1.0 token whose `aud` names the hub — so whether publish and
+		# subscribe survive it depends on the `aud` the bundle mints (PRODUCTION_SECURITY_CHECKLIST.md §7).
 		protocol_version_compatibility 8
 		# Allow anonymous subscribers (double-check that it's what you want)
 		anonymous
