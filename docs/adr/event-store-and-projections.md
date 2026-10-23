@@ -470,6 +470,55 @@ gate en rojo, y su mensaje lo advierte para que un falso positivo no se tome por
 escribirse: `audit_log` tenía entonces tres, todas anteriores a esa frase. Esperar habría sido esperar a algo
 que ya había ocurrido.
 
+*Enmienda (2026-10-23, el predicado y su índice).* La sentencia sancionada no cambia de miembro ni de `SET`;
+cambia su `WHERE`. `col::text ILIKE '%id%'` era un scan secuencial del log entero (medido: ~3 s a 1M de filas),
+y pasa a ser `event_store_uuids(col) @> ARRAY[CAST(:id AS uuid)]`, con un índice GIN sobre esa misma expresión
+en `payload` y en `metadata` (`event_store_payload_uuids_idx`, `event_store_metadata_uuids_idx`).
+`event_store_uuids(jsonb) RETURNS uuid[]` (`IMMUTABLE STRICT PARALLEL SAFE`) recoge **toda** ventana de 36
+caracteres con forma de UUID del texto serializado, **solapadas incluidas**, sin duplicados y ordenadas. Toda
+ventana así cae dentro de un tramo maximal de `[0-9a-fA-F-]`, y dentro de él es los 8 últimos caracteres de un
+grupo separado por `-`, tres grupos de exactamente 4 y los 12 primeros del siguiente; la función saca esos tramos
+una vez, los parte por `-` y lee cada secuencia así, en una sola pasada lineal. La clase de caracteres escribe las
+dos cajas en vez de usar el flag `'i'`, cuyo significado dependería de la colación y no casa con `IMMUTABLE`.
+La función se crea con `CREATE OR REPLACE` y los índices con `IF NOT EXISTS`: `doctrine:schema:drop
+--full-database` (lo que corre `make db.reset`) no borra funciones, y sin idempotencia el siguiente `migrate`
+falla con «already exists».
+El contrato es `col::text ILIKE '%id%'` ⇔ `event_store_uuids(col) @> ARRAY[id]` para todo id válido, en
+claves y valores, a cualquier profundidad y con cualquier caja; por eso el borrado sigue siendo **por valor** y
+nada de lo de arriba se estrecha. Medido a 1M de filas con la función final: misma selección que `ILIKE`;
+`UPDATE` 3,4 s → 9–144 ms; índice de 138 MB; 50k inserts pasan de 1,7–5,7 s a 8,9–12,0 s (ruido alto entre rondas,
+entre ×2 y ×7).
+Lo fijan tres tests distintos: la equivalencia de conjuntos sobre un corpus
+adversarial (`EventStoreSubjectPredicateEquivalenceFunctionalTest`), la existencia y forma de la función y los
+índices (`EventStoreUuidIndexSchemaFunctionalTest`, porque DBAL no introspecciona un índice de expresión —
+`attnum = 0` en `pg_attribute`— y `schema:validate` sigue verde sin ellos; la migración es su dueña) y el plan
+(`EventStoreSubjectAnonymiserPlanFunctionalTest`, sobre una población sembrada y con `ANALYZE`).
+
+- *Descartado: `regexp_matches(…, 'g')` sobre el patrón de UUID como extractor.* Reanuda tras el final de cada
+  coincidencia, así que un UUID que empieza dentro de otra ventana con forma de UUID se pierde y la equivalencia
+  se rompe en silencio (el corpus lo incluye y esa variante lo pone rojo).
+- *Descartado: `regexp_instr` reanudando en `pos+1`.* Exacto, pero cuadrático: cada vuelta vuelve a recorrer el
+  texto desde el principio. Medido: 8,9 s por insert con un documento de 147 KB, y lo mismo con un tramo hostil
+  de 90k caracteres hex/guion; la versión por tramos tarda 2–19 ms en esos mismos casos.
+- *Descartado: índice trigram (`pg_trgm`) sobre el texto.* Mismo resultado de selección, pero 425 MB de índice
+  y inserts ×7,8.
+- *Descartado: aceptar el scan y documentarlo.* El borrado corre en la transacción del caso de uso y se repite
+  cada cinco minutos durante la hora de re-barrido; su coste crece con el log entero, no con el sujeto.
+- *`uuid[]` y no `text[]`:* 16 bytes por entrada frente a 36, y el `CAST` del parámetro normaliza la caja sin
+  `lower()`.
+
+**Migración sin `CONCURRENTLY`.** Los índices se crean con `CREATE INDEX` normal dentro de la transacción de la
+migración, lo que bloquea las escrituras de `event_store` mientras se construyen (a 1M de filas: 32 s el de `payload`, 5,5 s el de `metadata`);
+sobre los despliegues de hoy, sin datos, es instantáneo. Con un log poblado, la receta es hacerlo **fuera de
+banda y antes** de que corra la migración, en una sesión sin transacción abierta (`CONCURRENTLY` no puede ir dentro
+de una): primero `CREATE OR REPLACE FUNCTION event_store_uuids(…)` con el cuerpo exacto de la migración, después
+`CREATE INDEX CONCURRENTLY IF NOT EXISTS event_store_payload_uuids_idx ON event_store USING GIN
+(event_store_uuids(payload))` y lo mismo para `event_store_metadata_uuids_idx` sobre `metadata`. Cuando la
+migración corre después, su `CREATE OR REPLACE` reescribe la función con el mismo cuerpo y sus dos
+`IF NOT EXISTS` no hacen nada, de modo que el pipeline `--all-or-nothing` no cambia. Si un build concurrente falla
+deja el índice `INVALID` (`pg_index.indisvalid = false`), que no se usa pero se mantiene en cada escritura, y
+`IF NOT EXISTS` lo daría por bueno: se borra con `DROP INDEX CONCURRENTLY` y se repite antes de migrar.
+
 **Trigger de revisita:** (a) que un agregado-persona pase a ser **event-sourced de verdad** —una clave de stream
 reescrita cambiaría la identidad de un agregado vivo—, o (b) que aterrice el **relay externo** de D8: un `UPDATE`
 aguas arriba **no** se propaga a un sumidero ya replicado. Nótese que (b) no exime a la alternativa del
