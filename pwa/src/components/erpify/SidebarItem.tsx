@@ -75,6 +75,7 @@ export function SidebarItem({
         type="button"
         onClick={handleItemClick}
         title={name}
+        aria-current={isActive && !hasSubItems ? "page" : undefined}
         data-testid={testId}
         className={`sidebar-item w-full flex items-center justify-between p-2.5 rounded-md font-semibold transition-all group ${
           isActive
@@ -118,6 +119,7 @@ export function SidebarItem({
                 key={subItem.testId ?? subItem.path}
                 onClick={() => onClick(subItem.path, subItem.action)}
                 title={subItem.name}
+                aria-current={isSubActive ? "page" : undefined}
                 aria-disabled={subItem.isBusy || undefined}
                 data-testid={subItem.testId}
                 className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${

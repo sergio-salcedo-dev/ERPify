@@ -264,7 +264,7 @@ make deploy.local.down                 # stop it (volumes kept) before `make app
 ```
 
 With `tls internal` the stack runs as project `erpify-prodlocal`, never on dev's
-`erpify` volumes; on public ACME (a VPS) it keeps `erpify`
+`erpify` volumes; on public ACME it runs as the checkout's own project — `erpify` on a VPS deploying from its primary checkout
 (`scripts/deploy/lib/prod-env.sh`); the rehearsal also loads `compose.rehearsal.yaml`,
 which adds a loopback-only mailpit for its security mail.
 

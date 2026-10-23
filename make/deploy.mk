@@ -8,73 +8,26 @@
 
 ## —— Deploy ———————————————————————————————————————————————————————————————
 
-# Keys that MUST be set (non-empty, no CHANGE_ME placeholder) before the prod
-# stack can start: every required interpolation in the compose files every prod
-# stack loads, as scripts/deploy/lib/prod-env.sh derives them — the same reader
-# prod.env.check runs and ProdEnvSupportScriptGateTest executes.
+# Every check on a prod env file lives in scripts/deploy/lib/prod-env.sh, the
+# reader the deploy scripts share and the ProdEnv*GateTest family executes:
+# required keys (derived from the compose files' `${VAR:?}`/`${VAR?}`),
+# placeholders, duplicates, AUDIT_KEK length, the security sender, the Postgres
+# password, the SMTP timeout and the memory knobs — read as Compose reads them.
 PROD_ENV_LIB := $(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh
-PROD_REQUIRED_KEYS = $(shell bash "$(PROD_ENV_LIB)" required-keys)
 
-prod.env.check: ## Validate .env.prod.local holds every required prod secret (fails on missing file / unset / placeholder / duplicate / wrong-length AUDIT_KEK)
+prod.env.check: ## Validate .env.prod.local as Compose will read it (required keys, placeholders, duplicates, AUDIT_KEK, sender, password, timeout, memory knobs)
 	@file="$(PROD_ENV_PATH)"; \
 	if [ ! -f "$$file" ]; then \
-		echo "✗ $(PROD_ENV_FILE) not found."; \
+		echo "✗ $$file not found."; \
 		echo "  Copy the template and fill in every CHANGE_ME value:"; \
-		echo "    cp .env.prod.example $(PROD_ENV_FILE)"; \
+		echo "    cp .env.prod.example $$file"; \
 		exit 1; \
 	fi; \
 	bash "$(PROD_ENV_LIB)" check "$$file" || exit 1; \
-	pw=$$(grep -E "^POSTGRES_PASSWORD=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
-	if printf '%s' "$$pw" | grep -q '[/+=:@? ]'; then \
-		echo "✗ POSTGRES_PASSWORD contains a URL-unsafe char (/ + = : @ ? or space) — it corrupts DATABASE_URL."; \
-		echo "  Regenerate URL-safe, e.g.: openssl rand -hex 24"; \
-		exit 1; \
-	fi; \
-	tmo=$$(grep -E "^MAILER_SMTP_TIMEOUT=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
-	if [ -n "$$tmo" ]; then \
-		if ! printf '%s' "$$tmo" | grep -qE '^[0-9]+(\.[0-9]+)?$$'; then \
-			echo "✗ MAILER_SMTP_TIMEOUT must be a plain number of seconds — got '$$tmo'."; \
-			echo "  A duration spelling like '10s' passes compose, the image build and the container lint,"; \
-			echo "  then throws on the first email and returns false from every lockout tick, silently."; \
-			exit 1; \
-		fi; \
-		if [ "$$(awk -v v="$$tmo" 'BEGIN { print (v >= 1 && v <= 300) ? 1 : 0 }')" != "1" ]; then \
-			echo "✗ MAILER_SMTP_TIMEOUT must be between 1 and 300 seconds — got '$$tmo'."; \
-			echo "  Below 1 no relay completes a round trip, so mail is discarded while looking configured;"; \
-			echo "  above 300 the bound no longer protects the five-minute lockout tick it exists for."; \
-			exit 1; \
-		fi; \
-	fi; \
-	bad_mem=""; \
-	for key in PHP_MEM_LIMIT PWA_MEM_LIMIT DB_MEM_LIMIT WORKER_MEM_LIMIT SCHEDULER_MEM_LIMIT; do \
-		val=$$(grep -E "^$$key=" "$$file" | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$$//'); \
-		[ -n "$$val" ] || continue; \
-		if ! printf '%s' "$$val" | grep -qE '^[0-9]{1,9}[bBkKmMgG]$$'; then \
-			bad_mem="$$bad_mem\n    - $$key='$$val': not a valid Docker memory limit (need a positive integer, max 9 digits, with a b/k/m/g suffix — a bare '512' reads as 512 BYTES)"; \
-			continue; \
-		fi; \
-		unit=$$(printf '%s' "$$val" | sed -E 's/^[0-9]+//' | tr '[:upper:]' '[:lower:]'); \
-		digits=$$(printf '%s' "$$val" | sed -E 's/[bBkKmMgG]$$//'); \
-		case "$$unit" in \
-			b) mult=1 ;; \
-			k) mult=1024 ;; \
-			m) mult=1048576 ;; \
-			g) mult=1073741824 ;; \
-		esac; \
-		bytes=$$(( digits * mult )); \
-		if [ "$$bytes" -lt 6291456 ]; then \
-			bad_mem="$$bad_mem\n    - $$key='$$val' ($$bytes bytes): below Docker's own ~6 MiB minimum — the container fails to start with 'Minimum memory limit allowed is 6MB', naming neither key nor service"; \
-		fi; \
-	done; \
-	if [ -n "$$bad_mem" ]; then \
-		echo "✗ $(PROD_ENV_FILE) has invalid memory-limit knobs:"; \
-		printf '%b\n' "$$bad_mem"; \
-		exit 1; \
-	fi; \
-	echo "✓ $(PROD_ENV_FILE) is complete — all required keys set."
+	echo "✓ $$file passes every check."
 
-# The project (erpify-prodlocal for the tls-internal rehearsal, erpify on ACME)
-# is resolved from the env file by make/config.mk and scripts/deploy/lib/prod-env.sh.
+# The project — erpify-prodlocal for the tls-internal rehearsal, the checkout's own
+# otherwise — is resolved from the env file by make/config.mk via scripts/deploy/lib/prod-env.sh.
 deploy.local: ## Stand up the prod profile on this host at https://erpify.local (preflight → up → migrate → smoke → CA export + trust guidance)
 	@bash $(PROJECT_ROOT)/scripts/deploy/deploy-local.sh
 
