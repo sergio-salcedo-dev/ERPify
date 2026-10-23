@@ -294,6 +294,24 @@ Feature: Server-side session registry and admission gate
     Then the response status code should be 401
     And the JSON node "type" should be equal to "unauthenticated"
 
+  # A suspension ejects that identity's live sessions through the same refresh, which is what lets the use case's
+  # post-commit revoke stay best-effort: a status change touches neither credential nor roles, so without the
+  # status in the comparison a revoke that failed after the commit would leave the suspended identity signed in
+  # until its session's TTL. Out-of-band for the reason the scenarios above are — the registry row stays ACTIVE,
+  # so the refusal is the firewall's and not the gate's `session-expired`.
+  Scenario: Suspending a signed-in identity ejects its live session even when no revoke ran
+    Given I reload the fixtures
+    And I send a "GET" request to "/me"
+    And the response status code should be 200
+    When I execute the SQL query "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'"
+    And I execute the SQL query "SELECT id FROM iam_session WHERE id = '0190d1e2-f3a4-7b5c-8d6e-1f2a3b4c5d01' AND status = 'ACTIVE'"
+    And there should have 1 records in SQL result
+    And I send a "GET" request to "/me"
+    Then the response status code should be 401
+    And the JSON node "type" should be equal to "unauthenticated"
+    # The suspended identity is the one every later scenario signs in as.
+    And I reload the fixtures
+
   @anonymous
   Scenario: An identity whose stored roles hold a retired value can still sign in
     # The ejection above is survivable only if the door still opens afterwards, and that is the whole

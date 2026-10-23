@@ -120,16 +120,6 @@
 	# Disable Topics tracking if not enabled explicitly: https://github.com/jkarlin/topics
 	header ?Permissions-Policy "browsing-topics=()"
 
-	# Symfony reads a JSON body whole through `php://input`, which `post_max_size` does not bound, so without
-	# this an anonymous POST to the login route can drive a worker into `memory_limit` — a fatal that ends the
-	# worker process, not just the request. The largest legitimate API payload is a few kilobytes; the bound is
-	# scoped to the API so the Sentry tunnel and the hub keep their own sizes. A route that comes to accept
-	# uploads raises it for its own path rather than here for everything.
-	@apiBody path /api*
-	request_body @apiBody {
-		max_size 1MB
-	}
-
 	route {
 		# Matches requests for HTML documents, for static files and for Next.js files,
 		# except for known API paths and paths with extensions handled by the API / Symfony
@@ -155,6 +145,16 @@
 		rewrite @phpRoute index.php
 
 		@frontController path index.php
+		# Every request PHP serves is bounded here, after the rewrite, rather than by its spelling: Symfony derives
+		# its route from REQUEST_URI, so `/index.php/api/…` reaches the API routes without ever matching an `/api*`
+		# path. Symfony reads a JSON body whole, and an anonymous POST to the login route must not cost a worker
+		# more than this; the largest legitimate payload is a few kilobytes. The PWA and the Sentry tunnel are
+		# proxied above and the hub is its own handler, so they keep their own sizes. The bound is applied as the
+		# body is read, not from Content-Length, so a client past it sees its request fail and is not promised a 413.
+		# A route that comes to accept uploads (`erpify.images.max_input_bytes` is 20 MB) needs its own bound.
+		request_body @frontController {
+			max_size 1MB
+		}
 		php @frontController {
 			{$FRANKENPHP_SITE_CONFIG}
 		}

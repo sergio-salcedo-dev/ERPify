@@ -283,16 +283,18 @@ Feature: Assign an identity's roles
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
   # Since an actor may not target itself, the last-admin guard can only be met over sequential HTTP by an actor that no
-  # longer counts: the seeded administrator is suspended beneath its live session (the admission gate reads the
-  # session row, never the status), and victor is promoted to be the one ACTIVE administrator left. Demoting
+  # longer counts: the seeded administrator is suspended and its session is seated FROM that suspended row (the
+  # firewall drops a session whose copy of the identity no longer matches the stored one, status included, so a
+  # suspension written beneath a live session would sign it out), and victor is promoted to be the one ACTIVE
+  # administrator left. Demoting
   # him would drain the pool. The shape the guard exists for — two administrators acting on each other
   # concurrently — is not drivable here. Kept LAST in the feature: it suspends the identity every other
   # scenario logs in as.
   Scenario: Demoting the last active administrator is refused with 409 and nothing changes
-    Given I am logged in as an administrator
-    And the stored events are cleared
-    And I execute the SQL query "UPDATE identity_user SET roles = jsonb_build_array('ADMIN')::json WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e'"
+    Given I execute the SQL query "UPDATE identity_user SET roles = jsonb_build_array('ADMIN')::json WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e'"
     And I execute the SQL query "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And I am logged in as an administrator
+    And the stored events are cleared
     And I execute the SQL query "SELECT id FROM identity_user WHERE status = 'ACTIVE' AND roles::jsonb @> jsonb_build_array('ADMIN')"
     And there should have 1 records in SQL result
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:

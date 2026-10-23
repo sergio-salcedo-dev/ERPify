@@ -576,11 +576,11 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `change` escrita antes de existir el sellado o directamente en la base de datos —
   `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
-**Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
-`X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
-exactamente la decisión que ya usa el rate-limiter del PWA (ver `PRODUCTION_SECURITY_CHECKLIST.md`).
-**Nunca** el `X-Forwarded-For` crudo del cliente (spoofeable). La captura se ejecuta en Epic 2; aquí
-se fija el contrato del dato.
+**Origen de `ip` (trust boundary).** El valor de `ip` es `Request::getClientIp()`, la misma decisión
+que toma el rate-limiter de la API. FrankenPHP es el borde —ejecuta PHP dentro del Caddy que aceptó la
+conexión— y prod no confía en ningún salto (`SYMFONY_TRUSTED_PROXIES` vacío en `compose.prod.yaml`), así
+que es el par TCP. Sólo un despliegue con un balanceador real delante nombra ahí su dirección, y entonces
+cuenta la entrada que añade ese salto. **Nunca** el `X-Forwarded-For` crudo del cliente (spoofeable).
 
 **Input no confiable (*tainted*).** `ip`, `user_agent` y `metadata` son datos controlados por el
 cliente / no confiables: deben escaparse al renderizarse en la UI admin (Epic 4) —nunca

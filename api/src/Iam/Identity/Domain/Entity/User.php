@@ -67,9 +67,9 @@ final class User extends AggregateRoot
 {
     /**
      * Consecutive failed attempts that trip the lockout, and how long it then holds (`PT15M`). A second,
-     * per-identity line behind the ephemeral per-IP `login_throttling` (max 5): the persistent counter catches
-     * a distributed credential-stuffing run that sprays a single account from many IPs and so evades the
-     * per-IP throttle — hence the higher threshold, which never fires on honest typos.
+     * per-identity line behind the ephemeral per-IP `login_throttling` (max 5): the persistent counter stops a
+     * run that sprays a single account from many IPs, and so evades the per-IP throttle, from opening a session
+     * while the lock holds — hence the higher threshold, which never fires on honest typos.
      */
     public const int MAX_FAILED_ATTEMPTS = 10;
 
