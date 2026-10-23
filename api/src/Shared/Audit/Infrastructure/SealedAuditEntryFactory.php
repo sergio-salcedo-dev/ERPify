@@ -22,8 +22,9 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * correlation id is the request's canonical id when one is in flight, otherwise a fresh UUIDv7 so the
  * entry never carries a null correlation id. The client `ip` and `user_agent` are read from the same
  * in-flight request — `ip` via `Request::getClientIp()`, the exact trust-boundary decision the
- * rate-limiter already makes (honours `SYMFONY_TRUSTED_PROXIES`, so a spoofed `X-Forwarded-For` cannot
- * forge it) — and are null off-request; both stay tainted downstream.
+ * rate-limiter already makes (honours `SYMFONY_TRUSTED_PROXIES`, which prod leaves empty, so the value is
+ * the TCP peer unless a deployment names a load balancer there) — and are null off-request; both stay
+ * tainted downstream.
  *
  * Sealing here — in the request cycle, not in the off-request worker that persists the entry — is what
  * keeps an activity entry from being mislabelled as a system act.

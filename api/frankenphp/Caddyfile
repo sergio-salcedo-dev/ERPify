@@ -120,6 +120,16 @@
 	# Disable Topics tracking if not enabled explicitly: https://github.com/jkarlin/topics
 	header ?Permissions-Policy "browsing-topics=()"
 
+	# Symfony reads a JSON body whole through `php://input`, which `post_max_size` does not bound, so without
+	# this an anonymous POST to the login route can drive a worker into `memory_limit` — a fatal that ends the
+	# worker process, not just the request. The largest legitimate API payload is a few kilobytes; the bound is
+	# scoped to the API so the Sentry tunnel and the hub keep their own sizes. A route that comes to accept
+	# uploads raises it for its own path rather than here for everything.
+	@apiBody path /api*
+	request_body @apiBody {
+		max_size 1MB
+	}
+
 	route {
 		# Matches requests for HTML documents, for static files and for Next.js files,
 		# except for known API paths and paths with extensions handled by the API / Symfony
