@@ -7,6 +7,7 @@ namespace Erpify\Shared\Audit\Application;
 use DateTimeImmutable;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditMetadataKey;
 use Erpify\Shared\Audit\Domain\AuditRedaction;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
@@ -26,12 +27,22 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * may still hold a client-sent literal, and on any row the erasure flags are what attribute it (see
  * {@see AuditRedaction}).
  *
- * **`metadata.changes` belongs to a `change` entry alone.** That key is the field diff, and only the
- * change-capture listener seals its personal values before they reach storage; any other caller would write
- * it in clear, where no erasure pass reaches it — both anonymisers rewrite columns, never `metadata`, and
- * crypto-shredding only matters to a value encrypted under the destroyed key. Refusing it here, where every
- * row the writer persists is built, closes that path for every caller rather than for the one public logger,
- * and it is what lets the detail route read the level as the diff's provenance.
+ * **`metadata` speaks a closed vocabulary, checked here.** Every key must be an {@see AuditMetadataKey} and every
+ * value must have that key's shape, because no erasure pass reaches this column — both anonymisers rewrite
+ * columns, never `metadata`, and crypto-shredding only matters to a value encrypted under the destroyed key —
+ * so whatever enters it stays for the life of the row. This constructor is where every row the writer
+ * persists is built, the change-capture listener's included, so it is the one place a key computed away from
+ * its call site cannot slip past.
+ *
+ * **`metadata.changes` belongs to a `change` entry alone**, and so does its sibling `operation`. That key is
+ * the field diff, and only the change-capture listener seals its personal values before they reach storage;
+ * any other caller would write it in clear. Refusing it on every other level is also what lets the detail
+ * route read the level as the diff's provenance.
+ *
+ * **And it is bounded**, as `action` and `user_agent` are by their column widths: {@see MAX_METADATA_BYTES} is
+ * measured as JSON text with Unicode and slashes unescaped, so a non-Latin name costs its UTF-8 bytes rather
+ * than the `\uXXXX` spelling the writer happens to send. Quotes, backslashes and control characters still count
+ * at their escaped length, so the measure is an upper bound on what a `jsonb` value stores, never below it.
  */
 final readonly class AuditLogEntry
 {
@@ -42,7 +53,17 @@ final readonly class AuditLogEntry
     private const int MAX_FIELD_LENGTH = 100;
 
     /** The `metadata` key holding the field diff, which only a `change` entry may carry. */
-    public const string CHANGES_KEY = 'changes';
+    public const string CHANGES_KEY = AuditMetadataKey::Changes->value;
+
+    /**
+     * Over twice the largest `change` entry a legitimate write can produce, which is the case that matters: a
+     * refused `change` entry fails the write that produced it. That entry is a `Bank` update moving `name`,
+     * `nameNormalized` and `shortName` at their column widths — 4,792 bytes with every character four UTF-8
+     * bytes, about 6.9 KB if every character were one JSON escapes as `\u00XX` — and
+     * `AuditLogEntryMetadataBoundTest` builds both and admits them. The bound refuses a producer that started
+     * dumping a body or a list.
+     */
+    public const int MAX_METADATA_BYTES = 16_384;
 
     /**
      * @param array<string, mixed> $metadata
@@ -65,7 +86,7 @@ final readonly class AuditLogEntry
     }
 
     /**
-     * @param array<string, mixed> $metadata
+     * @param array<array-key, mixed> $metadata any keys at all: the ones outside the vocabulary are refused here
      *
      * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
@@ -94,9 +115,7 @@ final readonly class AuditLogEntry
             self::guardFieldLength('resourceType', $resource->type);
         }
 
-        if (AuditLevel::CHANGE !== $level && \array_key_exists(self::CHANGES_KEY, $metadata)) {
-            throw InvalidAuditLogEntry::changesOnlyOnAChangeEntry($level->value);
-        }
+        $metadata = self::guardMetadata($level, $metadata);
 
         return new self(
             $id ?? Uuid::generate(),
@@ -111,6 +130,48 @@ final readonly class AuditLogEntry
             AuditRedaction::neutraliseCaptured($userAgent),
             $encryptionScopeId,
         );
+    }
+
+    /**
+     * The level rule runs before the shape rule, so a diff on the wrong level is refused for being there
+     * whatever it holds.
+     *
+     * @param array<array-key, mixed> $metadata
+     *
+     * @return array<string, mixed> the same entries, now known to be keyed by the vocabulary
+     */
+    private static function guardMetadata(AuditLevel $level, array $metadata): array
+    {
+        $checked = [];
+
+        foreach ($metadata as $name => $value) {
+            $key = \is_string($name) ? AuditMetadataKey::tryFrom($name) : null;
+
+            if (!$key instanceof AuditMetadataKey) {
+                throw InvalidAuditLogEntry::unknownMetadataKey($name);
+            }
+
+            if (AuditLevel::CHANGE !== $level && $key->isReservedToChangeEntries()) {
+                throw InvalidAuditLogEntry::reservedToChangeEntries($key, $level->value);
+            }
+
+            if (!$key->shape()->admits($value)) {
+                throw InvalidAuditLogEntry::metadataValueOutOfShape($key);
+            }
+
+            $checked[$key->value] = $value;
+        }
+
+        $size = \strlen(\json_encode(
+            (object) $metadata,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        ));
+
+        if ($size > self::MAX_METADATA_BYTES) {
+            throw InvalidAuditLogEntry::metadataExceedsMaxSize(self::MAX_METADATA_BYTES, $size);
+        }
+
+        return $checked;
     }
 
     private static function guardFieldLength(string $field, string $value): void

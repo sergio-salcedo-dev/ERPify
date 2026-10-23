@@ -1,7 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-22 (D4 — the row's level as the provenance of
-> `metadata.changes`; 2026-10-21: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-23 (D4 — the closed, shaped and bounded
+> vocabulary of `metadata`; 2026-10-22: D4 — the row's level as the provenance of `metadata.changes`; 2026-10-21: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -496,8 +496,9 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   infalsificable. **Lo que esto no es:** la derivación es una consulta que nadie ha escrito todavía, no un
   invariante comprobado — el mismo estado en que sigue el *cross-check* de D4.1. Se revisita cuando exista un
   consumidor que la haga falsificable, o si la fila llega a sellar un discriminante del solicitante; y no
-  antes, porque una novena clave libre en `metadata` gastaría el YAGNI con que este ADR aplazó pasar esa
-  estructura a tipos.
+  antes, porque una novena clave en esa fila —un caso más de `AuditMetadataKey`, revisado como todos— gastaría
+  el YAGNI con que este ADR aplazó dar a cada acción su propio conjunto tipado de claves: el vocabulario cierra
+  qué claves existen y qué forma tiene su valor, no cuáles lleva cada acción.
   **Que sea del contexto dueño lo vuelve una obligación distribuida**, así que lleva su control detectivo,
   igual que el crypto-shredding lleva el suyo: `api/.audit-resource-types` clasifica cada `resource_type`
   como persona o no, y una línea `person` declara **dos** rutas —quién lo borra y qué lo atestigua—. El gate
@@ -515,15 +516,38 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   ya tiene anonimizador. La asimetría es la razón: ninguna mutación de este conjunto entra en el JSON, así
   que un id de persona en `metadata` sobrevive al borrado que lo escribió, mientras que en el eje de recurso
   lo reescribe el anonimizador que ese mismo borrado ya ejecuta, en la misma transacción.
-  **Lo que sostiene la invariante no es un gate**, y la elección está argumentada: un pseudónimo es un UUID
-  indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería el contrato de
-  `anonymized_actor_id` (D4.1), y prohibir **por nombre de clave** sería una declaración que se comprueba a
-  sí misma. Lo sostiene un testigo de aceptación falsable en `api/features/backoffice/users/erase.feature`.
-  **Trigger de revisita vigente:** **cualquier** camino de escritura que vuelva a meter un id de persona en
-  `metadata`. Decía «un segundo», y estaba descontado en uno: tras el cambio no queda ninguno, así que «el
-  segundo» se habría negado a dispararse ante la primera regresión — que es exactamente recrear la fuga que
-  esta decisión cerró. Lo que la Regla de Tres protege es el **registro declarativo de claves**, y para eso
-  la cuenta que importa es cuántos caminos existen a la vez, no cuántos han existido.
+  **Lo que sostiene que no entre un id de persona sigue sin ser un gate**, y la elección está argumentada: un
+  pseudónimo es un UUID indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería
+  el contrato de `anonymized_actor_id` (D4.1). Lo sostiene un testigo de aceptación falsable en
+  `api/features/backoffice/users/erase.feature`. **Trigger de revisita vigente:** **cualquier** camino de
+  escritura que vuelva a meter un id de persona en `metadata`.
+  **Lo que sí está cerrado es el vocabulario (2026-10-23).** La Regla de Tres que protegía el registro
+  declarativo de claves se cumplió hace tiempo —hoy son catorce ficheros que escriben `metadata` no vacío y veinticinco claves—, y
+  `AuditMetadataKey` (`Shared/Audit/Domain`) es ese registro: cada clave con la **forma** de su valor
+  (`AuditMetadataShape`: un recuento, un flag, un nombre de ruta, un token del servidor, un pseudónimo, un
+  scope `<Tipo>:<uuid>`, nombres de rol, un instante ATOM, el diff de cambio, la operación). Lo impone
+  `AuditLogEntry::create()` —clave desconocida, valor fuera de forma, o `changes`/`operation` fuera de una fila
+  `change`, todo `InvalidAuditLogEntry`, sin marcador y por tanto un fallo de programación visible—, y la
+  objeción de arriba a «prohibir por nombre de clave» no lo alcanza por dos razones. **Dónde:** el
+  constructor es el único punto por el que pasan todas las filas, también las del capturador de cambios que
+  no pasa por `log()` y las tres cuyas claves se calculan lejos de la llamada (`StoredIdentityDrift`,
+  `AuditTrailReadAuditListener::metadataFor()`, el ternario de `lockedUntil`); un barrido textual de
+  `log(...)` nacía ciego a ellas, y por eso se descartó el registro en fichero con gate al modo de
+  `.audit-resource-types`. **Qué:** la forma, no el nombre, es lo que da contenido a la declaración —una clave
+  `route` sin forma admitiría una ruta con un id dentro—. Dos formas admiten texto que el servidor no eligió y
+  están nombradas como tales: los valores crudos que la sonda de integridad no pudo explicar (el operador
+  repara la cadena que se le mostró) y el diff, cuyos campos personales llegan sellados. El sentido inverso
+  —una clave que deja de escribirse y sigue admitida— lo lee `AuditMetadataVocabularyLivenessGateTest`.
+  **Y está acotado**, como `action` y `user_agent` por su ancho de columna: 16 KiB medidos como texto JSON con
+  Unicode y barras sin escapar —una cota superior de lo que guarda un `jsonb`: comillas, barras invertidas y
+  controles siguen contando escapados—. El mayor `metadata` legítimo es una actualización de `Bank` con sus tres
+  columnas de nombre al ancho máximo: 4 792 bytes en caracteres de cuatro bytes, unos 6,9 KB si todos fueran
+  controles escapados como `\u00XX`, y un test construye ambos y los admite: la cota existe para rechazar a un productor que empiece a volcar un cuerpo o una lista, nunca a uno
+  que llene sus columnas, porque una fila `change` rechazada hace fallar la escritura que la produjo. Por la
+  misma razón `orphan_role_values` es una **muestra** —veinte valores de 64 caracteres como máximo, con el total
+  en `orphan_role_value_count`—: su número y su longitud los decide la corrupción, y una fila rechazada por
+  tamaño dejaría el rastro sin constancia de que la deriva se detectó; el listado completo lo imprime el
+  comando.
   **Las dos claves de una fila `change`, y por qué ambas caben en la invariante:** `changes` —el diff campo
   a campo, con los valores clasificados `#[PersonalData]` sellados por `PiiDiffSealer`— y su hermana
   `operation`, el nombre del caso de `AuditWriteOperation` (`CREATED`/`UPDATED`/`DELETED`), que el sellado
@@ -531,7 +555,7 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   porque no es derivable del diff: un update que sólo rellena campos vacíos es indistinguible de un alta
   mirando los pares `old`/`new`. Las filas escritas antes de que el capturador la estampe no la llevan, así
   que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
-  cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
+  cuenta de «una novena clave» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
   re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
@@ -677,7 +701,8 @@ vida», justo la mezcla de ejes que D7 evita.
 
 **Trigger de revisita.** Cuando aparezca un **segundo** evento de cumplimiento
 (`GDPR_EXPORT_COMPLETED`, `GDPR_ERASURE_FAILED`, …), introducir una **estructura tipada** para esos
-eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo evento de cumplimiento).
+eventos en vez de confiar en un vocabulario compartido por todas las acciones —`AuditMetadataKey` (D4)
+cierra qué claves existen y su forma, no cuáles lleva cada acción— (hoy YAGNI: un solo evento de cumplimiento).
 
 ### D4.2 — Re-barrido diferido de los pases de borrado (enmienda D3.1 y D4)
 
@@ -838,7 +863,7 @@ actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audi
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
-metadata        jsonb        sin payload sensible
+metadata        jsonb        sin payload sensible; claves y formas de AuditMetadataKey, ≤ 16 KiB (D4)
 ip              varchar(45)  NULL
 user_agent      string       NULL
 actor_erased    boolean      NOT NULL — false al insertar (writer); true tras erasure GDPR (D4.1), fijado en

@@ -71,6 +71,7 @@ final class InspectStoredIdentityIntegrityCommandTest extends TestCase
         $this->assertSame(
             [
                 'orphan_role_values' => ['GHOST_ROLE', 'RETIRED'],
+                'orphan_role_value_count' => 2,
                 'malformed_roles' => 0,
                 'unreadable_credentials' => 3,
                 'admitted_without_credential' => 0,
