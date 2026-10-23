@@ -330,7 +330,8 @@ point. The checklist it enforces:
 5. You are on the correct host (`COMPOSE_PROJECT_NAME`).
 
 Under the hood (the raw commands, e.g. for a host without this checkout —
-substitute the project name the backup ran under for `erpify`):
+substitute the project name the backup ran under for `erpify`, and on the
+`tls internal` rehearsal add `-f compose.rehearsal.yaml`):
 
 ```bash
 # 0) stop writers FIRST — they must not race the restore below
@@ -355,10 +356,12 @@ fails, the writers stay stopped — rerun step 2 yourself to bring them back.
 ### Restore drill (quarterly)
 
 A backup is only proven by a restore. Once a quarter, restore the latest dump
-into the `erpify.local` rehearsal — never the live host — with
-`STAMP=<stamp> make restore.prod` and confirm a record seeded before the backup
-comes back. The target is the env file's project (`erpify-prodlocal` for the
-rehearsal), not the checkout's, so a worktree's dev stack is never it.
+into the `erpify.local` rehearsal — never the live host. On the workstation that
+runs it (`make deploy.local`, see `erpify-local-test-deployment.md`), copy the
+dump into a local `BACKUP_DIR`, run
+`BACKUP_DIR=<dir> STAMP=<stamp> make restore.prod` and confirm a record seeded
+before the backup comes back. The target is the rehearsal env file's project,
+`erpify-prodlocal`, so neither the live host nor a dev stack is it.
 
 #### End-to-end smoke checklist
 

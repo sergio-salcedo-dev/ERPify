@@ -133,6 +133,7 @@ ERPify/
 ├── compose.yaml                    # Base Compose (php, pwa, postgres, messenger_worker)
 ├── compose.dev.yaml                # Dev overlay (bind mounts, hot reload)
 ├── compose.prod.yaml               # Prod overlay (worker, mailer)
+├── compose.rehearsal.yaml          # Local prod rehearsal overlay (mailpit; tls-internal env file only)
 ├── CLAUDE.md                       # Project-wide Claude Code guidance
 └── README.md                       # Repo entry point
 ```

@@ -12,7 +12,8 @@ use RuntimeException;
  *
  * The child gets PATH and nothing else from the suite's environment: the script lets a shell-exported
  * `CADDY_SERVER_EXTRA_DIRECTIVES` beat the file, as Compose does, so an ambient value would otherwise decide
- * the profile under test. A caller passes such a variable explicitly when that precedence is the subject.
+ * the profile under test. A caller passes such a variable explicitly when that precedence is the subject —
+ * an EMPTY one through `$emptyExports`, because proc_open drops an environment entry whose value is empty.
  */
 final class ProdEnvScript
 {
@@ -21,13 +22,24 @@ final class ProdEnvScript
     /**
      * @param list<string>          $arguments
      * @param array<string, string> $environment
+     * @param list<string>          $emptyExports
      *
      * @return array{exit: int, stdout: string, stderr: string}
      */
-    public static function run(string $repositoryRoot, array $arguments, array $environment = []): array
-    {
+    public static function run(
+        string $repositoryRoot,
+        array $arguments,
+        array $environment = [],
+        array $emptyExports = [],
+    ): array {
         $process = \proc_open(
-            ['bash', $repositoryRoot . '/' . self::SCRIPT, ...$arguments],
+            [
+                'env',
+                ...\array_map(static fn (string $name): string => $name . '=', $emptyExports),
+                'bash',
+                $repositoryRoot . '/' . self::SCRIPT,
+                ...$arguments,
+            ],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,

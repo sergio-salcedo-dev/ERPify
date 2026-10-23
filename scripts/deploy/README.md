@@ -14,7 +14,7 @@ This directory holds the scripts for the prod / staging profile:
 `deploy.sh` does **not** bring the stack up — run `make deploy.local` for the
 initial stand-up, then use `deploy.sh` for subsequent redeploys. Every script
 here resolves the compose project and overlays from the env file (`lib/prod-env.sh`):
-`tls internal` → `erpify-prodlocal`, public ACME → `erpify`; an exported
+`tls internal` → `erpify-prodlocal`, public ACME → the checkout's own project (`erpify` in a primary checkout); an exported
 `COMPOSE_PROJECT_NAME` wins. The full
 runbook (secret setup, TLS trust, VPS promotion) is in
 `docs/erpify-local-test-deployment.md`. The rest of this file documents
@@ -62,7 +62,7 @@ Assumes the stack is already up (`make deploy.local` on first stand-up).
 ./scripts/deploy/deploy.sh --advanced
 
 # 4. Verify
-docker compose logs -f php messenger_worker
+make ENV=prod docker.logs   # php, messenger_worker, …
 ```
 
 ## Manual Commands
@@ -93,8 +93,8 @@ HEALTH_URL=https://app.example.com/api/v1/health  # Override the health endpoint
 |---------------------------|-------------------------------------------------------|
 | **"Makefile not found"**  | Run from repo root: `cd /path/to/ERPify`              |
 | **Migrations fail**       | Check status: `make db.status` then `make db.migrate` |
-| **Health check fails**    | Wait for containers: `sleep 5 && docker compose ps`   |
-| **Workers not reloading** | Restart: `docker compose restart messenger_worker`    |
+| **Health check fails**    | Wait for containers: `sleep 5 && make ENV=prod docker.ps` |
+| **Workers not reloading** | Restart: `make ENV=prod docker.restart`|
 
 ## CI/CD Integration
 
@@ -130,5 +130,5 @@ deploy:
 
 - Always test with `--dry-run` before production
 - Run from repository root or use full path
-- Check logs: `docker compose logs php`
+- Check logs: `make ENV=prod docker.logs`
 - Monitor workers post-deploy for issues

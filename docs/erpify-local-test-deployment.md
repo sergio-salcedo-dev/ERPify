@@ -79,10 +79,12 @@ whichever checkout runs it, and it binds the same ports 80/443 as dev —
 `make deploy.local.down` before `make app.dev`, `make docker.down` before
 `make deploy.local` (which refuses to start while another project holds them).
 
-Promoting this same box to a public host moves it to another project: clearing
-`CADDY_SERVER_EXTRA_DIRECTIVES` makes it `erpify`, on fresh volumes, so run
-`make deploy.local.down` **before** editing the file, and expect the rehearsal's
-data to stay behind in `erpify-prodlocal_*`.
+Promote a different box, never this one in place. Clearing
+`CADDY_SERVER_EXTRA_DIRECTIVES` moves the stack to the checkout's own project —
+`erpify` in the primary checkout — and on a dev machine `erpify` is dev's, so the
+promoted stack would meet dev's Postgres volume and its password. On a box with no
+dev stack, `make deploy.local.down` **before** editing the file; the rehearsal's
+data stays behind in `erpify-prodlocal_*`.
 
 A rehearsal stood up before the project split lives under `erpify` on dev's
 volumes: stop it with `COMPOSE_PROJECT_NAME=erpify make ENV=prod docker.down`,

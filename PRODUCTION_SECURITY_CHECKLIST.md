@@ -1167,7 +1167,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       deploy used to reach it: `MAILER_DSN` defaulted to `null://null` in every compose file and
       `MAILER_SECURITY_FROM` appeared in none, falling through to a reserved domain that receives
       nothing while passing the non-blank / non-no-reply guard. Both are now `${VAR:?}` on all three
-      prod services — which puts them in `PROD_REQUIRED_KEYS`, derived from those guards — and refused at send time by
+      prod services — which makes them required keys for `make prod.env.check` (`scripts/deploy/lib/prod-env.sh`, which also refuses a reserved-domain or no-reply sender before start) — and refused at send time by
       `DeliverableSecurityTransport` (discard transport) and `SecuritySenderAddress` (reserved sender
       domain). **The residual is that non-delivery on this channel is unobservable from the outside:**
       the notice is unsolicited, so no recipient reports its absence — the `warning` its best-effort

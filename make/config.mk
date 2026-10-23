@@ -34,18 +34,19 @@ DB_SERVICE   ?= database
 # Everything below is `?=`/overridable: exporting COMPOSE_PROJECT_NAME or any
 # *_PORT in your environment or on the command line wins.
 
-# A prod/staging env file whose site TLS is Caddy's internal CA is the local
-# rehearsal (erpify.local): it runs as `erpify-prodlocal`, never on dev's
-# `erpify` volumes, and loads compose.rehearsal.yaml (its own mailpit). Any other
-# profile leaves the name to the rules below — `erpify` in the primary checkout,
-# `erpify-<slug>` in a worktree — exactly as before. The reading is
-# scripts/deploy/lib/prod-env.sh's, shared with every deploy script.
+# A prod/staging stack's project and overlays come from
+# scripts/deploy/lib/prod-env.sh — the same answer every deploy, backup and
+# restore script gets. A tls-internal env file is the local rehearsal
+# (erpify.local): project `erpify-prodlocal`, never dev's volumes, plus
+# compose.rehearsal.yaml (its own mailpit). Any other file runs as the checkout's
+# project, the rule below for dev: `erpify` in the primary checkout,
+# `erpify-<slug>` in a worktree.
 PROD_ENV_FILE ?= .env.prod.local
 PROD_ENV_PATH := $(if $(filter /%,$(PROD_ENV_FILE)),$(PROD_ENV_FILE),$(PROJECT_ROOT)/$(PROD_ENV_FILE))
 ifneq ($(filter $(ENV),prod staging),)
   PROD_TLS_PROFILE := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" profile "$(PROD_ENV_PATH)")
-  ifeq ($(PROD_TLS_PROFILE),internal)
-    COMPOSE_PROJECT_NAME ?= erpify-prodlocal
+  ifeq ($(origin COMPOSE_PROJECT_NAME),undefined)
+    COMPOSE_PROJECT_NAME := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" project "$(PROD_ENV_PATH)" "$(PROJECT_ROOT)")
   endif
 endif
 
@@ -85,8 +86,8 @@ endif
 
 # —— Compose overlay by ENV ————————————————————————————————————————————————
 # dev      : compose.yaml + compose.dev.yaml
-# staging  : compose.yaml + compose.prod.yaml
-# prod     : compose.yaml + compose.prod.yaml
+# staging  : compose.yaml + compose.prod.yaml  (+ compose.rehearsal.yaml for a tls-internal env file)
+# prod     : compose.yaml + compose.prod.yaml  (+ compose.rehearsal.yaml for a tls-internal env file)
 #
 # CI runs with ENV unset (= dev overlay). If CI-specific Compose behavior is
 # ever needed, introduce compose.ci.yaml and re-add ENV=ci deliberately.
@@ -105,9 +106,9 @@ else
   COMPOSE_FILES := -f compose.yaml -f compose.dev.yaml
   ENV_FILE_ARGS :=
 endif
-# The rehearsal's own overlay (mailpit), only for a tls-internal env file. It
-# declares nothing but mailpit — BoundedContainerLogRetentionGateTest pins that —
-# so the worker stacks ScheduleConsumptionGateTest reads are the ones above.
+# The rehearsal's own overlay (mailpit), only for a tls-internal env file — the
+# list prod-env.sh compose-files answers. ScheduleConsumptionGateTest refuses a
+# worker or a replica count in it, so the worker stacks it reads stay the above.
 ifeq ($(PROD_TLS_PROFILE),internal)
   COMPOSE_FILES += -f compose.rehearsal.yaml
 endif
