@@ -293,6 +293,9 @@ Feature: Server-side session registry and admission gate
     And I send a "GET" request to "/me"
     Then the response status code should be 401
     And the JSON node "type" should be equal to "unauthenticated"
+    # See the credential scenarios above: the next scenario's session is minted from the database before any
+    # of its steps run, so the rewritten role set would eject it before its own reload repaired the row.
+    And I reload the fixtures
 
   # A suspension ejects that identity's live sessions through the same refresh, which is what lets the use case's
   # post-commit revoke stay best-effort: a status change touches neither credential nor roles, so without the
