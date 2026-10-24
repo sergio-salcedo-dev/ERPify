@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
+namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Keyset;
 
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -44,5 +44,24 @@ final class WirePaginationPolicyTest extends TestCase
             false,
             false,
         ];
+    }
+
+    #[Test]
+    #[DataProvider('provideItResolvesThePageSizeCases')]
+    public function itResolvesThePageSize(WirePaginationPolicy $policy, ?int $requested, int $expected): void
+    {
+        $this->assertSame($expected, $policy->limitFor($requested));
+    }
+
+    /**
+     * @return iterable<string, array{WirePaginationPolicy, int|null, int}>
+     */
+    public static function provideItResolvesThePageSizeCases(): iterable
+    {
+        yield 'an unspecified size takes the policy default' => [WirePaginationPolicy::wire(), null, 25];
+        yield 'another policy, another default' => [new WirePaginationPolicy(defaultLimit: 2), null, 2];
+        yield 'a size within bounds is kept' => [WirePaginationPolicy::wire(), 40, 40];
+        yield 'a size over the ceiling is clamped to it' => [WirePaginationPolicy::wire(), 500, 100];
+        yield 'a size below one is raised to one' => [WirePaginationPolicy::wire(), 0, 1];
     }
 }

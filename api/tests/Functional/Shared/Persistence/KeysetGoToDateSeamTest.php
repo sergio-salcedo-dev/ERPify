@@ -22,16 +22,17 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngin
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorPositionExtractor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\FingerprintCanonicalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetPredicateBuilder;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\RowUniquenessGuard;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\CursorCodec;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\KeysetPaginator;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
@@ -85,13 +86,15 @@ final class KeysetGoToDateSeamTest extends KernelTestCase
 
         // Concrete collaborators with a fixed secret: the same engine must both synthesize the
         // token and validate it on the follow-up paginate, exactly like a single deployed instance.
+        $codec = new CursorCodec('keyset-goto-date-seam-test-secret');
         $this->engine = new DoctrineSearchEngine(
             new FilterApplier(),
-            new CursorCodec('keyset-goto-date-seam-test-secret'),
+            $codec,
             new FingerprintCanonicalizer(),
             new KeysetPredicateBuilder(),
             new CursorPositionExtractor(PropertyAccess::createPropertyAccessor()),
             new RowUniquenessGuard(),
+            new KeysetPaginator($codec),
         );
     }
 

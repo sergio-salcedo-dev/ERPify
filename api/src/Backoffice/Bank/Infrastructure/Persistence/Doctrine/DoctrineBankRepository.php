@@ -17,12 +17,12 @@ use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\AsciiUpperTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 

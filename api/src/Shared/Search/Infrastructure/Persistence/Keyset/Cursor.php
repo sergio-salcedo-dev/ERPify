@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
+namespace Erpify\Shared\Search\Infrastructure\Persistence\Keyset;
 
 /**
  * Infrastructure value object for a decoded cursor payload — the record that
@@ -25,9 +25,9 @@ namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
  *   decide navigation — the wire `after`/`before` param is the single routing
  *   authority.
  * - `values`: the boundary row's ordering-key values, at column precision.
- * - `fingerprint`: the fingerprint of the {@see QueryExecutionTrace} the cursor
- *   was issued for, wire key `fp`. The codec compares it against an expected
- *   fingerprint supplied by the caller; it never knows the trace itself.
+ * - `fingerprint`: the fingerprint of the query the cursor was issued for, as its
+ *   {@see KeysetSource} derives it, wire key `fp`. The codec compares it against an
+ *   expected fingerprint supplied by the caller; it never knows how it was derived.
  */
 final readonly class Cursor
 {

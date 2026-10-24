@@ -22,16 +22,17 @@ use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorPositionExtractor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\FingerprintCanonicalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetPredicateBuilder;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\RowUniquenessGuard;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\CursorCodec;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\KeysetPaginator;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
@@ -76,13 +77,15 @@ final class KeysetBaseQueryScopeTest extends KernelTestCase
         $this->entityManager = $entityManager;
 
         // One instance both mints and validates the token, exactly like a single deployed process.
+        $codec = new CursorCodec('keyset-base-query-scope-test-secret');
         $this->engine = new DoctrineSearchEngine(
             new FilterApplier(),
-            new CursorCodec('keyset-base-query-scope-test-secret'),
+            $codec,
             new FingerprintCanonicalizer(),
             new KeysetPredicateBuilder(),
             new CursorPositionExtractor(PropertyAccess::createPropertyAccessor()),
             new RowUniquenessGuard(),
+            new KeysetPaginator($codec),
         );
     }
 

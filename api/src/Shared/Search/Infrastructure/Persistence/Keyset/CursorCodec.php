@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
+namespace Erpify\Shared\Search\Infrastructure\Persistence\Keyset;
 
 use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use JsonException;
@@ -24,9 +24,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * The length cap is enforced BEFORE any HMAC work (NFR1: never hash an
  * unbounded input). The fingerprint check is a DEFERRED integrity hook: the
  * caller passes the expected fingerprint as a plain string and the codec
- * compares — it NEVER imports or knows {@see QueryExecutionTrace}. The engine
- * wires the trace to the expected fingerprint; the codec stays agnostic of how
- * that fingerprint was produced.
+ * compares — it NEVER knows the query it binds to. Each {@see KeysetSource}
+ * derives its own fingerprint; the codec stays agnostic of how it was produced.
  *
  * The `dir` field is an integrity binding (K2/AR21): compared against the
  * expected direction, never consulted to decide navigation. A mismatch is a
