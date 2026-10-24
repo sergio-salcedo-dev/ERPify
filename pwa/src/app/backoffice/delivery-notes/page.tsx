@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { PlannedModulePage } from "@/app/backoffice/_components/PlannedModulePage";
+import { PlannedModules } from "@/app/backoffice/_lib/plannedModules";
 
 export const metadata: Metadata = {
   title: "Delivery Notes",
 };
 
 export default function DeliveryNotesPage() {
-  return <h1 className="text-foreground text-2xl font-semibold tracking-tight">Delivery Notes</h1>;
+  return <PlannedModulePage module={PlannedModules.DELIVERY_NOTES} />;
 }

@@ -25,6 +25,11 @@ import {
   type NavAction,
 } from "./_lib/backofficeMenu";
 import { permittedAccountEntries, permittedMenuGroups } from "./_lib/menuAccess";
+import { activeEntryPath, isItemActive, isItemPlanned } from "./_lib/menuState";
+import { PlannedModules, isPlannedPath } from "./_lib/plannedModules";
+import { goToDestinations } from "./_lib/goToDestinations";
+import { GoToPalette } from "./_components/GoToPalette";
+import { MobileNavEntry } from "./_components/MobileNavEntry";
 import {
   RequireAuth,
   DevSessionSwitcher,
@@ -155,6 +160,7 @@ export default function BackOfficeLayoutClient({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isGoToOpen, setIsGoToOpen] = useState(false);
   const [isCompact, setIsCompact] = useState(() => {
     if (globalThis.window === undefined) return false;
     const stored = globalThis.localStorage.getItem(SIDEBAR_STORAGE_KEY);
@@ -172,9 +178,15 @@ export default function BackOfficeLayoutClient({
 
   useEffect(() => {
     function handleKey(event: KeyboardEvent): void {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const key = event.key.toLowerCase();
+      if (key === "b") {
         event.preventDefault();
         setIsCompact((compact) => !compact);
+      } else if (key === "k") {
+        // Claimed from the browser, which would otherwise move the focus to its own search box.
+        event.preventDefault();
+        setIsGoToOpen(true);
       }
     }
     globalThis.addEventListener("keydown", handleKey);
@@ -400,23 +412,27 @@ export default function BackOfficeLayoutClient({
   // the intent would sign the user out while keeping its idle label and staying operable.
   // Handing the derivation to one parent and the raw model to the rest is the same
   // half-support this diff removes from the mobile drawer.
-  const withEntryState = (item: NavItem): NavItem => ({
-    ...item,
-    subItems: item.subItems?.map((entry) => ({
-      ...entry,
-      name: entryLabel(entry),
-      isBusy: isEntryLeaving(entry),
-    })),
-  });
-  const accountEmail = session?.user.email ?? "";
-
-  const isItemActive = (item: NavItem) => {
-    if (pathname === item.path) return true;
-    if (item.subItems) {
-      return item.subItems.some((sub) => pathname === sub.path);
-    }
-    return false;
+  const activeLeafOf = (item: NavItem): string | undefined =>
+    activeEntryPath(
+      pathname,
+      (item.subItems ?? []).map((entry) => entry.path),
+    );
+  const withEntryState = (item: NavItem) => {
+    const activeLeaf = activeLeafOf(item);
+    return {
+      ...item,
+      isPlanned: isItemPlanned(item),
+      subItems: item.subItems?.map((entry) => ({
+        ...entry,
+        name: entryLabel(entry),
+        isBusy: isEntryLeaving(entry),
+        isActive: entry.path === activeLeaf,
+        isPlanned: isPlannedPath(entry.path),
+      })),
+    };
   };
+  const accountEmail = session?.user.email ?? "";
+  const destinations = goToDestinations(menuGroups, accountEntries, "Account");
 
   return (
     <RequireAuth>
@@ -496,7 +512,7 @@ export default function BackOfficeLayoutClient({
                       <SidebarItem
                         key={item.name}
                         {...withEntryState(item)}
-                        isActive={isItemActive(item)}
+                        isActive={isItemActive(pathname, item)}
                         onClick={handleNavigation}
                         isCompact={isCompact}
                       />
@@ -514,7 +530,7 @@ export default function BackOfficeLayoutClient({
                 )}
                 <SidebarItem
                   {...withEntryState(permittedAccountItem)}
-                  isActive={isItemActive(permittedAccountItem)}
+                  isActive={isItemActive(pathname, permittedAccountItem)}
                   onClick={handleNavigation}
                   isCompact={isCompact}
                 />
@@ -532,6 +548,20 @@ export default function BackOfficeLayoutClient({
                 textClassName="bo-layout__logo-text"
               />
               <div className="bo-layout__header-mobile-actions flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Go to page"
+                  title="Go to page"
+                  aria-haspopup="dialog"
+                  data-testid="bo-layout__header-mobile-search"
+                  className="bo-layout__header-mobile-search"
+                  onClick={() => setIsGoToOpen(true)}
+                >
+                  <Search className="size-5" aria-hidden />
+                  <span className="sr-only">Go to page</span>
+                </Button>
                 <ThemeToggle testId="bo-layout__header-mobile-theme" />
                 <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
                   <SheetTrigger
@@ -559,7 +589,7 @@ export default function BackOfficeLayoutClient({
                     }}
                   >
                     <SheetHeader className="bo-layout__sidebar-mobile-header p-4 flex flex-row items-center justify-between border-b border-border">
-                      <SheetTitle className="hidden">Navigation Menu</SheetTitle>
+                      <SheetTitle className="sr-only">Navigation menu</SheetTitle>
                       <Logo
                         href="/backoffice"
                         variant="badge"
@@ -576,51 +606,12 @@ export default function BackOfficeLayoutClient({
                             {group.label}
                           </p>
                           {group.items.map((item) => (
-                            <div key={item.name} className="bo-layout__sidebar-mobile-item-wrapper">
-                              <button
-                                type="button"
-                                onClick={() => handleNavigation(item.path)}
-                                title={item.name}
-                                aria-current={pathname === item.path ? "page" : undefined}
-                                data-testid={item.testId ? `${item.testId}--mobile` : undefined}
-                                className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
-                                  pathname === item.path
-                                    ? "bg-primary/15 text-primary"
-                                    : "text-muted-foreground hover:bg-accent"
-                                }`}
-                              >
-                                <item.icon className="w-5 h-5" />
-                                <span className="text-sm">{item.name}</span>
-                              </button>
-                              {item.subItems && (
-                                <div className="ml-8 mt-1 space-y-1">
-                                  {item.subItems.map((subItem) => (
-                                    <button
-                                      type="button"
-                                      // Identity, never the label — see the account group below.
-                                      key={subItem.testId ?? subItem.path}
-                                      onClick={() => handleNavigation(subItem.path, subItem.action)}
-                                      title={entryLabel(subItem)}
-                                      aria-current={pathname === subItem.path ? "page" : undefined}
-                                      aria-disabled={isEntryLeaving(subItem) || undefined}
-                                      data-testid={
-                                        subItem.testId ? `${subItem.testId}--mobile` : undefined
-                                      }
-                                      className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
-                                        pathname === subItem.path
-                                          ? "text-primary bg-primary/10"
-                                          : "text-muted-foreground hover:bg-accent"
-                                      }`}
-                                    >
-                                      {subItem.icon && (
-                                        <subItem.icon className="w-3.5 h-3.5" aria-hidden />
-                                      )}
-                                      {entryLabel(subItem)}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <MobileNavEntry
+                              key={item.name}
+                              {...withEntryState(item)}
+                              isActive={isItemActive(pathname, item)}
+                              onNavigate={handleNavigation}
+                            />
                           ))}
                         </div>
                       ))}
@@ -629,51 +620,11 @@ export default function BackOfficeLayoutClient({
                         <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest px-4 mb-2">
                           Account
                         </p>
-                        <div className="bo-layout__sidebar-mobile-item-wrapper">
-                          <button
-                            type="button"
-                            onClick={() => handleNavigation(accountMenuItem.path)}
-                            title={accountMenuItem.name}
-                            aria-current={pathname === accountMenuItem.path ? "page" : undefined}
-                            className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
-                              pathname === accountMenuItem.path
-                                ? "bg-primary/15 text-primary"
-                                : "text-muted-foreground hover:bg-accent"
-                            }`}
-                          >
-                            <accountMenuItem.icon className="w-5 h-5" />
-                            <span className="text-sm">{accountMenuItem.name}</span>
-                          </button>
-                          <div className="ml-8 mt-1 space-y-1">
-                            {permittedAccountItem.subItems?.map((subItem) => (
-                              <button
-                                type="button"
-                                // Identity, never the label: this site relabels the entry it is
-                                // rendering, and a key derived from the label would change with it —
-                                // React destroys the button the user just activated, focus falls to
-                                // <body>, and the new state lands on a node nothing is watching.
-                                key={subItem.testId ?? subItem.path}
-                                onClick={() => handleNavigation(subItem.path, subItem.action)}
-                                title={entryLabel(subItem)}
-                                aria-current={pathname === subItem.path ? "page" : undefined}
-                                aria-disabled={isEntryLeaving(subItem) || undefined}
-                                data-testid={
-                                  subItem.testId ? `${subItem.testId}--mobile` : undefined
-                                }
-                                className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
-                                  pathname === subItem.path
-                                    ? "text-primary bg-primary/10"
-                                    : "text-muted-foreground hover:bg-accent"
-                                }`}
-                              >
-                                {subItem.icon && (
-                                  <subItem.icon className="w-3.5 h-3.5" aria-hidden />
-                                )}
-                                {entryLabel(subItem)}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                        <MobileNavEntry
+                          {...withEntryState(permittedAccountItem)}
+                          isActive={isItemActive(pathname, permittedAccountItem)}
+                          onNavigate={handleNavigation}
+                        />
                       </div>
                     </nav>
                   </SheetContent>
@@ -721,13 +672,15 @@ export default function BackOfficeLayoutClient({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Search"
-                    title="Search"
+                    aria-label="Go to page"
+                    title="Go to page (Ctrl/Cmd+K)"
+                    aria-haspopup="dialog"
                     data-testid="bo-layout__topbar-search"
                     className="bo-layout__topbar-search"
+                    onClick={() => setIsGoToOpen(true)}
                   >
                     <Search className="size-4" aria-hidden />
-                    <span className="sr-only">Search</span>
+                    <span className="sr-only">Go to page</span>
                   </Button>
                   <Button
                     type="button"
@@ -736,13 +689,10 @@ export default function BackOfficeLayoutClient({
                     aria-label="Notifications"
                     title="Notifications"
                     data-testid="bo-layout__topbar-notifications"
-                    className="bo-layout__topbar-notifications relative"
+                    className="bo-layout__topbar-notifications"
+                    onClick={() => handleNavigation(PlannedModules.NOTIFICATIONS.path)}
                   >
                     <Bell className="size-4" aria-hidden />
-                    <span
-                      className="bo-layout__topbar-badge absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary"
-                      aria-hidden
-                    />
                     <span className="sr-only">Notifications</span>
                   </Button>
                   <DropdownMenu>
@@ -835,6 +785,13 @@ export default function BackOfficeLayoutClient({
               </main>
             </div>
           </div>
+          <GoToPalette
+            open={isGoToOpen}
+            onOpenChange={setIsGoToOpen}
+            destinations={destinations}
+            onSelect={(path) => handleNavigation(path)}
+            focusAfterSelect={() => mainRef.current}
+          />
         </TooltipProvider>
       </RecoveryReadinessProvider>
     </RequireAuth>

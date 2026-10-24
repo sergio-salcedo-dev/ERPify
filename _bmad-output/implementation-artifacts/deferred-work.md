@@ -95,7 +95,8 @@ archived: 2026-09-28
 origin: migrated from legacy ledger ("Deferred from: code review of PR #618 — pase adversarial del eje de referencias a persona (2026-08-01)"), 2026-09-24
 location: api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php, api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php
 reason: The consent prompt is now rendered from ERASED_CATEGORIES and test-pinned; what remains is free prose that a map cannot reach, deliberately left ungated because a prose gate is fragile — review is the control.
-status: open
+status: done 2026-10-23
+resolution: fixed by #1103 — every console surface that enumerates the chain (consent prompt, help, "nothing to erase" notice, success report) is rendered from FulfilIdentityErasureResult::ERASED_CATEGORIES, and the command/controller/result docblocks point at the map instead of restating it; EraseIdentitySubjectCommandCategoriesTest pins each surface label by label, so no hand-written enumeration is left to drift and no prose gate is needed
 
 **(api/Iam/Identity — deriva por construcción) Los tres docblocks que describen la cadena de borrado siguen sin gate.** La mitad que importaba está cerrada: el **prompt de consentimiento** —lo único que el operador consiente— se renderiza hoy desde `FulfilIdentityErasureResult::ERASED_CATEGORIES`, un mapa que vive junto a las propiedades del constructor y que `FulfilIdentityErasureResultTest` mantiene igual a ellas en ambas direcciones, así que una décima propiedad no puede llegar sin su etiqueta. Esa mitad se cerró porque **la deriva que esta bala predijo ocurrió**: `recoverySecretsDeleted` entró en el DTO y en la línea de éxito del CLI mientras el prompt, el `setHelp()` y dos docblocks seguían nombrando ocho eslabones, o sea que el operador consentía a menos de lo que el borrado destruye — medido el 2026-09-20, nueve propiedades contra siete enunciadas. Lo que queda abierto es lo que un mapa no puede alcanzar: el docblock de la clase del comando, el texto de `setHelp()` y el del controlador siguen siendo prosa suelta, corregidos a mano en esa misma pasada. Un gate sobre prosa es frágil y no se construyó a propósito; el control es la revisión. Ref: `api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php`, `api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php`.
 
@@ -114,12 +115,22 @@ status: open
 
 **Trigger:** el día que `event_store` gane un flag de borrado, o que un agregado-persona pase a ser event-sourced de verdad (el mismo trigger (a) que D12 ya declara). Un medio-control cuyo ruido de base es ~100 % deja de leerse, y un hueco nombrado es mejor que un control que nadie cree.
 
+**Re-medido el 2026-10-23 (#1103): sigue abierta por diseño, con decisión del usuario.**
+
+- **Evidencia:** `api/src/Shared/Event/Application/EventStore.php` solo expone `append` y `stream`. Ningún agregado-persona se rehidrata desde `event_store` y la tabla no tiene flag de borrado. El trigger de D12 no ha saltado.
+- **Riesgo residual:** si el borrado preventivo deja escapar un id de persona en `event_store`, nadie lo detecta. Los proyectores lo leen en cada replay.
+- **Condición de cierre:** el trigger de D12, es decir, un flag de borrado en `event_store` o un agregado-persona event-sourced de verdad.
+- **Por qué no ahora:** añadir ese flag reabre D12.
+- **Alcance de la evidencia:** que el trigger no haya saltado prueba solo que ese mecanismo no existe hoy. No prueba que no haya riesgo.
+- **Lo que sí cambió:** #1103 indexa el predicado preventivo (DW-15) sin estrechar su alcance.
+
 ### DW-15: Erasure UPDATE on event_store is a sequential scan inside the erase transaction
 
 origin: migrated from legacy ledger ("Deferred from: G-5 — ids de persona fuera del `event_store` (2026-08-04)"), 2026-09-24
 location: api/src/Shared/Event/Infrastructure (DbalEventStoreSubjectAnonymiser)
 reason: payload::text ILIKE '%uuid%' cannot use any index (would need GIN + pg_trgm) and runs holding the erasure chain's locks; free today at zero rows and no production. Measure before it matters; not a blocker. Since #1037 the erasure re-sweep repeats the same scan for every subject in its window on each five-minute tick (about 13 scans per erasure, one per subject per tick, on the single scheduler worker, while holding that subject's audit_log row locks), so the trigger is a re-sweep tick taking more than ~30 s or an event_store of millions of rows; the answer then is a trigram index, not a design change.
-status: open
+status: done 2026-10-23
+resolution: fixed by #1103 — the WHERE reads event_store_uuids(col) @> ARRAY[CAST(:id AS uuid)] over two GIN expression indexes (migration Version20261023100000); measured at 1M rows: 3.4 s → 9–144 ms, same row set as the ILIKE (equivalence test over an adversarial corpus), 138 MB index, inserts roughly ×2–×7; rationale and the CONCURRENTLY recipe in docs/adr/event-store-and-projections.md D12 (amendment 2026-10-23)
 
 **(api/Shared/Event — tiempo de lock) El `UPDATE` del borrado hace un scan secuencial y corre dentro de la transacción del erase.** El predicado `payload::text ILIKE '%uuid%'` no lo puede servir ninguno de los cinco índices de la tabla (haría falta GIN + `pg_trgm`), y el `OR` fuerza el scan igualmente. Hoy es gratis —la tabla está a cero filas y no hay producción— pero cuando tenga volumen ese scan corre sosteniendo los locks que la cadena ya tiene sobre `identity_user`, `audit_log`, sesiones, membresía e invitaciones. Medir antes de que importe; no es un blocker.
 
@@ -491,7 +502,8 @@ location: api/src/Shared/Audit/Domain/AuditRedaction.php
 source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
 severity: low
 reason: La neutralización es sólo en captura; no hay backfill, que sería un UPDATE nuevo sobre audit_log (línea en SANCTIONED de SanctionedLogMutationGateTest y decisión en el ADR D4). La atribución NO depende de él: el predicado de flags (actor_erased, o resource_erased con actor_type = 'anonymous') atribuye bien el centinela también en filas anteriores, así que lo único que queda es que esas filas guarden el literal de un cliente. Sólo importa con datos reales dentro de la ventana de retención.
-status: open
+status: done 2026-10-23
+resolution: accepted, recorded in #1103 — residue: audit_log rows written before the capture-side neutralisation keep a client-sent literal `[REDACTED]` User-Agent; no backfill, because it would be a new sanctioned UPDATE on audit_log (SanctionedLogMutationGateTest + ADR D4) to rewrite a literal that attribution already handles; verified control: the flags predicate (actor_erased, or resource_erased with actor_type = 'anonymous') attributes the sentinel correctly on those rows too; accepted by the user on 2026-10-23; reopens if real data falls inside audit_log's retention window with such rows and the literal itself must not be kept
 
 ### DW-61: docs/rules/security.md y docs/rules/database.md describen el centinela [REDACTED] y sus dos escritores sin mencionar su reserva ni la reescritura [client-supplied].
 
