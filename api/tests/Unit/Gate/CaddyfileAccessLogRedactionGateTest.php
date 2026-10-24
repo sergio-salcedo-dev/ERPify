@@ -61,8 +61,8 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
             $this->caddyfile(),
             'The Caddy access log no longer strips the query string from `request>uri`. Every value a '
             . 'client can put in a query — a person id under a name nobody listed, a single-use token, a '
-            . 'filter value under any index or sub-index — is then written in clear to a sink with no '
-            . 'rotation, no TTL and no owner of erasure.',
+            . 'filter value under any index or sub-index — is then written in clear to a sink rotated by '
+            . 'volume alone, with no TTL and no owner of erasure.',
         );
     }
 

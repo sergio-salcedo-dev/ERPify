@@ -24,11 +24,12 @@
 		# strong as this variable being left alone.
 		{$CADDY_SERVER_LOG_OPTIONS}
 		# The query string is dropped WHOLE, and that is the mechanism rather than a stronger setting of
-		# the old one. This log has no owner of erasure — no compose file declares a `logging:` driver, so it
-		# is the default json-file driver with neither rotation nor TTL, and nothing in the GDPR erasure path
-		# can reach it — so whatever lands here outlives the erasure the app confirmed to the subject. The
-		# obligation that follows is RETENTION, and it is not answered by observing that whoever planted a
-		# value already knew it: the harm is that we now hold a person's identifier and cannot erase it.
+		# the old one. This log has no owner of erasure — the compose `logging:` blocks rotate its json-file
+		# driver by volume (10m × 5), which is eviction and not expiry, so it has no TTL, and nothing in the
+		# GDPR erasure path can reach it — so whatever lands here can still outlive the erasure the app
+		# confirmed to the subject. The obligation that follows is RETENTION, and it is not answered by
+		# observing that whoever planted a value already knew it: the harm is that we now hold a person's
+		# identifier and cannot erase it.
 		#
 		# What stood here was a name allowlist — one `replace` line per sensitive parameter, plus one per
 		# filter index up to `SearchQuery::MAX_FILTERS`. Measured against the running stack by
@@ -54,7 +55,7 @@
 		# `keyset_search` line per successful search. What those keep is the route, the limit, the direction,
 		# the pagination mode and the correlation id; none of them carries
 		# the filter shape, and it deliberately did not gain it here. `filters[N][field]` is a caller's
-		# string, and moving one into a stream with the same absence of rotation, TTL and erasure owner would
+		# string, and moving one into a stream with the same absence of TTL and erasure owner would
 		# reproduce this defect one channel over to recover a diagnostic nobody had asked for. Doing it
 		# safely means emitting the field the SERVER resolved, from the route's own field map, which is a
 		# change to what the listener is given rather than a line here. Path, method, status and timing stay.
