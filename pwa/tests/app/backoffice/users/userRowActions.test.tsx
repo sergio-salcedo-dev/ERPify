@@ -199,7 +199,7 @@ describe("Users row revoke-invitation action", () => {
     await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByTestId(STATUS_BADGE)).toHaveTextContent("Revoked"));
     expect(screen.getByTestId(INVITED_ROW)).toBeInTheDocument();
-    expect(screen.queryByTestId("users-list__revoke-error")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("users-list__invitation-error")).not.toBeInTheDocument();
   });
 
   it("lands focus in the row it acted on instead of stranding it on the document", async () => {
@@ -288,7 +288,7 @@ describe("Users row revoke-invitation action", () => {
     fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
 
     // The problem surfaces above the list, never inside the dialog — which closes itself.
-    const surface = await screen.findByTestId("users-list__revoke-error");
+    const surface = await screen.findByTestId("users-list__invitation-error");
     expect(surface).toHaveTextContent("No pending invitation was found for the given user.");
     await waitFor(() => {
       expect(screen.queryByTestId("user-revoke-invitation__dialog")).not.toBeInTheDocument();
@@ -306,12 +306,12 @@ describe("Users row revoke-invitation action", () => {
 
     fireEvent.click(await openRowMenuItem("users-table", "revoke", INVITED_USER.id));
     fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
-    await screen.findByTestId("users-list__revoke-error");
+    await screen.findByTestId("users-list__invitation-error");
 
-    fireEvent.click(screen.getByTestId("users-list__revoke-error__dismiss"));
+    fireEvent.click(screen.getByTestId("users-list__invitation-error__dismiss"));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("users-list__revoke-error")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("users-list__invitation-error")).not.toBeInTheDocument();
     });
   });
 
@@ -322,13 +322,13 @@ describe("Users row revoke-invitation action", () => {
 
     fireEvent.click(await openRowMenuItem("users-table", "revoke", INVITED_USER.id));
     fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
-    await screen.findByTestId("users-list__revoke-error");
+    await screen.findByTestId("users-list__invitation-error");
 
     // Sorting re-queries the register: the banner names a row of the previous result set.
     fireEvent.click(screen.getByRole("button", { name: /^Email/ }));
 
     await waitFor(() => {
-      expect(screen.queryByTestId("users-list__revoke-error")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("users-list__invitation-error")).not.toBeInTheDocument();
     });
   });
 });
@@ -383,6 +383,6 @@ describe("Users row revoke-invitation action across surfaces", () => {
     fireEvent.click(await openRowMenuItem("users-cards", "revoke", INVITED_USER.id));
     fireEvent.click(await screen.findByTestId("user-revoke-invitation__confirm"));
 
-    expect(await screen.findByTestId("users-list__revoke-error")).toBeInTheDocument();
+    expect(await screen.findByTestId("users-list__invitation-error")).toBeInTheDocument();
   });
 });

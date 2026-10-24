@@ -98,6 +98,10 @@ export const API_ENDPOINTS = {
       // API resolves every still-pending invitation of that user, withdrawing the identity to REVOKED in the
       // same transaction. Nothing revocable → 404.
       REVOKE_INVITATION: (id: string): string => `${userPath(id)}/invitation`,
+      // Re-send the pending invitation(s) of an identity with a fresh link — a bodyless POST keyed by user id
+      // (204, no body: the accept token leaves only in the email). The previous link dies with it. Nothing
+      // resendable → 404; a link minted but whose email the mailer refused → 503 `invitation-email-not-sent`.
+      RESEND_INVITATION: (id: string): string => `${userPath(id)}/invitation/resend`,
       // GDPR erasure — a DELETE on the detail URL (204, no body). Same target as DETAILS, different verb.
       ERASE: userPath,
     },

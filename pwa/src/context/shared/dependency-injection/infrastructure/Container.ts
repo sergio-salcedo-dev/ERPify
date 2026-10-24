@@ -57,6 +57,9 @@ import { ChangeUserRoles } from "../../../backoffice/user/application/ChangeUser
 import { ApiRevokeInvitationRepository } from "../../../backoffice/user/infrastructure/ApiRevokeInvitationRepository";
 import type { RevokeInvitationRepository } from "../../../backoffice/user/domain/RevokeInvitationRepository";
 import { RevokeInvitation } from "../../../backoffice/user/application/RevokeInvitation";
+import { ApiResendInvitationRepository } from "../../../backoffice/user/infrastructure/ApiResendInvitationRepository";
+import type { ResendInvitationRepository } from "../../../backoffice/user/domain/ResendInvitationRepository";
+import { ResendInvitation } from "../../../backoffice/user/application/ResendInvitation";
 import { ApiEraseIdentityRepository } from "../../../backoffice/user/infrastructure/ApiEraseIdentityRepository";
 import type { EraseIdentityRepository } from "../../../backoffice/user/domain/EraseIdentityRepository";
 import { FulfilIdentityErasure } from "../../../backoffice/user/application/FulfilIdentityErasure";
@@ -251,6 +254,15 @@ container
   .to(ApiRevokeInvitationRepository)
   .inSingletonScope();
 container.bind<RevokeInvitation>("BackOfficeRevokeInvitation").to(RevokeInvitation);
+
+// Identity write side: re-delivering a pending invitation with a fresh link through its own port — the sibling
+// of the withdrawal, kept apart so the two intents never share a call. Stateless adapter singleton; transient
+// use case.
+container
+  .bind<ResendInvitationRepository>("BackOfficeResendInvitationRepository")
+  .to(ApiResendInvitationRepository)
+  .inSingletonScope();
+container.bind<ResendInvitation>("BackOfficeResendInvitation").to(ResendInvitation);
 
 // Identity write side: GDPR erasure through its own destructive identity-shaped port — never the generic
 // CrudRepository.delete(). Stateless adapter singleton; transient use case.

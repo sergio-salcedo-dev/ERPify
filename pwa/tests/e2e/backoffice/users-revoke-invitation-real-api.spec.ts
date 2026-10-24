@@ -79,7 +79,7 @@ test.describe("BackOffice - Revoke a user invitation (real API)", () => {
 
     // The dialog closes itself and nothing surfaces as an error.
     await expect(page.getByTestId("user-revoke-invitation__dialog")).toHaveCount(0);
-    await expect(page.getByTestId("users-list__revoke-error")).toHaveCount(0);
+    await expect(page.getByTestId("users-list__invitation-error")).toHaveCount(0);
 
     // The identity is withdrawn, not removed: the silent re-read keeps the row and flips its badge…
     await expect(row).toBeVisible();
