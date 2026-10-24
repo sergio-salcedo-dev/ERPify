@@ -129,6 +129,7 @@ tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
 tests/Unit/Gate/AuditLogCheckEnumTokenGateTest.php :: home
+tests/Unit/Gate/AuditMetadataVocabularyLivenessGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
 tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
 tests/Unit/Gate/AuditWriteOperationParityTest.php :: home

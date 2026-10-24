@@ -8,6 +8,7 @@ use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Application\AuditPiiAad;
 use Erpify\Shared\Audit\Application\PiiFieldPosition;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
+use Erpify\Shared\Audit\Domain\AuditMetadataShape;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Privacy\Application\PersonalDataClassifier;
@@ -30,7 +31,7 @@ use Erpify\Shared\Privacy\Application\PersonalDataClassifier;
  */
 final readonly class PiiDiffSealer
 {
-    public const string ENCRYPTED_MARKER = '__enc__';
+    public const string ENCRYPTED_MARKER = AuditMetadataShape::SEALED_VALUE_KEY;
 
     public function __construct(
         private PersonalDataClassifier $classifier,
