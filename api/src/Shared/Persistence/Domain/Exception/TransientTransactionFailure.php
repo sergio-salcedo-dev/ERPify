@@ -29,8 +29,9 @@ use Throwable;
  * Untranslated, the same failure reaches the caller as a bare 500 `unhandled-exception`, which reads as "the
  * server is broken" and tells a client not to retry. The failure it matters most for is the GDPR erasure:
  * it runs the actor and resource audit passes and the `event_store` anonymiser in one transaction, and that
- * last one is a `payload::text ILIKE` — a sequential scan over rows the outbox is inserting into
- * concurrently, which is where contention is actually plausible.
+ * last one finds its rows through an index probe but still rewrites and row-locks them, under that one
+ * transaction, in the table the outbox is appending to concurrently — which is where contention is actually
+ * plausible (ADR `event-store-and-projections.md` D12, amendment of 2026-10-23).
  */
 final class TransientTransactionFailure extends DomainException implements ServiceUnavailable
 {

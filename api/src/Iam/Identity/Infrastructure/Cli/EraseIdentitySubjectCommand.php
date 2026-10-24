@@ -19,16 +19,15 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
 /**
- * GDPR "right to erasure" for an identity subject, run as one chained operation through {@see FulfilIdentityErasure}:
- * it hard-deletes the user row (the module's PII — email and credential hash), every pending password-reset
- * token and the recovery secret, anonymises every audit row the subject authored and every one that names them,
- * rewrites their identifier out of the reproducible business log, and hard-deletes the subject's sessions, the
- * membership that admitted them and every invitation addressed to them — atomically —
- * leaving `GDPR_SUBJECT_ERASED` and `GDPR_ERASURE_EXECUTED` security entries as the compliance record. Because it
- * shares that use case with the identity console, the CLI also enforces the ≥1-active-administrator guard (erasing
- * the last active admin fails). The `system` actor it runs as carries no id, so the self-erasure refusal never
- * applies. The additive `audit:gdpr:erase` command remains for anonymising an actor's trail without erasing the
- * identity.
+ * GDPR "right to erasure" for an identity subject, run as one chained operation through
+ * {@see FulfilIdentityErasure}: it removes or anonymises every link
+ * {@see FulfilIdentityErasureResult::ERASED_CATEGORIES} names — that map is the only enumeration of what the
+ * chain erases, and every enumeration of the chain's links this command prints is rendered from it — atomically,
+ * leaving `GDPR_SUBJECT_ERASED` and `GDPR_ERASURE_EXECUTED` security entries as the compliance record. Because
+ * it shares that use case with the identity console, the CLI also enforces the ≥1-active-administrator guard
+ * (erasing the last active admin fails).
+ * The `system` actor it runs as carries no id, so the self-erasure refusal never applies. The additive
+ * `audit:gdpr:erase` command remains for anonymising an actor's trail without erasing the identity.
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen:
  * `SUCCESS` means the subject is erased, that the no-op the operator asked for (`--dry-run`, or a
@@ -70,17 +69,16 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
             ->addArgument('user-id', InputArgument::REQUIRED, 'The user id (UUID) to erase')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Report the target without mutating anything')
             ->addOption('force', null, InputOption::VALUE_NONE, 'Skip the confirmation prompt')
-            ->setHelp(<<<'HELP'
-                The <info>%command.name%</info> command hard-deletes an identity (its email and credential
-                hash) together with every pending password-reset token and its recovery secret, anonymises
-                every audit row the subject authored and every one that names it, rewrites its identifier
-                out of the reproducible business
-                log (<comment>event_store</comment>, in the aggregate column and inside the stored JSON alike)
-                and hard-deletes its sessions, its organization membership and every invitation
-                addressed to it — atomically — so no <comment>user_id</comment> linkage, recovery artefact or
-                residual session PII outlives the subject. The erasure self-audits as
-                <comment>GDPR_SUBJECT_ERASED</comment> and <comment>GDPR_ERASURE_EXECUTED</comment> security
-                entries, and is refused if the subject is the last active administrator.
+            ->setHelp(\sprintf(
+                "%s %s.\n\n%s",
+                'The <info>%command.name%</info> command erases an identity subject atomically. It removes or '
+                . 'anonymises',
+                $this->categories(),
+                <<<'HELP'
+                The business-log rewrite covers <comment>event_store</comment> in the aggregate column and inside
+                the stored JSON alike. The erasure self-audits as <comment>GDPR_SUBJECT_ERASED</comment> and
+                <comment>GDPR_ERASURE_EXECUTED</comment> security entries, and is refused if the subject is the
+                last active administrator.
 
                 Exit codes: <comment>0</comment> erased, the no-op you asked for, or nothing left to
                 erase; <comment>1</comment> the erasure was attempted and failed; <comment>2</comment> nothing
@@ -93,7 +91,8 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
                   <info>php %command.full_name% <user-id> --dry-run</info>
                   <info>php %command.full_name% <user-id></info>
                   <info>php %command.full_name% <user-id> --force</info>
-                HELP)
+                HELP,
+            ))
         ;
     }
 
@@ -134,8 +133,44 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
     {
         return \sprintf(
             'Irreversibly erase this subject? This removes or anonymises %s.',
-            \implode(self::CATEGORY_SEPARATOR, FulfilIdentityErasureResult::ERASED_CATEGORIES),
+            $this->categories(),
         );
+    }
+
+    /**
+     * The chain as the operator reads it, shared by the prompt, the help and the "nothing to erase" notice so
+     * none of them can name a different set of links than the result reports.
+     */
+    private function categories(): string
+    {
+        return \implode(self::CATEGORY_SEPARATOR, FulfilIdentityErasureResult::ERASED_CATEGORIES);
+    }
+
+    /**
+     * One figure per entry of {@see FulfilIdentityErasureResult::ERASED_CATEGORIES}, in the map's order — a
+     * presentation order, not the order the chain runs in. The value is read by the map's key, so a property
+     * the map gains is reported the moment it is labelled, and one the map loses stops being reported.
+     *
+     * A label with no matching property prints `n/a` rather than raising: this runs after the erasure committed,
+     * so an exception here would exit as "attempted and failed" over an erasure that is done. The map and the
+     * properties are held equal by `FulfilIdentityErasureResultTest`, which is where that drift goes red.
+     */
+    private function report(FulfilIdentityErasureResult $result): string
+    {
+        $values = \get_object_vars($result);
+        $figures = [];
+
+        foreach (FulfilIdentityErasureResult::ERASED_CATEGORIES as $property => $label) {
+            $value = $values[$property] ?? null;
+            $figures[] = \sprintf('%s: %s', $label, match ($value) {
+                true => 'yes',
+                false => 'no',
+                null => 'n/a',
+                default => \var_export($value, true),
+            });
+        }
+
+        return \implode(self::CATEGORY_SEPARATOR, $figures);
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $userId): int
@@ -149,30 +184,15 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
         }
 
         if (!$result->erasedAnything()) {
-            $io->warning(
-                'Nothing to erase — the subject has no live identity, pending reset tokens, recovery '
-                . 'secret, audit trail, business-log rows, sessions, membership or invitations.',
-            );
+            $io->warning(\sprintf(
+                'Nothing to erase — none of these was left for the subject: %s.',
+                $this->categories(),
+            ));
 
             return Command::SUCCESS;
         }
 
-        $io->success(\sprintf(
-            'Erased subject %s (identity removed: %s, reset tokens deleted: %d, recovery secrets '
-            . 'deleted: %d, audit rows authored anonymised: %d, audit rows naming the subject anonymised: '
-            . '%d, business-log rows anonymised: %d, sessions removed: %d, memberships removed: %d, '
-            . 'invitations removed: %d).',
-            $userId,
-            $result->identityErased ? 'yes' : 'no',
-            $result->resetTokensDeleted,
-            $result->recoverySecretsDeleted,
-            $result->anonymizedAuditRows,
-            $result->anonymizedResourceRows,
-            $result->anonymizedEventRows,
-            $result->sessionsDeleted,
-            $result->membershipsDeleted,
-            $result->invitationsDeleted,
-        ));
+        $io->success(\sprintf('Erased subject %s (%s).', $userId, $this->report($result)));
 
         return Command::SUCCESS;
     }
