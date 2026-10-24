@@ -67,6 +67,75 @@ function entryTitle(name: string, isPlanned: boolean | undefined): string {
   return isPlanned ? `${name} (coming soon)` : name;
 }
 
+/**
+ * The trailing glyph: a section's chevron turns with its open state, a leaf's arrow shows on hover
+ * and stays nudged while the leaf is the current page.
+ */
+function SidebarChevron({
+  hasSubItems,
+  isOpen,
+  isActive,
+}: Readonly<{ hasSubItems: boolean; isOpen: boolean; isActive: boolean }>) {
+  if (hasSubItems) {
+    return (
+      <ChevronDown
+        className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        aria-hidden
+      />
+    );
+  }
+  return (
+    <ChevronRight
+      className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isActive ? "translate-x-0.5" : "opacity-0 group-hover:opacity-100"}`}
+      aria-hidden
+    />
+  );
+}
+
+/** The icon, and beside it the name and "Soon" marker the compact rail has no room for. */
+function SidebarItemContent({
+  icon: Icon,
+  name,
+  isCompact,
+  isPlanned,
+}: Readonly<{ icon: LucideIcon; name: string; isCompact: boolean; isPlanned?: boolean }>) {
+  return (
+    <div
+      className={`sidebar-item__content flex min-w-0 flex-1 items-center ${isCompact ? "justify-center" : "gap-3"}`}
+    >
+      <Icon className="sidebar-item__icon w-5 h-5 shrink-0" aria-hidden />
+      {!isCompact && <span className="sidebar-item__name text-sm truncate">{name}</span>}
+      {!isCompact && isPlanned ? <SoonMarker /> : null}
+    </div>
+  );
+}
+
+function SidebarSubItem({
+  subItem,
+  onClick,
+}: Readonly<{ subItem: SubItem; onClick: SidebarItemProps["onClick"] }>) {
+  const SubIcon = subItem.icon;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(subItem.path, subItem.action)}
+      title={entryTitle(subItem.name, subItem.isPlanned)}
+      aria-disabled={subItem.isBusy || undefined}
+      aria-current={subItem.isActive ? "page" : undefined}
+      data-testid={subItem.testId}
+      className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
+        subItem.isActive
+          ? "text-primary bg-primary/10"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground"
+      }`}
+    >
+      {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
+      <span className="truncate">{subItem.name}</span>
+      {subItem.isPlanned ? <SoonMarker /> : null}
+    </button>
+  );
+}
+
 export function SidebarItem({
   name,
   icon: Icon,
@@ -121,59 +190,25 @@ export function SidebarItem({
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
         } ${isCompact ? "justify-center" : ""}`}
       >
-        <div
-          className={`sidebar-item__content flex min-w-0 flex-1 items-center ${isCompact ? "justify-center" : "gap-3"}`}
-        >
-          <Icon className="sidebar-item__icon w-5 h-5 shrink-0" aria-hidden />
-          {!isCompact && <span className="sidebar-item__name text-sm truncate">{name}</span>}
-          {!isCompact && isPlanned ? <SoonMarker /> : null}
-        </div>
+        <SidebarItemContent icon={Icon} name={name} isCompact={isCompact} isPlanned={isPlanned} />
         {!isCompact && (
-          <>
-            {hasSubItems ? (
-              <ChevronDown
-                className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                aria-hidden
-              />
-            ) : (
-              <ChevronRight
-                className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isActive ? "translate-x-0.5" : "opacity-0 group-hover:opacity-100"}`}
-                aria-hidden
-              />
-            )}
-          </>
+          <SidebarChevron hasSubItems={hasSubItems} isOpen={isOpen} isActive={isActive} />
         )}
       </button>
 
       {hasSubItems && isOpen && !isCompact && (
         <div id={subItemsId} className="sidebar-item__sub-items ml-9 mt-1 space-y-1">
-          {subItems.map((subItem) => {
-            const SubIcon = subItem.icon;
-            return (
-              <button
-                type="button"
-                // Identity, never the label: a consumer that relabels an entry while it works
-                // would otherwise change the key, and React would destroy the button the user
-                // just activated — dropping focus to <body> and moving the new state onto a
-                // different node, where no assistive technology reads it.
-                key={subItem.testId ?? subItem.path}
-                onClick={() => onClick(subItem.path, subItem.action)}
-                title={entryTitle(subItem.name, subItem.isPlanned)}
-                aria-disabled={subItem.isBusy || undefined}
-                aria-current={subItem.isActive ? "page" : undefined}
-                data-testid={subItem.testId}
-                className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
-                  subItem.isActive
-                    ? "text-primary bg-primary/10"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                }`}
-              >
-                {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
-                <span className="truncate">{subItem.name}</span>
-                {subItem.isPlanned ? <SoonMarker /> : null}
-              </button>
-            );
-          })}
+          {subItems.map((subItem) => (
+            <SidebarSubItem
+              // Identity, never the label: a consumer that relabels an entry while it works
+              // would otherwise change the key, and React would destroy the button the user
+              // just activated — dropping focus to <body> and moving the new state onto a
+              // different node, where no assistive technology reads it.
+              key={subItem.testId ?? subItem.path}
+              subItem={subItem}
+              onClick={onClick}
+            />
+          ))}
         </div>
       )}
     </div>
