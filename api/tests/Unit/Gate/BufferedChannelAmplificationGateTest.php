@@ -264,8 +264,8 @@ final class BufferedChannelAmplificationGateTest extends TestCase
     /**
      * The one carrier that would reopen #804 on its own: the retry listener has the message OBJECT in hand
      * and puts only its class name into the record. A bump that added the payload back would put a queued
-     * aggregate id — and, for an event about a person, the personal datum itself — into a sink with no
-     * rotation, no TTL and no owner of erasure, with every other gate green.
+     * aggregate id — and, for an event about a person, the personal datum itself — into a sink rotated by
+     * volume alone, with no TTL and no owner of erasure, with every other gate green.
      */
     #[Test]
     public function theMessengerRecordCarriesTheMessageClassAndNotItsPayload(): void

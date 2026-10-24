@@ -30,7 +30,7 @@ use LogicException;
  * persistence-agnostic {@see KeysetPaginator} through a {@see DoctrineKeysetSource}, and returns an
  * immutable domain {@see Page}. The kernel collaborators it composes ({@see FilterApplier},
  * {@see CursorCodec}, {@see KeysetPredicateBuilder}, {@see FingerprintCanonicalizer},
- * {@see CursorPositionExtractor}) are pure; Doctrine query mechanics live here and in the source (NFR4).
+ * {@see CursorPositionExtractor}) are pure; Doctrine query mechanics live here and in the source.
  *
  * Pipeline (invariants enforced up to step 6 only; nothing after is part of the guarantees, AR10):
  *   1. resolve sort + `id` tie-break          → {@see AppliedSort} (semantic) + {@see OrderByColumns} (physical)
@@ -76,11 +76,10 @@ final readonly class DoctrineSearchEngine
     /**
      * Runs the keyset pipeline against the repository's base query builder and returns one page.
      *
-     * @param QueryBuilder $queryBuilder     base query builder: `SELECT`/`FROM`/joins only, never
-     *                                       order/limit/where-cursor (those are the engine's monopoly)
-     * @param string       $routingDirection {@see Cursor::DIRECTION_AFTER} or `DIRECTION_BEFORE` — the
-     *                                       single routing authority; the cursor's own `dir` is an
-     *                                       integrity binding, never consulted for navigation (AR21)
+     * @param QueryBuilder        $queryBuilder     base query builder: `SELECT`/`FROM`/joins only, never
+     *                                              order/limit/where-cursor (those are the engine's monopoly)
+     * @param NavigationDirection $routingDirection the single routing authority; the cursor's own `dir` is
+     *                                              an integrity binding, never consulted for navigation
      *
      * @return Page<object>
      */
@@ -91,7 +90,7 @@ final readonly class DoctrineSearchEngine
         SortFieldMap $sortFieldMap,
         PaginatorConfig $config,
         WirePaginationPolicy $policy,
-        string $routingDirection = Cursor::DIRECTION_AFTER,
+        NavigationDirection $routingDirection = NavigationDirection::After,
     ): Page {
         $alias = $this->rootAlias($queryBuilder);
 
@@ -125,7 +124,7 @@ final readonly class DoctrineSearchEngine
                 $this->positionExtractor,
             ),
             $criteria->cursor,
-            NavigationDirection::from($routingDirection),
+            $routingDirection,
         );
     }
 

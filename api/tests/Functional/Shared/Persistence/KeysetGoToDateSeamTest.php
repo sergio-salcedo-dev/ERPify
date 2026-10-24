@@ -15,6 +15,7 @@ use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
@@ -220,7 +221,7 @@ final class KeysetGoToDateSeamTest extends KernelTestCase
                 'createdAt',
                 SortDirection::ASC,
                 $empty->prevCursor,
-                routingDirection: Cursor::DIRECTION_BEFORE,
+                routingDirection: NavigationDirection::Before,
             );
 
             $this->assertSame($this->oracleOrder($ids, SortDirection::ASC), $this->ids($back));
@@ -334,7 +335,7 @@ final class KeysetGoToDateSeamTest extends KernelTestCase
         SortDirection $direction,
         string $cursor,
         int $limit = self::PAGE_LIMIT,
-        string $routingDirection = Cursor::DIRECTION_AFTER,
+        NavigationDirection $routingDirection = NavigationDirection::After,
     ): Page {
         /** @var Page<Bank> $page */
         $page = $this->engine->paginate(

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const search = vi.hoisted(() => vi.fn());
 const follow = vi.hoisted(() => vi.fn());
@@ -178,6 +178,24 @@ describe("Users row resend-invitation action", () => {
     const cluster = await screen.findByTestId(`users-table__rowactions-${INVITED_USER.id}`);
     await waitFor(() => expect(cluster).toContainElement(document.activeElement as HTMLElement));
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("sends one resend for two confirms landing before the re-render that disables the button", async () => {
+    resend.mockResolvedValue(undefined);
+    renderList();
+    await screen.findByTestId(INVITED_ROW);
+
+    fireEvent.click(await openRowMenuItem("users-table", "resend", INVITED_USER.id));
+    const confirm = await screen.findByTestId("user-resend-invitation__confirm");
+    // One act batches both clicks ahead of any re-render, as two clicks inside one frame are.
+    act(() => {
+      confirm.click();
+      confirm.click();
+    });
+
+    await waitFor(() => expect(resend).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    expect(resend).toHaveBeenCalledTimes(1);
   });
 
   it("does not resend when the operator cancels", async () => {

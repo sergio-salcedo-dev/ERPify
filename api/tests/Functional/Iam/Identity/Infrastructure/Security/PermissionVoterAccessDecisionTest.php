@@ -18,10 +18,10 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Proves the access-decision composition on the real, wired voter set. With the default `affirmative`
- * strategy left untouched and no route gated yet, an authenticated VIEWER — who clears the firewall's
- * IS_AUTHENTICATED_FULLY — is denied `bank.write` (the native voters abstain on a permission attribute, so
- * the {@see PermissionVoter}'s DENY stands) yet granted `bank.read`. This is exactly what a future
- * `#[IsGranted('bank.write')]` will enforce, verified here without opening a route.
+ * strategy left untouched, an authenticated VIEWER — who clears the firewall's IS_AUTHENTICATED_FULLY — is
+ * denied `bank.write` (the native voters abstain on a permission attribute, so the {@see PermissionVoter}'s
+ * DENY stands) yet granted `bank.read`: the decision every `#[IsGranted('bank.write')]` route takes, read here
+ * off the checker without going through one.
  *
  * @internal
  */
@@ -35,7 +35,8 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
      * decision. Read off the decision the wired manager actually took, not off `security.yaml`, so a strategy
      * set in any config file, environment block or `strategy_service` is seen. Declaring
      * `access_decision_manager.strategy` as anything else reds the first assertion; a second voter claiming a
-     * permission attribute — the contention this voter's shape-only support assumes away — reds the second.
+     * permission attribute — the contention this voter's shape-only support assumes away — reds the second. A
+     * voter the manager merely consults and that abstains is not contention, so abstentions are left out.
      */
     public function testPermissionAttributesAreDecidedAffirmativelyWithThePermissionVoterAsTheirOnlyVoter(): void
     {
@@ -68,11 +69,14 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
 
         $this->assertSame(
             [[PermissionVoter::class, VoterInterface::ACCESS_DENIED]],
-            \array_map(
+            \array_values(\array_map(
                 static fn (Vote $vote): array => [$vote->voter, $vote->result],
-                $accessDecision->votes,
-            ),
-            'A permission attribute must be answered by PermissionVoter alone; another voter now votes on it, '
+                \array_filter(
+                    $accessDecision->votes,
+                    static fn (Vote $vote): bool => VoterInterface::ACCESS_ABSTAIN !== $vote->result,
+                ),
+            )),
+            'A permission attribute must be answered by PermissionVoter alone; another voter now casts a vote on it, '
             . 'so the two contend over the same attribute.',
         );
     }

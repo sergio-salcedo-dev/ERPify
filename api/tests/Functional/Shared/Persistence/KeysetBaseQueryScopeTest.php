@@ -16,6 +16,7 @@ use Erpify\Shared\Search\Domain\Exception\InvalidCursorCause;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
@@ -168,7 +169,7 @@ final class KeysetBaseQueryScopeTest extends KernelTestCase
             $this->sortFieldMap(),
             new PaginatorConfig(),
             WirePaginationPolicy::wire(),
-            Cursor::DIRECTION_AFTER,
+            NavigationDirection::After,
         );
 
         return $page;

@@ -115,7 +115,7 @@ final readonly class KeysetPaginator
 
             // Reached via a cursor walking into a gap or an edge. The affordance follows the same directional
             // formula as a populated page with no extra row: an empty `before` keeps hasNext, an empty `after`
-            // keeps hasPrev. A true flag must carry a usable cursor (W10), so the recovery cursor re-signs the
+            // keeps hasPrev. A true flag must carry a usable cursor, so the recovery cursor re-signs the
             // INBOUND boundary under the OPPOSITE direction — following it walks back toward where you came,
             // landing just past that boundary (the boundary is exclusive).
             return new Page(

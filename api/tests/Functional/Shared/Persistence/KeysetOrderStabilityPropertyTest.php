@@ -14,6 +14,7 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
@@ -146,13 +147,13 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
             $ids = $this->seedAdversarialDataset();
             $oracle = $this->oracleOrder($ids, $column, $direction);
 
-            $firstPage = $this->paginate($ids, $field, $direction, null, Cursor::DIRECTION_AFTER);
-            $secondPage = $this->paginate($ids, $field, $direction, $firstPage->nextCursor, Cursor::DIRECTION_AFTER);
+            $firstPage = $this->paginate($ids, $field, $direction, null, NavigationDirection::After);
+            $secondPage = $this->paginate($ids, $field, $direction, $firstPage->nextCursor, NavigationDirection::After);
 
             $this->assertNotNull($secondPage->prevCursor);
 
             // before(page2.prevCursor) must return page 1, in the same caller-facing order.
-            $back = $this->paginate($ids, $field, $direction, $secondPage->prevCursor, Cursor::DIRECTION_BEFORE);
+            $back = $this->paginate($ids, $field, $direction, $secondPage->prevCursor, NavigationDirection::Before);
 
             $expectedFirstPage = \array_slice($oracle, 0, self::PAGE_LIMIT);
             $this->assertSame($expectedFirstPage, $this->ids($firstPage));
@@ -232,7 +233,7 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
         $maxIterations = self::DATASET_SIZE + 2;
 
         do {
-            $page = $this->paginate($ids, $field, $direction, $cursor, Cursor::DIRECTION_AFTER);
+            $page = $this->paginate($ids, $field, $direction, $cursor, NavigationDirection::After);
             $collected = [...$collected, ...$this->ids($page)];
             $cursor = $page->nextCursor;
             ++$guard;
@@ -251,7 +252,7 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
         string $field,
         SortDirection $direction,
         ?string $cursor,
-        string $routingDirection,
+        NavigationDirection $routingDirection,
     ): Page {
         $criteria = new SearchCriteria(
             cursor: $cursor,

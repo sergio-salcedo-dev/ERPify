@@ -21,7 +21,6 @@ use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextField
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
-use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -103,7 +102,7 @@ final readonly class DoctrineBankRepository implements
             $this->sortFieldMap(),
             new PaginatorConfig($criteria->paginationMode, fetchJoinCollection: false),
             WirePaginationPolicy::wire(),
-            $this->routingDirection($criteria->routingDirection),
+            $criteria->routingDirection,
         );
     }
 
@@ -112,13 +111,6 @@ final readonly class DoctrineBankRepository implements
      * infrastructure adapter maps it to the engine's string token here, keeping the domain VO free
      * of any infrastructure import.
      */
-    private function routingDirection(NavigationDirection $direction): string
-    {
-        return NavigationDirection::Before === $direction
-            ? Cursor::DIRECTION_BEFORE
-            : Cursor::DIRECTION_AFTER;
-    }
-
     private function searchFieldMap(): SearchFieldMap
     {
         $rangeOperators = [FilterOperator::Gt, FilterOperator::Gte, FilterOperator::Lt, FilterOperator::Lte];

@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\QueryBuilder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
@@ -203,7 +204,7 @@ final class KeysetSqlSnapshotTest extends KernelTestCase
             $this->sortFieldMap(),
             new PaginatorConfig(),
             $policy ?? WirePaginationPolicy::wire(),
-            Cursor::DIRECTION_AFTER,
+            NavigationDirection::After,
         );
 
         return $page;

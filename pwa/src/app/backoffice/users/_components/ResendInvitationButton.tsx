@@ -63,9 +63,14 @@ export function ResendInvitationButton({
   // Read once, when the closing dialog restores focus — a ref, not state, because the value is consulted
   // after the render that closed the dialog has already committed.
   const resentRef = useRef(false);
+  // Every confirm rotates the invitee's token and mails it, so a second click landing before the re-render
+  // that disables the button would kill the link the first one sent. State is only read on that re-render;
+  // the ref is set synchronously.
+  const inFlightRef = useRef(false);
 
   const onConfirm = async (): Promise<void> => {
-    if (resending) return;
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setResending(true);
     try {
       await container.get<ResendInvitation>("BackOfficeResendInvitation").run(userId);
@@ -80,6 +85,7 @@ export function ResendInvitationButton({
       onError(err.problem);
       toastNotifier.error("Couldn't resend the invitation — see error details");
     } finally {
+      inFlightRef.current = false;
       setResending(false);
     }
   };
@@ -128,7 +134,7 @@ export function ResendInvitationButton({
             onClick={() => void onConfirm()}
             disabled={resending}
             data-icon={resending ? "inline-start" : undefined}
-            aria-label="Confirm resend"
+            aria-label="Resend invitation"
             title={`Confirm resending the invitation of ${email}`}
             data-testid="user-resend-invitation__confirm"
           >
