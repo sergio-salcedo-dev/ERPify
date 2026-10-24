@@ -18,6 +18,7 @@ use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineKeysetSource;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
@@ -67,6 +68,7 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(DoctrineSearchEngine::class)]
+#[CoversClass(DoctrineKeysetSource::class)]
 final class KeysetOrderStabilityPropertyTest extends KernelTestCase
 {
     /** Below the dominant tie group of ~40, so every boundary lands inside a tie. */

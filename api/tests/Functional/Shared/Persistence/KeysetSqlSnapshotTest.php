@@ -15,6 +15,7 @@ use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineKeysetSource;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier;
@@ -53,6 +54,7 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(DoctrineSearchEngine::class)]
+#[CoversClass(DoctrineKeysetSource::class)]
 final class KeysetSqlSnapshotTest extends KernelTestCase
 {
     private EntityManagerInterface $loggedEntityManager;

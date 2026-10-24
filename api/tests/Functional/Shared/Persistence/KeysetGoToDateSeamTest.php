@@ -19,6 +19,7 @@ use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineKeysetSource;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
@@ -62,6 +63,7 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
  * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversClass(DoctrineSearchEngine::class)]
+#[CoversClass(DoctrineKeysetSource::class)]
 final class KeysetGoToDateSeamTest extends KernelTestCase
 {
     /** Above the dataset size, so a landing page exposes the full remainder in one fetch. */

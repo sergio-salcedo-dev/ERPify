@@ -34,6 +34,7 @@ use Psr\Log\NullLogger;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(ResendInvitation::class)]
+#[CoversClass(ResendableInvitationNotFound::class)]
 final class ResendInvitationTest extends TestCase
 {
     private const string INVITATION_ID = '0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b90';
