@@ -49,8 +49,8 @@ final readonly class RequestPasswordReset
     public function request(#[SensitiveParameter] string $email): void
     {
         // why: without a floor the silent branches (malformed, unknown, non-ACTIVE) answer in the time of one
-        // indexed read while the ACTIVE branch pays a multi-write transaction — a latency oracle over account
-        // existence. The KDF floor (tens of ms) is paid by every branch and swamps that sub-ms differential.
+        // indexed read. The floor is paid by every branch, so none of them answers faster than a KDF
+        // verification; it is added to the ACTIVE branch's work rather than padding it.
         $this->timingFloor->equalise();
 
         $canonicalEmail = Email::tryFrom($email);

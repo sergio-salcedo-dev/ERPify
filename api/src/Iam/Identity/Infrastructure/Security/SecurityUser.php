@@ -69,14 +69,18 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
      * is therefore equal to nothing — this copy included — so the token is dropped and the caller is sent back
      * to the door, the same fail-closed {@see UserProvider} applies to the row it loads.
      *
-     * Each of the three facts compared answers to a caller. The CREDENTIAL, because both replacement flows
+     * Each of the four facts compared answers to a caller. The CREDENTIAL, because both replacement flows
      * ({@see \Erpify\Iam\Identity\Application\CompletePasswordReset},
      * {@see \Erpify\Iam\Identity\Application\ChangeMyPassword}) swallow a failed session revoke on the stated
      * grounds that a credential change de-authenticates the old sessions natively — this comparison IS that
      * native de-authentication, so dropping it would silently degrade their containment to whatever the
-     * best-effort revoke happened to achieve. The ROLES, so a revocation bites on the next request rather than
-     * at the session's TTL. The IDENTIFIER is the one the reload was resolved BY, so it cannot differ today; it
-     * is kept for a provider that comes to resolve the reload by something else, such as the immutable id.
+     * best-effort revoke happened to achieve. The STATUS, for the same reason on behalf of
+     * {@see \Erpify\Iam\Identity\Application\ChangeUserStatus}: a suspension touches neither credential nor
+     * roles, so without this clause its best-effort revoke would be the only thing standing between a suspended
+     * identity and its live sessions, and a revoke failing after the commit would leave it signed in until the
+     * session's TTL. The ROLES, so a revocation bites on the next request rather than at the session's TTL. The
+     * IDENTIFIER is the one the reload was resolved BY, so it cannot differ today; it is kept for a provider that
+     * comes to resolve the reload by something else, such as the immutable id.
      *
      * Roles compare as a SET — their order in the JSON column is not a fact about the identity, and ejecting
      * live sessions over a reordered column would be a denial of service dressed as a security check.
@@ -104,6 +108,7 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
 
         return $this->getUserIdentifier() === $user->getUserIdentifier()
             && $credential === $theirs
+            && $this->status() === $user->status()
             && $this->sameRolesAs($user);
     }
 

@@ -54,6 +54,12 @@ final readonly class RotateSessionIdOnLogin
 
         $session = $request->getSession();
 
+        // A session not yet started reports an empty id under the native storage, which no cookie equals: the
+        // comparison below would read that as "already rotated" and leave the brought id carrying the login.
+        if (!$session->isStarted()) {
+            $session->start();
+        }
+
         // No cookie, or a cookie naming another id: either the server minted this id itself or the framework
         // already rotated it.
         if ($request->cookies->get($session->getName()) !== $session->getId()) {

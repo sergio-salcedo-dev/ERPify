@@ -25,6 +25,7 @@ cp .env.prod.example .env.prod.local
 #   MAILER_DSN=smtp://mailpit:1025              # compose.rehearsal.yaml's mailpit
 #   MAILER_SECURITY_FROM=security@erpify.dev    # a real TLD: .local/.test/.example/
 #                                               # .invalid/localhost and no-reply@ are refused
+#   DEFAULT_NOTIFICATION_EMAIL=ops@erpify.dev   # bank-change notices; mailpit catches them
 #   SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN         # erpify-api-prod / erpify-pwa-prod client keys
 # Keep SERVER_NAME=erpify.local and CADDY_SERVER_EXTRA_DIRECTIVES=tls internal.
 # Generate the secrets ONCE: Postgres keeps the password it initialised its volume
@@ -79,10 +80,12 @@ whichever checkout runs it, and it binds the same ports 80/443 as dev —
 `make deploy.local.down` before `make app.dev`, `make docker.down` before
 `make deploy.local` (which refuses to start while another project holds them).
 
-Promoting this same box to a public host moves it to another project: clearing
-`CADDY_SERVER_EXTRA_DIRECTIVES` makes it `erpify`, on fresh volumes, so run
-`make deploy.local.down` **before** editing the file, and expect the rehearsal's
-data to stay behind in `erpify-prodlocal_*`.
+Promote a different box, never this one in place. Clearing
+`CADDY_SERVER_EXTRA_DIRECTIVES` moves the stack to the checkout's own project —
+`erpify` in the primary checkout — and on a dev machine `erpify` is dev's, so the
+promoted stack would meet dev's Postgres volume and its password. On a box with no
+dev stack, `make deploy.local.down` **before** editing the file; the rehearsal's
+data stays behind in `erpify-prodlocal_*`.
 
 A rehearsal stood up before the project split lives under `erpify` on dev's
 volumes: stop it with `COMPOSE_PROJECT_NAME=erpify make ENV=prod docker.down`,

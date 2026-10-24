@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { useId, useState } from "react";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
 
 interface SubItem {
@@ -21,6 +20,13 @@ interface SubItem {
    * drops it — a view that swallowed the event instead would make that guard untestable.
    */
   isBusy?: boolean;
+  /**
+   * Whether this leaf holds the current route. Decided by the consumer, which knows which sibling
+   * wins when several match by prefix; this component never reads the router itself.
+   */
+  isActive?: boolean;
+  /** The entry leads to a module that is not built yet; rendered as a "Soon" marker. */
+  isPlanned?: boolean;
 }
 
 interface SidebarItemProps {
@@ -33,6 +39,32 @@ interface SidebarItemProps {
   isCompact?: boolean;
   /** Optional `data-testid` for the top-level item button. */
   testId?: string;
+  /** Every destination behind this entry is a module that is not built yet. */
+  isPlanned?: boolean;
+}
+
+/**
+ * Text, not an icon or a tint. The visible pill is short for the sighted scan; the accessible name
+ * carries the full phrase, so a screen reader hears "Invoicing, coming soon" before choosing to go
+ * there. The comma is load-bearing: adjacent spans are concatenated into the name with their edge
+ * whitespace trimmed, so a leading space would yield "Invoicingcoming soon".
+ */
+function SoonMarker() {
+  return (
+    <>
+      <span
+        className="sidebar-item__soon border-border text-muted-foreground ml-auto shrink-0 rounded border px-1 text-2xs leading-4 font-medium"
+        aria-hidden="true"
+      >
+        Soon
+      </span>
+      <span className="sr-only">, coming soon</span>
+    </>
+  );
+}
+
+function entryTitle(name: string, isPlanned: boolean | undefined): string {
+  return isPlanned ? `${name} (coming soon)` : name;
 }
 
 export function SidebarItem({
@@ -44,13 +76,15 @@ export function SidebarItem({
   subItems,
   isCompact = false,
   testId,
+  isPlanned,
 }: Readonly<SidebarItemProps>) {
-  const [isOpen, setIsOpen] = useState(false);
-  const pathname = usePathname();
+  const hasSubItems = subItems !== undefined && subItems.length > 0;
+  const subItemsId = useId();
 
-  const hasSubItems = subItems && subItems.length > 0;
-
-  // Auto-open if a sub-item is active (adjusting state during render to avoid cascading renders)
+  // A section holding the current route starts open — a deep link or a reload must show the
+  // active leaf, not a collapsed parent — and opens again whenever the route enters it later
+  // (adjusting state during render to avoid cascading renders).
+  const [isOpen, setIsOpen] = useState(isActive && hasSubItems);
   const [prevIsActive, setPrevIsActive] = useState(isActive);
   if (isActive !== prevIsActive) {
     setPrevIsActive(isActive);
@@ -59,8 +93,10 @@ export function SidebarItem({
     }
   }
 
+  const togglesSubItems = hasSubItems && !isCompact;
+
   const handleItemClick = () => {
-    if (hasSubItems && !isCompact) {
+    if (togglesSubItems) {
       setIsOpen(!isOpen);
       return;
     }
@@ -74,29 +110,35 @@ export function SidebarItem({
       <button
         type="button"
         onClick={handleItemClick}
-        title={name}
+        title={entryTitle(name, isPlanned)}
         data-testid={testId}
-        className={`sidebar-item w-full flex items-center justify-between p-2.5 rounded-md font-semibold transition-all group ${
+        aria-expanded={togglesSubItems ? isOpen : undefined}
+        aria-controls={togglesSubItems && isOpen ? subItemsId : undefined}
+        aria-current={isActive && !togglesSubItems ? "page" : undefined}
+        className={`sidebar-item w-full flex items-center justify-between gap-2 p-2.5 rounded-md font-semibold transition-all group ${
           isActive
             ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
             : "text-muted-foreground hover:bg-accent hover:text-foreground"
         } ${isCompact ? "justify-center" : ""}`}
       >
         <div
-          className={`sidebar-item__content flex items-center ${isCompact ? "justify-center" : "gap-3"}`}
+          className={`sidebar-item__content flex min-w-0 flex-1 items-center ${isCompact ? "justify-center" : "gap-3"}`}
         >
           <Icon className="sidebar-item__icon w-5 h-5 shrink-0" aria-hidden />
           {!isCompact && <span className="sidebar-item__name text-sm truncate">{name}</span>}
+          {!isCompact && isPlanned ? <SoonMarker /> : null}
         </div>
         {!isCompact && (
           <>
             {hasSubItems ? (
               <ChevronDown
-                className={`sidebar-item__chevron w-3.5 h-3.5 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                aria-hidden
               />
             ) : (
               <ChevronRight
-                className={`sidebar-item__chevron w-3.5 h-3.5 transition-transform ${isActive ? "translate-x-0.5" : "opacity-0 group-hover:opacity-100"}`}
+                className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isActive ? "translate-x-0.5" : "opacity-0 group-hover:opacity-100"}`}
+                aria-hidden
               />
             )}
           </>
@@ -104,9 +146,8 @@ export function SidebarItem({
       </button>
 
       {hasSubItems && isOpen && !isCompact && (
-        <div className="sidebar-item__sub-items ml-9 mt-1 space-y-1">
+        <div id={subItemsId} className="sidebar-item__sub-items ml-9 mt-1 space-y-1">
           {subItems.map((subItem) => {
-            const isSubActive = pathname === subItem.path;
             const SubIcon = subItem.icon;
             return (
               <button
@@ -117,17 +158,19 @@ export function SidebarItem({
                 // different node, where no assistive technology reads it.
                 key={subItem.testId ?? subItem.path}
                 onClick={() => onClick(subItem.path, subItem.action)}
-                title={subItem.name}
+                title={entryTitle(subItem.name, subItem.isPlanned)}
                 aria-disabled={subItem.isBusy || undefined}
+                aria-current={subItem.isActive ? "page" : undefined}
                 data-testid={subItem.testId}
                 className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
-                  isSubActive
+                  subItem.isActive
                     ? "text-primary bg-primary/10"
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
               >
                 {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
                 <span className="truncate">{subItem.name}</span>
+                {subItem.isPlanned ? <SoonMarker /> : null}
               </button>
             );
           })}

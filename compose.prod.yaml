@@ -54,6 +54,18 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      # FrankenPHP IS the edge: Caddy terminates the client's TCP connection and runs PHP in-process, so no
+      # hop in front of Symfony can vouch for an `X-Forwarded-For`, and the header reaches it exactly as the
+      # client wrote it. compose.yaml's default trusts every RFC1918 range, which hands that header to any
+      # connection whose peer is a private address — Docker's userland proxy (an IPv6 client reaching the
+      # IPv4 bridge), a hairpin, a NAT — and with it the key of every IP-scoped limiter and the `ip` the audit
+      # trail and the session registry record. Empty means Symfony trusts no hop and reads the peer address.
+      # A deployment that puts a real load balancer in front sets this to THAT balancer's address, and only it.
+      SYMFONY_TRUSTED_PROXIES: "${SYMFONY_TRUSTED_PROXIES:-}"
+      # Every bank created or updated is mailed here (SendEmailOnBankChanged). Required rather than inherited:
+      # compose.yaml's development default is a personal mailbox, and business data must not leave a
+      # deployment for an address nobody chose for it.
+      DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:?DEFAULT_NOTIFICATION_EMAIL is required in prod (the mailbox bank-change notices go to)}
       # This service sends the token-bearing security mail (invitation, password reset), and declared neither
       # of these, so prod inherited api/.env: the null:// discard transport, and a sender at a domain that
       # receives nothing. Required rather than defaulted for the same reason as on the two workers.
@@ -179,6 +191,8 @@ services:
       # file: prod fell through to api/.env's seguridad@erpify.local, a domain that receives nothing.
       MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
       MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
+      # This worker runs SendEmailOnBankChanged; required for the reason given on the php service.
+      DEFAULT_NOTIFICATION_EMAIL: ${DEFAULT_NOTIFICATION_EMAIL:?DEFAULT_NOTIFICATION_EMAIL is required in prod (the mailbox bank-change notices go to)}
       # Sentry captures async handler failures too (same required gating as php).
       SENTRY_DSN: ${SENTRY_DSN:?SENTRY_DSN is required in prod}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}

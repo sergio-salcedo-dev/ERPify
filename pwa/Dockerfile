@@ -24,11 +24,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm install --global npm@12.0.1
 
 COPY package.json package-lock.json ./
-COPY docker/install-deps.sh docker/
+# Outside /app/pwa on purpose: the dev container bind-mounts ./pwa over it, and a
+# source tree from before this script existed must still start.
+COPY docker/install-deps.sh /usr/local/bin/pwa-install-deps
 
 # Also writes the stamp the dev container's start compares against, so a stack
 # whose volume was seeded from this layer skips the reinstall (docker/install-deps.sh).
-RUN sh docker/install-deps.sh
+RUN sh /usr/local/bin/pwa-install-deps
 
 # Development image (use with bind-mount of ./pwa → /app/pwa, or run standalone)
 FROM base AS dev
@@ -43,11 +45,11 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 # docker/install-deps.sh runs `npm ci` only when the persistent pwa_node_modules
-# volume was not installed from this lockfile, Node and npm: base already ran it,
+# volume does not hold the tree installed from these inputs: base already ran it,
 # and a fresh volume is seeded from that layer. `ci` (not `install`) because it is
 # deterministic and, unlike `install`, never rewrites the bind-mounted
 # package-lock.json — which would leave it root-owned on the host.
-CMD ["sh", "-c", "sh docker/install-deps.sh && npx next dev --turbo -H 0.0.0.0 -p 3000"]
+CMD ["sh", "-c", "sh /usr/local/bin/pwa-install-deps && npx next dev --turbo -H 0.0.0.0 -p 3000"]
 
 FROM base AS builder
 

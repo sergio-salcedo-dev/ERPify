@@ -98,10 +98,11 @@
 		# The embedded hub is dunglas/mercure 1.x, which refuses to start with the two keys above unless
 		# compatibility mode is named. The application speaks the 0.x protocol (`protocol_version: '0.x'` in
 		# api/config/packages/mercure.yaml): its tokens carry the `mercure` claim, its subscriber cookie is
-		# `mercureAuthorization` and it subscribes with `?topic=`. Mode 8 is what keeps all three working, and
-		# it validates such a token exactly as the 0.x hub did — no `aud`, no `exp` required. Leaving it means
-		# moving the keys into an `issuer` block and the bundle to protocol 1.0 in the same change; either
-		# half alone stops every publish and every private subscription.
+		# `mercureAuthorization` and it subscribes with `?topic=`. Mode 8 is what keeps all three working: it
+		# validates such a token with no `aud` and no `exp` required. Leaving it means moving the keys into an
+		# `issuer` block, the bundle to protocol 1.0 and the PWA subscriber in one change. A half-move need not
+		# fail loudly — this mode also takes a 1.0 token whose `aud` names the hub — so whether publish and
+		# subscribe survive it depends on the `aud` the bundle mints (PRODUCTION_SECURITY_CHECKLIST.md §7).
 		protocol_version_compatibility 8
 		# Allow anonymous subscribers (double-check that it's what you want)
 		anonymous
@@ -145,6 +146,16 @@
 		rewrite @phpRoute index.php
 
 		@frontController path index.php
+		# Every request PHP serves is bounded here, after the rewrite, rather than by its spelling: Symfony derives
+		# its route from REQUEST_URI, so `/index.php/api/…` reaches the API routes without ever matching an `/api*`
+		# path. Symfony reads a JSON body whole, and an anonymous POST to the login route must not cost a worker
+		# more than this; the largest legitimate payload is a few kilobytes. The PWA and the Sentry tunnel are
+		# proxied above and the hub is its own handler, so they keep their own sizes. The bound is applied as the
+		# body is read, not from Content-Length, so a client past it sees its request fail and is not promised a 413.
+		# A route that comes to accept uploads (`erpify.images.max_input_bytes` is 20 MB) needs its own bound.
+		request_body @frontController {
+			max_size 1MB
+		}
 		php @frontController {
 			{$FRANKENPHP_SITE_CONFIG}
 		}
