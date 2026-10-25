@@ -186,7 +186,12 @@ export default function BackOfficeLayoutClient({
       } else if (key === "k") {
         // Claimed from the browser, which would otherwise move the focus to its own search box.
         event.preventDefault();
-        setIsGoToOpen(true);
+        // Never on top of another dialog — a delete confirmation, the mobile drawer, the palette
+        // itself: stacking a second modal over one waiting for an answer strands its focus trap.
+        // Closed dialogs unmount, so a dialog in the document is an open one.
+        if (globalThis.document.querySelector('[role="dialog"], [role="alertdialog"]') === null) {
+          setIsGoToOpen(true);
+        }
       }
     }
     globalThis.addEventListener("keydown", handleKey);
