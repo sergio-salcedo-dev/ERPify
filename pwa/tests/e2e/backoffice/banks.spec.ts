@@ -1127,7 +1127,7 @@ test.describe("BackOffice - Banks CRUD", () => {
       const treasuryItem = aside.getByRole("button", { name: "Treasury" });
       await expect(treasuryItem).toBeVisible();
       await treasuryItem.click();
-      const banksItem = aside.getByRole("button", { name: "Banks" });
+      const banksItem = aside.getByRole("link", { name: "Banks" });
       await expect(banksItem).toBeVisible();
       await banksItem.click();
       await expect(page).toHaveURL("/backoffice/banks");
