@@ -11,20 +11,26 @@ use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationEmailNotSent;
 use Erpify\Iam\Invitation\Infrastructure\Http\ResendUserInvitationController;
+use Erpify\Iam\Invitation\Infrastructure\Security\InvitationResendThrottle;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
-use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
+use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Invitation\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Cli\CapturingInvitationEmailSender;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
 /**
  * Drives the resend controller over the real {@see ResendInvitation} on in-memory repositories, because the
@@ -46,10 +52,13 @@ final class ResendUserInvitationControllerTest extends TestCase
 
     private const string NOW = '2026-07-17T10:00:00+00:00';
 
+    private RecordingAuditLogger $auditLogger;
+
     protected function setUp(): void
     {
         parent::setUp();
         SystemClock::set(FixedClock::at(self::NOW));
+        $this->auditLogger = new RecordingAuditLogger();
     }
 
     #[Test]
@@ -83,7 +92,27 @@ final class ResendUserInvitationControllerTest extends TestCase
         }
     }
 
-    private function controller(InvitationEmailSender $emailSender): ResendUserInvitationController
+    #[Test]
+    public function aSpentBudgetRefusesBeforeTheLinkIsTouched(): void
+    {
+        $emailSender = CapturingInvitationEmailSender::accepting();
+        $controller = $this->controller($emailSender, budget: 1);
+        $controller(UserMother::DEFAULT_ID);
+        $deliveredToken = $emailSender->capturedToken();
+
+        try {
+            $controller(UserMother::DEFAULT_ID);
+            $this->fail('A spent per-invitee budget must refuse out loud.');
+        } catch (RateLimitExceeded) {
+            // Asserted below: the budget protects the link the invitee holds, so a refusal reaches no row.
+        }
+
+        // The link mailed by the admitted call is still the last one sent, and only that call left a row.
+        $this->assertSame($deliveredToken, $emailSender->capturedToken());
+        $this->assertCount(1, $this->auditLogger->records);
+    }
+
+    private function controller(InvitationEmailSender $emailSender, int $budget = 5): ResendUserInvitationController
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-18T10:00:00+00:00'));
         $invitation = Invitation::create(
@@ -102,6 +131,13 @@ final class ResendUserInvitationControllerTest extends TestCase
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
+            $this->auditLogger,
+        ), new InvitationResendThrottle(
+            new RateLimiterFactory(
+                ['id' => 'per_invitee', 'policy' => 'sliding_window', 'limit' => $budget, 'interval' => '1 day'],
+                new InMemoryStorage(),
+            ),
+            new RequestStack(),
         ));
     }
 }

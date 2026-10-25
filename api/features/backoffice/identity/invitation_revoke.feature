@@ -32,6 +32,21 @@ Feature: Revoke a pending invitation from the console
     And there should be 1 event stored named "erpify.iam.identity.invitation-revoked"
     # Invitation events are deliberately unrouted — no realtime consumer — so the write leaves async empty.
     And 0 outbox events were created on the queue "async"
+    # The event store records the transition, never who pulled the invitation back: the security row is who.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE action = 'INVITATION_REVOKED'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "INVITATION_REVOKED",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": "User",
+        "resource_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70"
+      }
+    ]
+    """
     # The wrapped write's query budget (auth/admission lookups are excluded from the counter): one revocation
     # touches two aggregates in one transaction — the invitation and the identity it provisioned — each read
     # under a row lock, updated, and with its domain event appended to the event store. Measured, not derived:

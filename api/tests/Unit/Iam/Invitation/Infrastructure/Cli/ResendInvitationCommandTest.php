@@ -14,9 +14,10 @@ use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
-use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
+use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Invitation\Application\RecordingEventBus;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -106,6 +107,7 @@ final class ResendInvitationCommandTest extends TestCase
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
+            new RecordingAuditLogger(),
         ));
 
         $tester = new CommandTester($command);

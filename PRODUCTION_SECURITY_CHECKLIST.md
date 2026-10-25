@@ -792,6 +792,19 @@ you change anything here.
       detection/notification half (`NotifyLockedIdentities`) shipped in #683 and #857; #602 stays open on the
       stolen-session composition recorded in §7 (*A stolen session can deny the owner a credential rotation,
       but not an eviction*).
+- [ ] **The console's invitation levers — resend (`POST /backoffice/users/{userId}/invitation/resend`) and
+      revoke (`DELETE /backoffice/users/{userId}/invitation`) — are bounded and attributed.** Both are
+      `ADMIN`-only (`users.resendInvitation`, `users.revokeInvitation`). Every resend kills the link the invitee
+      already holds and mails a new one, so an unbounded resend let one administrator session — stolen or
+      scripted — keep a person's link permanently dead and flood their mailbox. `InvitationResendThrottle`
+      spends `invitation_resend_per_invitee` (5 / day, keyed by the case-folded invitee id, shared by every
+      administrator) before any row is touched, and answers a visible 429. The cost is that a drained bucket
+      blocks every administrator's resend of that person until it refills; revoke and re-invite is the way
+      round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
+      `INVITATION_REVOKED`), because the event store records the transition and never who caused it. The row is
+      written inside the transaction, after the invitation rows are locked: `FulfilIdentityErasure` deletes the
+      subject's invitations before its pass over the trail, so the row either commits before that pass reaches
+      it or is never written (`SubjectAuditWriteSerialisationGateTest`).
 - [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
       `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
       **Minted** from a live session against a re-proof of the current password and shown in clear exactly

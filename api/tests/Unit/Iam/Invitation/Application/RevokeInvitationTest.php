@@ -12,6 +12,7 @@ use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Event\InvitationRevoked;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\RevocableInvitationNotFound;
+use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -46,6 +47,59 @@ final class RevokeInvitationTest extends TestCase
     private const string OTHER_USER_ID = '0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b84';
 
     private const string ORG_ID = '0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5b82';
+
+    private ?TransactionObservingAuditLogger $auditLogger = null;
+
+    #[Test]
+    public function itAuditsTheRevocationByIdAsASecurityRowNamingTheInviteeWhileTheLocksAreHeld(): void
+    {
+        $this->revoker(new InMemoryInvitationRepository($this->sentInvitation()), new RecordingEventBus())
+            ->revoke(self::INVITATION_ID)
+        ;
+
+        // The resource is the PERSON the erasure's pass matches, and the row is written before the commit
+        // because the invitation locks are what keep that erasure waiting until it lands.
+        $records = $this->auditLogger()->records;
+        $this->assertCount(1, $records);
+        $this->assertSame('INVITATION_REVOKED', $records[0]['action']);
+        $this->assertSame(AuditLevel::SECURITY, $records[0]['level']);
+        $this->assertSame('User', $records[0]['resource']?->type);
+        $this->assertSame(self::USER_ID, $records[0]['resource']->id);
+        $this->assertSame([], $records[0]['metadata']);
+        $this->assertTrue($records[0]['inTransaction']);
+    }
+
+    #[Test]
+    public function itAuditsOneRowPerRevocationHoweverManyInvitationsItPulls(): void
+    {
+        $invitations = new InMemoryInvitationRepository(
+            $this->sentInvitation(),
+            $this->sentInvitation(self::SECOND_INVITATION_ID),
+        );
+
+        $this->revoker($invitations, new RecordingEventBus())->revokeForInvitedUser(self::USER_ID);
+
+        $records = $this->auditLogger()->records;
+        $this->assertCount(1, $records);
+        $this->assertSame('INVITATION_REVOKED', $records[0]['action']);
+        $this->assertSame(self::USER_ID, $records[0]['resource']?->id);
+        $this->assertTrue($records[0]['inTransaction']);
+    }
+
+    #[Test]
+    public function itAuditsNothingWhenThereIsNothingToRevoke(): void
+    {
+        try {
+            $this->revoker(new InMemoryInvitationRepository(), new RecordingEventBus())
+                ->revokeForInvitedUser(self::USER_ID)
+            ;
+            $this->fail('Expected RevocableInvitationNotFound.');
+        } catch (RevocableInvitationNotFound) {
+            // Asserted below: a refused revocation names nobody in the trail.
+        }
+
+        $this->assertSame([], $this->auditLogger()->records);
+    }
 
     #[Test]
     public function itRevokesALiveInvitationAndPublishes(): void
@@ -167,12 +221,23 @@ final class RevokeInvitationTest extends TestCase
         RecordingEventBus $eventBus,
         ?CountingTransactionManager $transactions = null,
     ): RevokeInvitation {
+        $transactions ??= new CountingTransactionManager();
+        $this->auditLogger = new TransactionObservingAuditLogger($transactions);
+
         return new RevokeInvitation(
             $invitations,
             $this->invitedUserStore(),
             $eventBus,
-            $transactions ?? new CountingTransactionManager(),
+            $transactions,
+            $this->auditLogger,
         );
+    }
+
+    private function auditLogger(): TransactionObservingAuditLogger
+    {
+        $this->assertInstanceOf(TransactionObservingAuditLogger::class, $this->auditLogger);
+
+        return $this->auditLogger;
     }
 
     /**

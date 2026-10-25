@@ -7,6 +7,7 @@ namespace Erpify\Tests\Behat\Context;
 use Behat\Behat\Context\Context;
 use Behat\Step\Given;
 use Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey;
+use Erpify\Iam\Invitation\Infrastructure\Security\InvitationResendThrottle;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\LimiterInterface;
@@ -41,6 +42,8 @@ final class RateLimitContext extends AbstractContext implements Context
         private readonly RateLimiterFactoryInterface $perSelectorLimiter,
         #[Autowire(service: 'limiter.password_change_per_identity')]
         private readonly RateLimiterFactoryInterface $perIdentityLimiter,
+        #[Autowire(service: 'limiter.invitation_resend_per_invitee')]
+        private readonly RateLimiterFactoryInterface $perInviteeLimiter,
     ) {
     }
 
@@ -83,6 +86,19 @@ final class RateLimitContext extends AbstractContext implements Context
     public function thePasswordChangeBudgetIsExhaustedForIdentity(string $identityId): void
     {
         $this->exhaust($this->perIdentityLimiter->create($identityId), 'password_change_per_identity');
+    }
+
+    /**
+     * Key derivation goes through {@see InvitationResendThrottle::keyOf()} itself, so a scenario priming one
+     * spelling of the id and requesting another proves the controller folds them into one bucket.
+     */
+    #[Given('the invitation-resend budget is exhausted for invitee :userId')]
+    public function theInvitationResendBudgetIsExhaustedForInvitee(string $userId): void
+    {
+        $this->exhaust(
+            $this->perInviteeLimiter->create(InvitationResendThrottle::keyOf($userId)),
+            'invitation_resend_per_invitee',
+        );
     }
 
     /**

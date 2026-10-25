@@ -14,6 +14,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -137,7 +138,13 @@ final class RevokeInvitationIdentityWithdrawalTest extends TestCase
         InMemoryUserRepository $users,
         RecordingEventBus $eventBus,
     ): RevokeInvitation {
-        return new RevokeInvitation($invitations, $users, $eventBus, new CountingTransactionManager());
+        return new RevokeInvitation(
+            $invitations,
+            $users,
+            $eventBus,
+            new CountingTransactionManager(),
+            new RecordingAuditLogger(),
+        );
     }
 
     private function invitedUser(): User
