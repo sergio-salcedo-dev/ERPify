@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Event\UserInvitationRevoked;
@@ -143,7 +144,12 @@ final class RevokeInvitationIdentityWithdrawalTest extends TestCase
             $users,
             $eventBus,
             new CountingTransactionManager(),
-            new RecordingAuditLogger(),
+            // A store of its own: the locks counted here are the withdrawal's, not the audit seam's.
+            new RecordInvitationAudit(
+                new InMemoryUserRepository($this->invitedUser()),
+                new RecordingAuditLogger(),
+                new InlineTransactionManager(),
+            ),
         );
     }
 

@@ -805,9 +805,11 @@ you change anything here.
       an operator drains it retrying through a mail outage; the console command `iam:invitation:resend`, which
       this budget does not cover, is the way round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
       `INVITATION_REVOKED`), because the event store records the transition and never who caused it. The row is
-      written inside the transaction, after the invitation rows are locked: `FulfilIdentityErasure` deletes the
-      subject's invitations before its pass over the trail, so the row either commits before that pass reaches
-      it or is never written (`SubjectAuditWriteSerialisationGateTest`).
+      written by `Iam/Identity`'s `RecordInvitationAudit` — the context that owns and erases the person — under
+      the invitee's `identity_user` row lock, nested in the lever's transaction after the invitation rows: the
+      order `FulfilIdentityErasure` takes them in, so the row either commits before the erasure's pass over the
+      trail or finds the identity gone and is never written (`SubjectAuditWriteSerialisationGateTest`,
+      `PersonResourceErasureGateTest`).
 - [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
       `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
       **Minted** from a live session against a re-proof of the current password and shown in clear exactly

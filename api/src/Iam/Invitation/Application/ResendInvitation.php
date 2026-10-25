@@ -5,16 +5,13 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Application;
 
 use DateInterval;
-use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Iam\Invitation\Domain\Exception\ResendableInvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
-use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
@@ -33,12 +30,9 @@ use LogicException;
  * not the delivery record — so {@see resendForInvitedUser()} resolves the invitations here, inside the context
  * that owns `invited_user_id`.
  *
- * Each resend writes a `security` audit row naming the invitee, because the event store records that a link
- * was replaced and never by whom — and a resend is a write against a person who cannot see it coming. The row
- * is written inside the transaction, after the invitations are locked, and that lock is what keeps it erasable:
- * {@see FulfilIdentityErasure} deletes the subject's invitations before it passes over the trail, so its
- * delete waits for this transaction and the pass then finds the row committed, or it ran first and the locked
- * read here finds nothing to resend and writes nothing.
+ * Each resend records who resent the person's invitation through {@see RecordInvitationAudit}, the seam the
+ * identity context publishes for it, inside this transaction and after the invitations are locked — the order
+ * the erasure takes them in.
  *
  * The object coupling is the two entry points sharing one reissue: each adds the not-found answer its own
  * caller is owed, over the same token, mailer, event bus, audit and transaction collaborators.
@@ -47,8 +41,6 @@ use LogicException;
  */
 final readonly class ResendInvitation
 {
-    private const string RESENT_ACTION = 'INVITATION_RESENT';
-
     public function __construct(
         private InvitationRepository $invitations,
         private UserRepository $users,
@@ -56,7 +48,7 @@ final readonly class ResendInvitation
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
-        private AuditLogger $auditLogger,
+        private RecordInvitationAudit $audit,
     ) {
     }
 
@@ -85,7 +77,7 @@ final readonly class ResendInvitation
                 }
 
                 $acceptToken = $this->reissue($invitation, $invitationId);
-                $this->auditResend($invitation->invitedUserId());
+                $this->audit->resent($invitation->invitedUserId());
 
                 return [$user->email(), $acceptToken];
             },
@@ -136,7 +128,8 @@ final readonly class ResendInvitation
                     $acceptTokens[] = $this->reissue($invitation, $this->idOf($invitation));
                 }
 
-                $this->auditResend($userId);
+                // One row per act, not per invitation: several live rows for one person are one decision.
+                $this->audit->resent($userId);
 
                 return [$user->email(), $acceptTokens];
             },
@@ -165,19 +158,6 @@ final readonly class ResendInvitation
         $this->eventBus->publish(...$invitation->pullDomainEvents());
 
         return $selector . '.' . $generated->plaintext();
-    }
-
-    /**
-     * One row per act rather than per invitation: the operator resent a person's invitation, and the defensive
-     * case of several live rows for one person is not a second decision.
-     */
-    private function auditResend(string $invitedUserId): void
-    {
-        $this->auditLogger->log(
-            self::RESENT_ACTION,
-            AuditLevel::SECURITY,
-            AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $invitedUserId),
-        );
     }
 
     private function idOf(Invitation $invitation): string

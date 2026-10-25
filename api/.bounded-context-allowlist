@@ -120,11 +120,10 @@ src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Domai
 # accept path above, which drives both aggregates of the pair through this repository.
 src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
 src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Domain\Exception\UserNotFound
-# Resending or revoking an invitation writes a security audit row naming the invited person, under the resource
-# type FulfilIdentityErasure publishes — the one constant the erasure's pass over the trail matches, so a row
-# spelled any other way would survive the erasure of the person it names.
-src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Application\FulfilIdentityErasure
-src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Application\FulfilIdentityErasure
+# Resending or revoking an invitation records who acted on whom through RecordInvitationAudit, the seam the
+# identity context publishes: the row names a person, so the context that owns and erases the person writes it.
+src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Application\RecordInvitationAudit
+src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Application\RecordInvitationAudit
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort

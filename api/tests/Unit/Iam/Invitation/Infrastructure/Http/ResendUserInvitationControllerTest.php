@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Http;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Invitation\Application\InvitationEmailSender;
 use Erpify\Iam\Invitation\Application\ResendInvitation;
 use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
@@ -125,7 +126,8 @@ final class ResendUserInvitationControllerTest extends TestCase
             // Asserted below: the refusal must leave the real person's single slot untouched.
         }
 
-        $this->assertSame(Response::HTTP_NO_CONTENT, $controller(UserMother::DEFAULT_ID)->getStatusCode());
+        $response = $controller(UserMother::DEFAULT_ID);
+        $this->assertSame(Response::HTTP_NO_CONTENT, $response->getStatusCode(), (string) $response->getContent());
     }
 
     private function controller(InvitationEmailSender $emailSender, int $budget = 5): ResendUserInvitationController
@@ -140,14 +142,16 @@ final class ResendUserInvitationControllerTest extends TestCase
         $invitation->markSent();
         $invitation->pullDomainEvents();
 
+        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID));
+
         return new ResendUserInvitationController(new ResendInvitation(
             new InMemoryInvitationRepository($invitation),
-            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID)),
+            $users,
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
-            $this->auditLogger,
+            new RecordInvitationAudit($users, $this->auditLogger, new InlineTransactionManager()),
         ), new InvitationResendThrottle(
             new RateLimiterFactory(
                 ['id' => 'per_invitee', 'policy' => 'sliding_window', 'limit' => $budget, 'interval' => '1 day'],

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Invitation\Application\RevokeInvitation;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -223,13 +224,15 @@ final class RevokeInvitationTest extends TestCase
     ): RevokeInvitation {
         $transactions ??= new CountingTransactionManager();
         $this->auditLogger = new TransactionObservingAuditLogger($transactions);
+        $users = $this->invitedUserStore();
 
         return new RevokeInvitation(
             $invitations,
-            $this->invitedUserStore(),
+            $users,
             $eventBus,
             $transactions,
-            $this->auditLogger,
+            // Its own inline boundary, so the counters above describe the use case's and nothing nested in it.
+            new RecordInvitationAudit($users, $this->auditLogger, new InlineTransactionManager()),
         );
     }
 

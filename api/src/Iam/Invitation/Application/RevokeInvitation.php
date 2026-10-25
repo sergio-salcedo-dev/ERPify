@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Application;
 
-use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\RevocableInvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
-use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -36,22 +33,17 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * the delivery record — so {@see revokeForInvitedUser()} resolves the invitations here, inside the context
  * that owns `invited_user_id`, rather than surfacing an invitation id through the Identity-owned read model.
  *
- * Each revocation writes a `security` audit row naming the invited person, because the event store records the
- * transition and never who pulled the invitation back. It is written in the transaction, after the invitations
- * are locked, for the reason {@see ResendInvitation} gives: {@see FulfilIdentityErasure} deletes the subject's
- * invitations before its pass over the trail, so the two are serialised on those rows and the row is either
- * committed before the pass reaches it or never written.
+ * Each revocation records who pulled the person's invitation back through {@see RecordInvitationAudit}, in the
+ * same transaction and after the identity is withdrawn, once per call rather than once per invitation.
  */
 final readonly class RevokeInvitation
 {
-    private const string REVOKED_ACTION = 'INVITATION_REVOKED';
-
     public function __construct(
         private InvitationRepository $invitations,
         private UserRepository $users,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
-        private AuditLogger $auditLogger,
+        private RecordInvitationAudit $audit,
     ) {
     }
 
@@ -77,7 +69,7 @@ final readonly class RevokeInvitation
 
             $this->revokeOne($invitation);
             $this->withdrawIdentity($invitation->invitedUserId());
-            $this->auditRevocation($invitation->invitedUserId());
+            $this->audit->revoked($invitation->invitedUserId());
         });
     }
 
@@ -116,21 +108,8 @@ final readonly class RevokeInvitation
             }
 
             $this->withdrawIdentity($userId);
-            $this->auditRevocation($userId);
+            $this->audit->revoked($userId);
         });
-    }
-
-    /**
-     * One row per act rather than per invitation, as for the resend: pulling back several live rows for one
-     * person is one decision.
-     */
-    private function auditRevocation(string $invitedUserId): void
-    {
-        $this->auditLogger->log(
-            self::REVOKED_ACTION,
-            AuditLevel::SECURITY,
-            AuditResource::of(FulfilIdentityErasure::SUBJECT_RESOURCE_TYPE, $invitedUserId),
-        );
     }
 
     private function revokeOne(Invitation $invitation): void

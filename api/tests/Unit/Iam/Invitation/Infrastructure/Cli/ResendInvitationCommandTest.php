@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Cli;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Invitation\Application\ResendInvitation;
 use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -100,14 +101,16 @@ final class ResendInvitationCommandTest extends TestCase
             ? CapturingInvitationEmailSender::refusing()
             : CapturingInvitationEmailSender::accepting();
 
+        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID));
+
         $command = new ResendInvitationCommand(new ResendInvitation(
             new InMemoryInvitationRepository($this->sentInvitation()),
-            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID)),
+            $users,
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
-            new RecordingAuditLogger(),
+            new RecordInvitationAudit($users, new RecordingAuditLogger(), new InlineTransactionManager()),
         ));
 
         $tester = new CommandTester($command);

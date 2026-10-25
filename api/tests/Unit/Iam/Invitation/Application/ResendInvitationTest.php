@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Invitation\Application\ResendInvitation;
 use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -13,8 +14,6 @@ use Erpify\Iam\Invitation\Domain\Event\InvitationResent;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
 use Erpify\Iam\Invitation\Domain\Exception\InvitedIdentityUnavailable;
 use Erpify\Iam\Invitation\Domain\Exception\ResendableInvitationNotFound;
-use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Double\Clock\FixedClock;
@@ -59,58 +58,6 @@ final class ResendInvitationTest extends TestCase
         parent::setUp();
         SystemClock::set(FixedClock::at(self::NOW));
         $this->auditLogger = new RecordingAuditLogger();
-    }
-
-    #[Test]
-    public function itAuditsTheResendByIdAsASecurityRowNamingTheInviteeWhileTheLocksAreHeld(): void
-    {
-        [$invitation] = $this->sentInvitation();
-        $transactions = new CountingTransactionManager();
-        $auditLogger = new TransactionObservingAuditLogger($transactions);
-
-        $this->useCase(
-            new InMemoryInvitationRepository($invitation),
-            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID)),
-            new SpyInvitationEmailSender(),
-            new RecordingEventBus(),
-            $transactions,
-            $auditLogger,
-        )->resend(self::INVITATION_ID);
-
-        // The resource is the PERSON, never the invitation: it is the id the erasure's pass over the trail
-        // matches, and the row is inside the transaction because the invitation locks are what hold that
-        // erasure back until it commits.
-        $this->assertCount(1, $auditLogger->records);
-        $this->assertSame('INVITATION_RESENT', $auditLogger->records[0]['action']);
-        $this->assertSame(AuditLevel::SECURITY, $auditLogger->records[0]['level']);
-        $this->assertSame('User', $auditLogger->records[0]['resource']?->type);
-        $this->assertSame(UserMother::DEFAULT_ID, $auditLogger->records[0]['resource']->id);
-        $this->assertSame([], $auditLogger->records[0]['metadata']);
-        $this->assertTrue($auditLogger->records[0]['inTransaction']);
-    }
-
-    #[Test]
-    public function itAuditsOneRowPerResendHoweverManyInvitationsItReissues(): void
-    {
-        [$first] = $this->sentInvitation();
-        [$second] = $this->sentInvitation(self::SECOND_INVITATION_ID);
-        $transactions = new CountingTransactionManager();
-        $auditLogger = new TransactionObservingAuditLogger($transactions);
-
-        $this->useCase(
-            new InMemoryInvitationRepository($first, $second),
-            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID)),
-            new SpyInvitationEmailSender(),
-            new RecordingEventBus(),
-            $transactions,
-            $auditLogger,
-        )->resendForInvitedUser(UserMother::DEFAULT_ID);
-
-        $this->assertCount(1, $auditLogger->records);
-        $this->assertSame('INVITATION_RESENT', $auditLogger->records[0]['action']);
-        $this->assertSame(AuditLevel::SECURITY, $auditLogger->records[0]['level']);
-        $this->assertSame(UserMother::DEFAULT_ID, $auditLogger->records[0]['resource']?->id);
-        $this->assertTrue($auditLogger->records[0]['inTransaction']);
     }
 
     #[Test]
@@ -259,7 +206,7 @@ final class ResendInvitationTest extends TestCase
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
-            $this->auditLogger,
+            new RecordInvitationAudit($users, $this->auditLogger, new InlineTransactionManager()),
         ))->resendForInvitedUser(UserMother::DEFAULT_ID);
 
         // The send runs after the commit, so its failure cannot undo the reissue: the old link is dead either
@@ -347,7 +294,6 @@ final class ResendInvitationTest extends TestCase
         SpyInvitationEmailSender $emailSender,
         RecordingEventBus $eventBus,
         ?CountingTransactionManager $transactions = null,
-        ?AuditLogger $auditLogger = null,
     ): ResendInvitation {
         return new ResendInvitation(
             $invitations,
@@ -356,7 +302,7 @@ final class ResendInvitationTest extends TestCase
             $eventBus,
             $transactions ?? new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
-            $auditLogger ?? $this->auditLogger,
+            new RecordInvitationAudit($users, $this->auditLogger, new InlineTransactionManager()),
         );
     }
 

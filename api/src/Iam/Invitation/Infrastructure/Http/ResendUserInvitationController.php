@@ -34,11 +34,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * answering 204 would tell the operator the invitee holds a working link when they hold none. It is a 503
  * {@see InvitationEmailNotSent}, and the remedy it names — resend again — is safe to repeat.
  *
- * {@see InvitationResendThrottle} runs before the use case, keyed by the invitee: each call kills the link the person already
- * holds, so the number of calls per person is bounded whoever makes them, and a spent budget is a 429
- * `rate-limited` that reaches no row. It runs after `#[IsGranted]` and after the id is checked to be a UUID, so
- * only an administrator naming a well-formed id spends it, and every such attempt does, including one that ends
- * in a 404 or a 503.
+ * {@see InvitationResendThrottle} runs before the use case, keyed by the invitee: each call kills the link the
+ * person already holds, so the number of calls per person is bounded whoever makes them, and a spent budget is a
+ * 429 `rate-limited` that reaches no row. It runs after `#[IsGranted]` and after the id is checked to be a UUID,
+ * so only an administrator naming a well-formed id spends it, and every such attempt does, including one that
+ * ends in a 404 or a 503.
  */
 #[Route('/users/{userId}/invitation/resend', name: self::ROUTE_NAME, methods: ['POST'])]
 #[IsGranted('users.resendInvitation')]

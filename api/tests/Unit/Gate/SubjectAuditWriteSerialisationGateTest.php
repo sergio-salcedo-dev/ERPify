@@ -13,14 +13,10 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Every audit row the Iam context writes naming the identity subject — `AuditResource::of(FulfilIdentityErasure::
- * SUBJECT_RESOURCE_TYPE, …)` anywhere under `src/Iam/` — is serialised with that subject's erasure, so it cannot
- * commit after the erasure's pass over the trail has run. A row that does is residue nothing clears: the erasure
- * redacts only what is committed when it passes.
- *
- * The row a `locking-read` holds is the subject's `identity_user` for the Identity writers and the subject's
- * `iam_invitation` rows for the two Invitation writers. Both serialise, because the erasure takes both before
- * its pass: it deletes the subject's invitations first and locks the identity row next.
+ * Every audit row the identity module writes naming its subject — `AuditResource::of(FulfilIdentityErasure::
+ * SUBJECT_RESOURCE_TYPE, …)` under `Iam/Identity/Application` — is serialised with that subject's
+ * `identity_user` row, so it cannot commit after an erasure's pass over the trail has run. A row that does is
+ * residue nothing clears: the erasure redacts only what is committed when it passes.
  *
  * A site is serialised in one of three ways, and the sweep names which ({@see SubjectAuditWriteMechanisms}):
  *  - `row-lock` — the site, or a private method every call of which, sits inside the closure handed to
@@ -40,7 +36,7 @@ use PHPUnit\Framework\TestCase;
  * lexically placed as its mechanism says. It proves nothing about which row a `ForUpdate` read locks (the
  * subject's or another), about a lock taken and released before the write, about a call reached through a
  * callable, a helper in another file or a trait, about the resource type spelled as a literal or reached under
- * an alias, nor about a writer outside `src/Iam/`. The erasure itself
+ * an alias, nor about a writer outside `Iam/Identity/Application`. The erasure itself
  * ({@see FulfilIdentityErasure}) spells the constant through `self::` and is outside the sweep by construction.
  *
  * @internal
@@ -48,7 +44,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class SubjectAuditWriteSerialisationGateTest extends TestCase
 {
-    private const string SCOPE = '/src/Iam/';
+    private const string SCOPE = '/Iam/Identity/Application/';
 
     /**
      * @var array<string, string> file under the scope => the mechanism serialising its write
@@ -56,17 +52,16 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
     private const array POPULATION = [
         'ChangeUserRoles.php' => 'locking-read',
         'InviteUser.php' => 'creates-subject',
+        'RecordInvitationAudit.php' => 'locking-read',
         'RecordLockoutAuditBestEffort.php' => 'row-lock',
         'RecordLockoutNoticeAuditBestEffort.php' => 'row-lock',
         'RecordRecoverySecretAuditBestEffort.php' => 'row-lock',
         'RecordRecoveryThrottleAuditBestEffort.php' => 'row-lock',
-        'ResendInvitation.php' => 'locking-read',
         'ResweepErasedSubjects.php' => 'erasure-pass',
-        'RevokeInvitation.php' => 'locking-read',
         'UnlockUserAccount.php' => 'locking-read',
     ];
 
-    private const int SITES = 10;
+    private const int SITES = 9;
 
     #[Test]
     public function everySubjectAuditWriteIsSerialisedWithTheSubjectsRow(): void
