@@ -19,8 +19,8 @@ interface UsersCardsProps {
   selectedIds?: ReadonlySet<string>;
   onToggleSelect?: (id: string) => void;
   density?: "compact" | "comfortable";
-  onInvitationRevoked: () => void;
-  onRevokeFailed: (problem: ProblemDetails) => void;
+  onInvitationChanged: () => void;
+  onInvitationActionFailed: (problem: ProblemDetails) => void;
 }
 
 /**
@@ -57,8 +57,8 @@ export function UsersCards({
   selectedIds,
   onToggleSelect,
   density = "compact",
-  onInvitationRevoked,
-  onRevokeFailed,
+  onInvitationChanged,
+  onInvitationActionFailed,
 }: Readonly<UsersCardsProps>) {
   return (
     <ul
@@ -99,8 +99,8 @@ export function UsersCards({
                   status={user.status}
                   surface="cards"
                   reveal="card"
-                  onInvitationRevoked={onInvitationRevoked}
-                  onRevokeFailed={onRevokeFailed}
+                  onInvitationChanged={onInvitationChanged}
+                  onInvitationActionFailed={onInvitationActionFailed}
                   className="users-cards__actions relative z-10 ml-auto"
                 />
               </div>

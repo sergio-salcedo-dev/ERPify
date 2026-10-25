@@ -150,6 +150,19 @@ The re-login that follows a successful accept cannot add a failure type to this 
 
 400 (not 401 or 404): a dead token is a malformed request *target*, like a malformed route UUID (`invalid-uuid`) — 401 would conflate with a credentials failure, and 404 would leak whether the invitation exists. The `InvalidInput` marker keeps the status uniform across the five cases, which is the whole opacity requirement ([`identity-invitation-lifecycle.md`](adr/identity-invitation-lifecycle.md) D11). The invited email is never surfaced, and the raw token never appears in a response, log or event. On success the flow answers **204** with the session cookie (mirroring login) — never a body that could echo identity.
 
+### Invitation resend (`POST /api/v1/backoffice/users/{userId}/invitation/resend`)
+
+The console's resend, gated by `users.resendInvitation` and keyed by the invited **user** like the revocation (`DELETE …/users/{userId}/invitation`). It re-tokenises every `SENT` invitation of that user, invalidating the previous link, and emails the new one after the commit. Success is **204** with no body: the accept token is a credential and leaves only in the email.
+
+| Case | Wire result | Why |
+|------|-------------|-----|
+| Malformed `userId` | **400 `invalid-uuid`** | `Uuid::ensure()` in the use case, before any lookup. |
+| No `SENT` invitation, identity not `INVITED`, or unknown id | **404 `resendable-invitation-not-found`** | [`ResendableInvitationNotFound`](../api/src/Iam/Invitation/Domain/Exception/ResendableInvitationNotFound.php) (`NotFound`, `context.userId`). One answer for every one of these cases, so the route never confirms who exists; distinct from `invitation-not-found` because the request names a user, not an invitation. |
+| A `SENT` invitation whose identity row is gone (integrity desync no write path produces) | **500 `invited-identity-unavailable`** | [`InvitedIdentityUnavailable::missing()`](../api/src/Iam/Invitation/Domain/Exception/InvitedIdentityUnavailable.php) carries no marker on purpose: it is a server-side fault, not a client error, and the transaction rolls back with nothing reissued. |
+| Link re-issued and committed, mailer refused the send | **503 `invitation-email-not-sent`** | [`InvitationEmailNotSent`](../api/src/Iam/Invitation/Domain/Exception/InvitationEmailNotSent.php) (`ServiceUnavailable`, no `context`, reaches Sentry). |
+
+The 503 is answered **after a committed write**, and that is the decision rather than an oversight. The best-effort send swallows the mailer fault so the commit stands; the CLI then prints the token for an out-of-band hand-over, which a response body may never carry. Answering 204 instead would tell the operator the invitee holds a working link when the previous one is already dead and the new one never left. The title names the remedy — resend once mail works — and repeating it is safe, since each call re-tokenises the same row. No new marker interface is introduced (`NotFound` and `ServiceUnavailable` are reused), so the drift gate does not fire and this table is the manual NFR26 record.
+
 ### Password recovery errors (forgot / reset)
 
 The forgot-password endpoint answers a **uniform 202** whatever the email (unknown or any identity state), so it produces no error type: enumerating accounts through its response is impossible by construction (only an `ACTIVE` identity does any work, and that work is never observable to the anonymous requester). The reset-password endpoint grades exactly like the login walls, one axis at a time:

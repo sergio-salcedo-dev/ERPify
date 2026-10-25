@@ -36,7 +36,7 @@ final readonly class SearchCriteria
      */
     public const int DEFAULT_LIMIT = 25;
 
-    /** Wire page-size ceiling. Mirrors {@see \Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy::MAX_LIMIT}. */
+    /** Wire page-size ceiling. Mirrors {@see \Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy::MAX_LIMIT}. */
     public const int MAX_LIMIT = 100;
 
     public function __construct(

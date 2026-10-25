@@ -10,21 +10,77 @@ use Erpify\Shared\Access\Domain\Role;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Security\Core\Authorization\AccessDecision;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Vote;
+use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 use Symfony\Component\Uid\Uuid;
 
 /**
  * Proves the access-decision composition on the real, wired voter set. With the default `affirmative`
- * strategy left untouched and no route gated yet, an authenticated VIEWER — who clears the firewall's
- * IS_AUTHENTICATED_FULLY — is denied `bank.write` (the native voters abstain on a permission attribute, so
- * the {@see PermissionVoter}'s DENY stands) yet granted `bank.read`. This is exactly what a future
- * `#[IsGranted('bank.write')]` will enforce, verified here without opening a route.
+ * strategy left untouched, an authenticated VIEWER — who clears the firewall's IS_AUTHENTICATED_FULLY — is
+ * denied `bank.write` (the native voters abstain on a permission attribute, so the {@see PermissionVoter}'s
+ * DENY stands) yet granted `bank.read`: the decision every `#[IsGranted('bank.write')]` route takes, read here
+ * off the checker without going through one.
  *
  * @internal
  */
 #[CoversClass(PermissionVoter::class)]
 final class PermissionVoterAccessDecisionTest extends WebTestCase
 {
+    /**
+     * {@see PermissionVoter::supports()} claims every `<resource>.<action>` attribute by shape alone, which is
+     * sound only while the decision manager composes votes `affirmative`ly: under `unanimous` or `consensus`
+     * the voter's DENY on an attribute it claimed would weigh against another voter's GRANT in the same
+     * decision. Read off the decision the wired manager actually took, not off `security.yaml`, so a strategy
+     * set in any config file, environment block or `strategy_service` is seen. Declaring
+     * `access_decision_manager.strategy` as anything else reds the first assertion; a second voter claiming a
+     * permission attribute — the contention this voter's shape-only support assumes away — reds the second. A
+     * voter the manager merely consults and that abstains is not contention, so abstentions are left out.
+     */
+    public function testPermissionAttributesAreDecidedAffirmativelyWithThePermissionVoterAsTheirOnlyVoter(): void
+    {
+        $client = self::createClient();
+
+        $viewer = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'strategy-viewer@erpify.test',
+            'strategy-viewer-password',
+            [Role::VIEWER->value],
+        );
+        $client->loginUser(new SecurityUser($viewer), 'main');
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        $accessDecision = new AccessDecision();
+        $this->assertFalse(
+            $authorizationChecker->isGranted('bank.write', null, $accessDecision),
+            'A VIEWER must not be granted bank.write.',
+        );
+
+        $this->assertSame(
+            'affirmative',
+            $accessDecision->strategy,
+            'The access decision manager no longer decides affirmatively. PermissionVoter::supports() claims '
+            . 'every <resource>.<action> attribute by shape, which is sound only under affirmative; change '
+            . 'the voter (a positive marker or a resource registry) before changing the strategy.',
+        );
+
+        $this->assertSame(
+            [[PermissionVoter::class, VoterInterface::ACCESS_DENIED]],
+            \array_values(\array_map(
+                static fn (Vote $vote): array => [$vote->voter, $vote->result],
+                \array_filter(
+                    $accessDecision->votes,
+                    static fn (Vote $vote): bool => VoterInterface::ACCESS_ABSTAIN !== $vote->result,
+                ),
+            )),
+            'A permission attribute must be answered by PermissionVoter alone; another voter now casts a vote on it, '
+            . 'so the two contend over the same attribute.',
+        );
+    }
+
     public function testAnAuthenticatedViewerIsDeniedWriteButGrantedRead(): void
     {
         $client = self::createClient();

@@ -10,6 +10,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Backoffice\Audit\Domain\AuditTimelineEntry;
 use Erpify\Backoffice\Audit\Domain\Repository\AuditTimelineRepository;
 use Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal\AuditTimelineKeysetPaginator;
+use Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal\AuditTimelineKeysetSource;
 use Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal\DbalAuditTimelineRepository;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
@@ -48,6 +49,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 #[CoversClass(DbalAuditTimelineRepository::class)]
 #[CoversClass(AuditTimelineKeysetPaginator::class)]
+#[CoversClass(AuditTimelineKeysetSource::class)]
 #[CoversClass(AuditTimelineEntry::class)]
 final class DbalAuditTimelineRepositoryTest extends KernelTestCase
 {

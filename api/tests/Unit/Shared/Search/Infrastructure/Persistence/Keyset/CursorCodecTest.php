@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
+namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Keyset;
 
 use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use Erpify\Shared\Search\Domain\Exception\InvalidCursorCause;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
-use Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Mother\CursorMother;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\CursorCodec;
+use Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Keyset\Mother\CursorMother;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;

@@ -238,6 +238,7 @@ scripts/        Utility scripts
 | Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |
 | Cross-cutting capabilities over a minimal `Kernel/`                          | `api/src/Shared/`                                                        |
 | Shared search-filter plumbing (applier + per-repo field maps)                | `api/src/Shared/Search/Infrastructure/Persistence/Doctrine/`             |
+| Keyset pagination walk shared by every store (paginator, port, cursor codec) | `api/src/Shared/Search/Infrastructure/Persistence/Keyset/`               |
 | Symfony config (services, routes, packages, Messenger transports)            | `api/config/`                                                            |
 | Doctrine migrations                                                          | `api/migrations/` (generate via `make db.diff`, never edit applied ones) |
 | Test fixtures (Hautelook Alice)                                              | `api/tests/DataFixtures/` and `api/tests/Fixtures/`                      |

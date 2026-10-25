@@ -136,24 +136,24 @@ export function UsersListView() {
 
   // Persistent surface for a failed row mutation, anchored above the list — the confirmation dialog closes
   // itself and never renders the failure. Kept apart from `useResourceList`'s delete-error state: that one
-  // carries the focus-recovery bookkeeping of an optimistic removal, and a revocation removes no row.
-  const [revokeProblem, setRevokeProblem] = useState<ProblemDetails | null>(null);
+  // carries the focus-recovery bookkeeping of an optimistic removal, and an invitation action removes no row.
+  const [invitationProblem, setInvitationProblem] = useState<ProblemDetails | null>(null);
 
-  // A revocation withdraws the identity to REVOKED instead of removing it, so the list reconciles by
-  // re-reading rather than dropping the row: `silentReload` refreshes in place — the badge flips and the row's
-  // action retires itself — without the loading skeleton stealing the view. Deferred rather than dropped when
-  // a read is already running: confirming during a debounced filter fetch would otherwise report the
-  // revocation over a row still reading Invited.
-  const onInvitationRevoked = (): void => {
-    setRevokeProblem(null);
+  // An invitation action removes no row: a revocation withdraws the identity to REVOKED and a resend leaves it
+  // INVITED, so the list reconciles by re-reading rather than dropping the row: `silentReload` refreshes in
+  // place — after a revocation the badge flips and the row's action retires itself — without the loading
+  // skeleton stealing the view. Deferred rather than dropped when a read is already running: confirming during
+  // a debounced filter fetch would otherwise report the revocation over a row still reading Invited.
+  const onInvitationChanged = (): void => {
+    setInvitationProblem(null);
     silentReload({ whenBusy: "defer" });
   };
 
   // A failure re-reads too. The row the action was offered on may simply be stale — the invitee accepted, or
-  // another operator revoked first — and leaving it untouched would keep offering a revocation that answers 404
+  // another operator revoked first — and leaving it untouched would keep offering an action that answers 404
   // on every retry. Reconciling turns a confusing repeat into a visible state change beside the error.
-  const onRevokeFailed = (problem: ProblemDetails): void => {
-    setRevokeProblem(problem);
+  const onInvitationActionFailed = (problem: ProblemDetails): void => {
+    setInvitationProblem(problem);
     silentReload({ whenBusy: "defer" });
   };
 
@@ -172,11 +172,11 @@ export function UsersListView() {
     query.pageSize !== bannerQuery.pageSize
   ) {
     setBannerQuery({ filter, sort: query.sort, pageSize: query.pageSize });
-    setRevokeProblem(null);
+    setInvitationProblem(null);
   }
 
   const goToPage = (navigate: () => void): void => {
-    setRevokeProblem(null);
+    setInvitationProblem(null);
     navigate();
   };
 
@@ -260,11 +260,11 @@ export function UsersListView() {
         />
       ) : null}
 
-      {revokeProblem ? (
+      {invitationProblem ? (
         <MutationError
-          problem={revokeProblem}
-          onDismiss={() => setRevokeProblem(null)}
-          testId="users-list__revoke-error"
+          problem={invitationProblem}
+          onDismiss={() => setInvitationProblem(null)}
+          testId="users-list__invitation-error"
         />
       ) : null}
 
@@ -303,8 +303,8 @@ export function UsersListView() {
                     users={items}
                     onUserPeek={setPeekId}
                     density={density}
-                    onInvitationRevoked={onInvitationRevoked}
-                    onRevokeFailed={onRevokeFailed}
+                    onInvitationChanged={onInvitationChanged}
+                    onInvitationActionFailed={onInvitationActionFailed}
                     className="md:hidden"
                   />
                   <div className="hidden md:block">
@@ -315,8 +315,8 @@ export function UsersListView() {
                       onSortChange={setTableSort}
                       onUserPeek={setPeekId}
                       density={density}
-                      onInvitationRevoked={onInvitationRevoked}
-                      onRevokeFailed={onRevokeFailed}
+                      onInvitationChanged={onInvitationChanged}
+                      onInvitationActionFailed={onInvitationActionFailed}
                     />
                   </div>
                 </>
@@ -324,8 +324,8 @@ export function UsersListView() {
                 <UsersCards
                   users={items}
                   density={density}
-                  onInvitationRevoked={onInvitationRevoked}
-                  onRevokeFailed={onRevokeFailed}
+                  onInvitationChanged={onInvitationChanged}
+                  onInvitationActionFailed={onInvitationActionFailed}
                 />
               )}
               <UsersPagination

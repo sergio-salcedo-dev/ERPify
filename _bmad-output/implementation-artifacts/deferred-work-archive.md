@@ -560,3 +560,62 @@ status: done 2026-10-03
 archived: 2026-10-22
 resolution: verified a real gap in #1037: neither anonymiser nor crypto-shredding reaches metadata.changes. Closed in #1077 by product decision (option c, both sides): the detail mapper serves a `changes` map only on a `change` row and withholds any other non-empty `changes` whole; AuditLogEntry refuses `changes` on any other level so it is never stored; ChangeLevelProvenanceGateTest pins the producers of AuditLevel::CHANGE and the single audit_log append path. PRODUCTION_SECURITY_CHECKLIST.md §7 keeps only a `change` row that bypassed PiiDiffSealer
 
+### DW-13: Erasure-chain prose (command class docblock, setHelp(), controller) still ungated
+
+origin: migrated from legacy ledger ("Deferred from: code review of PR #618 — pase adversarial del eje de referencias a persona (2026-08-01)"), 2026-09-24
+location: api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php, api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php
+reason: The consent prompt is now rendered from ERASED_CATEGORIES and test-pinned; what remains is free prose that a map cannot reach, deliberately left ungated because a prose gate is fragile — review is the control.
+status: done 2026-10-23
+archived: 2026-10-24
+resolution: fixed by #1103 — every console surface that enumerates the chain (consent prompt, help, "nothing to erase" notice, success report) is rendered from FulfilIdentityErasureResult::ERASED_CATEGORIES, and the command/controller/result docblocks point at the map instead of restating it; EraseIdentitySubjectCommandCategoriesTest pins each surface label by label, so no hand-written enumeration is left to drift and no prose gate is needed
+
+**(api/Iam/Identity — deriva por construcción) Los tres docblocks que describen la cadena de borrado siguen sin gate.** La mitad que importaba está cerrada: el **prompt de consentimiento** —lo único que el operador consiente— se renderiza hoy desde `FulfilIdentityErasureResult::ERASED_CATEGORIES`, un mapa que vive junto a las propiedades del constructor y que `FulfilIdentityErasureResultTest` mantiene igual a ellas en ambas direcciones, así que una décima propiedad no puede llegar sin su etiqueta. Esa mitad se cerró porque **la deriva que esta bala predijo ocurrió**: `recoverySecretsDeleted` entró en el DTO y en la línea de éxito del CLI mientras el prompt, el `setHelp()` y dos docblocks seguían nombrando ocho eslabones, o sea que el operador consentía a menos de lo que el borrado destruye — medido el 2026-09-20, nueve propiedades contra siete enunciadas. Lo que queda abierto es lo que un mapa no puede alcanzar: el docblock de la clase del comando, el texto de `setHelp()` y el del controlador siguen siendo prosa suelta, corregidos a mano en esa misma pasada. Un gate sobre prosa es frágil y no se construyó a propósito; el control es la revisión. Ref: `api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php`, `api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php`.
+
+### DW-15: Erasure UPDATE on event_store is a sequential scan inside the erase transaction
+
+origin: migrated from legacy ledger ("Deferred from: G-5 — ids de persona fuera del `event_store` (2026-08-04)"), 2026-09-24
+location: api/src/Shared/Event/Infrastructure (DbalEventStoreSubjectAnonymiser)
+reason: payload::text ILIKE '%uuid%' cannot use any index (would need GIN + pg_trgm) and runs holding the erasure chain's locks; free today at zero rows and no production. Measure before it matters; not a blocker. Since #1037 the erasure re-sweep repeats the same scan for every subject in its window on each five-minute tick (about 13 scans per erasure, one per subject per tick, on the single scheduler worker, while holding that subject's audit_log row locks), so the trigger is a re-sweep tick taking more than ~30 s or an event_store of millions of rows; the answer then is a trigram index, not a design change.
+status: done 2026-10-23
+archived: 2026-10-24
+resolution: fixed by #1103 — the WHERE reads event_store_uuids(col) @> ARRAY[CAST(:id AS uuid)] over two GIN expression indexes (migration Version20261023100000); measured at 1M rows: 3.4 s → 9–144 ms, same row set as the ILIKE (equivalence test over an adversarial corpus), 138 MB index, inserts roughly ×2–×7; rationale and the CONCURRENTLY recipe in docs/adr/event-store-and-projections.md D12 (amendment 2026-10-23)
+
+**(api/Shared/Event — tiempo de lock) El `UPDATE` del borrado hace un scan secuencial y corre dentro de la transacción del erase.** El predicado `payload::text ILIKE '%uuid%'` no lo puede servir ninguno de los cinco índices de la tabla (haría falta GIN + `pg_trgm`), y el `OR` fuerza el scan igualmente. Hoy es gratis —la tabla está a cero filas y no hay producción— pero cuando tenga volumen ese scan corre sosteniendo los locks que la cadena ya tiene sobre `identity_user`, `audit_log`, sesiones, membresía e invitaciones. Medir antes de que importe; no es un blocker.
+
+### DW-32: audit metadata PII-free rule (FR12) has no structural enforcement
+
+origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
+location: api/src/Shared/Audit (log() callsites, AuditEntryFactory::create), api/.audit-metadata-keys (absent)
+reason: Non-empty metadata is passed at 12 callsites across 4 contexts, plus a 13th producer via AuditWriteCaptureListener that bypasses log(); the revisit trigger has long fired. Closing it is a registry + engine + gate (api/.audit-metadata-keys, like .audit-resource-types) — size L, its own PR, kept out of the 2026-08-28 sweep by explicit product-owner decision.
+status: done 2026-10-23
+archived: 2026-10-24
+decision: 2026-09-28 Keep open for a dedicated PR outside the sweep
+resolution: fixed by #1105 — not as the text registry + gate this entry proposed but at runtime, by owner decision: AuditMetadataKey declares every top-level key with the shape of its value (AuditMetadataShape) and AuditLogEntry::create() refuses any other key, any out-of-shape value and changes/operation outside a change row; that constructor is the one point all producers reach, including the change-capture listener (no log() call) and the three that compute their keys away from the call, which a source sweep would have missed; AuditMetadataVocabularyLivenessGateTest reads the reverse direction (a key no longer written); residuals in PRODUCTION_SECURITY_CHECKLIST.md section 7 and ADR audit-activity-log D4
+
+**(Epic 2+) `metadata` PII-free sin enforcement estructural.** FR12 ("nunca PII/payload en `metadata`") es hoy solo prosa; un dev puede pasar `metadata: ['iban' => …]` y compila/pasa gates. Aceptable en Epic 1 (un consumidor, `metadata` vacío). Revisit trigger: al entrar el 2.º/3.er consumidor con `metadata` no vacío, añadir un guardrail testable (test de arquitectura que escanee los callsites de `log(...)`, o una allowlist de claves de `metadata` por acción).
+
+**Re-medido el 2026-09-20: el conteo NO ha crecido** — siguen siendo 12 puntos de llamada, 11 ficheros y 4 contextos, y `api/.audit-metadata-keys` sigue sin existir. Lo que la medición de 2026-08-28 no vio es un **decimotercer productor que no pasa por `log()`**: el tier de cambios escribe `metadata` a través de `AuditEntryFactory::create()` después de que `AuditWriteCaptureListener:88` le inyecte `$diff['operation']`, así que un gate que barra sólo los callsites de `log(...)` nacería ciego a él.
+
+**Disparador ya cumplido (medido el 2026-08-28).** El `metadata` no vacío se pasa hoy en **12 puntos de llamada**, en 11 ficheros y **4 contextos acotados** (`Backoffice/Audit`, `Backoffice/BankAccount`, `Iam/Identity`, `Shared/Audit`); en tres de ellos el conjunto de claves se calcula fuera del punto de llamada — `AuditTrailReadAuditListener::metadataFor()`, `StoredIdentityDrift::toAuditMetadata()` y el ternario `lockedUntil` de `RecordLockoutNoticeAuditBestEffort` — así que ahí las claves no son ni legibles en el callsite. El «Revisit trigger» de arriba dejó de estar pendiente hace tiempo. Lo que cierra la bala es un registro `api/.audit-metadata-keys` + motor + gate, al modo de `.audit-resource-types`: talla L y PR propia, fuera del barrido de 2026-08-28 por decisión explícita del product owner.
+
+### DW-33: audit_log.metadata jsonb has no size bound
+
+origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
+location: api/src/Shared/Audit (writer, audit_log schema)
+reason: Unlike user_agent VARCHAR(512) or action VARCHAR(100), metadata JSONB is unbounded — an inflation/PII vector once a generic producer fills it. AccessLogAuditListener exists but passes default [] metadata, so the trigger has not fired. Consider a writer-side size bound or an AC forbidding raw query/body dumps.
+status: done 2026-10-23
+archived: 2026-10-24
+resolution: fixed by #1105 — AuditLogEntry::create() bounds metadata at 16 KiB, measured as JSON with Unicode and slashes unescaped (an upper bound on what the jsonb stores); the largest legitimate change entry (a Bank update at full column width, 4,792 bytes, about 6.9 KB with escaped control characters) is built and admitted by AuditLogEntryMetadataBoundTest, and StoredIdentityDrift samples its orphan role values so its row always fits; the raw query/body dump this entry feared is refused by the closed key vocabulary of DW-32
+
+**(Epic 2) `metadata` jsonb sin tope de tamaño.** A diferencia de `user_agent` (`VARCHAR(512)`) o `action` (`VARCHAR(100)`), `metadata` jsonb no tiene cota → vector de inflado PII/almacenamiento cuando el access-log genérico de Epic 2 lo pueble automáticamente. **Ese access-log ya no es futuro y el disparador sigue sin saltar** (medido el 2026-09-20): `AccessLogAuditListener` existe desde el 2026-06-25 y es el «access-log genérico» que esta bala esperaba, pero emite `log($action, $level, $resource)` con tres argumentos, así que `metadata` toma el default `[]` y la fila guarda un jsonb vacío. La cota sigue sin existir (`metadata JSONB NOT NULL` sin opciones, frente a `user_agent VARCHAR(512)` y `action VARCHAR(100)`), y el escritor tampoco la impone. Considerar una cota de tamaño en el escritor o un AC de Epic 2 que prohíba volcar `query`/`body` crudos.
+
+### DW-60: Las filas de audit_log persistidas antes de este cambio con un User-Agent igual a [REDACTED] no se reescriben.
+origin: spec-deferred ee2d683b793e
+location: api/src/Shared/Audit/Domain/AuditRedaction.php
+source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
+severity: low
+reason: La neutralización es sólo en captura; no hay backfill, que sería un UPDATE nuevo sobre audit_log (línea en SANCTIONED de SanctionedLogMutationGateTest y decisión en el ADR D4). La atribución NO depende de él: el predicado de flags (actor_erased, o resource_erased con actor_type = 'anonymous') atribuye bien el centinela también en filas anteriores, así que lo único que queda es que esas filas guarden el literal de un cliente. Sólo importa con datos reales dentro de la ventana de retención.
+status: done 2026-10-23
+archived: 2026-10-24
+resolution: accepted, recorded in #1103 — residue: audit_log rows written before the capture-side neutralisation keep a client-sent literal `[REDACTED]` User-Agent; no backfill, because it would be a new sanctioned UPDATE on audit_log (SanctionedLogMutationGateTest + ADR D4) to rewrite a literal that attribution already handles; verified control: the flags predicate (actor_erased, or resource_erased with actor_type = 'anonymous') attributes the sentinel correctly on those rows too; accepted by the user on 2026-10-23; reopens if real data falls inside audit_log's retention window with such rows and the literal itself must not be kept
+

@@ -11,16 +11,14 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Projection\BankAccountCollectionRow;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCollectionSearchRepository;
 use Erpify\Shared\Search\Domain\FilterOperator;
-use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
@@ -75,15 +73,8 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
             $this->sortFieldMap(),
             new PaginatorConfig($criteria->paginationMode, fetchJoinCollection: false),
             WirePaginationPolicy::wire(),
-            $this->routingDirection($criteria->routingDirection),
+            $criteria->routingDirection,
         );
-    }
-
-    private function routingDirection(NavigationDirection $direction): string
-    {
-        return NavigationDirection::Before === $direction
-            ? Cursor::DIRECTION_BEFORE
-            : Cursor::DIRECTION_AFTER;
     }
 
     private function searchFieldMap(): SearchFieldMap

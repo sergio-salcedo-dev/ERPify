@@ -314,9 +314,9 @@ itself, not anybody watching.
 
 A volumetric signal (a counter carrying no selector, no identity and no reversible transformation of either)
 would be compatible with I-1 and is the shape to reach for if this ever needs observing. It is deliberately not
-built now: the `observability` stream has no rotation, no TTL and no declared owner of deletion — the same
-reason a caller's string was refused that stream elsewhere in this repository — so adding a channel there is a
-decision of its own and not a detail of this one.
+built now: the `observability` stream is rotated by volume alone, with no TTL and no declared owner of
+deletion — the same reason a caller's string was refused that stream elsewhere in this repository — so adding a
+channel there is a decision of its own and not a detail of this one.
 
 ## D10 — Redemption evicts every other session, atomically with the consumption
 

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Mother;
+namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Keyset\Mother;
 
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\CursorCodec;
 
 /**
  * Builds {@see Cursor} value objects with sensible defaults (static methods,

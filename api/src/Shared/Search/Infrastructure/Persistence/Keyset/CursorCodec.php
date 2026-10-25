@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
+namespace Erpify\Shared\Search\Infrastructure\Persistence\Keyset;
 
 use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use JsonException;
@@ -21,12 +21,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *
  * Decoding validates in the intrinsic-first DAG order (AR10):
  *   signature → version → payload → fingerprint.
- * The length cap is enforced BEFORE any HMAC work (NFR1: never hash an
+ * The length cap is enforced BEFORE any HMAC work (never hash an
  * unbounded input). The fingerprint check is a DEFERRED integrity hook: the
  * caller passes the expected fingerprint as a plain string and the codec
- * compares — it NEVER imports or knows {@see QueryExecutionTrace}. The engine
- * wires the trace to the expected fingerprint; the codec stays agnostic of how
- * that fingerprint was produced.
+ * compares — it NEVER knows the query it binds to. Each {@see KeysetSource}
+ * derives its own fingerprint; the codec stays agnostic of how it was produced.
  *
  * The `dir` field is an integrity binding (K2/AR21): compared against the
  * expected direction, never consulted to decide navigation. A mismatch is a
@@ -36,7 +35,7 @@ final readonly class CursorCodec
 {
     public const int CURRENT_VERSION = 1;
 
-    /** Max wire length accepted before any HMAC work — a DoS guard (NFR1). */
+    /** Max wire length accepted before any HMAC work — a DoS guard. */
     private const int MAX_ENCODED_LENGTH = 512;
 
     private const string HMAC_ALGO = 'sha256';

@@ -5,53 +5,52 @@ declare(strict_types=1);
 namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\ORM\QueryBuilder;
-use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
 use Erpify\Shared\Search\Domain\Exception\UnknownSortField;
+use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
-use Erpify\Shared\Search\Domain\PaginationMode;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\AppliedLimit;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\AppliedSort;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorPositionExtractor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\FingerprintCanonicalizer;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetNavigation;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetPredicateBuilder;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\OrderByColumns;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\QueryExecutionTrace;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\CursorCodec;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\KeysetPaginator;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use LogicException;
 
 /**
- * The single query-shaper of the keyset read-path: given a repository-authored base
- * {@see QueryBuilder} (its `SELECT`/`FROM`/joins) plus the search {@see SearchCriteria}, it runs
- * the fixed 8-step pipeline (ADR Process Patterns) and returns an immutable domain {@see Page}.
- * It is the ONLY collaborator that touches Doctrine query mechanics (NFR4); the kernel
- * collaborators it composes ({@see FilterApplier}, {@see CursorCodec}, {@see KeysetPredicateBuilder},
- * {@see FingerprintCanonicalizer}, {@see CursorPositionExtractor}) are pure.
+ * The ORM entry point of the keyset read-path: given a repository-authored base
+ * {@see QueryBuilder} (its `SELECT`/`FROM`/joins) plus the search {@see SearchCriteria}, it settles
+ * everything that shapes the query and the cursor's binding, then hands the walk itself to the
+ * persistence-agnostic {@see KeysetPaginator} through a {@see DoctrineKeysetSource}, and returns an
+ * immutable domain {@see Page}. The kernel collaborators it composes ({@see FilterApplier},
+ * {@see CursorCodec}, {@see KeysetPredicateBuilder}, {@see FingerprintCanonicalizer},
+ * {@see CursorPositionExtractor}) are pure; Doctrine query mechanics live here and in the source.
  *
  * Pipeline (invariants enforced up to step 6 only; nothing after is part of the guarantees, AR10):
  *   1. resolve sort + `id` tie-break          → {@see AppliedSort} (semantic) + {@see OrderByColumns} (physical)
  *   2. apply filters                           → {@see Keyset\AppliedFilters} receipt
  *   3. clamp limit by the policy               → {@see AppliedLimit}
  *   4. SEAL the {@see QueryExecutionTrace} + fingerprint  ← Row Uniqueness Contract guard runs HERE
- *   5. validate the cursor (intrinsic→extrinsic, then arity)
- *   6. build the keyset predicate
- *   7. execute with the +1 trick (`before`: invert the ORDER BY in SQL, re-reverse in memory)
- *   8. build the immutable {@see Page} + encode both cursors
+ *   5. validate the cursor (intrinsic→extrinsic, then arity)            ┐
+ *   6. build the keyset predicate                                        │ {@see KeysetPaginator}
+ *   7. execute with the +1 trick (`before`: invert the ORDER BY in SQL)  │ over the
+ *   8. build the immutable {@see Page} + encode both cursors             ┘ {@see DoctrineKeysetSource}
  *
  * The fingerprint derives EXCLUSIVELY from the sealed trace (step 4), never from raw request input,
  * and no validation output mutates the trace post-sealing (AR22).
  *
- * This engine is the single runtime query-shaper for the filterable-search read-path: the HTTP
+ * This engine is the single runtime query-shaper for the ORM filterable-search read-path: the HTTP
  * layer hands it a base query builder plus allow-lists and receives an immutable {@see Page} with
  * opaque cursors (after/before envelope, 422 on an invalid cursor). It is also verified in
  * isolation by DIRECT tests (property, snapshot, contract — never HTTP).
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
- * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 final readonly class DoctrineSearchEngine
 {
@@ -70,17 +69,17 @@ final readonly class DoctrineSearchEngine
         private KeysetPredicateBuilder $predicateBuilder,
         private CursorPositionExtractor $positionExtractor,
         private RowUniquenessGuard $rowUniquenessGuard,
+        private KeysetPaginator $paginator,
     ) {
     }
 
     /**
      * Runs the keyset pipeline against the repository's base query builder and returns one page.
      *
-     * @param QueryBuilder $queryBuilder     base query builder: `SELECT`/`FROM`/joins only, never
-     *                                       order/limit/where-cursor (those are the engine's monopoly)
-     * @param string       $routingDirection {@see Cursor::DIRECTION_AFTER} or `DIRECTION_BEFORE` — the
-     *                                       single routing authority; the cursor's own `dir` is an
-     *                                       integrity binding, never consulted for navigation (AR21)
+     * @param QueryBuilder        $queryBuilder     base query builder: `SELECT`/`FROM`/joins only, never
+     *                                              order/limit/where-cursor (those are the engine's monopoly)
+     * @param NavigationDirection $routingDirection the single routing authority; the cursor's own `dir` is
+     *                                              an integrity binding, never consulted for navigation
      *
      * @return Page<object>
      */
@@ -91,7 +90,7 @@ final readonly class DoctrineSearchEngine
         SortFieldMap $sortFieldMap,
         PaginatorConfig $config,
         WirePaginationPolicy $policy,
-        string $routingDirection = Cursor::DIRECTION_AFTER,
+        NavigationDirection $routingDirection = NavigationDirection::After,
     ): Page {
         $alias = $this->rootAlias($queryBuilder);
 
@@ -110,17 +109,22 @@ final readonly class DoctrineSearchEngine
         $fingerprint = $this->fingerprintCanonicalizer->fingerprint($trace);
         $this->rowUniquenessGuard->assert($queryBuilder);
 
-        // Step 5: validate the cursor (a malformed one is an InvalidCursor, never a 500).
-        $cursor = $this->decodeCursor($criteria->cursor, $fingerprint, $routingDirection, $orderByColumns);
-
-        // Steps 6–8: predicate, execute with the +1 trick, build the page.
-        return $this->execute(
-            $queryBuilder,
-            $alias,
-            new KeysetNavigation($orderByColumns, $cursor, $routingDirection, $fingerprint),
-            $appliedLimit->value,
-            $policy,
-            $config,
+        // Steps 5–8: the walk itself (a malformed cursor is an InvalidCursor, never a 500).
+        return $this->paginator->paginate(
+            new DoctrineKeysetSource(
+                $queryBuilder,
+                $alias,
+                $entity,
+                $orderByColumns,
+                $fingerprint,
+                $appliedLimit->value,
+                $policy,
+                $config->paginationMode,
+                $this->predicateBuilder,
+                $this->positionExtractor,
+            ),
+            $criteria->cursor,
+            $routingDirection,
         );
     }
 
@@ -263,234 +267,10 @@ final readonly class DoctrineSearchEngine
         ];
     }
 
-    /**
-     * Step 3 — resolve the effective page size and clamp it to the policy ceiling; the receipt is
-     * always ≥ 1. A `null` criteria limit is "unspecified" and falls back to the policy's
-     * `defaultLimit`, so an adapter picks its default by selecting the policy — never by baking a
-     * value into {@see SearchCriteria}.
-     */
+    /** Step 3 — the policy's page size for this request, as the receipt the trace seals. */
     private function resolveLimit(SearchCriteria $criteria, WirePaginationPolicy $policy): AppliedLimit
     {
-        return new AppliedLimit(\max(1, \min($criteria->limit ?? $policy->defaultLimit, $policy->maxLimit)));
-    }
-
-    /**
-     * Step 5 — decode and validate the cursor, or return `null` for a first-page request. The codec
-     * enforces signature → version → payload → fingerprint; this method adds the ARITY guard (OQ-2):
-     * a cursor whose values do not cover exactly the order-by columns would make the predicate builder
-     * raise an {@see \InvalidArgumentException} (a 500), so it is mapped to {@see InvalidCursor::payload()}
-     * (the 422 family) BEFORE the builder ever runs — the codec validates integrity, not arity.
-     */
-    private function decodeCursor(
-        ?string $encoded,
-        string $fingerprint,
-        string $routingDirection,
-        OrderByColumns $orderByColumns,
-    ): ?Cursor {
-        if (null === $encoded || '' === $encoded) {
-            return null;
-        }
-
-        $cursor = $this->cursorCodec->decode($encoded, $fingerprint, $routingDirection);
-
-        foreach ($orderByColumns->columnNames() as $column) {
-            if (!\array_key_exists($column, $cursor->values)) {
-                throw InvalidCursor::payload();
-            }
-        }
-
-        return $cursor;
-    }
-
-    /**
-     * Steps 6–8 — build the predicate (when a cursor is present), execute with the +1 trick, and
-     * assemble the immutable page. `before` is contained entirely here (FR13/K15): the ORDER BY is
-     * inverted in SQL and the page is re-reversed in memory, so the contract never sees it.
-     *
-     * @return Page<object>
-     */
-    private function execute(
-        QueryBuilder $queryBuilder,
-        string $alias,
-        KeysetNavigation $navigation,
-        int $limit,
-        WirePaginationPolicy $policy,
-        PaginatorConfig $config,
-    ): Page {
-        $isBefore = $navigation->isBefore();
-        $physicalColumns = $isBefore ? $this->invert($navigation->orderByColumns) : $navigation->orderByColumns;
-
-        $fetch = clone $queryBuilder;
-        $this->applyKeysetPredicate($fetch, $physicalColumns, $navigation->cursor, $alias, $policy);
-        $this->applyOrderBy($fetch, $physicalColumns, $alias);
-        $fetch->setMaxResults($limit + 1);
-
-        /** @var list<object> $rows */
-        $rows = $fetch->getQuery()->getResult();
-
-        $hasExtra = \count($rows) > $limit;
-        $rows = \array_slice($rows, 0, $limit);
-
-        // `before` fetched in reversed physical order — restore the caller-facing order.
-        $items = $isBefore ? \array_reverse($rows) : $rows;
-
-        return $this->buildPage($items, $navigation, $hasExtra, $this->countIfDetailed($queryBuilder, $alias, $config));
-    }
-
-    /**
-     * Step 6 — bind the keyset boundary predicate. The builder qualifies every bare column (e.g. the
-     * `id` tie-break) with the root alias as it emits, so the DQL is bound here as-is.
-     */
-    private function applyKeysetPredicate(
-        QueryBuilder $queryBuilder,
-        OrderByColumns $columns,
-        ?Cursor $cursor,
-        string $alias,
-        WirePaginationPolicy $policy,
-    ): void {
-        if (!$cursor instanceof Cursor) {
-            return;
-        }
-
-        $predicate = $this->predicateBuilder->build($columns, $cursor->values, $policy, $alias);
-
-        $queryBuilder->andWhere($predicate['dql']);
-
-        foreach ($predicate['parameters'] as $name => $value) {
-            $queryBuilder->setParameter($name, $value);
-        }
-    }
-
-    private function applyOrderBy(QueryBuilder $queryBuilder, OrderByColumns $columns, string $alias): void
-    {
-        // why: ordering is the engine's monopoly (the base QB contract is SELECT/FROM/joins only). A
-        // stray ORDER BY from the repo would, via addOrderBy, sit AHEAD of the keyset columns and become
-        // the primary sort — silently breaking the monotonic walk. Reset it first, as countIfDetailed does.
-        $queryBuilder->resetDQLPart('orderBy');
-
-        foreach ($columns->all() as $column) {
-            $queryBuilder->addOrderBy(
-                $this->qualifyColumn($column['column'], $alias),
-                DoctrineSortDirection::from($column['direction']),
-            );
-        }
-    }
-
-    /**
-     * Step 8 — the immutable page plus both opaque cursors. The cursor values are extracted at COLUMN
-     * precision from the boundary rows (last → next, first → prev) and keyed by the ORIGINAL column
-     * names, so a page fetched `before` round-trips identically to one fetched `after`.
-     *
-     * @param list<object> $items
-     *
-     * @return Page<object>
-     *
-     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
-     */
-    private function buildPage(array $items, KeysetNavigation $navigation, bool $hasExtra, ?int $count): Page
-    {
-        $cursor = $navigation->cursor;
-        $isBefore = $navigation->isBefore();
-        $fingerprint = $navigation->fingerprint;
-
-        if ([] === $items) {
-            if (!$cursor instanceof Cursor) {
-                // First-page empty: a genuinely empty dataset, no affordance in either direction.
-                return new Page([], false, false, $count);
-            }
-
-            // Reached via a cursor. The affordance derives from the SAME directional formula as a
-            // populated page (hasExtra = false): a `before` walk into a gap/edge keeps hasNext (the
-            // page you came from, ahead, is recoverable via next); an `after` walk keeps hasPrev.
-            // NOT a special bidirectional state (empty-before ⇒ hasNext=true,hasPrev=false;
-            // empty-after ⇒ hasNext=false,hasPrev=true). W10 (Linkability): the true flag must carry
-            // a usable cursor, so the recovery cursor re-signs the INBOUND cursor's own boundary
-            // values under the OPPOSITE direction — navigating it walks back toward where you came.
-            return new Page(
-                [],
-                $isBefore,
-                !$isBefore,
-                $count,
-                $isBefore ? $this->reencodeCursor($cursor, Cursor::DIRECTION_AFTER, $fingerprint) : null,
-                $isBefore ? null : $this->reencodeCursor($cursor, Cursor::DIRECTION_BEFORE, $fingerprint),
-            );
-        }
-
-        $orderByColumns = $navigation->orderByColumns;
-        $lastItem = \array_last($items);
-        $nextCursor = $this->encodeBoundary($orderByColumns, $lastItem, Cursor::DIRECTION_AFTER, $fingerprint);
-        $prevCursor = $this->encodeBoundary($orderByColumns, $items[0], Cursor::DIRECTION_BEFORE, $fingerprint);
-
-        // `before` discovers "more rows exist before" via its extra row; `after` discovers "more after".
-        $hasNext = $isBefore ? $navigation->hasCursor() : $hasExtra;
-        $hasPrev = $isBefore ? $hasExtra : $navigation->hasCursor();
-
-        return new Page($items, $hasNext, $hasPrev, $count, $nextCursor, $prevCursor);
-    }
-
-    /**
-     * Re-signs an existing cursor's boundary values under a (possibly flipped) direction. Used for
-     * the empty-page recovery cursor (W10): the inbound cursor's values become a usable token for
-     * the opposite navigation, so a true hasNext/hasPrev flag is never stranded without a cursor.
-     * The boundary is exclusive, so recovery lands just past the boundary row (documented edge of
-     * gap navigation).
-     */
-    private function reencodeCursor(Cursor $cursor, string $direction, string $fingerprint): string
-    {
-        return $this->cursorCodec->encode(
-            new Cursor(CursorCodec::CURRENT_VERSION, $direction, $cursor->values, $fingerprint),
-        );
-    }
-
-    private function encodeBoundary(
-        OrderByColumns $orderByColumns,
-        object $row,
-        string $direction,
-        string $fingerprint,
-    ): string {
-        $values = $this->positionExtractor->extract($orderByColumns, $row);
-
-        return $this->cursorCodec->encode(new Cursor(CursorCodec::CURRENT_VERSION, $direction, $values, $fingerprint));
-    }
-
-    /** Detailed mode runs one COUNT over the filtered query (no order/limit/predicate); light skips it. */
-    private function countIfDetailed(QueryBuilder $queryBuilder, string $alias, PaginatorConfig $config): ?int
-    {
-        if (PaginationMode::DETAILED !== $config->paginationMode) {
-            return null;
-        }
-
-        $identifier = $queryBuilder->getEntityManager()
-            ->getClassMetadata($this->rootEntity($queryBuilder))
-            ->getSingleIdentifierFieldName()
-        ;
-
-        $countQuery = (clone $queryBuilder)
-            ->select(\sprintf('COUNT(%s.%s)', $alias, $identifier))
-            ->resetDQLPart('orderBy')
-            ->setFirstResult(null)
-            ->setMaxResults(null)
-            ->getQuery()
-        ;
-
-        return (int) $countQuery->getSingleScalarResult();
-    }
-
-    /** Inverts every key direction; the `id` tie-break stays last, so arity is preserved (no re-append). */
-    private function invert(OrderByColumns $columns): OrderByColumns
-    {
-        return OrderByColumns::fromSorts(\array_map(
-            static fn (array $column): array => [
-                'column' => $column['column'],
-                'direction' => SortDirection::ASC === $column['direction'] ? SortDirection::DESC : SortDirection::ASC,
-            ],
-            $columns->all(),
-        ));
-    }
-
-    private function qualifyColumn(string $column, string $alias): string
-    {
-        return \str_contains($column, '.') ? $column : $alias . '.' . $column;
+        return new AppliedLimit($policy->limitFor($criteria->limit));
     }
 
     private function rootAlias(QueryBuilder $queryBuilder): string
@@ -507,7 +287,7 @@ final readonly class DoctrineSearchEngine
     /**
      * The root entity FQCN — the fully-qualified class name is the trace's entity segment (a globally
      * unique identity, so two homonymous entities across bounded contexts never collide in the
-     * fingerprint canonical chain) and {@see countIfDetailed}'s `getClassMetadata` lookup key.
+     * fingerprint canonical chain) and the COUNT's `getClassMetadata` lookup key.
      *
      * @return class-string
      */
