@@ -21,28 +21,38 @@ export function goToDestinations(
   accountEntries: readonly NavSubItem[],
   accountSection: string,
 ): GoToDestination[] {
-  const destinations = new Map<string, GoToDestination>();
-  const add = (name: string, path: string, section: string): void => {
-    if (destinations.has(path)) return;
-    destinations.set(path, { name, path, section, isPlanned: isPlannedPath(path) });
-  };
+  const candidates: ReadonlyArray<Omit<GoToDestination, "isPlanned">> = [
+    ...groups.flatMap(groupEntries),
+    ...accountEntries.filter(isPage).map((entry) => ({
+      name: entry.name,
+      path: entry.path,
+      section: accountSection,
+    })),
+  ];
 
-  for (const group of groups) {
-    for (const item of group.items) {
-      if (item.subItems && item.subItems.length > 0) {
-        for (const sub of item.subItems) {
-          if (sub.action === undefined) add(sub.name, sub.path, `${group.label} › ${item.name}`);
-        }
-      } else {
-        add(item.name, item.path, group.label);
-      }
+  const destinations = new Map<string, GoToDestination>();
+  for (const candidate of candidates) {
+    if (!destinations.has(candidate.path)) {
+      destinations.set(candidate.path, { ...candidate, isPlanned: isPlannedPath(candidate.path) });
     }
   }
-  for (const entry of accountEntries) {
-    if (entry.action === undefined) add(entry.name, entry.path, accountSection);
-  }
-
   return [...destinations.values()];
+}
+
+/** A leaf that navigates, as opposed to one that triggers an action such as signing out. */
+function isPage(entry: NavSubItem): boolean {
+  return entry.action === undefined;
+}
+
+/** One group's entries in sidebar order: a parent's leaves when it has any, otherwise itself. */
+function groupEntries(group: NavGroup): Array<Omit<GoToDestination, "isPlanned">> {
+  return group.items.flatMap((item) => {
+    if (item.subItems === undefined || item.subItems.length === 0) {
+      return [{ name: item.name, path: item.path, section: group.label }];
+    }
+    const section = `${group.label} › ${item.name}`;
+    return item.subItems.filter(isPage).map((sub) => ({ name: sub.name, path: sub.path, section }));
+  });
 }
 
 /**
