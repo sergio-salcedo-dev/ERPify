@@ -32,7 +32,7 @@ final class AuditLogEntryTest extends TestCase
         $correlationId = Uuid::generate();
         $resourceId = Uuid::generate();
         $occurredOn = new DateTimeImmutable('2026-01-01T12:34:56.789012+00:00');
-        $metadata = ['filters' => ['status' => 'active']];
+        $metadata = ['route' => 'backoffice_bank_account_search'];
 
         $entry = AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',

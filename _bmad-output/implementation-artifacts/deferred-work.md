@@ -263,8 +263,9 @@ archived: 2026-09-28
 origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
 location: api/src/Shared/Audit (log() callsites, AuditEntryFactory::create), api/.audit-metadata-keys (absent)
 reason: Non-empty metadata is passed at 12 callsites across 4 contexts, plus a 13th producer via AuditWriteCaptureListener that bypasses log(); the revisit trigger has long fired. Closing it is a registry + engine + gate (api/.audit-metadata-keys, like .audit-resource-types) — size L, its own PR, kept out of the 2026-08-28 sweep by explicit product-owner decision.
-status: open
+status: done 2026-10-23
 decision: 2026-09-28 Keep open for a dedicated PR outside the sweep
+resolution: fixed by #1105 — not as the text registry + gate this entry proposed but at runtime, by owner decision: AuditMetadataKey declares every top-level key with the shape of its value (AuditMetadataShape) and AuditLogEntry::create() refuses any other key, any out-of-shape value and changes/operation outside a change row; that constructor is the one point all producers reach, including the change-capture listener (no log() call) and the three that compute their keys away from the call, which a source sweep would have missed; AuditMetadataVocabularyLivenessGateTest reads the reverse direction (a key no longer written); residuals in PRODUCTION_SECURITY_CHECKLIST.md section 7 and ADR audit-activity-log D4
 
 **(Epic 2+) `metadata` PII-free sin enforcement estructural.** FR12 ("nunca PII/payload en `metadata`") es hoy solo prosa; un dev puede pasar `metadata: ['iban' => …]` y compila/pasa gates. Aceptable en Epic 1 (un consumidor, `metadata` vacío). Revisit trigger: al entrar el 2.º/3.er consumidor con `metadata` no vacío, añadir un guardrail testable (test de arquitectura que escanee los callsites de `log(...)`, o una allowlist de claves de `metadata` por acción).
 
@@ -277,7 +278,8 @@ decision: 2026-09-28 Keep open for a dedicated PR outside the sweep
 origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
 location: api/src/Shared/Audit (writer, audit_log schema)
 reason: Unlike user_agent VARCHAR(512) or action VARCHAR(100), metadata JSONB is unbounded — an inflation/PII vector once a generic producer fills it. AccessLogAuditListener exists but passes default [] metadata, so the trigger has not fired. Consider a writer-side size bound or an AC forbidding raw query/body dumps.
-status: open
+status: done 2026-10-23
+resolution: fixed by #1105 — AuditLogEntry::create() bounds metadata at 16 KiB, measured as JSON with Unicode and slashes unescaped (an upper bound on what the jsonb stores); the largest legitimate change entry (a Bank update at full column width, 4,792 bytes, about 6.9 KB with escaped control characters) is built and admitted by AuditLogEntryMetadataBoundTest, and StoredIdentityDrift samples its orphan role values so its row always fits; the raw query/body dump this entry feared is refused by the closed key vocabulary of DW-32
 
 **(Epic 2) `metadata` jsonb sin tope de tamaño.** A diferencia de `user_agent` (`VARCHAR(512)`) o `action` (`VARCHAR(100)`), `metadata` jsonb no tiene cota → vector de inflado PII/almacenamiento cuando el access-log genérico de Epic 2 lo pueble automáticamente. **Ese access-log ya no es futuro y el disparador sigue sin saltar** (medido el 2026-09-20): `AccessLogAuditListener` existe desde el 2026-06-25 y es el «access-log genérico» que esta bala esperaba, pero emite `log($action, $level, $resource)` con tres argumentos, así que `metadata` toma el default `[]` y la fila guarda un jsonb vacío. La cota sigue sin existir (`metadata JSONB NOT NULL` sin opciones, frente a `user_agent VARCHAR(512)` y `action VARCHAR(100)`), y el escritor tampoco la impone. Considerar una cota de tamaño en el escritor o un AC de Epic 2 que prohíba volcar `query`/`body` crudos.
 

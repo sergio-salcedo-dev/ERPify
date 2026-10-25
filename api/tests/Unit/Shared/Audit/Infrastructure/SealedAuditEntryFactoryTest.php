@@ -44,7 +44,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
             AuditResource::of('Bank', $resourceId),
-            ['page' => 2],
+            ['affected_rows' => 2],
         );
 
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
@@ -53,7 +53,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $this->assertInstanceOf(AuditResource::class, $entry->resource);
         $this->assertSame('Bank', $entry->resource->type);
         $this->assertSame($resourceId, $entry->resource->id);
-        $this->assertSame(['page' => 2], $entry->metadata);
+        $this->assertSame(['affected_rows' => 2], $entry->metadata);
         $this->assertSame(self::CORRELATION_ID, $entry->correlationId, 'the request canonical id is adopted');
         $this->assertSame(self::OCCURRED_ON, $entry->occurredOn->format('Y-m-d\TH:i:s.uP'));
     }

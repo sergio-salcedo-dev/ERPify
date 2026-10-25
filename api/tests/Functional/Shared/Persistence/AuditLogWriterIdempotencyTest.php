@@ -99,7 +99,7 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
                 $correlationId,
                 $occurredOn,
                 resource: AuditResource::of('Bank', $resourceId),
-                metadata: ['filters' => ['status' => 'active']],
+                metadata: ['route' => 'backoffice_bank_detail', 'new_roles' => ['ADMIN', 'VIEWER']],
                 ip: '203.0.113.7',
                 userAgent: 'Mozilla/5.0',
             );
@@ -122,7 +122,7 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $metadata = $row['metadata'] ?? null;
             $this->assertIsString($metadata);
             $this->assertSame(
-                ['filters' => ['status' => 'active']],
+                ['route' => 'backoffice_bank_detail', 'new_roles' => ['ADMIN', 'VIEWER']],
                 \json_decode($metadata, true, 512, JSON_THROW_ON_ERROR),
             );
 

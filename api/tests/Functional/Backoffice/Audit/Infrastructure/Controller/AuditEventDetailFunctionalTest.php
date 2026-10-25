@@ -148,6 +148,35 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     }
 
     /**
+     * A `change` row `AuditLogEntry` refuses to build — a diff that is not a map of `{old, new}` pairs — seeded
+     * by raw SQL, because that is the only road such a row ever took: it predates the metadata vocabulary, or
+     * reached the table by another writer.
+     *
+     * @param array<string, mixed> $metadata
+     *
+     * @throws JsonException
+     */
+    private function seedUnbuildableChangeRow(array $metadata): string
+    {
+        $id = Uuid::generate();
+        $this->connection()->executeStatement(
+            'INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, '
+            . 'resource_id, metadata, occurred_on) '
+            . "VALUES (CAST(:id AS UUID), 'change', 'BANK_UPDATED', 'user', CAST(:actorId AS UUID), "
+            . "CAST(:correlationId AS UUID), 'Bank', CAST(:resourceId AS UUID), CAST(:metadata AS JSONB), NOW())",
+            [
+                'id' => $id,
+                'actorId' => self::ACTOR_ID,
+                'correlationId' => Uuid::generate(),
+                'resourceId' => self::RESOURCE_ID,
+                'metadata' => \json_encode($metadata, JSON_THROW_ON_ERROR),
+            ],
+        );
+
+        return $id;
+    }
+
+    /**
      * @throws JsonException
      *
      * @return array<string, mixed>
@@ -231,7 +260,7 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     #[DataProvider('provideANonMapChangesKeepsItsShapeAndLosesItsContentCases')]
     public function testANonMapChangesKeepsItsShapeAndLosesItsContent(mixed $changes, mixed $served): void
     {
-        $id = $this->seedChangeRow(['changes' => $changes, 'operation' => 'UPDATED']);
+        $id = $this->seedUnbuildableChangeRow(['changes' => $changes, 'operation' => 'UPDATED']);
 
         $data = $this->detail($id);
 
