@@ -18,6 +18,18 @@ interface GoToPaletteProps {
   focusAfterSelect: () => HTMLElement | null;
 }
 
+/**
+ * What the polite status region says after each keystroke. The combobox announces the active
+ * option, but nothing announces how many there are or that the list went empty — a screen-reader
+ * user would otherwise hear silence after typing a term that matches nothing. Empty on an empty
+ * query, so opening the palette says nothing beyond its own name.
+ */
+function resultSummary(query: string, count: number): string {
+  if (query.trim() === "") return "";
+  if (count === 0) return `No page matches “${query.trim()}”.`;
+  return count === 1 ? "1 page found." : `${count} pages found.`;
+}
+
 function optionId(listId: string, path: string): string {
   return `${listId}-${path.replaceAll("/", "-")}`;
 }
@@ -178,8 +190,16 @@ export function GoToPalette({
             );
           })}
         </ul>
+        <p
+          role="status"
+          className="go-to-palette__status sr-only"
+          data-testid="go-to-palette__status"
+        >
+          {resultSummary(query, results.length)}
+        </p>
         {results.length === 0 ? (
           <p
+            aria-hidden="true"
             className="go-to-palette__empty text-muted-foreground px-4 pb-6 pt-5 text-center text-sm"
             data-testid="go-to-palette__empty"
           >

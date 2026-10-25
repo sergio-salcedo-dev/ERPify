@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
+import { NavEntryLink } from "./NavEntryLink";
 
 interface SubItem {
   name: string;
@@ -116,13 +117,14 @@ function SidebarSubItem({
 }: Readonly<{ subItem: SubItem; onClick: SidebarItemProps["onClick"] }>) {
   const SubIcon = subItem.icon;
   return (
-    <button
-      type="button"
-      onClick={() => onClick(subItem.path, subItem.action)}
+    <NavEntryLink
+      href={subItem.path}
+      onNavigate={() => onClick(subItem.path, subItem.action)}
+      isAction={subItem.action !== undefined}
+      isBusy={subItem.isBusy}
       title={entryTitle(subItem.name, subItem.isPlanned)}
-      aria-disabled={subItem.isBusy || undefined}
-      aria-current={subItem.isActive ? "page" : undefined}
-      data-testid={subItem.testId}
+      isCurrent={subItem.isActive}
+      testId={subItem.testId}
       className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
         subItem.isActive
           ? "text-primary bg-primary/10"
@@ -132,7 +134,7 @@ function SidebarSubItem({
       {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
       <span className="truncate">{subItem.name}</span>
       {subItem.isPlanned ? <SoonMarker /> : null}
-    </button>
+    </NavEntryLink>
   );
 }
 
@@ -164,37 +166,49 @@ export function SidebarItem({
 
   const togglesSubItems = hasSubItems && !isCompact;
 
-  const handleItemClick = () => {
-    if (togglesSubItems) {
-      setIsOpen(!isOpen);
-      return;
-    }
-    // No sub-items, or compact mode collapses the chevron interaction — fall
-    // back to navigating to the main path.
-    onClick(path);
-  };
+  const className = `sidebar-item w-full flex items-center justify-between gap-2 p-2.5 rounded-md font-semibold transition-all group ${
+    isActive
+      ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
+      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+  } ${isCompact ? "justify-center" : ""}`;
+  const content = (
+    <>
+      <SidebarItemContent icon={Icon} name={name} isCompact={isCompact} isPlanned={isPlanned} />
+      {!isCompact && (
+        <SidebarChevron hasSubItems={hasSubItems} isOpen={isOpen} isActive={isActive} />
+      )}
+    </>
+  );
 
   return (
     <div className="sidebar-item-wrapper">
-      <button
-        type="button"
-        onClick={handleItemClick}
-        title={entryTitle(name, isPlanned)}
-        data-testid={testId}
-        aria-expanded={togglesSubItems ? isOpen : undefined}
-        aria-controls={togglesSubItems && isOpen ? subItemsId : undefined}
-        aria-current={isActive && !togglesSubItems ? "page" : undefined}
-        className={`sidebar-item w-full flex items-center justify-between gap-2 p-2.5 rounded-md font-semibold transition-all group ${
-          isActive
-            ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
-            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-        } ${isCompact ? "justify-center" : ""}`}
-      >
-        <SidebarItemContent icon={Icon} name={name} isCompact={isCompact} isPlanned={isPlanned} />
-        {!isCompact && (
-          <SidebarChevron hasSubItems={hasSubItems} isOpen={isOpen} isActive={isActive} />
-        )}
-      </button>
+      {/* An expanded section header opens and closes its leaves, which is an action rather than a
+          place, so it is a button. Everything else — a leaf-less entry, or a section on the
+          compact rail, where a click goes to its first page — is a link. */}
+      {togglesSubItems ? (
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          title={entryTitle(name, isPlanned)}
+          data-testid={testId}
+          aria-expanded={isOpen}
+          aria-controls={isOpen ? subItemsId : undefined}
+          className={className}
+        >
+          {content}
+        </button>
+      ) : (
+        <NavEntryLink
+          href={path}
+          onNavigate={() => onClick(path)}
+          title={entryTitle(name, isPlanned)}
+          isCurrent={isActive}
+          testId={testId}
+          className={className}
+        >
+          {content}
+        </NavEntryLink>
+      )}
 
       {hasSubItems && isOpen && !isCompact && (
         <div id={subItemsId} className="sidebar-item__sub-items ml-9 mt-1 space-y-1">

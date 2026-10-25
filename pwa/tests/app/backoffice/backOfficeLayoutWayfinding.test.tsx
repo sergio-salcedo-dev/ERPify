@@ -79,9 +79,9 @@ describe("BackOfficeLayoutClient wayfinding", () => {
     expect(treasury).toHaveClass("sidebar-item--active");
     expect(treasury).toHaveAttribute("aria-expanded", "true");
 
-    const banks = within(sidebar()).getByRole("button", { name: "Banks" });
+    const banks = within(sidebar()).getByRole("link", { name: "Banks" });
     expect(banks).toHaveAttribute("aria-current", "page");
-    expect(within(sidebar()).getByRole("button", { name: "Bank Accounts" })).not.toHaveAttribute(
+    expect(within(sidebar()).getByRole("link", { name: "Bank Accounts" })).not.toHaveAttribute(
       "aria-current",
     );
   });
@@ -101,9 +101,10 @@ describe("BackOfficeLayoutClient wayfinding", () => {
   it("marks entries whose module is not built yet, and leaves live ones unmarked", () => {
     renderLayout();
 
-    expect(
-      within(sidebar()).getByRole("button", { name: "Invoicing, coming soon" }),
-    ).toHaveAttribute("title", "Invoicing (coming soon)");
+    expect(within(sidebar()).getByRole("link", { name: "Invoicing, coming soon" })).toHaveAttribute(
+      "title",
+      "Invoicing (coming soon)",
+    );
     expect(within(sidebar()).getByRole("button", { name: "Treasury" })).toHaveAttribute(
       "title",
       "Treasury",
@@ -117,12 +118,12 @@ describe("BackOfficeLayoutClient wayfinding", () => {
     fireEvent.click(screen.getByLabelText("Open navigation menu"));
     const drawer = await screen.findByRole("dialog", { name: "Navigation menu" });
 
-    expect(within(drawer).getByRole("button", { name: "Banks" })).toHaveAttribute(
+    expect(within(drawer).getByRole("link", { name: "Banks" })).toHaveAttribute(
       "aria-current",
       "page",
     );
     expect(
-      within(drawer).getByRole("button", { name: "Invoicing, coming soon" }),
+      within(drawer).getByRole("link", { name: "Invoicing, coming soon" }),
     ).toBeInTheDocument();
   });
 
@@ -133,13 +134,13 @@ describe("BackOfficeLayoutClient wayfinding", () => {
     const drawer = await screen.findByRole("dialog", { name: "Navigation menu" });
 
     expect(
-      within(drawer).getByRole("button", { name: "Customers, coming soon" }),
+      within(drawer).getByRole("link", { name: "Customers, coming soon" }),
     ).toBeInTheDocument();
-    expect(within(drawer).queryByRole("button", { name: /^Clients/ })).toBeNull();
+    expect(within(drawer).queryByRole("link", { name: /^Clients/ })).toBeNull();
     // A parent with one live leaf still lists all of them, planned ones included.
-    expect(within(drawer).getByRole("button", { name: "Banks" })).toBeInTheDocument();
+    expect(within(drawer).getByRole("link", { name: "Banks" })).toBeInTheDocument();
     expect(
-      within(drawer).getByRole("button", { name: "Cash Flow, coming soon" }),
+      within(drawer).getByRole("link", { name: "Cash Flow, coming soon" }),
     ).toBeInTheDocument();
   });
 });
@@ -213,6 +214,34 @@ describe("BackOfficeLayoutClient go-to palette", () => {
     expect(screen.queryAllByRole("option")).toHaveLength(0);
     expect(screen.getByTestId("go-to-palette__empty")).toHaveTextContent("No page matches");
     expect(input).not.toHaveAttribute("aria-activedescendant");
+  });
+
+  it("tells a screen reader how many pages match, and when none does", async () => {
+    renderLayout();
+    const input = await openWithShortcut();
+    const status = screen.getByTestId("go-to-palette__status");
+
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toBeEmptyDOMElement();
+
+    fireEvent.change(input, { target: { value: "banks" } });
+    expect(status).toHaveTextContent("1 page found.");
+
+    fireEvent.change(input, { target: { value: "bank" } });
+    expect(status).toHaveTextContent(`${screen.getAllByRole("option").length} pages found.`);
+
+    fireEvent.change(input, { target: { value: "zzz-nothing" } });
+    expect(status).toHaveTextContent("No page matches “zzz-nothing”.");
+  });
+
+  it("does not open on top of another dialog", async () => {
+    renderLayout();
+    fireEvent.click(screen.getByLabelText("Open navigation menu"));
+    await screen.findByRole("dialog", { name: "Navigation menu" });
+
+    fireEvent.keyDown(document.body, { key: "k", ctrlKey: true });
+
+    expect(screen.queryByTestId("go-to-palette")).toBeNull();
   });
 
   it("never offers a page the session's sidebar hides", async () => {

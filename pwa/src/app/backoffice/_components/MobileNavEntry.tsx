@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { NavEntryLink } from "@/components/erpify";
 import type { NavAction } from "@/app/backoffice/_lib/backofficeMenu";
 
 interface MobileNavLeaf {
@@ -59,12 +60,12 @@ export function MobileNavEntry({
   const hasActiveLeaf = subItems?.some((entry) => entry.isActive) ?? false;
   return (
     <div className="bo-layout__sidebar-mobile-item-wrapper">
-      <button
-        type="button"
-        onClick={() => onNavigate(path)}
+      <NavEntryLink
+        href={path}
+        onNavigate={() => onNavigate(path)}
         title={isPlanned ? `${name} (coming soon)` : name}
-        aria-current={isActive && !hasActiveLeaf ? "page" : undefined}
-        data-testid={testId ? `${testId}--mobile` : undefined}
+        isCurrent={isActive && !hasActiveLeaf}
+        testId={testId ? `${testId}--mobile` : undefined}
         className={`bo-layout__sidebar-mobile-link w-full flex items-center gap-3 p-3 rounded-md font-semibold transition-all ${
           isActive ? "bg-primary/15 text-primary" : "text-muted-foreground hover:bg-accent"
         }`}
@@ -72,18 +73,19 @@ export function MobileNavEntry({
         <Icon className="w-5 h-5 shrink-0" aria-hidden />
         <span className="text-sm truncate">{name}</span>
         {isPlanned ? <SoonMarker /> : null}
-      </button>
+      </NavEntryLink>
       {subItems && subItems.length > 0 && !isPlanned ? (
         <div className="ml-8 mt-1 space-y-1">
           {subItems.map((subItem) => (
-            <button
-              type="button"
+            <NavEntryLink
               key={subItem.testId ?? subItem.path}
-              onClick={() => onNavigate(subItem.path, subItem.action)}
+              href={subItem.path}
+              onNavigate={() => onNavigate(subItem.path, subItem.action)}
+              isAction={subItem.action !== undefined}
+              isBusy={subItem.isBusy}
               title={subItem.isPlanned ? `${subItem.name} (coming soon)` : subItem.name}
-              aria-disabled={subItem.isBusy || undefined}
-              aria-current={subItem.isActive ? "page" : undefined}
-              data-testid={subItem.testId ? `${subItem.testId}--mobile` : undefined}
+              isCurrent={subItem.isActive}
+              testId={subItem.testId ? `${subItem.testId}--mobile` : undefined}
               className={`w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-semibold transition-all ${
                 subItem.isActive
                   ? "text-primary bg-primary/10"
@@ -93,7 +95,7 @@ export function MobileNavEntry({
               {subItem.icon && <subItem.icon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
               <span className="truncate">{subItem.name}</span>
               {subItem.isPlanned ? <SoonMarker /> : null}
-            </button>
+            </NavEntryLink>
           ))}
         </div>
       ) : null}
