@@ -568,3 +568,26 @@ source_spec: `spec-dw-48-serialise-late-audit-writers-on-identity.md`
 severity: medium
 archived: 2026-10-21
 
+
+### DW-70: La huella del cursor del timeline de auditoría no incluye su consulta base (la divergencia de #457 sigue en el lado DBAL)
+
+origin: cierre de #373 tras #1108, decisión del usuario, 2026-10-25
+location: api/src/Backoffice/Audit/Infrastructure/Persistence/Dbal/AuditTimelineKeysetSource.php (fingerprint()), api/src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSearchEngine.php (baseQueryIdentity())
+reason: #457 ató la huella ORM a la consulta base; la DBAL de auditoría hashea un `'table' => 'audit_log'` fijo. Hoy no es explotable porque esa consulta base es una sola y sin ámbito. Unificar los dos esquemas invalida una vez todos los cursores de auditoría en vuelo, así que se mantuvo idéntica en #1108.
+status: open
+severity: low
+
+**Qué entra hoy en la huella de auditoría:** `table`, `sort`, `direction`, `limit` y `filters` (`AuditTimelineKeysetSource::fingerprint()`). La consulta base no entra. El lado ORM sí la ata desde #457 (`QueryExecutionTrace` lleva `baseQueryIdentity()`). #1108 unificó el algoritmo, no los dos esquemas de huella. Los mantuvo byte a byte para que los cursores emitidos antes del despliegue sigan resolviéndose.
+
+**Por qué no es un riesgo vivo:** `DbalAuditTimelineRepository::search()` construye una única consulta base, `SELECT … FROM audit_log a`, sin ningún `WHERE` fuera de los filtros, y los filtros sí entran en la huella. No existe otro listado de `audit_log` sobre el que se pueda reproducir un cursor ajeno.
+
+**Disparador, revisar cuando:**
+- se añada un segundo listado de auditoría con ámbito propio fuera de los filtros (por ejemplo, el timeline de un recurso o de un actor fijado por la ruta), o
+- la consulta base del timeline gane cualquier `WHERE`, `JOIN` o `GROUP BY`.
+
+En ese momento, un cursor de un ámbito se podría reproducir sobre otro: es la clase de defecto que cerró #457.
+
+**Forma del cierre:**
+- Derivar la identidad de la consulta base del `QueryBuilder` DBAL, igual que hace `baseQueryIdentity()` con el DQL, e incluirla en `fingerprint()`.
+- Aceptar el 422 único sobre los cursores en vuelo del despliegue que lo introduzca, y anotarlo en el PR.
+- Añadir un test que reproduzca un cursor de un ámbito sobre otro y espere `InvalidCursor`.
