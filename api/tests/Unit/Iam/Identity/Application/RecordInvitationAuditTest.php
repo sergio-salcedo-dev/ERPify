@@ -20,22 +20,6 @@ use PHPUnit\Framework\TestCase;
 final class RecordInvitationAuditTest extends TestCase
 {
     /**
-     * @return iterable<string, array{0: Closure(RecordInvitationAudit, string): void, 1: string}>
-     */
-    public static function acts(): iterable
-    {
-        yield 'resent' => [
-            static fn (RecordInvitationAudit $audit, string $userId) => $audit->resent($userId),
-            'INVITATION_RESENT',
-        ];
-
-        yield 'revoked' => [
-            static fn (RecordInvitationAudit $audit, string $userId) => $audit->revoked($userId),
-            'INVITATION_REVOKED',
-        ];
-    }
-
-    /**
      * The row names the person, so it is erasable only if it commits on one side of the erasure: it is written
      * after the identity's own row lock, inside the unit of work that holds it.
      */
@@ -69,8 +53,26 @@ final class RecordInvitationAuditTest extends TestCase
         $transactions = new InlineTransactionManager();
         $auditLogger = new TransactionAwareAuditLogger($transactions);
 
-        $act(new RecordInvitationAudit(new InMemoryUserRepository(), $auditLogger, $transactions), UserMother::DEFAULT_ID);
+        $audit = new RecordInvitationAudit(new InMemoryUserRepository(), $auditLogger, $transactions);
+
+        $act($audit, UserMother::DEFAULT_ID);
 
         $this->assertSame([], $auditLogger->records, $action . ' must name nobody who is gone.');
+    }
+
+    /**
+     * @return iterable<string, array{0: Closure(RecordInvitationAudit, string): void, 1: string}>
+     */
+    public static function acts(): iterable
+    {
+        yield 'resent' => [
+            static fn (RecordInvitationAudit $audit, string $userId) => $audit->resent($userId),
+            'INVITATION_RESENT',
+        ];
+
+        yield 'revoked' => [
+            static fn (RecordInvitationAudit $audit, string $userId) => $audit->revoked($userId),
+            'INVITATION_REVOKED',
+        ];
     }
 }

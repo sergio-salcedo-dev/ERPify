@@ -49,9 +49,10 @@ Feature: Revoke a pending invitation from the console
     """
     # The wrapped write's query budget (auth/admission lookups are excluded from the counter): one revocation
     # touches two aggregates in one transaction — the invitation and the identity it provisioned — each read
-    # under a row lock, updated, and with its domain event appended to the event store, plus the one security
-    # audit row naming the invitee. Measured, not derived: a drop here means one of the three stopped happening.
-    And 23 requests got executed only for doctrine connection "default"
+    # under a row lock, updated, and with its domain event appended to the event store — plus the security audit
+    # row naming the invitee, written in a nested unit of work (savepoint, the identity row re-locked, the insert,
+    # release). Measured, not derived: a drop here means one of those stopped happening.
+    And 26 requests got executed only for doctrine connection "default"
 
   Scenario: The delivered token stops working the moment the invitation is revoked
     Given I am logged in as an administrator
