@@ -17,17 +17,19 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * person's working link can be destroyed and their mailbox written to — whichever administrator asks, which is
  * why it is keyed by the TARGET rather than by the caller.
  *
- * The key is the id case-folded and nothing more. The column it selects is a Postgres `uuid`, which compares
- * case-insensitively, so keying on the spelling would give one person a bucket per spelling and the limit would
- * stop being one — the defect {@see \Erpify\Shared\Token\Domain\SelectorBudgetKey} records for the selector
- * axis. It is not validated here: a malformed id spends a bucket nobody else can reach, and the use case answers
- * it 400 before any lookup.
+ * The key is an HMAC of the case-folded id under `kernel.secret`, for two reasons. The column the id selects is a
+ * Postgres `uuid`, which compares case-insensitively, so keying on the spelling would give one person a bucket
+ * per spelling and the limit would stop being one — the defect
+ * {@see \Erpify\Shared\Token\Domain\SelectorBudgetKey} records for the selector axis. And the limiter
+ * serialises its key into the bucket it stores in the cache pool, where it lives for up to two windows and no
+ * erasure path reaches it, so the raw id would put a person's identifier there; the HMAC is stable per person
+ * and names nobody. The caller hands it a well-formed UUID: a malformed one is answered 400 before the budget is
+ * touched, so no spelling the use case would refuse can spend a person's budget.
  *
  * It refuses out loud with the shared {@see RateLimitExceeded} (429 `rate-limited`) and stamps its
  * {@see RateLimitSnapshot} on the request, so the response carries the `Retry-After` of the budget that said no.
  * The route sits behind an administrator session that can already read the register, so a per-target 429
- * discloses nothing that session could not learn. The person's id travels only as the exception's
- * `limiterKey`, which neither the response body nor the per-error log line serialises.
+ * discloses nothing that session could not learn.
  */
 final readonly class InvitationResendThrottle
 {
@@ -35,6 +37,8 @@ final readonly class InvitationResendThrottle
         #[Autowire(service: 'limiter.invitation_resend_per_invitee')]
         private RateLimiterFactoryInterface $perInviteeLimiter,
         private RequestStack $requestStack,
+        #[Autowire(param: 'kernel.secret')]
+        private string $secret,
     ) {
     }
 
@@ -43,7 +47,7 @@ final readonly class InvitationResendThrottle
      */
     public function ensureWithinBudget(string $invitedUserId): void
     {
-        $key = self::keyOf($invitedUserId);
+        $key = $this->keyOf($invitedUserId);
         $snapshot = RateLimitSnapshot::of($this->perInviteeLimiter->create($key)->consume(), $key);
 
         if ($snapshot->accepted) {
@@ -59,8 +63,8 @@ final readonly class InvitationResendThrottle
         throw $snapshot->refusal();
     }
 
-    public static function keyOf(string $invitedUserId): string
+    public function keyOf(string $invitedUserId): string
     {
-        return \mb_strtolower(\trim($invitedUserId));
+        return \hash_hmac('sha256', \mb_strtolower($invitedUserId), $this->secret);
     }
 }

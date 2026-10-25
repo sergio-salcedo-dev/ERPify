@@ -20,7 +20,15 @@ use Override;
  */
 final class TransactionObservingAuditLogger implements AuditLogger
 {
-    /** @var list<array{action: string, level: AuditLevel, resource: ?AuditResource, metadata: array<string, mixed>, inTransaction: bool}> */
+    /**
+     * @var list<array{
+     *     action: string,
+     *     level: AuditLevel,
+     *     resource: ?AuditResource,
+     *     metadata: array<string, mixed>,
+     *     inTransaction: bool,
+     * }>
+     */
     public array $records = [];
 
     public function __construct(private readonly CountingTransactionManager $transactions)

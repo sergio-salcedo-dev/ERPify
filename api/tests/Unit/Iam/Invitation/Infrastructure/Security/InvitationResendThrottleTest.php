@@ -46,7 +46,22 @@ final class InvitationResendThrottleTest extends TestCase
         $throttle->ensureWithinBudget(self::INVITEE_ID);
 
         $this->expectException(RateLimitExceeded::class);
-        $throttle->ensureWithinBudget(' ' . \strtoupper(self::INVITEE_ID) . ' ');
+        $throttle->ensureWithinBudget(\strtoupper(self::INVITEE_ID));
+    }
+
+    /**
+     * The limiter serialises its key into the bucket it stores, and that store is a cache no erasure reaches, so
+     * the key may not BE the person's id in any spelling; it must still be one stable key per person.
+     */
+    #[Test]
+    public function theBucketKeyNamesNobodyAndIsStablePerPerson(): void
+    {
+        $throttle = $this->throttle(limit: 1);
+        $key = $throttle->keyOf(self::INVITEE_ID);
+
+        $this->assertStringNotContainsStringIgnoringCase(self::INVITEE_ID, $key);
+        $this->assertSame($key, $throttle->keyOf(\strtoupper(self::INVITEE_ID)));
+        $this->assertNotSame($key, $this->throttle(limit: 1, secret: 'another-secret')->keyOf(self::INVITEE_ID));
     }
 
     #[Test]
@@ -75,8 +90,11 @@ final class InvitationResendThrottleTest extends TestCase
             $this->assertSame(1, $rateLimitExceeded->limit);
             $this->assertSame(0, $rateLimitExceeded->remaining);
             $this->assertGreaterThanOrEqual(1, $rateLimitExceeded->retryAfterSeconds);
-            $this->assertSame(self::INVITEE_ID, $rateLimitExceeded->limiterKey);
-            $this->assertStringNotContainsString(self::INVITEE_ID, (string) \json_encode($rateLimitExceeded->context()));
+            $this->assertSame($throttle->keyOf(self::INVITEE_ID), $rateLimitExceeded->limiterKey);
+            $this->assertStringNotContainsString(
+                self::INVITEE_ID,
+                (string) \json_encode($rateLimitExceeded->context()),
+            );
         }
     }
 
@@ -115,13 +133,16 @@ final class InvitationResendThrottleTest extends TestCase
         $throttle->ensureWithinBudget(self::INVITEE_ID);
     }
 
-    private function throttle(int $limit, ?RequestStack $requestStack = null): InvitationResendThrottle
-    {
+    private function throttle(
+        int $limit,
+        ?RequestStack $requestStack = null,
+        string $secret = 'test-kernel-secret',
+    ): InvitationResendThrottle {
         $factory = new RateLimiterFactory(
             ['id' => 'per_invitee', 'policy' => 'sliding_window', 'limit' => $limit, 'interval' => '1 day'],
             new InMemoryStorage(),
         );
 
-        return new InvitationResendThrottle($factory, $requestStack ?? new RequestStack());
+        return new InvitationResendThrottle($factory, $requestStack ?? new RequestStack(), $secret);
     }
 }

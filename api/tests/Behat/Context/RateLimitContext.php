@@ -44,6 +44,7 @@ final class RateLimitContext extends AbstractContext implements Context
         private readonly RateLimiterFactoryInterface $perIdentityLimiter,
         #[Autowire(service: 'limiter.invitation_resend_per_invitee')]
         private readonly RateLimiterFactoryInterface $perInviteeLimiter,
+        private readonly InvitationResendThrottle $invitationResendThrottle,
     ) {
     }
 
@@ -89,14 +90,15 @@ final class RateLimitContext extends AbstractContext implements Context
     }
 
     /**
-     * Key derivation goes through {@see InvitationResendThrottle::keyOf()} itself, so a scenario priming one
-     * spelling of the id and requesting another proves the controller folds them into one bucket.
+     * Key derivation goes through the container's own {@see InvitationResendThrottle::keyOf()}, under the same
+     * secret, so a scenario priming one spelling of the id and requesting another proves the controller folds
+     * them into one bucket.
      */
     #[Given('the invitation-resend budget is exhausted for invitee :userId')]
     public function theInvitationResendBudgetIsExhaustedForInvitee(string $userId): void
     {
         $this->exhaust(
-            $this->perInviteeLimiter->create(InvitationResendThrottle::keyOf($userId)),
+            $this->perInviteeLimiter->create($this->invitationResendThrottle->keyOf($userId)),
             'invitation_resend_per_invitee',
         );
     }

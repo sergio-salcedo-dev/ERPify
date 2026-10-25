@@ -15,11 +15,12 @@ use Erpify\Iam\Invitation\Infrastructure\Security\InvitationResendThrottle;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Token\Domain\SingleUseToken;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
-use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
+use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Invitation\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Cli\CapturingInvitationEmailSender;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -112,6 +113,21 @@ final class ResendUserInvitationControllerTest extends TestCase
         $this->assertCount(1, $this->auditLogger->records);
     }
 
+    #[Test]
+    public function aMalformedIdIsRefusedWithoutSpendingTheInviteesBudget(): void
+    {
+        $controller = $this->controller(CapturingInvitationEmailSender::accepting(), budget: 1);
+
+        try {
+            $controller(' ' . UserMother::DEFAULT_ID);
+            $this->fail('A padded id must be refused as a malformed UUID.');
+        } catch (InvalidUuidException) {
+            // Asserted below: the refusal must leave the real person's single slot untouched.
+        }
+
+        $this->assertSame(Response::HTTP_NO_CONTENT, $controller(UserMother::DEFAULT_ID)->getStatusCode());
+    }
+
     private function controller(InvitationEmailSender $emailSender, int $budget = 5): ResendUserInvitationController
     {
         $generated = SingleUseToken::mint(new DateTimeImmutable('2026-07-18T10:00:00+00:00'));
@@ -138,6 +154,7 @@ final class ResendUserInvitationControllerTest extends TestCase
                 new InMemoryStorage(),
             ),
             new RequestStack(),
+            'test-kernel-secret',
         ));
     }
 }

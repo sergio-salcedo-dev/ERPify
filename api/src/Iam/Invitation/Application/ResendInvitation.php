@@ -47,8 +47,6 @@ use LogicException;
  */
 final readonly class ResendInvitation
 {
-    private const string TTL_SPEC = 'P3D';
-
     private const string RESENT_ACTION = 'INVITATION_RESENT';
 
     public function __construct(
@@ -159,7 +157,7 @@ final readonly class ResendInvitation
      */
     private function reissue(Invitation $invitation, string $selector): string
     {
-        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));
+        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(Invitation::TTL_SPEC)));
 
         $invitation->resend($generated->token);
 

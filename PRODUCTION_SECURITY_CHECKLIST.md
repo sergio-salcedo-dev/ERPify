@@ -797,10 +797,13 @@ you change anything here.
       `ADMIN`-only (`users.resendInvitation`, `users.revokeInvitation`). Every resend kills the link the invitee
       already holds and mails a new one, so an unbounded resend let one administrator session — stolen or
       scripted — keep a person's link permanently dead and flood their mailbox. `InvitationResendThrottle`
-      spends `invitation_resend_per_invitee` (5 / day, keyed by the case-folded invitee id, shared by every
-      administrator) before any row is touched, and answers a visible 429. The cost is that a drained bucket
-      blocks every administrator's resend of that person until it refills; revoke and re-invite is the way
-      round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
+      spends `invitation_resend_per_invitee` (5 / day between deploys — the limiter state lives in the `app`
+      cache pool, which a deploy resets — keyed by an HMAC of the case-folded invitee id under `kernel.secret`,
+      so the stored bucket names nobody, and shared by every administrator)
+      after the id is validated and before any row is touched, and answers a visible 429. The cost is that a
+      drained bucket blocks every administrator's HTTP resend of that person until it refills, including when
+      an operator drains it retrying through a mail outage; the console command `iam:invitation:resend`, which
+      this budget does not cover, is the way round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
       `INVITATION_REVOKED`), because the event store records the transition and never who caused it. The row is
       written inside the transaction, after the invitation rows are locked: `FulfilIdentityErasure` deletes the
       subject's invitations before its pass over the trail, so the row either commits before that pass reaches
@@ -1278,6 +1281,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
       re-resolves the ranges in a single install and reads every claimed version back out of the
       lock) and re-run `composer audit`.
+- [ ] **A stolen administrator session can hold one invitee's HTTP resend shut for a day.** The per-invitee
+      budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`, 5 / day,
+      shared by every administrator — §6) is what stops one session from killing a person's link for ever, and
+      the price of sharing it is that the same session can drain it: five resends, and no administrator can
+      resend that person's invitation over HTTP until the window refills. The invitee keeps the last link that
+      was delivered, inside its three-day TTL. An operator retrying through a mail outage drains it the same
+      way, and then the invitee holds no working link, because each 503 has already rotated it. **Way round:**
+      the console command `iam:invitation:resend <invitationId>`, which a shell operator runs and the budget
+      does not cover. Every resend that spent the budget is attributed (`INVITATION_RESENT`, `security`).
+      **Revisit when** an operator reports a resend refused with 429 that they did not cause, or the console
+      surfaces invitation resend to a role other than `ADMIN`. **Accepted:** not recorded (opened
+      2026-10-25).
 - [ ] **A stolen session can deny the owner a credential _rotation_, but not an _eviction_.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
