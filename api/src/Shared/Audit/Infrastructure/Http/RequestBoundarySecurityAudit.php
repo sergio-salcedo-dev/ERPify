@@ -45,7 +45,7 @@ use Throwable;
  *
  * It also reports the handed failure to the error tracker itself, because nothing downstream will: Sentry's
  * own `kernel.exception` listener runs at priority 128, before any caller here, so it saw only the request's
- * throwable — a client error its `before_send` drops — and never the 5xx that replaced it, while the
+ * throwable — a 4xx its `before_send` drops or reports by marker — and never the 5xx that replaced it, while the
  * responder's log line carries no throwable at all. Without this call a leaked transaction, the defect the
  * refusal exists to surface, would answer a 500 that no alert ever sees. The tracker is absent where Sentry is
  * not installed (the test kernel), and a failure is then handed over unreported rather than not handed over.

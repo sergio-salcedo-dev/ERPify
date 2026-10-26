@@ -27,6 +27,7 @@ cp .env.prod.example .env.prod.local
 #                                               # .invalid/localhost and no-reply@ are refused
 #   DEFAULT_NOTIFICATION_EMAIL=ops@erpify.dev   # bank-change notices; mailpit catches them
 #   SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN         # erpify-api-prod / erpify-pwa-prod client keys
+#   SENTRY_ENVIRONMENT=rehearsal                # required (API + PWA): prod.env.check refuses the file without it
 # Keep SERVER_NAME=erpify.local and CADDY_SERVER_EXTRA_DIRECTIVES=tls internal.
 # Generate the secrets ONCE: Postgres keeps the password it initialised its volume
 # with, and data sealed under one AUDIT_KEK is unreadable under another.

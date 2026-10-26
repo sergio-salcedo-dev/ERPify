@@ -12,7 +12,7 @@ contract, the observability events, how to diagnose `invalid-cursor`, and how to
 > **No metrics backend.** There is no Prometheus / StatsD / OpenTelemetry / Grafana in this stack. The
 > "metrics" and "dashboards" below are **structured JSON log lines** on a dedicated Monolog channel,
 > queried by parsing. `invalid-cursor` is a 4xx client error, so it is **dropped before Sentry**
-> (`before_send` discards `ClientError` — see [`api/config/packages/sentry.yaml`](../../api/config/packages/sentry.yaml)); logs are the only sink.
+> (`before_send` discards the expected-outcome markers — see [`api/config/packages/sentry.yaml`](../../api/config/packages/sentry.yaml)); logs are the only sink.
 
 ---
 

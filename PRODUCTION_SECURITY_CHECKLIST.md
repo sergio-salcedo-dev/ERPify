@@ -109,7 +109,8 @@ you change anything here.
       breadcrumbs and exception messages are out of that scope.
 - [ ] No secret hides behind a `NEXT_PUBLIC_*` name — those are inlined into the
       browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL`,
-      `NEXT_PUBLIC_APP_ENV`, and `NEXT_PUBLIC_SENTRY_DSN` are allowed; the
+      `NEXT_PUBLIC_APP_ENV`, `NEXT_PUBLIC_SENTRY_DSN` and
+      `NEXT_PUBLIC_SENTRY_ENVIRONMENT` (a tag) are allowed; the
       `pwa/tests/next-public-env-allowlist.test.ts` guard (in `make pwa.test.unit`)
       fails the build on any other. The Sentry DSN is intentionally public
       (write-only, browser-embeddable); the real Sentry secret is
@@ -2350,6 +2351,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       Mitigated by the guide's rule that a box is promoted only after `make deploy.local.down`, and by
       `make ENV=prod docker.info` printing the resolved project. Closing it means recording the project at
       stand-up (a label or a state file) and refusing a run that resolves a different one.
+
+- [ ] **The domain security signals reach Sentry, and nothing alerts on them.** `SentryEventFilter` reports
+      the domain `Unauthenticated` (401), `Forbidden` (403, `AccountLocked` among them) and `RateLimited`
+      (429) raised on an HTTP request, together with the framework's own 401/403/422, so a guessing run or a
+      lockout wave arrives as events (`docs/api-error-contract.md` → "Client-error suppression in Sentry").
+      No alert rule exists in the tree or is provisioned by any deploy step, so nobody is paged. Sentry
+      groups by exception type and stack, never by account or source address, so even a frequency alert
+      sees a volume — it cannot tell one account sprayed from many accounts probed — and a burst spends the
+      event quota the other issues share. **One 401 is not reported at all:** `SessionNoLongerActive`
+      (`session-expired`) implements `RoutineOutcome`, because every returning user raises it; a stolen
+      cookie replayed after its owner revoked it raises the same exception and leaves no signal. The row
+      still knows the difference (`status`, `revokedAt`, `expiresAt`, until the retention sweep deletes it),
+      but `SessionAdmissionGate` reads it through `findActiveById()`, which filters on `status = ACTIVE AND
+      expires_at > now` and so answers null for all three causes. Closing it needs frequency alert rules on
+      those issues plus a rate limit per issue, and — for the revoked-cookie case — a gate that tells revoked
+      from expired and emits a deduplicated security event carrying no session id.
 
 ## 8. Deploy & verify
 

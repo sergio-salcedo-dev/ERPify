@@ -6,6 +6,17 @@ namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
 use Doctrine\DBAL\Exception\ConnectionException;
 use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
+use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
+use Erpify\Shared\ErrorContract\Domain\Exception\InvalidInput;
+use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
+use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
+use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
+use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
+use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
+use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\Monitoring\Domain\RoutineOutcome;
 use Sentry\Event;
 use Sentry\EventHint;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\PostgreSqlConnection;
@@ -17,12 +28,30 @@ use Throwable;
  * to {@see SentryEventScrubber} (composed by {@see SentryBeforeSend}). Returning `null` stops the
  * event from leaving the process, keeping error tracking signal-rich.
  *
- * 1. **Expected 4xx client errors** — any throwable implementing {@see ClientError} (a business
- *    outcome / invalid client request that needs no technical intervention, e.g. deleting a bank
- *    that still has accounts → 409). 5xx paths are untouched: a marker-less DomainException maps to
- *    `unhandled-exception` (500) and any non-domain throwable is not a ClientError — both keep
- *    flowing. The decision is type-based and reuses the RFC 9457 marker hierarchy as the single
- *    source of truth (see {@see ClientError}).
+ * 1. **Expected 4xx business outcomes on an HTTP request** — a {@see DomainException} implementing one
+ *    of {@see EXPECTED_OUTCOME_MARKERS} (404, 409, 422, 400: a business outcome or an invalid request
+ *    that needs no technical intervention, e.g. deleting a bank that still has accounts → 409) and
+ *    none of {@see SIGNAL_MARKERS}. The security markers — `Unauthenticated` (401), `Forbidden` (403),
+ *    `RateLimited` (429) — are reported although they are client errors: a spike of failed proofs,
+ *    lockouts or throttling is how an attack shows up, and so is a spike of the framework's own 4xx
+ *    (Security 401/403, validation 422, a 4xx `HttpException`), which carry no marker and always flow.
+ *    `ServiceUnavailable` sits there too, because an exception combining it with an outcome marker may
+ *    be answered 503 depending on marker order. 5xx paths are untouched: a marker-less DomainException
+ *    maps to `unhandled-exception` (500), and a marker on a non-domain throwable is honoured by no one —
+ *    `ProblemDetailsFactory` answers it 500. A {@see ClientError} marker on neither list is reported, so
+ *    a marker added later fails toward reporting until someone classifies it.
+ *
+ *    A {@see RoutineOutcome} is dropped too, and it outranks the signal markers: it is the exception whose
+ *    volume follows normal traffic and whose hostile occurrence looks exactly like a benign one — an
+ *    expired session's 401 — so its issue could never alert and would spend the quota the signals need.
+ *    It reaches no 5xx: it is dropped only as a `DomainException` beside one of the status-bearing 4xx
+ *    markers on the two lists — a bare `ClientError` maps no status, and the contract answers it 500.
+ *
+ *    **Only where a client exists**, read as an event carrying request data (Sentry's
+ *    `RequestIntegration` fills it before `before_send` runs). Sentry's Messenger listener unwraps a
+ *    `HandlerFailedException` and captures each nested throwable top-level, so a handler's `NotFound`
+ *    arrives here with the very type a client's has — and there it is a malformed message, a publisher
+ *    bug or cross-context drift, never a client mistake. A console command has no client either.
  *
  * 2. **Messenger-worker DB-connection teardown noise** — the long-lived `messenger:consume` worker
  *    holds a PostgreSQL `LISTEN messenger_messages` connection and runs an `UNLISTEN` in its
@@ -57,17 +86,36 @@ final class SentryEventFilter
 
     private const string MESSENGER_CONSUME_COMMAND = 'messenger:consume';
 
+    /**
+     * Client-error markers whose 4xx is an expected business outcome, dropped on an HTTP request.
+     */
+    public const array EXPECTED_OUTCOME_MARKERS = [
+        NotFound::class,
+        Conflict::class,
+        InvariantViolation::class,
+        InvalidInput::class,
+        InvalidSearchCriteria::class,
+    ];
+
+    /**
+     * Markers that keep an exception reported even beside an expected-outcome marker.
+     */
+    public const array SIGNAL_MARKERS = [
+        Unauthenticated::class,
+        Forbidden::class,
+        RateLimited::class,
+        ServiceUnavailable::class,
+    ];
+
     public function __invoke(Event $event, ?EventHint $hint): ?Event
     {
         $throwable = $hint?->exception;
 
-        // Deliberate: only the top-level throwable is inspected, not the getPrevious() chain.
-        // ClientError is thrown solely in HTTP request flows today, reaching the kernel
-        // unwrapped — so a top-level check suffices. A ClientError surfacing WRAPPED (e.g. a
-        // Messenger HandlerFailedException around one) is not self-evidently noise: in async it
-        // can signal a malformed message, a publisher bug, or cross-context drift worth seeing.
-        // Revisit (chain-walk vs. keep dropping) only when such a case actually occurs.
-        if ($throwable instanceof ClientError) {
+        if (
+            $throwable instanceof DomainException
+            && [] !== $event->getRequest()
+            && $this->isRoutineOrExpected($throwable)
+        ) {
             return null;
         }
 
@@ -76,6 +124,19 @@ final class SentryEventFilter
         }
 
         return $event;
+    }
+
+    private function isRoutineOrExpected(DomainException $exception): bool
+    {
+        $implements = static fn (string $marker): bool => $exception instanceof $marker;
+
+        if ($exception instanceof RoutineOutcome) {
+            return !$exception instanceof ServiceUnavailable
+                && \array_any([...self::EXPECTED_OUTCOME_MARKERS, ...self::SIGNAL_MARKERS], $implements);
+        }
+
+        return \array_any(self::EXPECTED_OUTCOME_MARKERS, $implements)
+            && !\array_any(self::SIGNAL_MARKERS, $implements);
     }
 
     private function isWorkerConnectionTeardown(Event $event, Throwable $throwable): bool

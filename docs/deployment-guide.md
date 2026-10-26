@@ -117,7 +117,7 @@ To stand up a prod host:
 3. `make deploy.local` (first stand-up) or `make docker.up ENV=prod` (restart)
    picks them up; `make prod.env.check` validates them first.
 
-The Sentry `environment` tag is just `APP_ENV` (`dev` / `prod`) — no extra var.
+The Sentry `environment` tag is `SENTRY_ENVIRONMENT` when set, else `APP_ENV` (`dev` / `prod`) — for the API services at runtime, and for the PWA at build time through `NEXT_PUBLIC_SENTRY_ENVIRONMENT`. Leave it empty on a real host; the local prod rehearsal must set `rehearsal` (`make prod.env.check` refuses a `tls internal` file without it, and a public one with it), because it runs `APP_ENV=prod` against the prod Sentry project and would otherwise report as production.
 
 **Release.** For `ENV=prod|staging`, `make` exports the checkout's commit SHA as
 `SENTRY_RELEASE` (`make/config.mk`). Nothing inside a build can derive it

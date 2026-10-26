@@ -18,7 +18,8 @@ use LogicException;
  * As raised, it answers the case nobody translates — the identity is gone — and that answer is the firewall's
  * own uniform failure: an {@see Unauthenticated} marker, 401 `unauthenticated`, and the very title the
  * authentication failure handler gives a wrong password, so an erasure that won the race is indistinguishable
- * from a credential that never matched. `ClientError`, so it does not reach Sentry.
+ * from a credential that never matched. Reported to Sentry like every domain 401 that is not routine: a login losing a
+ * race to an erasure is rare, so it is no {@see \Erpify\Shared\Monitoring\Domain\RoutineOutcome}.
  *
  * It carries no context: the identity is a person, and the reason is a property of the object rather than of
  * the wire body.

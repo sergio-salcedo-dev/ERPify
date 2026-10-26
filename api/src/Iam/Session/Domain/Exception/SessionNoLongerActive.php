@@ -6,6 +6,7 @@ namespace Erpify\Iam\Session\Domain\Exception;
 
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\Monitoring\Domain\RoutineOutcome;
 
 /**
  * The Session Admission Gate's "re-login" outcome: the correlated session is absent, revoked, or expired by
@@ -13,13 +14,13 @@ use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
  * explicit `session-expired` type so the PWA can tell this apart from a fresh-login 401 and route to the
  * sign-in screen preserving `?next=`.
  *
- * Reusing the existing `Unauthenticated` marker (rather than minting a Symfony `AuthenticationException`) is
- * deliberate: `Unauthenticated extends ClientError`, so a revoked-session request is suppressed in Sentry — a
- * bare `AuthenticationException` is not a `ClientError` and would flood Sentry with one event per request of a
- * revoked session. This exception carries no `AccessDeniedException` in its chain, so the 401-vs-403 listener
- * leaves it as a 401.
+ * A {@see RoutineOutcome}, so error tracking keeps it out on an HTTP request although `Unauthenticated` is
+ * otherwise reported: every returning user with an expired session raises it, once per API call in flight, and
+ * a revoked cookie replayed by a thief raises the same exception with nothing to tell the two apart. It is a
+ * domain exception rather than a Symfony `AuthenticationException` so that the marker can say so. It carries no
+ * `AccessDeniedException` in its chain, so the 401-vs-403 listener leaves it as a 401.
  */
-final class SessionNoLongerActive extends DomainException implements Unauthenticated
+final class SessionNoLongerActive extends DomainException implements Unauthenticated, RoutineOutcome
 {
     public static function forRequest(): self
     {
