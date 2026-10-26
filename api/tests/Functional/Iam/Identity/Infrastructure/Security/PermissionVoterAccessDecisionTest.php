@@ -29,14 +29,14 @@ use Symfony\Component\Uid\Uuid;
 final class PermissionVoterAccessDecisionTest extends WebTestCase
 {
     /**
-     * {@see PermissionVoter::supports()} claims every `<resource>.<action>` attribute by shape alone, which is
-     * sound only while the decision manager composes votes `affirmative`ly: under `unanimous` or `consensus`
-     * the voter's DENY on an attribute it claimed would weigh against another voter's GRANT in the same
-     * decision. Read off the decision the wired manager actually took, not off `security.yaml`, so a strategy
-     * set in any config file, environment block or `strategy_service` is seen. Declaring
-     * `access_decision_manager.strategy` as anything else reds the first assertion; a second voter claiming a
-     * permission attribute — the contention this voter's shape-only support assumes away — reds the second. A
-     * voter the manager merely consults and that abstains is not contention, so abstentions are left out.
+     * {@see PermissionVoter::supports()} claims every published permission, and the composition is read here as
+     * it is wired: the decision manager composes votes `affirmative`ly, and a permission attribute is answered
+     * by this voter alone. Under `unanimous` or `consensus` its DENY would weigh against another voter's GRANT
+     * on the same attribute. Read off the decision the wired manager actually took, not off `security.yaml`, so
+     * a strategy set in any config file, environment block or `strategy_service` is seen. Declaring
+     * `access_decision_manager.strategy` as anything else reds the first assertion; a second voter casting a
+     * vote on a permission attribute reds the second. A voter the manager merely consults and that abstains is
+     * not contention, so abstentions are left out.
      */
     public function testPermissionAttributesAreDecidedAffirmativelyWithThePermissionVoterAsTheirOnlyVoter(): void
     {
@@ -62,9 +62,8 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         $this->assertSame(
             'affirmative',
             $accessDecision->strategy,
-            'The access decision manager no longer decides affirmatively. PermissionVoter::supports() claims '
-            . 'every <resource>.<action> attribute by shape, which is sound only under affirmative; change '
-            . 'the voter (a positive marker or a resource registry) before changing the strategy.',
+            'The access decision manager no longer decides affirmatively; re-weigh how PermissionVoter composes '
+            . 'with every other voter on a permission attribute before changing the strategy.',
         );
 
         $this->assertSame(

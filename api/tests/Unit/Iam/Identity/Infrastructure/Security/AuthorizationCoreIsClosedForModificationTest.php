@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\AuthorizationPolicy;
 use Erpify\Iam\Identity\Infrastructure\Security\Permission;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionVoter;
 use Erpify\Iam\Identity\Infrastructure\Security\StaticAuthorizationPolicy;
+use Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\Fixtures\ListedPublishedPermissions;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -24,9 +25,10 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
  *
  * There is no way to assert "the developer did not edit the voter", so this asserts the *consequence*: a
  * resource the production policy has never heard of is governed end-to-end by the unmodified core, on tier
- * verbs alone, with zero policy rows. If governing a new resource required touching the voter, the value or
- * the port, this test could not be written against the untouched production core — so the test itself is the
- * proof that a new CRUD-only resource costs zero core edits and zero policy rows (the OCP goal at full
+ * verbs alone, with zero policy rows — once the catalog publishes it, which is a line of data the completeness
+ * gate already demands of every gated route. If governing a new resource required touching the voter, the value
+ * or the port, this test could not be written against the untouched production core — so the test itself is
+ * the proof that a new CRUD-only resource costs zero core edits and zero policy rows (the OCP goal at full
  * strength). It drives through the real {@see PermissionVoter} so the whole core-set is exercised, not the
  * policy alone. A second check freezes the port contract by reflection, because the drive-through proves the
  * core *works* for a new resource but not that the port's *shape* stays the minimal closed contract — a
@@ -54,8 +56,8 @@ final class AuthorizationCoreIsClosedForModificationTest extends TestCase
         string $action,
         int $expectedVote,
     ): void {
-        $voter = new PermissionVoter(new StaticAuthorizationPolicy());
         $permission = self::UNKNOWN_RESOURCE . '.' . $action;
+        $voter = new PermissionVoter(new StaticAuthorizationPolicy(), new ListedPublishedPermissions([$permission]));
 
         $this->assertSame($expectedVote, $voter->vote($this->tokenWithRoles([$role]), null, [$permission]));
     }

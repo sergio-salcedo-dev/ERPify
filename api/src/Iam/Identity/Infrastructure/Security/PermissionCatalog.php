@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
+use Override;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
+
 /**
  * Every permission the installation publishes — the enumerable counterpart to {@see AuthorizationPolicy},
  * which answers "may these roles do X?" for one permission at a time and deliberately cannot enumerate.
@@ -23,7 +26,8 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
  * is what makes that price safe, by turning a forgotten entry into a failed build rather than a client-side
  * gate that silently denies.
  */
-final readonly class PermissionCatalog
+#[AsAlias(PublishedPermissions::class)]
+final readonly class PermissionCatalog implements PublishedPermissions
 {
     /**
      * Every published permission. The completeness gate
@@ -72,9 +76,11 @@ final readonly class PermissionCatalog
     }
 
     /**
-     * Whether $candidate is a permission this installation publishes. Takes a raw string because its caller
-     * (the completeness gate) reads unvalidated arguments straight from attributes and from source.
+     * Whether $candidate is a permission this installation publishes. Takes a raw string because its callers
+     * hold one: the voter is handed whatever attribute a check names, and the completeness gate reads
+     * unvalidated arguments straight from attributes and from source.
      */
+    #[Override]
     public function contains(string $candidate): bool
     {
         return \in_array($candidate, self::PERMISSIONS, true);

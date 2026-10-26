@@ -32,6 +32,8 @@ A single `PermissionVoter` (the first custom voter in the codebase) supports att
 
 The two audit routes migrate `#[IsGranted('ROLE_AUDIT_READER')]` → `#[IsGranted('auditTrail.read')]` so the whole system speaks one grammar; `AUDIT_READER` survives as a specialized role that grants that permission.
 
+**Amended 2026-10-26 — the voter claims only published permissions, not every `<resource>.<action>`.** Support by shape was the original reading of this decision, and it composed badly with D5: the tier policy grants an unknown resource's tier verbs (and `ADMIN` everything), so under the `affirmative` strategy the voter's GRANT on a dotted attribute that is not a permission (`featureFlag.read`) would overrule another voter's DENY. `supports()` now asks `PublishedPermissions` — implemented by `PermissionCatalog`, the static list the completeness gate already forces every gated route into — so an attribute nobody published draws no vote and the decision manager denies it. Adding a resource still edits no part of the core: its catalog line is data, and the gate already demanded it.
+
 *Supersedes* the sibling ADR's D4 YAGNI deferral of a custom voter: with banks+accounts × {read, write, delete, domain-ops} the Rule of Three is met, so the voter is now the justified abstraction rather than a `RoleVoter` clone. *Discarded:* a hand-rolled `JsonResponse` in the controller — forbidden by the error pipeline (`php.lint.error-contract`).
 
 ### D5 — Declaration seam: per-module permission constants + one central, declarative, tier-based policy

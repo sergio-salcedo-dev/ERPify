@@ -18,18 +18,30 @@
 
 {$SERVER_NAME:localhost} {
 	log {
-		# NOTE: this expands INSIDE the log block and ahead of `format filter` below, so a deployment
-		# that sets it to another encoder (`format json`, a documented use) replaces the redaction
-		# without touching this repository and without any gate noticing. The filter below is only as
-		# strong as this variable being left alone.
-		{$CADDY_SERVER_LOG_OPTIONS}
+		# The access log has a file of its own, on the `caddy_access_log` volume, rather than the container's
+		# stdio, where it would share one json-file budget (10m × 5) with Monolog's buffered channel and the
+		# always-on `observability` channel: any producer could evict any other's history, and eviction by
+		# volume is not expiry, so an idle deployment would keep its oldest line for ever. Here it has its own
+		# budget and a TTL. `roll_at` rolls the active file every day at 00:00 UTC, idle or not, once the
+		# process has written its first line — size rolling alone never rolls an idle file, and the cleanup
+		# below runs only when a file is rolled — and `roll_keep_for` deletes rolled files older than 14 days,
+		# so a line lives about 15 days at most. A restart followed by no traffic at all defers the next roll,
+		# and that residual is recorded in PRODUCTION_SECURITY_CHECKLIST.md §7.
+		# `roll_keep` is a count ceiling above those 14 daily files, so a size flood evicts only this log's own
+		# history. Literals, not an environment expansion: a deployment could otherwise point the log back at
+		# stderr, or replace the encoder ahead of the `format filter` below, without this file changing.
+		output file /var/log/caddy/access.log {
+			roll_size 32MiB
+			roll_keep 20
+			roll_keep_for 336h
+			roll_at 00:00
+		}
 		# The query string is dropped WHOLE, and that is the mechanism rather than a stronger setting of
-		# the old one. This log has no owner of erasure — the compose `logging:` blocks rotate its json-file
-		# driver by volume (10m × 5), which is eviction and not expiry, so it has no TTL, and nothing in the
-		# GDPR erasure path can reach it — so whatever lands here can still outlive the erasure the app
-		# confirmed to the subject. The obligation that follows is RETENTION, and it is not answered by
-		# observing that whoever planted a value already knew it: the harm is that we now hold a person's
-		# identifier and cannot erase it.
+		# the old one. This log has no owner of erasure — nothing in the GDPR erasure path can reach it, so a
+		# line naming a person outlives the erasure the app confirmed to the subject until the retention
+		# above deletes it. The obligation that follows is RETENTION, and it is not answered by observing
+		# that whoever planted a value already knew it: the harm is that we hold a person's identifier and
+		# cannot erase it.
 		#
 		# What stood here was a name allowlist — one `replace` line per sensitive parameter, plus one per
 		# filter index up to `SearchQuery::MAX_FILTERS`. Measured against the running stack by
@@ -55,7 +67,7 @@
 		# `keyset_search` line per successful search. What those keep is the route, the limit, the direction,
 		# the pagination mode and the correlation id; none of them carries
 		# the filter shape, and it deliberately did not gain it here. `filters[N][field]` is a caller's
-		# string, and moving one into a stream with the same absence of TTL and erasure owner would
+		# string, and moving one into `observability`, which has neither a TTL nor an erasure owner, would
 		# reproduce this defect one channel over to recover a diagnostic nobody had asked for. Doing it
 		# safely means emitting the field the SERVER resolved, from the route's own field map, which is a
 		# change to what the listener is given rather than a line here. Path, method, status and timing stay.

@@ -665,9 +665,9 @@ you change anything here.
       reach was whatever a person remembered to write. **The threat model the old acceptance was signed
       against was the wrong one**: it argued that whoever plants an index past the cap already knows the
       identifier, which answers confidentiality and answers nothing about **retention** — the harm is that
-      the deployment then holds a person's identifier in a sink bounded by size alone, with no TTL and no
-      owner of erasure, and any client can force that for free. Both cliffs (index and sub-index) are closed by the
-      strip rather than by a longer list. **Caddy also drops the `Referer` header**, because a
+      the deployment then holds a person's identifier in a sink with no owner of erasure, for as long as its
+      retention keeps the line (about 15 days, §7), and any client can force that for free. Both cliffs
+      (index and sub-index) are closed by the strip rather than by a longer list. **Caddy also drops the `Referer` header**, because a
       log line records more than its URI: for a same-origin API call the referring document is the screen the
       ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
       same entry. The **application** log answers the same vocabulary through a Monolog processor over every
@@ -802,10 +802,11 @@ you change anything here.
       spends `invitation_resend_per_invitee` (5 / day between deploys — the limiter state lives in the `app`
       cache pool, which a deploy resets — keyed by an HMAC of the case-folded invitee id under `kernel.secret`,
       so the stored bucket names nobody, and shared by every administrator)
-      after the id is validated and before any row is touched, and answers a visible 429. The cost is that a
-      drained bucket blocks every administrator's HTTP resend of that person until it refills, including when
-      an operator drains it retrying through a mail outage; the console command `iam:invitation:resend`, which
-      this budget does not cover, is the way round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
+      after the id is validated and before any row is touched, and answers a visible 429. Each caller may spend
+      at most its own share of it (`invitation_resend_per_actor_invitee`, 2 / day per invitee, spent first), so
+      one session cannot drain it for the others. The cost is that a drained bucket blocks every administrator's
+      HTTP resend of that person until it refills (§7); the console command `iam:invitation:resend`, which
+      neither budget covers, is the way round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
       `INVITATION_REVOKED`), because the event store records the transition and never who caused it. The row is
       written by `Iam/Identity`'s `RecordInvitationAudit` — the context that owns and erases the person — under
       the invitee's `identity_user` row lock, nested in the lever's transaction after the invitation rows: the
@@ -1285,18 +1286,37 @@ mitigated state. Accepting one means recording who accepted it and against which
       customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
       re-resolves the ranges in a single install and reads every claimed version back out of the
       lock) and re-run `composer audit`.
-- [ ] **A stolen administrator session can hold one invitee's HTTP resend shut for a day.** The per-invitee
-      budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`, 5 / day,
-      shared by every administrator — §6) is what stops one session from killing a person's link for ever, and
-      the price of sharing it is that the same session can drain it: five resends, and no administrator can
-      resend that person's invitation over HTTP until the window refills. The invitee keeps the last link that
-      was delivered, inside its three-day TTL. An operator retrying through a mail outage drains it the same
-      way, and then the invitee holds no working link, because each 503 has already rotated it. **Way round:**
-      the console command `iam:invitation:resend <invitationId>`, which a shell operator runs and the budget
-      does not cover. Every resend that spent the budget is attributed (`INVITATION_RESENT`, `security`).
-      **Revisit when** an operator reports a resend refused with 429 that they did not cause, or the console
-      surfaces invitation resend to a role other than `ADMIN`. **Accepted:** not recorded (opened
-      2026-10-25).
+- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order.** `SendInvitation`
+      and `ResendInvitation` commit the token rotation and then mail the link synchronously, outside the
+      transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent resends of one person are
+      serialised by the invitation row lock, but their SMTP sends race after the commit, so the email that
+      arrives last can carry the link the other resend already killed. And an SMTP exchange slower than the
+      PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. Both are
+      bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
+      operator to resend again, and a refused send answers 503 rather than a false 204.
+      **When an outbox earns its place** — any one of: a second transactional email producer that needs
+      at-least-once delivery rather than best-effort; the 30 s timeout observed against real SMTP latency; an
+      invitee who reports holding only a dead link after a resend; or invitations sent in bulk, where a
+      synchronous SMTP exchange per row stops fitting a request. **And the shape it must take:** a token-bearing
+      email may never sit in a Messenger transport (`docs/rules/security.md`, "Token hygiene"), so the outbox
+      would enqueue the INTENT — "deliver the current link of invitation X" — and mint the token when the
+      message is delivered, not enqueue the rendered email. That moves the token rotation off the request, so
+      the resend's answer stops meaning "the old link is dead", and that contract change is the real cost to
+      weigh. **Accepted:** not recorded (opened 2026-10-26).
+- [ ] **Three administrator identities acting together can hold one invitee's HTTP resend shut for a day.** The
+      per-invitee budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`,
+      5 / day, shared by every administrator — §6) is what stops the lever from killing a person's link for ever,
+      and sharing it means it can be drained. One identity cannot drain it alone: each caller may spend at most
+      its own share (`invitation_resend_per_actor_invitee`, 2 / day per invitee), spent first, so a single stolen
+      session — or one operator retrying through a mail outage — kills at most two of a person's links a day and
+      leaves the rest to the other administrators. Three distinct administrator identities can still spend all
+      five, and then nobody resends that person over HTTP until the window refills. The invitee keeps the last
+      link that was delivered, inside its three-day TTL; after a mail outage they hold none, because each 503 has
+      already rotated it. **Way round:** the console command `iam:invitation:resend <invitationId>`, which a shell
+      operator runs and neither budget covers. Every resend that spent the budget is attributed
+      (`INVITATION_RESENT`, `security`). **Revisit when** an operator reports a resend refused with 429 that they
+      did not cause, or the console surfaces invitation resend to a role other than `ADMIN`. **Accepted:** not
+      recorded (opened 2026-10-25; narrowed 2026-10-26 by the per-caller share).
 - [ ] **A stolen session can deny the owner a credential _rotation_, but not an _eviction_.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
@@ -1619,7 +1639,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       and nothing more.** Rotation evicts by VOLUME, so a busy deployment reaches a bounded window of hours
       while an IDLE one keeps its oldest line indefinitely — there is still no age-based expiry, and nothing
       in `FulfilIdentityErasure` can reach this sink. A person id that lands here can still outlive the
-      erasure the application confirmed to the subject, which is why this entry stays unchecked. Closing it
+      erasure the application confirmed to the subject, which is why this entry stays unchecked. **Caddy's
+      access log is no longer in this sink** ([#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879)):
+      it writes its own file with its own budget and a TTL (the URL-path entry below). What remains here is
+      Monolog's prod output — the flushed `fingers_crossed` buffer and the always-on `observability` channel —
+      the embedded Mercure hub's `http.handlers.mercure` logger, and every other container's stdout/stderr
+      (`database`, `pwa`, the workers). Closing it
       needs a different mechanism — a log driver whose retention the erasure path can act on, or shipping to
       a sink that has one — and is deliberately not attempted while there is no production deployment and no
       customer, mirroring how the mail-boundary residuals are accepted. Gate:
@@ -1640,11 +1665,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       construction — and the application log's `request_uri` leaves the path alone by the same decision, so
       the residual is one residual across both logs rather than a difference between them. The producer is
       `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts`, which composes
-      `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
-      the compose files bound the driver by size alone, so it still has no TTL and no age-based expiry,
-      and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure
-      the application confirmed to the subject. Closing it is not a wider `replace` but a different mechanism —
-      a log-level rewrite of `uri`, a `logging:` driver whose retention the erasure path can act on, or no
+      `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The access log has a TTL but no
+      owner of erasure: it is written to `/var/log/caddy/access.log` on the `caddy_access_log` volume, rolled
+      every day at 00:00 UTC (and at 32 MiB) with rolled files deleted after 14 days — literals in
+      `api/frankenphp/Caddyfile`, so a line lives about 15 days at most — **once the process has written its
+      first line**: the roll scheduler and the pruning start on the first write after a (re)start, so a
+      restart followed by no traffic at all keeps the files it found until a request arrives — and nothing in
+      `FulfilIdentityErasure` can reach it, so an id that lands there outlives the erasure the application
+      confirmed to the subject by up to that window. The volume is in no backup (`scripts/deploy/backup-prod.sh`
+      dumps Postgres only), so a restore cannot bring back a line the retention already deleted. The
+      application log's `request_uri` lands in the container json-file sink instead, which still has no TTL
+      (the entry above). Closing it is not a wider `replace` but a different mechanism —
+      a log-level rewrite of `uri`, a retention the erasure path can act on, or no
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
       query-side leak that _was_ closed is the one with volume — it fired on every keystroke of a filter,
       against one entry per user record opened here.
@@ -1679,17 +1711,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       `api/features/backoffice/bank/search.feature` do reach with a list, declare it — that count is stated
       with the extraction that produces it at `DoctrineBankRepository::searchFieldMap()`, so a reader re-runs
       it rather than trusting it.
-- [ ] **The access log's filter is overridable from the environment at three points, and nothing detects
-      it.** `{$CADDY_GLOBAL_OPTIONS}` (`api/frankenphp/Caddyfile:7`), `{$CADDY_EXTRA_CONFIG}` (`:17`) and
-      `{$CADDY_SERVER_LOG_OPTIONS}` (`:25`) are each documented options (`api/docs/options.md`). The last
-      expands inside the `log` block **ahead of** `format filter`, so setting it to another encoder replaces
-      every rule below it; the first two can introduce a global logger or a whole second site block carrying
-      no `format filter` at all. Any of the three does it from a deployment, without touching this
-      repository, with every gate in the tree green — the whole-query strip included. No test here can see
-      it, because none reads a deployment's environment. **This is a bigger hole than any spelling the strip
-      closes**, and it bounds what every other claim on this page about the access log is worth. Dev and
-      test set the third deliberately, to point the log at a file the effect gate can read; that use sets
-      the destination and leaves `format filter` alone.
+- [ ] **The access log's filter can be bypassed from the environment at two points, and nothing detects
+      it.** `{$CADDY_GLOBAL_OPTIONS}` (`api/frankenphp/Caddyfile:8`) and `{$CADDY_EXTRA_CONFIG}` (`:17`) are
+      each documented options (`api/docs/options.md`), and both expand **outside** the site's `log` block:
+      the first can declare a global logger of its own, the second a whole second site block carrying no
+      `format filter` at all. Either does it from a deployment, without touching this repository, with every
+      gate in the tree green — the whole-query strip included. No test here can see it, because none reads a
+      deployment's environment. **This is a bigger hole than any spelling the strip closes**, and it bounds
+      what every other claim on this page about the access log is worth. The `log` block itself expands
+      nothing: its destination and retention are a literal `output file` block, and
+      `CaddyfileAccessLogRedactionGateTest` pins that block whole and refuses any `{$…}` inside `log`, so a
+      deployment can no longer point the log back at stderr or replace the encoder ahead of `format filter`.
+      Dev, test and prod therefore write the same file. Not checked against a running Caddy:
+      `{$CADDY_SERVER_EXTRA_DIRECTIVES}` (`:128`) also expands inside the site block, outside `log`, and
+      whether a directive placed there (a second named `log`, a `log_append` field) can reach these entries
+      unfiltered has not been measured — read it as a possible third point until it is.
 - [ ] **Everything a client controls OUTSIDE the query string still reaches the access log in clear.** The
       strip covers `request>uri` from the first `?` **or `%3f`** — the encoded delimiter is matched
       case-insensitively because the literal-only pattern was measured letting `/api/v1/health%3Ffoo=<value>`
@@ -1725,12 +1761,13 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **The embedded Mercure hub logs subscriber topics in clear, on a logger this site's filter does not
       govern.** Measured: `GET /.well-known/mercure?topic=<value>` produces an access line reading
       `?REDACTED` **and**, on stderr, `http.handlers.mercure … "topics": ["<value>"]`. They are separate
-      loggers, which is why the site's `format filter` reaches one and not the other.
+      loggers, which is why the site's `format filter` reaches one and not the other — and why they land in
+      different sinks: the access line in `/var/log/caddy/access.log`, the hub's line in the container log.
       `api/frankenphp/Caddyfile` enables `anonymous` and `subscriptions` unconditionally, so this is
       unauthenticated. The application's own topics are bank and bank-account UUIDs, so normal operation
-      leaks nothing — this is an injection channel into the same unrotated, un-TTL'd, unerasable sink, and it
-      is pre-existing rather than introduced. Closing it needs a `log` override for the
-      `http.handlers.mercure` logger, or dropping `subscriptions`.
+      leaks nothing — this is an injection channel into the container's json-file sink, rotated by volume
+      only, with no TTL and no erasure path, and it is pre-existing rather than introduced. Closing it needs
+      a `log` override for the `http.handlers.mercure` logger, or dropping `subscriptions`.
 - [ ] **The embedded Mercure 1.x hub runs in compatibility mode, which accepts more than the
       application speaks.** The FrankenPHP 1.13 image (taken for PHP 8.5.12, CVE-2026-109618 /
       CVE-2026-109619, #1072) embeds dunglas/mercure v1.1.4, which refuses top-level
@@ -1778,10 +1815,10 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints
-      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — the same json-file driver, bounded by size but
-      with no TTL, that Caddy's access log uses, and one that Caddy's `query` filter cannot reach because it is a
-      different process. **Caddy's redaction does not cover this**; anyone reading "the access log redacts
-      `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
+      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — Docker's json-file driver, bounded by size but
+      with no TTL (unlike Caddy's access log, which has a file of its own with a 14-day TTL), and one that
+      Caddy's `query` filter cannot reach because it is a different process. **Caddy's redaction does not
+      cover this**; anyone reading "the access log redacts `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
       `logging.fetches.fullUrl: true`, widening what server-side fetches record.
       **Scope, stated with its limit:** that line is emitted by `next dev`, and production runs the standalone
       `node server.js` (`pwa/Dockerfile`), where it was **not** observed — but nor was it verified against a
@@ -2105,13 +2142,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
       avatar) and not (a logo), and there is no consumer relation to vote on yet. It is a scope boundary, not
       an oversight — and it means this route has no forensic record of access at all.
-      **Nine — the container log has no isolation between producers, so a read failure can evict unrelated
-      history.** Caddy's access log, the default channel and `observability` share one retention budget
+      **Nine — the container log has no isolation between the application's channels, so a read failure can
+      evict unrelated history.** The default channel and `observability` share one retention budget
       (`json-file`, 10m x 5) and eviction is **by volume, not by ownership or age**, so a sustained failure on
       this path displaces the history of subsystems that have nothing to do with it — and nothing alerts,
       because no collector reads that channel and the Sentry handler is commented out. The correct framing is
       shared-sink eviction between independent producers rather than "too many logs", and the correct control
-      point is the logging infrastructure itself, which is transverse and not this module's.
+      point is the logging infrastructure itself, which is transverse and not this module's. **Caddy's access
+      log has left that budget** ([#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879)): it writes
+      `/var/log/caddy/access.log` on its own volume, rolled daily and kept 14 days, so a failure flood on this
+      path can no longer evict request history, nor a request flood these records. What #879 did
+      not change is the sharing between Monolog's channels, and between them and the Mercure hub's logger —
+      one budget per container, still evicted by volume, still with no TTL.
       **The read path's own contribution is now bounded, and the bound is narrower than it sounds.**
       `FailureSignalWindow` admits one record per `(operation, category)` per 60 seconds in both emitters, so
       a caller can no longer choose how much this deployment writes by looping one broken image. Its state is
@@ -2122,7 +2164,6 @@ mitigated state. Accepting one means recording who accepted it and against which
       and stops carrying how often it was retried. Reasoning, and the measurement that reversed the earlier
       decision to leave it unbounded:
       [`docs/adr/image-read-failure-signal-bound.md`](docs/adr/image-read-failure-signal-bound.md) D2 and D4.
-      Tracked as [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879).
       **Ten — the served `Content-Type` is a database column, and the allowlist that closes it lives only at
       the writer.** `ImageGetController` sets the response type verbatim from `Image::mediaType()`; the
       entity guarantees only that the value is non-blank, and Doctrine hydrates without the constructor, so
