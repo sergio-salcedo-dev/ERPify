@@ -2351,6 +2351,30 @@ mitigated state. Accepting one means recording who accepted it and against which
       `make ENV=prod docker.info` printing the resolved project. Closing it means recording the project at
       stand-up (a label or a state file) and refusing a run that resolves a different one.
 
+- [ ] **A guessing run spread across accounts raises no operator signal.** Three controls bound it,
+      and none of them alerts anyone. `login_throttling` (`max_attempts: 5`, default `1 minute`) is two
+      limiters, 5 a minute per (IP, email) and 25 a minute per IP, so one address rotating emails gets 25
+      guesses a minute. A source can move to another IP; an email cannot be throttled across sources. The
+      persisted lockout trips at 10 failures (`PT15M`), and its counter has **no window**: below the threshold
+      it resets only on a successful login, so the budget is 9 guesses per account between two of its owner's
+      sign-ins, refreshed each time the owner signs in. **What a failed attempt leaves:** the Caddy
+      access-log line (path, status, client address and every request header except `Referer`, the
+      credential-bearing ones censored; rotated by volume, read by nothing) and, for an `ACTIVE` identity
+      only, the value of `identity_user.failed_attempts`. That is a count rather than an event: an unknown
+      email writes nothing. A throttled attempt does not move it at all. The `warning` line
+      `ExceptionResponder` writes for the 401 sits below the prod `fingers_crossed` `action_level: error` and
+      is discarded with its buffer, and `SentryEventFilter` drops every 4xx of an HTTP request (see
+      `docs/api-error-contract.md` → "Client-error suppression in Sentry"). That covers the 401, the throttle's
+      429 and the 403 `AccountLocked` alike. **A lockout that does trip is durable but unalerted:** a
+      `UserLocked` row in `event_store`, an `audit_log` row at `security` level, and a notice that goes to the
+      account's owner, not to an operator. So a slow spray below the threshold leaves no lock and a fast one
+      leaves locks, and neither reaches an operator. The Sentry events this used to raise were no control
+      either: they grouped by exception type, never by account or source, and a real user's typo looked the
+      same. **Closing this needs a metrics sink, which the stack does not have.** The `observability` Monolog
+      stream is a log with no TTL and no erasure owner, so it does not qualify. On that sink: a count of failed
+      logins and of lockout trips, with a threshold alert, carrying **neither email nor client address** as a
+      dimension, because either one turns a counter into a per-person record with no erasure owner.
+
 ## 8. Deploy & verify
 
 - [ ] `make deploy.local` (or `scripts/deploy/deploy-local.sh`) reaches a 200 on
