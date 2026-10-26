@@ -183,10 +183,9 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
      * `holderNameNormalized` included. `alias` is the one a null fixture hides — the sealer stores a null
      * unsealed, so a test that leaves it unset asserts nothing about it in either direction. The folded twin
      * is the one a search for the holder's name misses: "ana ruiz" in clear does not contain "Ana Ruiz".
+     * `$personal` holds the plaintexts the aggregate stored, keyed by field.
      *
      * @param array{holderName: string, holderNameNormalized: string, iban: string, alias: string} $personal
-     *                                                                         the plaintexts the aggregate
-     *                                                                         stored, keyed by field
      *
      * @return array{
      *     auditLogId: string,

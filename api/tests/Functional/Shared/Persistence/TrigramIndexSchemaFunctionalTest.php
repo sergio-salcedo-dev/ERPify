@@ -70,8 +70,8 @@ final class TrigramIndexSchemaFunctionalTest extends KernelTestCase
 
         $declared = [];
 
-        foreach ($entityManager->getMetadataFactory()->getAllMetadata() as $metadata) {
-            foreach ($metadata->table['indexes'] ?? [] as $name => $index) {
+        foreach ($entityManager->getMetadataFactory()->getAllMetadata() as $classMetadata) {
+            foreach ($classMetadata->table['indexes'] ?? [] as $name => $index) {
                 if (!\is_string($name) || !\str_ends_with($name, self::SUFFIX)) {
                     continue;
                 }
@@ -83,7 +83,7 @@ final class TrigramIndexSchemaFunctionalTest extends KernelTestCase
                 $column = $columns[0] ?? null;
                 $this->assertIsString($column);
 
-                $declared[$name] = \sprintf('%s gin %s gin_trgm_ops', $metadata->getTableName(), $column);
+                $declared[$name] = \sprintf('%s gin %s gin_trgm_ops', $classMetadata->getTableName(), $column);
             }
         }
 

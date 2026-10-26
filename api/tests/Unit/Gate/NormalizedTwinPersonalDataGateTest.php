@@ -56,7 +56,7 @@ final class NormalizedTwinPersonalDataGateTest extends TestCase
         foreach ($pairs as $twin => [$class, $field]) {
             $this->assertArrayHasKey($field, $this->propertiesOf($class), \sprintf(
                 '%s folds a field named "%s", which %s does not declare. Name the twin after the field it '
-                . 'folds, so its classification can be compared with that field\'s.',
+                . "folds, so its classification can be compared with that field's.",
                 $twin,
                 $field,
                 $class->getName(),
@@ -116,11 +116,11 @@ final class NormalizedTwinPersonalDataGateTest extends TestCase
     {
         $twins = [];
 
-        foreach ($this->propertiesOf($class) as $name => $property) {
+        foreach ($this->propertiesOf($class) as $name => $reflectionProperty) {
             if (
                 !\str_ends_with($name, self::SUFFIX)
                 || self::SUFFIX === $name
-                || [] === $property->getAttributes(Column::class)
+                || [] === $reflectionProperty->getAttributes(Column::class)
             ) {
                 continue;
             }
