@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditResourceAnonymiser;
@@ -112,9 +113,11 @@ final class PersonResourceReferencesFunctionalTest extends KernelTestCase
         $writer->write(AuditLogEntry::create(
             'USER_ROLES_CHANGED',
             AuditLevel::SECURITY,
-            ActorContext::forUser(Uuid::generate()),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::forUser(Uuid::generate()),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
+            ),
             AuditResource::of($resourceType, $resourceId),
         ));
     }

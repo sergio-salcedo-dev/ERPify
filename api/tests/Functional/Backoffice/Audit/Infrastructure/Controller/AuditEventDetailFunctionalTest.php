@@ -14,6 +14,7 @@ use Erpify\Backoffice\Audit\Infrastructure\Http\AuditEventDetailResourceMapper;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -136,9 +137,11 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
         $entry = AuditLogEntry::create(
             'BANK_UPDATED',
             AuditLevel::CHANGE,
-            ActorContext::forUser(self::ACTOR_ID),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-03-02T10:11:12.123456+00:00'),
+            new AuditProvenance(
+                ActorContext::forUser(self::ACTOR_ID),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-03-02T10:11:12.123456+00:00'),
+            ),
             AuditResource::of('Bank', self::RESOURCE_ID),
             $changes,
         );

@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Application;
 
-use DateTimeImmutable;
-use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditMetadataKey;
-use Erpify\Shared\Audit\Domain\AuditRedaction;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -20,12 +18,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * under the id before the row exists — the sole idempotency anchor, sealed downstream by the
  * `audit_log` primary key, and enforces the field invariants before the row can exist.
  *
- * `ip`, `userAgent` and `metadata` are attacker-controlled: treat them as tainted
- * downstream — never render them as HTML without escaping, never use them in a trust or
- * authorization decision. A captured `ip`/`userAgent` equal to {@see AuditRedaction::SENTINEL} is
- * rewritten on the way in, so the literal is written by an erasure alone; a row stored without that rewrite
- * may still hold a client-sent literal, and on any row the erasure flags are what attribute it (see
- * {@see AuditRedaction}).
+ * What the act was — `action`, `level`, `resource`, `metadata` — is this class's; who did it, when and from
+ * which client is the {@see AuditProvenance} it was sealed with. `metadata` and the provenance's `ip` and
+ * `userAgent` are attacker-controlled: treat them as tainted downstream — never render them as HTML without
+ * escaping, never use them in a trust or authorization decision.
  *
  * **`metadata` speaks a closed vocabulary, checked here.** Every key must be an {@see AuditMetadataKey} and every
  * value must have that key's shape, because no erasure pass reaches this column — both anonymisers rewrite
@@ -67,39 +63,27 @@ final readonly class AuditLogEntry
 
     /**
      * @param array<string, mixed> $metadata
-     *
-     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     private function __construct(
         public string $id,
         public string $action,
         public AuditLevel $level,
-        public ActorContext $actor,
-        public string $correlationId,
-        public DateTimeImmutable $occurredOn,
+        public AuditProvenance $provenance,
         public ?AuditResource $resource,
         public array $metadata,
-        public ?string $ip,
-        public ?string $userAgent,
         public ?string $encryptionScopeId,
     ) {
     }
 
     /**
      * @param array<array-key, mixed> $metadata any keys at all: the ones outside the vocabulary are refused here
-     *
-     * @SuppressWarnings("PHPMD.ExcessiveParameterList")
      */
     public static function create(
         string $action,
         AuditLevel $level,
-        ActorContext $actor,
-        string $correlationId,
-        DateTimeImmutable $occurredOn,
+        AuditProvenance $provenance,
         ?AuditResource $resource = null,
         array $metadata = [],
-        ?string $ip = null,
-        ?string $userAgent = null,
         ?string $encryptionScopeId = null,
         ?string $id = null,
     ): self {
@@ -121,13 +105,9 @@ final readonly class AuditLogEntry
             $id ?? Uuid::generate(),
             $action,
             $level,
-            $actor,
-            $correlationId,
-            $occurredOn,
+            $provenance,
             $resource,
             $metadata,
-            AuditRedaction::neutraliseCaptured($ip),
-            AuditRedaction::neutraliseCaptured($userAgent),
             $encryptionScopeId,
         );
     }

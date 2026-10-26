@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditMetadataKey;
 use Erpify\Shared\Audit\Domain\AuditMetadataShape;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -245,9 +246,11 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
         return AuditLogEntry::create(
             'AUDIT_METADATA_PROBE',
             $level,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
             metadata: $metadata,
         );
     }
