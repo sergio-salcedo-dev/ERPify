@@ -97,6 +97,8 @@ pnpm-debug.log*
 /.agent/skills/
 /.agents/skills/
 /.claude/skills/bmad-*/
+# TEA 3's knowledge-base skill; reinstall from skills-lock.json (`npx skills experimental_install`).
+/.claude/skills/bmod-*/
 # The wds module writes outside the bmad-* namespace: its wds-* skills plus two tools.
 /.claude/skills/wds-*/
 /.claude/skills/memory/
