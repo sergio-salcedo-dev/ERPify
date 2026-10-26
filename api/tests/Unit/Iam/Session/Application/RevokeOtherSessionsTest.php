@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 use Erpify\Iam\Session\Application\RevokeOtherSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
-use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
+use Erpify\Iam\Session\Domain\Exception\SessionEvictedBeforeRevocation;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -60,6 +60,26 @@ final class RevokeOtherSessionsTest extends TestCase
     }
 
     /**
+     * With the session in hand the only active one, the UPDATE spares it and flips nothing else, so there is
+     * no revocation to record: an `OtherSessionsRevoked` here would claim devices were signed out when none
+     * were.
+     */
+    public function testWithNoOtherActiveSessionNothingIsPublished(): void
+    {
+        $sessions = new InMemorySessionRepository(SessionMother::active());
+        $eventBus = new RecordingEventBus();
+
+        $this->useCase($sessions, $eventBus)->revoke(
+            SessionMother::DEFAULT_USER_ID,
+            SessionId::fromString(SessionMother::DEFAULT_ID),
+        );
+
+        $this->assertSame([SessionMother::DEFAULT_USER_ID], $sessions->revokeOthersCalls, 'the revocation still ran');
+        $this->assertCount(1, $sessions->findByUserId(SessionMother::DEFAULT_USER_ID), 'the current one survives');
+        $this->assertSame([], $eventBus->publishedEvents);
+    }
+
+    /**
      * The request was admitted while its session was alive, and another session of the same identity evicted
      * it before this one's decision took the lock. Acting on the admission would let the evicted session revoke
      * the one that evicted it — the loop a stolen session runs against an owner's recovered one. Under the lock
@@ -82,7 +102,7 @@ final class RevokeOtherSessionsTest extends TestCase
                 SessionId::fromString(SessionMother::DEFAULT_ID),
             );
             $this->fail('Expected an evicted session to be refused.');
-        } catch (SessionNoLongerActive) {
+        } catch (SessionEvictedBeforeRevocation) {
             // 401 session-expired, the gate's own answer to a revoked session
         }
 

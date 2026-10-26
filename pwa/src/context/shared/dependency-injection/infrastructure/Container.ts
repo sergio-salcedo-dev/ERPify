@@ -57,6 +57,9 @@ import { ChangeUserRoles } from "../../../backoffice/user/application/ChangeUser
 import { ApiRevokeInvitationRepository } from "../../../backoffice/user/infrastructure/ApiRevokeInvitationRepository";
 import type { RevokeInvitationRepository } from "../../../backoffice/user/domain/RevokeInvitationRepository";
 import { RevokeInvitation } from "../../../backoffice/user/application/RevokeInvitation";
+import { ApiResendInvitationRepository } from "../../../backoffice/user/infrastructure/ApiResendInvitationRepository";
+import type { ResendInvitationRepository } from "../../../backoffice/user/domain/ResendInvitationRepository";
+import { ResendInvitation } from "../../../backoffice/user/application/ResendInvitation";
 import { ApiEraseIdentityRepository } from "../../../backoffice/user/infrastructure/ApiEraseIdentityRepository";
 import type { EraseIdentityRepository } from "../../../backoffice/user/domain/EraseIdentityRepository";
 import { FulfilIdentityErasure } from "../../../backoffice/user/application/FulfilIdentityErasure";
@@ -65,7 +68,10 @@ import type { IdentityRepository } from "@/context/shared/access/domain/Identity
 import { ApiSessionsRepository } from "@/context/shared/access/infrastructure/ApiSessionsRepository";
 import type { SessionsRepository } from "@/context/shared/access/domain/SessionsRepository";
 import { ApiRecoverySecretRepository } from "@/context/shared/access/infrastructure/ApiRecoverySecretRepository";
-import type { RecoverySecretRepository } from "@/context/shared/access/domain/RecoverySecretRepository";
+import {
+  RECOVERY_SECRET_REPOSITORY_KEY,
+  type RecoverySecretRepository,
+} from "@/context/shared/access/domain/RecoverySecretRepository";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
@@ -249,6 +255,15 @@ container
   .inSingletonScope();
 container.bind<RevokeInvitation>("BackOfficeRevokeInvitation").to(RevokeInvitation);
 
+// Identity write side: re-delivering a pending invitation with a fresh link through its own port — the sibling
+// of the withdrawal, kept apart so the two intents never share a call. Stateless adapter singleton; transient
+// use case.
+container
+  .bind<ResendInvitationRepository>("BackOfficeResendInvitationRepository")
+  .to(ApiResendInvitationRepository)
+  .inSingletonScope();
+container.bind<ResendInvitation>("BackOfficeResendInvitation").to(ResendInvitation);
+
 // Identity write side: GDPR erasure through its own destructive identity-shaped port — never the generic
 // CrudRepository.delete(). Stateless adapter singleton; transient use case.
 container
@@ -305,7 +320,7 @@ container
 // surface. A port of its own rather than more methods on IdentityRepository — minting a
 // second credential is not a way of resolving who you are.
 container
-  .bind<RecoverySecretRepository>("RecoverySecretRepository")
+  .bind<RecoverySecretRepository>(RECOVERY_SECRET_REPOSITORY_KEY)
   .to(ApiRecoverySecretRepository)
   .inSingletonScope();
 

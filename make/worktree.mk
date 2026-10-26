@@ -35,25 +35,40 @@
 #                   which git does not carry either — so a fresh checkout has none
 #                   and /bmad-* slash commands would otherwise
 #                   be "Unknown command" inside the worktree.
-#                   The bmad-loop-* skills are seeded separately, from the main
-#                   checkout's .claude/skills only: `bmad-loop init` installs them
-#                   there and the BMad installer never writes them to .agent/skills,
+#                   The foreign skills (bmad-loop-*, TEA 3's bmad-tea*/bmod-tea;
+#                   named in scripts/lib/foreign-skills.sh) are seeded separately,
+#                   from the main checkout's .claude/skills only: their own tools
+#                   install them there and the BMad installer never writes them to .agent/skills,
 #                   so the bmad-* seed above, which copies from one root only,
-#                   never carries them. scripts/seed-bmad-loop-skills.sh seeds
+#                   never carries them. scripts/seed-foreign-skills.sh seeds
 #                   each on its own and reports a failed copy; a failure does
 #                   not stop the worktree being created. Measured: a
 #                   sweep run from a worktree seeded without them answered
 #                   "Unknown command: /bmad-loop-sweep" twice and sat idle until
 #                   its session timeout, and `bmad-loop validate` reported ok.
-#                   It also links _bmad -> the main checkout's install. /_bmad is
-#                   gitignored too, so no worktree ever had it, and every bmad
+#                   It also copies _bmad from the main checkout's install. /_bmad
+#                   is gitignored too, so no worktree ever had it, and every bmad
 #                   skill dies at activation: it resolves the workflow block via
 #                   _bmad/scripts/resolve_customization.py and its config via
-#                   _bmad/bmm/config.yaml. Linked, not copied, so one installed
-#                   version and one config serve every worktree — a copy would
-#                   drift silently the first time the install is updated. The
-#                   link is relative (../../../_bmad), so moving the whole tree
-#                   keeps it resolving.
+#                   _bmad/bmm/config.yaml. Copied, not linked: with
+#                   [scm] isolation = "worktree", bmad-loop seeds _bmad into its
+#                   own per-story worktree and cannot follow a link that leaves
+#                   the project, so a run from a linked worktree pauses before
+#                   its first dev session (measured on the rr-2 run). A link also
+#                   let every worktree write the primary's _bmad/render/. The
+#                   copy is a snapshot taken with the bmad-* skills above, so
+#                   the two stay a matching pair; an install updated afterwards
+#                   reaches a worktree only when it is recreated. _bmad/render/
+#                   is a cache each session regenerates and is left out.
+#                   And it links .bmad-loop/policy.toml -> the main checkout's.
+#                   `bmad-loop init` gitignores it as machine-specific, so a
+#                   worktree had none and a `bmad-loop run` there fell back to the
+#                   built-in defaults — `--permission-mode bypassPermissions` and
+#                   [scm] isolation = "none" — whatever the primary's policy said
+#                   (measured with `run --dry-run`: bypass from the worktree,
+#                   acceptEdits from the primary). bmad-loop reads the link; its
+#                   own writes replace it atomically with a regular file, so an
+#                   edit made from inside a worktree stays in that worktree.
 #
 # worktree.remove / worktree.remove-all:
 # NAME=<dir|path|branch>  selects the worktree by its directory basename under
@@ -200,10 +215,23 @@ worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main
 	else \
 		echo "! the main checkout holds no bmad-* skills in any root — run the BMad installer there; /bmad-* will be Unknown command in this worktree"; \
 	fi; \
-	"$(PROJECT_ROOT)/scripts/seed-bmad-loop-skills.sh" "$$main" "$$path" || true; \
-	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ]; then \
-		ln -s ../../../_bmad "$$path/_bmad"; \
-		echo "→ linked _bmad -> the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
+	"$(PROJECT_ROOT)/scripts/seed-foreign-skills.sh" "$$main" "$$path" || true; \
+	if [ -d "$$main/_bmad" ] && [ ! -e "$$path/_bmad" ] && [ ! -L "$$path/_bmad" ]; then \
+		if cp -a "$$main/_bmad" "$$path/_bmad" && rm -rf "$$path/_bmad/render"; then \
+			echo "→ copied _bmad from the main checkout's install (gitignored; every bmad skill reads it on activation)"; \
+		else \
+			rm -rf "$$path/_bmad"; \
+			echo "! could not copy _bmad from the main checkout — every /bmad-* skill will fail at activation in this worktree"; \
+		fi; \
+	fi; \
+	if [ -f "$$main/.bmad-loop/policy.toml" ]; then \
+		if [ ! -e "$$path/.bmad-loop/policy.toml" ]; then \
+			mkdir -p "$$path/.bmad-loop"; \
+			ln -s ../../../../.bmad-loop/policy.toml "$$path/.bmad-loop/policy.toml"; \
+			echo "→ linked .bmad-loop/policy.toml -> the main checkout's (gitignored; without it bmad-loop runs on its built-in defaults)"; \
+		fi; \
+	else \
+		echo "! the main checkout holds no .bmad-loop/policy.toml — a bmad-loop run in this worktree would use the built-in defaults: --permission-mode bypassPermissions, in place on the checked-out branch"; \
 	fi; \
 	if [ "$$START" = "true" ]; then \
 		echo "→ bringing up stack erpify-$$dir"; \

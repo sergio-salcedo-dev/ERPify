@@ -13,8 +13,9 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalSessionSubjectLock;
 use Erpify\Iam\Session\Application\SessionSubjectLock;
 use Erpify\Iam\Session\Application\StartSession;
-use Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable;
+use Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
+use Erpify\Iam\Session\Domain\SubjectAdmission;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Event\Domain\EventBus;
@@ -121,8 +122,10 @@ final class LoginRacingAnErasureFunctionalTest extends KernelTestCase
         try {
             $this->login();
             $this->fail('a login for an identity erased while it waited must fail closed');
-        } catch (SessionStoreUnavailable) {
-            // The failure the minting listener turns into a dropped cookie and a 503.
+        } catch (SessionSubjectNotAdmissible $sessionSubjectNotAdmissible) {
+            // The failure the minting listener turns into a dropped cookie and the firewall's uniform 401.
+            $this->assertSame(SubjectAdmission::Gone, $sessionSubjectNotAdmissible->reason());
+            $this->assertSame('Invalid credentials.', $sessionSubjectNotAdmissible->title());
         }
 
         $elapsedMicroseconds = (\hrtime(true) - $started) / 1_000;

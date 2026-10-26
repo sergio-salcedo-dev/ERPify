@@ -5,13 +5,17 @@ This directory holds the scripts for the prod / staging profile:
 | Script            | Run via                        | Purpose                                                                                                                              |
 |-------------------|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | `deploy-local.sh` | `make deploy.local`            | **First stand-up** on a host: preflight → `docker.up` → migrate → smoke → internal-CA export + trust guidance.                       |
+| —                 | `make deploy.local.down`       | **Stop** the stack `deploy.local` stood up; volumes kept.                                                                            |
 | `trust-local.sh`  | `sudo make deploy.local.trust` | **Privileged client-trust** steps (`/etc/hosts`, system CA store, Chromium NSS). Splits the root-requiring work out of the stand-up. |
 | `deploy.sh`       | `./scripts/deploy/deploy.sh`   | **Post-deploy operations on an already-running stack**: migrations, cache warmup, worker reload, health checks (+ a `--ci` mode).    |
 | `backup-prod.sh`  | `make backup.prod`             | **Backup** of all application state: a timestamped `pg_dump -Fc` of Postgres, verified by full read-back.                            |
 | `restore-prod.sh` | `STAMP=<s> make restore.prod`  | **Restore** (inverse of the backup) — verifies the dump (full read-back), atomic DB restore (`--single-transaction`), restarts writers on any failure. **Destructive**; any non-local target needs `ALLOW_PROD_RESTORE=1` + a typed confirmation.  |
 
 `deploy.sh` does **not** bring the stack up — run `make deploy.local` for the
-initial stand-up, then use `deploy.sh` for subsequent redeploys. The full
+initial stand-up, then use `deploy.sh` for subsequent redeploys. Every script
+here resolves the compose project and overlays from the env file (`lib/prod-env.sh`):
+`tls internal` → `erpify-prodlocal`, public ACME → the checkout's own project (`erpify` in a primary checkout); an exported
+`COMPOSE_PROJECT_NAME` wins. The full
 runbook (secret setup, TLS trust, VPS promotion) is in
 `docs/erpify-local-test-deployment.md`. The rest of this file documents
 `deploy.sh`.
@@ -58,7 +62,10 @@ Assumes the stack is already up (`make deploy.local` on first stand-up).
 ./scripts/deploy/deploy.sh --advanced
 
 # 4. Verify
-docker compose logs -f php messenger_worker
+make ENV=prod docker.logs   # follows every service from now; for history: docker compose -p <project> … logs php messenger_worker
+# HTTP access lines are not in either: Caddy writes them to its own file (rolled daily once it has logged
+# a line since its last start, kept 14 days)
+docker compose -p <project> … exec php tail -F /var/log/caddy/access.log
 ```
 
 ## Manual Commands
@@ -89,8 +96,8 @@ HEALTH_URL=https://app.example.com/api/v1/health  # Override the health endpoint
 |---------------------------|-------------------------------------------------------|
 | **"Makefile not found"**  | Run from repo root: `cd /path/to/ERPify`              |
 | **Migrations fail**       | Check status: `make db.status` then `make db.migrate` |
-| **Health check fails**    | Wait for containers: `sleep 5 && docker compose ps`   |
-| **Workers not reloading** | Restart: `docker compose restart messenger_worker`    |
+| **Health check fails**    | Wait for containers: `sleep 5 && make ENV=prod docker.ps` |
+| **Workers not reloading** | `make ENV=prod sf.messenger.stop-workers` (they exit and `restart:` brings them back) |
 
 ## CI/CD Integration
 
@@ -126,5 +133,8 @@ deploy:
 
 - Always test with `--dry-run` before production
 - Run from repository root or use full path
-- Check logs: `docker compose logs php`
+- Check logs: `make ENV=prod docker.logs` (new lines only) or `docker compose -p <project> … logs php` for history
+- HTTP access history is not in `docker compose logs`: read `/var/log/caddy/access.log` inside `php`
+  (`docker compose -p <project> … exec php tail -n 200 /var/log/caddy/access.log`); earlier days are the
+  rolled files beside it in `/var/log/caddy/`, deleted after 14 days and in no backup
 - Monitor workers post-deploy for issues

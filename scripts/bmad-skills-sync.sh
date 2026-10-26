@@ -123,29 +123,20 @@ if [ ${#source_names[@]} -eq 0 ]; then
 	exit 2
 fi
 
-# `bmad-loop-*` is a DIFFERENT product's namespace inside this glob. `bmad-loop
-# init` installs its own skills into .claude/skills, and the BMad installer that
-# writes SOURCE neither creates nor knows them — so classifying them would abort
-# this sync on every checkout that uses bmad-loop, and `--force` would archive and
-# delete three skills no reinstall brings back. They are not this sync's to manage,
-# so they never enter the inventory at all: `restore()` rm -rf's every inventoried
-# name, which is the path that would destroy them. Named rather than derived, and
-# the alternative was measured: `customize.toml` is absent from 18 of the 75 BMad
-# skills, so "no customize.toml ⇒ foreign" would exempt real ones. The guardrail
-# still aborts on every OTHER unrecognised bmad-*, so a third product arriving here
-# fails closed and visibly instead of being swept in silence.
-foreign_namespace() {
-	case "$1" in
-	bmad-loop-*) return 0 ;;
-	*) return 1 ;;
-	esac
-}
+# Other products install skills inside this glob (bmad-loop, TEA 3), and the BMad
+# installer that writes SOURCE neither creates nor knows them — so classifying them
+# would abort this sync on every checkout holding them, and `--force` would archive
+# and delete skills no reinstall brings back. They never enter the inventory at
+# all: `restore()` rm -rf's every inventoried name, which is the path that would
+# destroy them. The set, and why it is named, lives in the sourced file.
+# shellcheck source=scripts/lib/foreign-skills.sh
+. "${HERE}/scripts/lib/foreign-skills.sh"
 
 # A non-directory here is never inventoried by the glob above, so it would
 # survive the delete loop and then abort `cp` halfway. Refuse it up front.
 strays=()
 for p in "${TARGET}"/bmad-*; do
-	foreign_namespace "$(basename "$p")" && continue
+	foreign_skill "$(basename "$p")" && continue
 	[ -d "$p" ] || strays+=("$(basename "$p")")
 done
 if [ ${#strays[@]} -gt 0 ]; then
@@ -157,7 +148,7 @@ fi
 
 target_names=()
 for d in "${TARGET}"/bmad-*/; do
-	foreign_namespace "$(basename "$d")" && continue
+	foreign_skill "$(basename "$d")" && continue
 	target_names+=("$(basename "$d")")
 done
 

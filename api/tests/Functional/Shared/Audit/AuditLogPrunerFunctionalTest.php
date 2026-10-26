@@ -10,6 +10,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogPruner;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
@@ -30,6 +31,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * table do not affect the assertions.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(DbalAuditLogPruner::class)]
 final class AuditLogPrunerFunctionalTest extends KernelTestCase
@@ -155,9 +158,11 @@ final class AuditLogPrunerFunctionalTest extends KernelTestCase
         $entry = AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',
             $level,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            $occurredOn,
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                $occurredOn,
+            ),
         );
         $writer->write($entry);
 

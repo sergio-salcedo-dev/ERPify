@@ -113,6 +113,10 @@
 
 tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
 tests/Unit/Gate/ConfigReferenceGateReadsHeadGateTest.php :: home
+tests/Unit/Gate/ProdEnvCheckGateTest.php :: home
+tests/Unit/Gate/ProdEnvProjectGateTest.php :: home
+tests/Unit/Gate/ProdEnvReadingGateTest.php :: home
+tests/Unit/Gate/ProdEnvTemplateGateTest.php :: home
 tests/Unit/Gate/SentryReleaseWiringGateTest.php :: home
 tests/Unit/Gate/TestDatabaseGuardGateTest.php :: home
 tests/Unit/Gate/AcceptedRiskTagRulesGateTest.php :: home
@@ -125,10 +129,12 @@ tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRegistryGateTest.php :: home
 tests/Unit/Gate/AuditEvidenceActionRulesGateTest.php :: home
 tests/Unit/Gate/AuditLogCheckEnumTokenGateTest.php :: home
+tests/Unit/Gate/AuditMetadataVocabularyLivenessGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
 tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
 tests/Unit/Gate/AuditWriteOperationParityTest.php :: home
 tests/Unit/Gate/BehatStepVocabularyGateTest.php :: home
+tests/Unit/Gate/BehatCoverageScopeGateTest.php :: home
 tests/Unit/Gate/BehatSuiteCoverageGateTest.php :: home
 tests/Unit/Gate/BehatVocabularyReaderTest.php :: home
 tests/Unit/Gate/BestEffortReportChannelGateTest.php :: home
@@ -136,6 +142,7 @@ tests/Unit/Gate/BoundedContainerLogRetentionGateTest.php :: home
 tests/Unit/Gate/BoundedContextGateTest.php :: home
 tests/Unit/Gate/BufferedChannelAmplificationGateTest.php :: home
 tests/Unit/Gate/CaddyfileAccessLogRedactionGateTest.php :: home
+tests/Unit/Gate/ChangeLevelProvenanceGateTest.php :: home
 tests/Unit/Gate/ComposerStabilityGateTest.php :: home
 tests/Unit/Gate/ConfirmationGuardAdjacencyGateTest.php :: home
 tests/Unit/Gate/ConsoleCommandCarrierGateTest.php :: home
@@ -156,6 +163,7 @@ tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
 tests/Unit/Gate/MonologExclusionDeclarationGateTest.php :: home
+tests/Unit/Gate/NormalizedTwinPersonalDataGateTest.php :: home
 tests/Unit/Gate/ObservabilityChannelGateTest.php :: home
 tests/Unit/Gate/OrmSortDirectionGateTest.php :: home
 tests/Unit/Gate/PersistentTransportPolicyGateTest.php :: home
@@ -180,6 +188,7 @@ tests/Unit/Gate/PublicAccessExemptionRulesGateTest.php :: home
 tests/Unit/Gate/QueryBudgetExclusionMarkerGateTest.php :: home
 tests/Unit/Gate/ReadSideProjectionGateTest.php :: home
 tests/Unit/Gate/RedactionVocabularyParityTest.php :: home
+tests/Unit/Gate/SanctionedLogAppendRulesGateTest.php :: home
 tests/Unit/Gate/SanctionedLogMutationBlindSpotGateTest.php :: home
 tests/Unit/Gate/SanctionedLogMutationGateTest.php :: home
 tests/Unit/Gate/SanctionedLogMutationRulesGateTest.php :: home
@@ -228,14 +237,7 @@ tests/Unit/Support/SignatureReaderTest.php :: mirrored :: tests/Support
 tests/Unit/Support/ResourceResponderBuilderTest.php :: mirrored :: tests/Support
 tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 
-# Kernel-free by shape, which is what the detector reads, but its subject is a RUNNING behaviour rather than
-# an artifact read as data: it sends real requests through Caddy and reads the line Caddy wrote. By the
-# definition at the top of this file that puts it outside the category, and the category has no spelling for
-# saying so — `home` and `mirrored` both assert a placement, and this file's placement under
-# `tests/Functional/` is not in question. Recorded rather than moved, because moving it into the home would
-# file a test that needs a running stack beside tests that need nothing.
-tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack
-tests/Unit/Gate/BmadLoopSkillSeedGateTest.php :: home
+tests/Unit/Gate/ForeignSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
 tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home
 tests/Unit/Gate/SubjectAuditWriteSerialisationGateTest.php :: home

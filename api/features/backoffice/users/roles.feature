@@ -6,8 +6,8 @@ Feature: Assign an identity's roles
   # ADMIN-only (users.changeRoles). The payload is the complete resulting set, so re-sending the set an identity
   # already holds is a legitimate no-op — unlike the status endpoint, where a same-state PATCH is a 409, because
   # a role set is not unidirectional. A change that actually replaces the set records exactly one identity event
-  # and revokes the identity's sessions (an all-revoked event); neither is routed to the async worker, so the
-  # outbox stays empty (no realtime consumer). The guard is only consulted when the change would demote an
+  # and revokes the identity's sessions, which records an all-revoked event only when a live session was there
+  # to flip; neither is routed to the async worker, so the outbox stays empty (no realtime consumer). The guard is only consulted when the change would demote an
   # active administrator.
   Background:
     Given I add "Content-Type" header equal to "application/json"
@@ -61,7 +61,9 @@ Feature: Assign an identity's roles
     And 25 requests got executed for doctrine connection "default"
 
   # Roles are orthogonal to the identity lifecycle, so a suspended member is re-roled like any other — the new
-  # set simply stays inert until the identity can act again.
+  # set simply stays inert until the identity can act again. sam holds no registry session (the fixtures seat
+  # one per login a scenario uses, and a suspended identity is never one), so the revocation the change runs
+  # flips no row and records no all-revoked: that event states that sessions were revoked.
   Scenario: A suspended member can still be re-roled
     Given I am logged in as an administrator
     And the stored events are cleared
@@ -75,6 +77,7 @@ Feature: Assign an identity's roles
     And the JSON node "data.status" should be equal to "SUSPENDED"
     And the JSON node "data.roles[0]" should be equal to "VIEWER"
     And there should be 1 event stored for aggregate "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61" named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
   # Duplicates collapse to the set the identity already holds, so this is the redundant-save path: it answers
   # with the detail but must not write, emit or — the reason it matters — tear down live sessions.
@@ -280,16 +283,18 @@ Feature: Assign an identity's roles
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
 
   # Since an actor may not target itself, the last-admin guard can only be met over sequential HTTP by an actor that no
-  # longer counts: the seeded administrator is suspended beneath its live session (the admission gate reads the
-  # session row, never the status), and victor is promoted to be the one ACTIVE administrator left. Demoting
+  # longer counts: the seeded administrator is suspended and its session is seated FROM that suspended row (the
+  # firewall drops a session whose copy of the identity no longer matches the stored one, status included, so a
+  # suspension written beneath a live session would sign it out), and victor is promoted to be the one ACTIVE
+  # administrator left. Demoting
   # him would drain the pool. The shape the guard exists for — two administrators acting on each other
   # concurrently — is not drivable here. Kept LAST in the feature: it suspends the identity every other
   # scenario logs in as.
   Scenario: Demoting the last active administrator is refused with 409 and nothing changes
-    Given I am logged in as an administrator
-    And the stored events are cleared
-    And I execute the SQL query "UPDATE identity_user SET roles = jsonb_build_array('ADMIN')::json WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e'"
+    Given I execute the SQL query "UPDATE identity_user SET roles = jsonb_build_array('ADMIN')::json WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e'"
     And I execute the SQL query "UPDATE identity_user SET status = 'SUSPENDED' WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66'"
+    And I am logged in as an administrator
+    And the stored events are cleared
     And I execute the SQL query "SELECT id FROM identity_user WHERE status = 'ACTIVE' AND roles::jsonb @> jsonb_build_array('ADMIN')"
     And there should have 1 records in SQL result
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:

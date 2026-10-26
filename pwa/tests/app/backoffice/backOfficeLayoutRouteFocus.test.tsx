@@ -13,6 +13,16 @@ vi.mock("@/context/shared/access/application/useSession", () => ({
   useSession: () => ({ ...auth, login: vi.fn(), logout, override }),
 }));
 
+// The shell's recovery-readiness read is mocked like the session: these cases are about the
+// layout, and an unknown verdict renders no warning, so the shell under test is the one they assert.
+vi.mock("@/context/shared/access/application/useRecoveryReadiness", () => ({
+  useRecoveryReadiness: () => ({ readiness: { kind: "unknown" }, publish: vi.fn() }),
+  useRecoveryReadinessPublisher: () => vi.fn(),
+}));
+vi.mock("@/context/shared/access/infrastructure/ui/RecoveryReadinessProvider", () => ({
+  RecoveryReadinessProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock("next/navigation", () => {
   const router = { push, replace: vi.fn(), refresh: vi.fn(), back: vi.fn(), prefetch: vi.fn() };
   return { useRouter: () => router, usePathname: () => nav.pathname };

@@ -25,8 +25,9 @@ updates:
   # the one image in the tree nothing was tracking.
   #
   # Reach: the fetcher's filename regex is /(docker-)?compose(-[\w]+)?(?>\.[\w-]+)?\.ya?ml/i
-  # and the listing is non-recursive, so it takes compose.yaml, compose.dev.yaml and
-  # compose.prod.yaml and nothing else. Those three carry ten `${IMAGES_PREFIX:-}app-*`
+  # and the listing is non-recursive, so it takes compose.yaml, compose.dev.yaml,
+  # compose.prod.yaml and compose.rehearsal.yaml and nothing else — mailpit's pin sits in
+  # both the dev and the rehearsal file and moves in one PR. They carry ten `${IMAGES_PREFIX:-}app-*`
   # references built locally from the Dockerfiles the /api and /pwa lanes already watch;
   # they parse to nothing and are dropped without error, so they generate no noise here.
   #

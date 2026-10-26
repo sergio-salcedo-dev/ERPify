@@ -1,13 +1,20 @@
 /**
  * What an account may know about its recovery secret without ever holding it: whether one
- * exists, and the two instants that bound its life. The secret itself is deliberately absent
- * from this shape — the API hands the plaintext over exactly once, at mint, and can never
- * produce it again, so a read that returned it would be describing something impossible.
+ * exists, whether it still signs its holder in, and the two instants that bound its life. The
+ * secret itself is deliberately absent from this shape — the API hands the plaintext over
+ * exactly once, at mint, and can never produce it again, so a read that returned it would be
+ * describing something impossible.
+ *
+ * `live` is the server's verdict at the instant of the read, never something this client
+ * derives from `expiresAt` against its own clock: an expired row still exists (it occupies the
+ * slot until revoked) yet signs nobody in, and the rule that says so lives once, on the server.
  */
 export type RecoverySecretStatus =
-  | { exists: false; mintedAt: null; expiresAt: null }
+  | { exists: false; live: false; mintedAt: null; expiresAt: null }
   | {
       exists: true;
+      /** Whether the secret still signs its holder in, as the server judged it at the read. */
+      live: boolean;
       /** ISO-8601 instant the secret was minted. */
       mintedAt: string;
       /**

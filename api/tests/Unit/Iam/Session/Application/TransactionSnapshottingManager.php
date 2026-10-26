@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Override;
+use Throwable;
 
 /**
  * Runs the unit of work inline and records what it did while inside it, so a test can tell a write or an event
@@ -22,6 +23,12 @@ final class TransactionSnapshottingManager implements TransactionManager
     public int $publishedWithin = 0;
 
     public bool $open = false;
+
+    /** Units of work that returned, and so would have committed. */
+    public int $committed = 0;
+
+    /** Units of work that threw, and so would have rolled back everything done inside them. */
+    public int $rolledBack = 0;
 
     public function __construct(
         private readonly InMemorySessionRepository $sessions,
@@ -40,9 +47,15 @@ final class TransactionSnapshottingManager implements TransactionManager
 
         try {
             $result = $operation();
+        } catch (Throwable $throwable) {
+            ++$this->rolledBack;
+
+            throw $throwable;
         } finally {
             $this->open = false;
         }
+
+        ++$this->committed;
 
         $this->savedWithin += \count($this->sessions->saved) - $saved;
         $this->publishedWithin += \count($this->eventBus->publishedEvents) - $published;

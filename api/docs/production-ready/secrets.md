@@ -107,7 +107,7 @@ interpolation.
 | `MAILER_FROM`                | Symfony Mailer            | Operational sender (may be no-reply). Must be authorised by your mail provider.                           |
 | `MAILER_SMTP_TIMEOUT`        | `php`, `messenger_worker`, `scheduler_worker` | Seconds an `smtp`/`smtps` server may hold a caller **per socket operation**, not per send — one send costs round-trips × this value. Default `3`, accepted range `1`–`300`, enforced by `make prod.env.check` before the stack starts and refused again by the app at first send. Compose supplies the default on all three services, so unsetting it is a no-op. Ignored by API-bridge and `sendmail://` transports, which carry their own timeouts. |
 | `MAILER_SECURITY_FROM`       | Security emails           | Sender of invitation/reset/password-changed mails. Must be a monitored, replyable mailbox — outside dev/test an empty or no-reply value fails loudly at send time. Provisional prod value: `sergio.salcedo.dev@gmail.com` (the monitored operator mailbox, same as `DEFAULT_NOTIFICATION_EMAIL`) until a dedicated `seguridad@…` mailbox exists. |
-| `DEFAULT_NOTIFICATION_EMAIL` | Notification handler      | Recipient for bank create/update emails.                                                                  |
+| `DEFAULT_NOTIFICATION_EMAIL` | `php`, `messenger_worker` | Recipient for bank create/update emails. Required in prod (`:?` in `compose.prod.yaml`, `make prod.env.check`): the `compose.yaml` default is a development mailbox. |
 
 Overview: [docs-info/production-deployment.md](../../../docs-info/production-deployment.md) and [architecture-api.md](../../../docs/architecture-api.md#async--messaging).
 

@@ -22,8 +22,8 @@ interface UsersTableProps {
   selection?: DataTableSelection;
   onUserPeek?: (id: string) => void;
   density?: "compact" | "comfortable";
-  onInvitationRevoked: () => void;
-  onRevokeFailed: (problem: ProblemDetails) => void;
+  onInvitationChanged: () => void;
+  onInvitationActionFailed: (problem: ProblemDetails) => void;
 }
 
 const renderEmailCell = (row: User) => <TruncatedText value={row.email} />;
@@ -53,8 +53,8 @@ const renderUpdatedAtCell = (row: User) =>
 
 function buildUsersColumns(
   visible: UserColumnKey[],
-  onInvitationRevoked: () => void,
-  onRevokeFailed: (problem: ProblemDetails) => void,
+  onInvitationChanged: () => void,
+  onInvitationActionFailed: (problem: ProblemDetails) => void,
 ): DataTableColumn<User>[] {
   const shown = new Set(visible);
   const renderActionsCell = (row: User) => (
@@ -64,8 +64,8 @@ function buildUsersColumns(
       status={row.status}
       surface="table"
       reveal="row"
-      onInvitationRevoked={onInvitationRevoked}
-      onRevokeFailed={onRevokeFailed}
+      onInvitationChanged={onInvitationChanged}
+      onInvitationActionFailed={onInvitationActionFailed}
       className="justify-end"
     />
   );
@@ -137,8 +137,8 @@ export function UsersTable({
   selection,
   onUserPeek,
   density = "compact",
-  onInvitationRevoked,
-  onRevokeFailed,
+  onInvitationChanged,
+  onInvitationActionFailed,
 }: Readonly<UsersTableProps>) {
   const router = useRouter();
 
@@ -146,7 +146,7 @@ export function UsersTable({
   // so any dependency array containing them never matches twice — and the compiler-backed hook lint rejects
   // the `useCallback` spelling that would stabilise them, because the dependencies it infers are not the ones
   // that keep the closure fresh. What is left is six column descriptors, which `<DataTable>` only iterates.
-  const columns = buildUsersColumns(visible, onInvitationRevoked, onRevokeFailed);
+  const columns = buildUsersColumns(visible, onInvitationChanged, onInvitationActionFailed);
 
   return (
     <div

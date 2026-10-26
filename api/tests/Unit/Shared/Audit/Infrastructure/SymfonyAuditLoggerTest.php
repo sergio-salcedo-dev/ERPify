@@ -81,7 +81,7 @@ final class SymfonyAuditLoggerTest extends TestCase
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
             AuditResource::of('Bank', self::RESOURCE_ID),
-            ['pii' => 'x'],
+            ['route' => 'backoffice_bank_account_search'],
         );
 
         $this->assertCount(1, $recordingLogger->records, 'the gap is recorded, never silent');

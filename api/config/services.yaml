@@ -15,6 +15,8 @@ parameters:
     # Pixel count alone does not fix the memory cost — it also depends on bytes-per-pixel and on the
     # decoder's own intermediate buffers, which is why the two numbers are gated as a pair rather
     # than reasoned about separately.
+    # An HTTP route that uploads also needs its own Caddy `request_body` bound: every request PHP
+    # serves is capped at 1MB in frankenphp/Caddyfile, well below this budget.
     erpify.images.max_input_bytes: 20971520 # ~20 MB, strlen($bytes) received by ImageProcessor
     # Measured, not chosen: the pipeline peaks at roughly 10 bytes per INPUT pixel (GD holds a truecolor
     # frame at 4 B/px and `ResizeModifier` clones it), so this ceiling and `memory_limit` are ONE decision.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset;
 
 use Erpify\Shared\Search\Domain\SortDirection;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use InvalidArgumentException;
 
 /**

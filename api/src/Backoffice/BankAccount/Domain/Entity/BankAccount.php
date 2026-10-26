@@ -21,6 +21,7 @@ use Erpify\Shared\Audit\Domain\AuditWriteOperation;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Kernel\Domain\Enum\Currency;
+use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
 use Erpify\Shared\Privacy\Domain\PersonalData;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Shared\Validation\Infrastructure\EnumType;
@@ -36,9 +37,23 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'bank_account')]
+#[ORM\Index(name: 'idx_bank_account_holder_name_trgm', columns: ['holder_name_normalized'])]
 #[UniqueEntity(fields: ['iban'], message: 'This IBAN is already in use.')]
 final class BankAccount extends AggregateRoot implements AuditedEntity
 {
+    /**
+     * Accent- and case-folded twin of `holderName` ({@see NormalizedText::normalize()}): the column the
+     * `contains` filter matches, served by a GIN trigram index the migration builds (DBAL does not model an
+     * index's access method, so the mapping can only name it). Not unique — two holders may share a name.
+     *
+     * Personal data like the name it folds: the change capture diffs every mapped field, so an unclassified
+     * twin would land in `audit_log` in clear. `TEXT` because folding can lengthen a name ("ß" -> "ss"). The
+     * default exists for writers that do not name the column, such as an image predating it.
+     */
+    #[ORM\Column(type: Types::TEXT, options: ['default' => ''])]
+    #[PersonalData]
+    private string $holderNameNormalized;
+
     private function __construct(
         string $id,
         #[ORM\Column(name: 'bank_id', type: Types::GUID)]
@@ -96,6 +111,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         parent::__construct();
 
         $this->id = $id;
+        $this->holderNameNormalized = NormalizedText::normalize($holderName);
     }
 
     /**
@@ -158,6 +174,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
         }
 
         $this->holderName = $holderName;
+        $this->holderNameNormalized = NormalizedText::normalize($holderName);
         $this->iban = $canonicalIban;
         $this->bic = $canonicalBic;
         $this->alias = $alias;
@@ -230,6 +247,15 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
     public function getHolderName(): string
     {
         return $this->holderName;
+    }
+
+    /**
+     * Read accessor for the accent-folded, lower-cased holder name the `holderName` filter matches. It is never
+     * mapped to a resource: the wire carries the name as typed.
+     */
+    public function getHolderNameNormalized(): string
+    {
+        return $this->holderNameNormalized;
     }
 
     public function getAlias(): ?string

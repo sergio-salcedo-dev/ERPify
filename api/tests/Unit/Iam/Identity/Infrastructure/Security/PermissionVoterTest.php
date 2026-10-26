@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
+use Erpify\Iam\Identity\Infrastructure\Security\PermissionCatalog;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionVoter;
 use Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\Fixtures\RecordingAuthorizationPolicy;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,11 +20,11 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 #[CoversClass(PermissionVoter::class)]
 final class PermissionVoterTest extends TestCase
 {
-    #[DataProvider('provideItAbstainsOnNonPermissionAttributesCases')]
-    public function testItAbstainsOnNonPermissionAttributes(string $attribute): void
+    #[DataProvider('provideItAbstainsOnAttributesTheCatalogDoesNotPublishCases')]
+    public function testItAbstainsOnAttributesTheCatalogDoesNotPublish(string $attribute): void
     {
         $policy = new RecordingAuthorizationPolicy(true);
-        $voter = new PermissionVoter($policy);
+        $voter = new PermissionVoter($policy, new PermissionCatalog());
         $token = $this->tokenWithRoles(['ROLE_AUDIT_READER']);
 
         $this->assertSame(VoterInterface::ACCESS_ABSTAIN, $voter->vote($token, null, [$attribute]));
@@ -34,19 +35,23 @@ final class PermissionVoterTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
-    public static function provideItAbstainsOnNonPermissionAttributesCases(): iterable
+    public static function provideItAbstainsOnAttributesTheCatalogDoesNotPublishCases(): iterable
     {
         yield 'a role attribute' => ['ROLE_AUDIT_READER'];
         yield 'an authentication attribute' => ['IS_AUTHENTICATED_FULLY'];
         yield 'the public marker' => ['PUBLIC_ACCESS'];
+        // Dotted like a permission, published by nobody: claiming it would let the tier policy's grant of an
+        // unknown resource overrule another voter's denial under the affirmative strategy.
+        yield 'a dotted attribute no catalog publishes' => ['featureFlag.read'];
+        yield 'an unpublished action on a published resource' => ['bank.approve'];
     }
 
     public function testItGrantsOrDeniesPermissionShapedAttributesFollowingThePolicy(): void
     {
         $token = $this->tokenWithRoles(['ROLE_VIEWER']);
 
-        $granting = new PermissionVoter(new RecordingAuthorizationPolicy(true));
-        $denying = new PermissionVoter(new RecordingAuthorizationPolicy(false));
+        $granting = new PermissionVoter(new RecordingAuthorizationPolicy(true), new PermissionCatalog());
+        $denying = new PermissionVoter(new RecordingAuthorizationPolicy(false), new PermissionCatalog());
 
         $this->assertSame(VoterInterface::ACCESS_GRANTED, $granting->vote($token, null, ['bank.read']));
         $this->assertSame(VoterInterface::ACCESS_DENIED, $denying->vote($token, null, ['bank.write']));
@@ -55,7 +60,7 @@ final class PermissionVoterTest extends TestCase
     public function testItStripsTheRolePrefixAndBuildsThePermissionBeforeDelegating(): void
     {
         $policy = new RecordingAuthorizationPolicy(true);
-        $voter = new PermissionVoter($policy);
+        $voter = new PermissionVoter($policy, new PermissionCatalog());
         $token = $this->tokenWithRoles(['ROLE_VIEWER', 'ROLE_AUDIT_READER']);
 
         $voter->vote($token, null, ['bank.read']);
@@ -70,7 +75,7 @@ final class PermissionVoterTest extends TestCase
     public function testItIgnoresRoleTokensWithoutThePrefix(): void
     {
         $policy = new RecordingAuthorizationPolicy(true);
-        $voter = new PermissionVoter($policy);
+        $voter = new PermissionVoter($policy, new PermissionCatalog());
         // A bare 'ADMIN' (no ROLE_ prefix) must be dropped, never honoured as the ADMIN tier.
         $token = $this->tokenWithRoles(['ROLE_VIEWER', 'ADMIN']);
 
@@ -108,7 +113,7 @@ final class PermissionVoterTest extends TestCase
     private function voteOutcome(array $roles, string $attribute, mixed $subject): array
     {
         $policy = new RecordingAuthorizationPolicy(false);
-        $voter = new PermissionVoter($policy);
+        $voter = new PermissionVoter($policy, new PermissionCatalog());
 
         $vote = $voter->vote($this->tokenWithRoles($roles), $subject, [$attribute]);
 

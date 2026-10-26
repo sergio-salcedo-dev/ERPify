@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
+import { PlannedModulePage } from "@/app/backoffice/_components/PlannedModulePage";
+import { PlannedModules } from "@/app/backoffice/_lib/plannedModules";
 
 export const metadata: Metadata = {
   title: "Brands & Manufacturers",
 };
 
 export default function CatalogBrandsPage() {
-  return (
-    <h1 className="text-foreground text-2xl font-semibold tracking-tight">
-      Brands & Manufacturers
-    </h1>
-  );
+  return <PlannedModulePage module={PlannedModules.BRANDS} />;
 }

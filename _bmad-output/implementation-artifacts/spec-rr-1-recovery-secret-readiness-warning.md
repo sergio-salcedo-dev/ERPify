@@ -2,7 +2,8 @@
 title: 'RR-1: aviso a todo administrador sin secreto de recuperación vivo'
 type: 'feature'
 created: '2026-09-29'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '043c236c7fa8858c98ae721dc2600308030c9078'
 route: 'dispatch'
 review_loop_iteration: 0 # revisión externa del spec incorporada 2026-09-29 (Spec Change Log)
 story_key: 'rr-1-recovery-secret-readiness-warning' # tablero: sprint-status-recovery-readiness.yaml
@@ -63,18 +64,18 @@ Rutas relativas al worktree.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `api/src/Iam/Identity/Domain/Entity/RecoverySecret.php` -- `isLiveAt()` -- una sola regla, en el agregado.
-- [ ] `api/tests/Unit/Iam/Identity/Domain/Entity/RecoverySecretTest.php` (nuevo) -- vivo antes, caducado en `expiresAt` exacto y después (falsa un `>` en lugar de `>=`).
-- [ ] `RecoverySecretResource.php` + `GetMyRecoverySecretController.php` + su test -- `live` desde `Clock`.
-- [ ] `api/features/backoffice/identity/recovery_secret_read.feature` (nuevo) -- none / live / expired.
-- [ ] `RecoverySecret.ts`, `ApiRecoverySecretRepository.ts` + test, `useRecoverySecret.ts` -- `live` en el contrato del cliente.
-- [ ] `pwa/src/context/shared/access/infrastructure/ui/RecoveryReadinessProvider.tsx` + `application/useRecoveryReadiness.ts` (nuevos, calcados de `AuthProvider`/`useSession`) -- el proveedor hace la lectura del shell y guarda `live | unknown`; `useRecoverySecret` publica ahí el resultado de mint/revoke (no-op sin proveedor).
-- [ ] `pwa/src/components/erpify/NoticeBanner.tsx` (nuevo) + test -- tono, texto, enlace; sin rol de región viva.
-- [ ] `BackOfficeLayoutClient.tsx` -- monta el proveedor; la banda, primer hijo de `<main>`, solo si `ADMIN` y `live === false` (nunca con `unknown`); el foco de navegación sigue en `<main>`; los cinco tests de layout reciben el mock.
-- [ ] `RecoverySecretPanel.tsx` + test -- `live`, copy de AC4, `hasLapsed` fuera.
-- [ ] `pwa/tests/e2e/global-setup.ts` (nuevo) + `globalSetup` en `pwa/playwright.config.ts` -- deja al admin en `live === true` según la decisión (GET → revoca si caducado → acuña → GET verifica); falla la suite si no lo consigue.
-- [ ] `pwa/tests/e2e/backoffice/recovery-readiness-real-api.spec.ts` (nuevo) -- revoca por API, banda en dos rutas con el foco en `<main>`, acuña por UI, banda fuera sin navegar; termina vivo; `test.skip` si `repeatEachIndex > 0`.
-- [ ] Docs + Postman -- `live` en el contrato.
+- [x] `api/src/Iam/Identity/Domain/Entity/RecoverySecret.php` -- `isLiveAt()` -- una sola regla, en el agregado.
+- [x] `api/tests/Unit/Iam/Identity/Domain/Entity/RecoverySecretTest.php` (nuevo) -- vivo antes, caducado en `expiresAt` exacto y después (falsa un `>` en lugar de `>=`).
+- [x] `RecoverySecretResource.php` + `GetMyRecoverySecretController.php` + su test -- `live` desde `Clock`.
+- [x] `api/features/backoffice/identity/recovery_secret_read.feature` (nuevo) -- none / live / expired.
+- [x] `RecoverySecret.ts`, `ApiRecoverySecretRepository.ts` + test, `useRecoverySecret.ts` -- `live` en el contrato del cliente.
+- [x] `pwa/src/context/shared/access/infrastructure/ui/RecoveryReadinessProvider.tsx` + `application/useRecoveryReadiness.ts` (nuevos, calcados de `AuthProvider`/`useSession`) -- el proveedor hace la lectura del shell y guarda `live | unknown`; `useRecoverySecret` publica ahí el resultado de mint/revoke (no-op sin proveedor).
+- [x] `pwa/src/components/erpify/NoticeBanner.tsx` (nuevo) + test -- tono, texto, enlace; sin rol de región viva.
+- [x] `BackOfficeLayoutClient.tsx` -- monta el proveedor; la banda, primer hijo de `<main>`, solo si `ADMIN` y `live === false` (nunca con `unknown`); el foco de navegación sigue en `<main>`; los cinco tests de layout reciben el mock.
+- [x] `RecoverySecretPanel.tsx` + test -- `live`, copy de AC4, `hasLapsed` fuera.
+- [x] `pwa/tests/e2e/global-setup.ts` (nuevo) + `globalSetup` en `pwa/playwright.config.ts` -- deja al admin en `live === true` según la decisión (GET → revoca si caducado → acuña → GET verifica); falla la suite si no lo consigue.
+- [x] `pwa/tests/e2e/backoffice/recovery-readiness-real-api.spec.ts` (nuevo) -- revoca por API, banda en dos rutas con el foco en `<main>`, acuña por UI, banda fuera sin navegar; termina vivo; `test.skip` si `repeatEachIndex > 0`.
+- [x] Docs + Postman -- `live` en el contrato.
 
 **Acceptance Criteria:**
 - Given un admin sin secreto en `/backoffice/profile`, when acuña, then la banda desaparece sin navegar ni recargar; y when revoca, then reaparece (variante «none»).
@@ -100,8 +101,41 @@ La banda va como primer hijo de `<main>`, no como hermano anterior: visualmente 
 
 ## Implementation Notes
 
+- Implementado el 2026-10-22 en `feat/backoffice-rr-1-recovery-readiness-warning-is58` (worktree propio, desde `origin/main` `043c236c`).
+- Revisión de la tarea completa, el 2026-10-22 en la misma sesión y en paralelo: Blind Hunter, Edge Case Hunter, Verification Gap y Acceptance Auditor. Los cuatro, subagentes de solo lectura sobre el diff contra `baseline_commit`. Triaje y patches en el `Review Triage Log`.
+- Decisión del dueño: `NoticeBanner` importa `safeHref` de `context/shared/navigation/domain`. El bloque congelado dice «no importa `context/`», pero la regla que cita (`pwa/.dependency-cruiser.cjs:82`) admite `context/shared`. Se mantiene para que el componente no pierda su defensa contra `javascript:`. Moverlo al layout es un cambio de una línea si el dueño prefiere la lectura literal.
+- `make php.quality` destapó una expresión `new X()->m()` sin paréntesis en un test, que PDepend no parsea. Se partió en dos sentencias.
+- E2E en local: el spec RR-1 pasa. `banks-real-api*` falla en local solo por recuentos exactos sobre la BD de dev acumulada entre corridas (CI siembra en una BD nueva). La suite completa con 11 workers en modo dev produce además envíos de login sin hidratar.
+
 ## Spec Change Log
 
 - 2026-09-29 — revisión externa del spec (pegada por el usuario). Aceptado: el 409 de mint no prueba un secreto vivo (el bootstrap lee, revoca si caducó, acuña y verifica); límite `== now` pinado; `unknown` ≠ `false`; `live` como foto sin polling; ningún GET extra tras mutar; ningún cálculo de caducidad en el cliente; la banda dentro de `<main>`. Rechazado por medición: «`application/` es framework-free» (aloja `useRecoverySecret`, `useSession`, `useAuditTimeline`…; lo que no aloja es `.tsx`, y por eso el proveedor va a `infrastructure/ui/` como `AuthProvider`); «sin mocks en los tests de layout» (ya mockean `useSession` con `vi.mock`). KEEP: el bloque congelado inicial y el Code Map verificado.
 
 ## Review Triage Log
+
+Revisión de 2026-10-22, cuatro capas en paralelo y solo lectura, en esta sesión y sobre el diff contra `043c236c`: Blind Hunter, Edge Case Hunter, Verification Gap (las tres del paso 4 de `bmad-build`) y Acceptance Auditor (exigido por el `CLAUDE.md` raíz). BH = Blind Hunter, ECH = Edge Case Hunter, VG = Verification Gap, AA = Acceptance Auditor.
+
+| # | Capa | Hallazgo | Veredicto | Ruta | Evidencia |
+|---|------|----------|-----------|------|-----------|
+| 1 | BH, VG, AA, ECH | `page.locator("aside")` en `app-shell`, `sidebar` y `banks` (6 sitios) choca en modo estricto con la banda mientras el spec RR-1 tiene al admin compartido revocado | medium | patch | `fullyParallel` y 2 workers en CI; la banda es un segundo `<aside>`; se acota con `data-testid="bo-layout__sidebar"` |
+| 2 | BH, ECH | Los reintentos de CI (`retries: 2`) parten de `repeatEachIndex 0` y vuelven a gastar revoke+mint+restore: más de 10 pruebas de contraseña en 15 min | medium | patch | `playwright.config.ts` `retries`; se salta también con `testInfo.retry > 0` y se documenta el peor caso |
+| 3 | BH, ECH | El `globalSetup` incondicional aborta la suite sin API viva | false | — | La job `pwa-e2e` de CI levanta el stack completo (`make docker.up.wait.no-build`) antes de Playwright, y la suite ya apunta al stack vivo |
+| 4 | BH | `RECOVERY_SECRET_REPOSITORY_KEY` queda copiado a mano en tres ficheros | low | patch | Si se renombra el binding, una copia queda resolviendo nada; arreglo directo con una constante exportada |
+| 5 | BH, ECH, VG, AA | `publish` fija un veredicto para sesiones no-ADMIN o no-ACTIVE, que el proveedor dice mantener en `unknown` | low | patch | El layout filtra con `useCanRole`, así que hoy no se filtra nada; arreglo directo: no-op si `subject` es null |
+| 6 | BH | El enlace de la banda no lleva al ancla de la sección | low | rechazado | Aterriza en la página correcta; añadir un destino enfocable es complejidad para un defecto cosmético |
+| 7 | BH | El test de `javascript:` de `NoticeBanner` es débil | low | patch | Solo afirma «no es `javascript:alert(1)`»; se fija el fallback `"#"` y un esquema con mayúsculas |
+| 8 | BH, AA | Docs sin actualizar: `architecture-pwa.md`, `DESIGN.md`, ADR del canal y `security.md` | medium | patch | Lo exige «Keeping docs up to date» del `CLAUDE.md` raíz; un segundo aviso fijo no tendría patrón documentado que seguir |
+| 9 | BH | El literal `2036-…11:59:59` del test del controlador duplica `LAPSES` | low | patch | Si cambia el TTL, el caso deja de probar la frontera; se deriva de `LAPSES` |
+| 10 | BH | El escenario Behat «vivo» no afirma los instantes | low | patch | Unos instantes intercambiados o nulos pasarían el carril de aceptación |
+| 11 | BH | La reindentación del layout y el copy duplicado de la banda y el panel | low | rechazado | La reindentación es de Prettier; el copy lo decidió UX en la story |
+| 12 | ECH | Un revoke que resuelve tras cambiar de sujeto publica sobre el nuevo admin | low | rechazado | Solo alcanzable con el `DevSessionSwitcher` a mitad de una petición; el arreglo añade estado de sujeto a la API de `publish` |
+| 13 | ECH | La banda puede llegar después de que el foco haya ido a `<main>` en la primera carga | low | rechazado | La lectura es asíncrona por diseño (`unknown` hasta que responde); la banda sigue dentro de `<main>` y se lee en orden |
+| 14 | ECH | Una lectura fallida del shell no se reintenta | false | — | Es el comportamiento del bloque congelado: lectura fallida = desconocido, silencioso en el shell, sin polling |
+| 15 | ECH | Una pestaña larga nunca se entera de la caducidad | false | — | Fila «Caduca con la página abierta» del bloque congelado: deliberado, sin polling |
+| 16 | VG | Ningún test observa que la lectura del propio panel se publica al shell | medium | patch | Volver a `setStatus(result)` deja todo verde; se añade el caso shell-rechaza / panel-NONE |
+| 17 | VG | Ningún test ejercita el reinicio por cambio de sujeto | medium | patch | Borrar el reset o el ticket deja todo verde; se añade el caso con re-render |
+| 18 | AA | El AC2 no prueba el foco en `<main>` tras navegar, solo vía skip link | medium | patch | Se afirma `main` enfocado antes del skip link |
+| 19 | AA | «Sin recarga» solo se prueba por la URL | low | patch | Marcador en `window` que sobrevive al mint |
+| 20 | AA | El orden del copy del 409 sobre el `MutationError` no se afirma | low | patch | Solo se comprueba la presencia; se afirma el orden en el DOM |
+| 21 | AA | La story dice «above `<main>`», dice `ready-for-dev` y pide la caducidad Behat «bajo reloj movido» | low | rechazado | El spec, que es la fuente, movió la banda dentro de `<main>` (Design Notes, Change Log) y modela la siembra con `'2020-01-01'`; el estado de la story se cierra al terminar |
+| 22 | AA | `NoticeBanner` importa `safeHref` de `context/shared`, y el bloque congelado dice «no importa `context/`» | — | decisión del dueño | La regla de dependency-cruiser citada (:82) permite `context/shared`; se deja así y se eleva a Sergio |

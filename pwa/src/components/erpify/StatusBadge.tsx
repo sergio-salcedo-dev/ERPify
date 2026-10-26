@@ -20,7 +20,7 @@ export type StatusBadgeVariant = "success" | "warning" | "danger" | "info" | "ne
  * rule for any of this — the wiring in `eslint.config.mjs` does not see it — so the gate is
  * `tests/live-region-surfaces.test.ts`, which refuses a new `<output>` outside its registry.
  */
-const dotVariants = cva("size-1.5 flex-none rounded-full", {
+export const statusDotVariants = cva("size-1.5 flex-none rounded-full", {
   variants: {
     variant: {
       success: "bg-status-dot-success",
@@ -35,7 +35,7 @@ const dotVariants = cva("size-1.5 flex-none rounded-full", {
   },
 });
 
-interface StatusBadgeProps extends VariantProps<typeof dotVariants> {
+interface StatusBadgeProps extends VariantProps<typeof statusDotVariants> {
   variant: StatusBadgeVariant;
   label: string;
   className?: string;
@@ -52,7 +52,7 @@ export function StatusBadge({ variant, label, className, testId }: Readonly<Stat
       )}
       data-testid={testId}
     >
-      <span className={dotVariants({ variant })} aria-hidden="true" />
+      <span className={statusDotVariants({ variant })} aria-hidden="true" />
       {label}
     </span>
   );

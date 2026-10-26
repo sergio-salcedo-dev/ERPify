@@ -71,7 +71,9 @@ fi
 NSS_DB="${TARGET_HOME}/.pki/nssdb"
 
 # —— Server name + CA file ————————————————————————————————————————————————
-SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
+# shellcheck source=scripts/deploy/lib/prod-env.sh
+source "$REPO_ROOT/scripts/deploy/lib/prod-env.sh"
+SERVER_NAME="$(prod_env_value SERVER_NAME "$ENV_FILE" 2>/dev/null || true)"
 SERVER_NAME="${SERVER_NAME:-erpify.local}"
 HOSTS_LINE="127.0.0.1   ${SERVER_NAME}"
 NSS_NICK="${SERVER_NAME} Local CA"

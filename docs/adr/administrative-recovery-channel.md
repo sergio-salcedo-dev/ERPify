@@ -11,8 +11,9 @@ that it has **one** — and that administrator is the victim of
 [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602).
 
 The persisted lockout is keyed by **email address** (10 consecutive failures → `PT15M`,
-`api/src/Iam/Identity/Domain/Entity/User.php:64,66`), deliberately carrying no source dimension so it
-catches a distributed credential-stuffing run the per-IP throttle misses (`User.php:58-63`). That same
+`api/src/Iam/Identity/Domain/Entity/User.php:64,66`), deliberately carrying no source dimension so a
+distributed run the per-IP throttle misses cannot open a session while it holds — though it still verifies
+guesses during the lock (`PRODUCTION_SECURITY_CHECKLIST.md` §7). That same
 property lets anyone who merely knows an administrator's address hold it closed: a lapsed lock zeroes
 the counter (`User.php:283-289`), so a sustained blackout costs 40 login attempts plus 5 recovery
 requests per hour. The binding limiter is `login_throttling` (5 per minute per address+IP,
@@ -313,9 +314,9 @@ itself, not anybody watching.
 
 A volumetric signal (a counter carrying no selector, no identity and no reversible transformation of either)
 would be compatible with I-1 and is the shape to reach for if this ever needs observing. It is deliberately not
-built now: the `observability` stream has no rotation, no TTL and no declared owner of deletion — the same
-reason a caller's string was refused that stream elsewhere in this repository — so adding a channel there is a
-decision of its own and not a detail of this one.
+built now: the `observability` stream is rotated by volume alone, with no TTL and no declared owner of
+deletion — the same reason a caller's string was refused that stream elsewhere in this repository — so adding a
+channel there is a decision of its own and not a detail of this one.
 
 ## D10 — Redemption evicts every other session, atomically with the consumption
 

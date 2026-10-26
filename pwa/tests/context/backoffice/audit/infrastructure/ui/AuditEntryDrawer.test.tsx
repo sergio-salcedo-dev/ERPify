@@ -72,7 +72,7 @@ describe("AuditEntryDrawer", () => {
     );
 
     expect(screen.getByTestId("audit-entry-drawer__diff--unreadable")).toHaveTextContent(
-      "Diff unavailable — the stored change record is not a field-by-field diff.",
+      "Diff unavailable — this change record cannot be shown.",
     );
     expect(screen.queryByTestId("audit-entry-drawer__diff")).not.toBeInTheDocument();
     // No snapshot header is drawn for an unreadable diff, so the write kind stays in Metadata.

@@ -14,8 +14,9 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * Every real `@accepted-risk #<issue>` tag under `api/src`, the implementation-artifact specs and the ADRs
- * must be well-formed and co-located with enough prose to be more than a floating reference. See
+ * Every real `@accepted-risk #<issue>` tag under `api/src`, the implementation-artifact specs, the spec folders
+ * under `_bmad-output/specs/` (each `SPEC.md` and the `stories/*.md` the dispatch writes) and the ADRs must be
+ * well-formed and co-located with enough prose to be more than a floating reference. See
  * {@see AcceptedRiskTagRulesGateTest} for the falsification of those rules against fixtures -- this test
  * only asserts them over the real tree, and asserts PROPERTIES rather than a tag count, because the
  * inventory legitimately grows.
@@ -35,7 +36,7 @@ final class AcceptedRiskTagGateTest extends TestCase
     }
 
     #[Test]
-    public function everyTagInTheImplementationArtifactSpecsIsWellFormedAndMeetsTheContentFloor(): void
+    public function everyTagInThePlanningSpecsIsWellFormedAndMeetsTheContentFloor(): void
     {
         $this->assertEveryTagValid($this->specFiles());
     }
@@ -128,9 +129,15 @@ final class AcceptedRiskTagGateTest extends TestCase
      */
     private function specFiles(): array
     {
-        $files = \glob($this->repositoryDirectory('_bmad-output/implementation-artifacts') . '/spec-*.md');
+        $output = $this->repositoryDirectory('_bmad-output');
+        $files = [];
 
-        return false === $files ? [] : $files;
+        foreach (['/implementation-artifacts/spec-*.md', '/specs/*/SPEC.md', '/specs/*/stories/*.md'] as $pattern) {
+            $matches = \glob($output . $pattern);
+            $files = [...$files, ...(false === $matches ? [] : $matches)];
+        }
+
+        return $files;
     }
 
     /**

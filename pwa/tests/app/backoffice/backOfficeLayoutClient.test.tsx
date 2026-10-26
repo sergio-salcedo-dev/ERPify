@@ -38,6 +38,16 @@ vi.mock("@/context/shared/access/application/useSession", () => ({
 }));
 
 // The router object is built once so RequireAuth's effect does not re-run on every render.
+// The shell's recovery-readiness read is mocked like the session: these cases are about the
+// layout, and an unknown verdict renders no warning, so the shell under test is the one they assert.
+vi.mock("@/context/shared/access/application/useRecoveryReadiness", () => ({
+  useRecoveryReadiness: () => ({ readiness: { kind: "unknown" }, publish: vi.fn() }),
+  useRecoveryReadinessPublisher: () => vi.fn(),
+}));
+vi.mock("@/context/shared/access/infrastructure/ui/RecoveryReadinessProvider", () => ({
+  RecoveryReadinessProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 vi.mock("next/navigation", () => {
   const router = {
     push,

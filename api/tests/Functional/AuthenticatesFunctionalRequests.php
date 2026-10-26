@@ -163,6 +163,30 @@ trait AuthenticatesFunctionalRequests
     }
 
     /**
+     * Seats a fresh session from the identity row AS STORED, for a test that rewrote that row out-of-band and
+     * needs the caller to stay admitted. The firewall compares the identity it reloads with the copy the session
+     * carries — credential, roles and lifecycle status — and drops the token on any difference, so a row changed
+     * beneath a live session signs that session out on its next request.
+     */
+    private function reseatSessionFromStoredIdentity(KernelBrowser $client, string $userId): void
+    {
+        $container = static::getContainer();
+
+        $entityManager = $container->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        // The row was rewritten by SQL, which the identity map never sees.
+        $entityManager->clear();
+
+        $users = $container->get(UserRepository::class);
+        self::assertInstanceOf(UserRepository::class, $users);
+
+        $user = $users->findById($userId) ?? throw new RuntimeException('The identity to reseat no longer exists.');
+
+        $client->loginUser(new SecurityUser($user), 'main');
+        $this->seatRegistrySession($client, $userId);
+    }
+
+    /**
      * @param list<string> $roleValues
      */
     private function carriesAllRoles(User $user, array $roleValues): bool

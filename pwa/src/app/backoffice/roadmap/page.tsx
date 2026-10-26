@@ -6,6 +6,7 @@ import {
   roadmapPhases,
   computeRoadmapProgress,
   moduleStatus,
+  roadmapModuleAnchor,
   submoduleStatus,
   type RoadmapComplexity,
   type RoadmapModule,
@@ -79,7 +80,8 @@ function ModuleCard({ module }: Readonly<{ module: RoadmapModule }>) {
   const status = moduleStatus(module);
   return (
     <article
-      className="roadmap__module bg-card border-border flex flex-col gap-3 rounded-xl border p-4 shadow-sm"
+      id={roadmapModuleAnchor(module.code)}
+      className="roadmap__module bg-card border-border flex scroll-mt-20 flex-col gap-3 rounded-xl border p-4 shadow-sm target:ring-2 target:ring-ring"
       data-testid={`roadmap__module-${module.code}`}
     >
       <header className="roadmap__module-head flex items-start gap-3">

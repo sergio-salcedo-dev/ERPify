@@ -1,0 +1,32 @@
+# Local prod rehearsal overlay (erpify.local). Loaded on top of compose.yaml +
+# compose.prod.yaml only when the env file's site TLS is Caddy's internal CA —
+# scripts/deploy/lib/prod-env.sh decides, for make and every deploy script. A
+# public host's env file sets the directive EMPTY, so it never loads this file;
+# one that deletes the line instead reads as `tls internal` and does.
+#
+# The rehearsal's security mail (invitations, password resets) needs an SMTP
+# server the php services can reach. The prod overlay has none, so this one adds
+# mailpit: MAILER_DSN=smtp://mailpit:1025 delivers into its inbox, which nothing
+# forwards to the internet. Its UI is published on loopback only.
+services:
+  mailpit:
+    # Cap: memory.peak reads 26 MiB (measured in the dev overlay).
+    deploy:
+      resources:
+        limits:
+          memory: ${REHEARSAL_MAILPIT_MEM_LIMIT:-256m}
+    memswap_limit: ${REHEARSAL_MAILPIT_MEM_LIMIT:-256m}
+    image: axllent/mailpit:v1.31.6@sha256:23fe39e81bde596a918000b3135c0f85dc8bb4c9ea6be274b051143f3e300387
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - frontend
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1

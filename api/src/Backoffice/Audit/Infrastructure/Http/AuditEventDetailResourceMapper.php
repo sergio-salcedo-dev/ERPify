@@ -7,6 +7,8 @@ namespace Erpify\Backoffice\Audit\Infrastructure\Http;
 use ArrayObject;
 use Erpify\Backoffice\Audit\Application\Resource\AuditEventDetailResource;
 use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
+use Erpify\Shared\Audit\Application\AuditLogEntry;
+use Erpify\Shared\Audit\Domain\AuditLevel;
 
 /**
  * Maps an {@see AuditEventDetail} read model to the {@see AuditEventDetailResource} wire DTO — the
@@ -21,8 +23,9 @@ use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
  * read side decodes it with `json_decode(…, true)`, which collapses a stored `{}` and `[]` into the same
  * PHP `[]`. Sealing it at write time therefore cannot hold; this mapper is the one place that controls the
  * wire, so it is also the one place that covers rows already stored. Only `changes` is sealed, and only
- * when empty or keyed: forcing every nested array into an object would turn a legitimate list inside a
- * value into `{"0": …}`, and a list-shaped `changes` is drift the client must still see as a list.
+ * when empty, or keyed on a `change` row: forcing every nested array into an object would turn a legitimate
+ * list inside a value into `{"0": …}`, and a list-shaped `changes` is drift the client must still see as a
+ * list.
  *
  * **A `changes` that is not a map keeps its SHAPE on the wire and loses its CONTENT.** A scalar becomes
  * {@see self::WITHHELD}, a non-empty list becomes a list of as many of them, and `null` stays `null`. Sealing
@@ -39,12 +42,25 @@ use Erpify\Backoffice\Audit\Domain\AuditEventDetail;
  *
  * The test is the decoded shape: `json_decode()` reads an object keyed `"0"`, `"1"`, … as a list, so such a map
  * is withheld as one — a shape the writer never produces.
+ *
+ * **A map is served only on a `change` row, because the level is the diff's provenance and the shape is not.**
+ * A map has exactly the shape of a sealed diff whether or not anything sealed it, so serving every map would
+ * hand out in clear a `{"email": {"old": …}}` that any other writer put there. The level does prove it: only
+ * the change-capture listener mints a `change` entry, the public logger refuses that level, `AuditLogEntry`
+ * refuses `changes` on any other, and `ChangeLevelProvenanceGateTest` holds the producer set closed. On any
+ * other row any non-empty `changes`, map or list, is withheld whole as {@see self::WITHHELD} — a scalar, so the
+ * client degrades it to an unreadable diff rather than rendering it — and not as a map of withheld values,
+ * because its keys came from the same unsealed writer and a key can name a person as easily as a value can.
+ * A list keeps its shape only on a `change` row, where it can only be the diff builder's own failure and the
+ * client refusing the envelope is the signal; on any other row no diff builder wrote it, so refusing the
+ * whole event over it would only hide an activity or security record behind a writer's mistake.
  */
 final readonly class AuditEventDetailResourceMapper
 {
     /**
-     * What a `changes` that is not a map serves in place of each value it held. A string, so a scalar stays a
-     * scalar and a list stays a list; and not the erasure sentinel, because nothing was erased — the value
+     * What a withheld `changes` serves: in place of each value of a scalar or of a list on a `change` row, and
+     * in place of the whole of any other non-empty `changes`. A string, so a scalar stays a scalar and a list
+     * stays a list; and not the erasure sentinel, because nothing was erased — the value
      * still sits in the row, withheld by the read side.
      */
     public const string WITHHELD = '[unsealed value withheld]';
@@ -66,7 +82,7 @@ final readonly class AuditEventDetailResourceMapper
             $detail->resourceId,
             $detail->actorErased,
             $detail->resourceErased,
-            new ArrayObject($this->withChangesAsMap($detail->metadata)),
+            new ArrayObject($this->withChangesAsMap($detail->metadata, $detail->level)),
         );
     }
 
@@ -75,24 +91,35 @@ final readonly class AuditEventDetailResourceMapper
      *
      * @return array<string, mixed>
      */
-    private function withChangesAsMap(array $metadata): array
+    private function withChangesAsMap(array $metadata, string $level): array
     {
-        $changes = $metadata['changes'] ?? null;
+        $changes = $metadata[AuditLogEntry::CHANGES_KEY] ?? null;
 
-        // A non-empty LIST is not a diff, and wrapping it would serve it as `{"0": …}` — a map the client
-        // accepts and renders as a field named "0", hiding the drift its guard would otherwise refuse.
-        if (\is_array($changes) && ([] === $changes || !\array_is_list($changes))) {
-            $metadata['changes'] = new ArrayObject($changes);
+        if (\is_array($changes) && ([] === $changes || $this->isSealedDiff($changes, $level))) {
+            $metadata[AuditLogEntry::CHANGES_KEY] = new ArrayObject($changes);
 
             return $metadata;
         }
 
-        if (\is_array($changes)) {
-            $metadata['changes'] = \array_fill(0, \count($changes), self::WITHHELD);
-        } elseif (null !== $changes) {
-            $metadata['changes'] = self::WITHHELD;
+        if (null === $changes) {
+            return $metadata;
         }
 
+        // A non-empty LIST on a `change` row is not a diff, and wrapping it would serve it as `{"0": …}` — a map
+        // the client accepts and renders as a field named "0", hiding the drift its guard would otherwise refuse.
+        $metadata[AuditLogEntry::CHANGES_KEY] = \is_array($changes) && \array_is_list($changes)
+            && AuditLevel::CHANGE->value === $level
+            ? \array_fill(0, \count($changes), self::WITHHELD)
+            : self::WITHHELD;
+
         return $metadata;
+    }
+
+    /**
+     * @param array<array-key, mixed> $changes
+     */
+    private function isSealedDiff(array $changes, string $level): bool
+    {
+        return AuditLevel::CHANGE->value === $level && !\array_is_list($changes);
     }
 }

@@ -24,6 +24,10 @@ function envelopeData(body: unknown): Record<string, unknown> | null {
  * rather than accepting either shape is what lets the surface state the expiry unconditionally:
  * a body claiming a secret without saying when it dies fails the guard and becomes a
  * `malformed-response-envelope`, instead of rendering an existing secret with a blank expiry.
+ *
+ * `live` is required as a boolean in both shapes, and must be `false` when nothing exists: a
+ * body without it would leave the readiness warning to guess, and a guess is the one thing
+ * that surface may not do.
  */
 const isStatusEnvelope: ResponseGuard<RecoverySecretStatusEnvelope> = (
   body,
@@ -31,6 +35,8 @@ const isStatusEnvelope: ResponseGuard<RecoverySecretStatusEnvelope> = (
   const data = envelopeData(body);
   if (data === null) return false;
   if (typeof data.exists !== "boolean") return false;
+  if (typeof data.live !== "boolean") return false;
+  if (!data.exists && data.live) return false;
   return data.exists
     ? typeof data.mintedAt === "string" && typeof data.expiresAt === "string"
     : data.mintedAt === null && data.expiresAt === null;
@@ -61,7 +67,7 @@ interface RevokeRecoverySecretRequest {
 /**
  * HTTP adapter over the signed-in identity's own recovery secret:
  *
- *  - `GET /me/recovery-secret` → `{ data: { exists, mintedAt, expiresAt } }`.
+ *  - `GET /me/recovery-secret` → `{ data: { exists, live, mintedAt, expiresAt } }`.
  *  - `POST /me/recovery-secret` → 201 `{ data: { secret, mintedAt, expiresAt } }`; the
  *    plaintext is returned once and is unrecoverable afterwards.
  *  - `POST /me/recovery-secret/revoke` → 204, carrying the current password. A verb with a

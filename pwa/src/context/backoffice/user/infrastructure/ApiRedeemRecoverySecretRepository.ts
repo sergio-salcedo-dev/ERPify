@@ -26,8 +26,9 @@ interface RedeemRecoverySecretRequest {
  *    `forbidden` 403 is an origin/CSRF rejection rather than an account state, so it falls
  *    through and is rethrown — otherwise a stripped `Origin` would render the terminal
  *    "account is not active" wall over a request that was merely refused at the door.
- *  - anything else — an unavailable session store (503), a transport fault — is not a redeem
- *    outcome and is rethrown for the neutral retryable error.
+ *  - anything else — any 5xx (an unavailable session store, an identity with no organization to
+ *    sign it into), a transport fault — is not a redeem outcome and is rethrown for the neutral
+ *    retryable error, never read as a wrong secret.
  *
  * The `X-CSRF-Token` header carries a client-generated, single-use CSRF nonce: the backend
  * only length-checks it, so a v7 UUID satisfies the contract while keeping every client-side

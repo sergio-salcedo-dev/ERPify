@@ -121,7 +121,8 @@ para Fase H sin segundo rediseño.
 4. Página vacía (filtro, fin de dataset o fuera de rango) → 200 `items: []`, nunca error.
 5. Descarte client-side de ambos cursores al cambiar `sort`/`direction`/`filters`/`limit` —
    defensa en profundidad sobre el fingerprint.
-6. Fingerprint completo: tenant + entity + normalizedFilters + sort + direction + limit.
+6. Fingerprint completo: tenant + entity + normalizedFilters + sort + direction + limit + consulta base
+   (su forma — DQL en el ORM, SQL en el timeline de auditoría —, nunca los valores ligados).
 7. Solo columnas **NOT NULL** son sortables (`NULL > x` es unknown — omitiría filas en silencio).
 8. Toda invalidez → 422 `invalid-cursor`, cuatro causas indistinguibles.
 9. `after`+`before` simultáneos → 422 `validation-failed` en mapping; cursor sobredimensionado →

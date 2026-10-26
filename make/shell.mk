@@ -19,8 +19,8 @@
 # `cmd; echo "✓ …"` makes the recipe line's exit status the ECHO's, so shellcheck
 # could print a finding, exit 1, and the target would still print its success line
 # and exit 0 — measured with a stub that emits a finding and exits 1: the ✓ printed
-# and `make shell.lint` returned 0. CI runs this exact target and `shell-lint` gates
-# through `ci-success`, so the masking reached the merge button. A gate that cannot
+# and `make shell.lint` returned 0. CI runs this exact target and the `static` job gates
+# through `ci-status`, so the masking reached the merge button. A gate that cannot
 # express a red is the shape this file was written to install, arrived at one
 # character of shell punctuation.
 #
@@ -76,8 +76,8 @@
 #
 # NOT PART OF ci.quality: that aggregate runs php.quality and pwa.quality inside
 # their containers, while this needs shellcheck on the host. Making it a member
-# would change that aggregate's contract for every contributor. It is its own
-# `shell-lint` job in ci.yml for the same reason, gating through `ci-success`.
+# would change that aggregate's contract for every contributor. It runs in the
+# `static` job of ci.yml for the same reason, gating through `ci-status`.
 
 .PHONY: shell.lint shell.files
 

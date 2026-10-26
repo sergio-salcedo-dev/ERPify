@@ -72,38 +72,39 @@ final class StartSessionRetiresCorrelatedSessionTest extends TestCase
         $this->assertTrue($sessionId->equals($reference), 'the correlation now names the new session');
     }
 
-    /** Only the correlated row is touched: this is not a "log out everywhere". */
-    public function testNoOtherSessionOfTheIdentityIsTouched(): void
-    {
-        $previous = SessionMother::active();
-        $sibling = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c71');
-
-        $sessions = new InMemorySessionRepository($previous, $sibling);
-
-        $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
-
-        $this->assertSame(SessionStatus::REVOKED, $previous->status());
-        $this->assertSame(SessionStatus::ACTIVE, $sibling->status(), 'this is not a log-out-everywhere');
-        $this->assertSame([], $sessions->revokeAllCalls);
-        $this->assertSame([], $sessions->revokeOthersCalls);
-    }
-
     /**
-     * A shared browser: the correlated row belongs to another person, so it is left live for its owner and the
-     * login publishes nothing about them — only its own start.
+     * Once this login commits the correlated row has no bearer left, so it is revoked whoever owns it and its
+     * `SessionRevoked` is published as for the identity's own — while no other session of either identity is
+     * touched.
      */
-    public function testACorrelatedSessionOfAnotherIdentityIsLeftLiveAndUnannounced(): void
+    public function testTheCorrelatedSessionIsRevokedWhoeverOwnsItAndNoOtherSessionIsTouched(): void
     {
-        $previous = SessionMother::active(userId: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c70');
+        $previousOwner = '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c70';
+        $previous = SessionMother::active(userId: $previousOwner);
         $previous->pullDomainEvents();
 
-        $sessions = new InMemorySessionRepository($previous);
+        $sibling = SessionMother::active(id: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c71');
+        $previousOwnersOtherDevice = SessionMother::active(
+            id: '0190c1d2-e3f4-7a5b-8c6d-1e2f3a4b5c72',
+            userId: $previousOwner,
+        );
+
+        $sessions = new InMemorySessionRepository($previous, $sibling, $previousOwnersOtherDevice);
 
         $sessionId = $this->start($this->correlatedTo(SessionMother::DEFAULT_ID), $sessions);
 
-        $this->assertSame(SessionStatus::ACTIVE, $previous->status());
-        $this->assertSame([$sessionId->toString()], $this->savedIds($sessions));
-        $this->assertSame([[self::STARTED, $sessionId->toString()]], $this->published());
+        $this->assertSame(SessionStatus::REVOKED, $previous->status());
+        $this->assertSame(
+            [
+                [self::REVOKED, SessionMother::DEFAULT_ID],
+                [self::STARTED, $sessionId->toString()],
+            ],
+            $this->published(),
+        );
+        $this->assertSame(SessionStatus::ACTIVE, $sibling->status(), 'this is not a log-out-everywhere');
+        $this->assertSame(SessionStatus::ACTIVE, $previousOwnersOtherDevice->status(), 'nor one for its owner');
+        $this->assertSame([], $sessions->revokeAllCalls);
+        $this->assertSame([], $sessions->revokeOthersCalls);
     }
 
     #[DataProvider('provideACorrelationToAnInadmissibleSessionOnlyMintsCases')]

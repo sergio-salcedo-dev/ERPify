@@ -37,6 +37,7 @@ final class StaticAuthorizationPolicyUsersResourceTest extends TestCase
         yield 'read' => ['users.read'];
         yield 'invite' => ['users.invite'];
         yield 'revokeInvitation' => ['users.revokeInvitation'];
+        yield 'resendInvitation' => ['users.resendInvitation'];
         yield 'changeStatus' => ['users.changeStatus'];
         yield 'changeRoles' => ['users.changeRoles'];
         yield 'grantAdmin' => ['users.grantAdmin'];

@@ -13,7 +13,7 @@ namespace Erpify\Shared\Search\Domain;
  * Lives in `Domain/` (no framework, no infrastructure import) so every adapter
  * — HTTP DTO, message handlers — speaks one direction type. The backing string
  * values intentionally mirror the infrastructure wire tokens
- * ({@see \Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor}'s
+ * ({@see \Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor}'s
  * `DIRECTION_AFTER`/`DIRECTION_BEFORE}); a contract test pins that coherence so
  * the mapping can never drift silently.
  */

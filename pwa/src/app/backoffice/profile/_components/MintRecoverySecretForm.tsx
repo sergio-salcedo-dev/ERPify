@@ -2,7 +2,10 @@
 
 import { type FormEvent, useRef, useState, useSyncExternalStore } from "react";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
-import type { RecoverySecretRepository } from "@/context/shared/access/domain/RecoverySecretRepository";
+import {
+  RECOVERY_SECRET_REPOSITORY_KEY,
+  type RecoverySecretRepository,
+} from "@/context/shared/access/domain/RecoverySecretRepository";
 import type { MintedRecoverySecret } from "@/context/shared/access/domain/RecoverySecret";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
@@ -14,8 +17,6 @@ import {
 import { FormField, Spinner } from "@/components/erpify";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/button";
-
-const RECOVERY_SECRET_REPOSITORY_KEY = "RecoverySecretRepository";
 
 /** The problem type the API hangs on the password field rather than on a `violations[]` entry. */
 const INVALID_CURRENT_PASSWORD = "invalid-current-password";

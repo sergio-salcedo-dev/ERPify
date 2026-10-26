@@ -125,7 +125,7 @@ docker.up.wait.no-build: $(DOCKER_UP_GUARDS) ## Start stack detached with --wait
 # Backend-only variant for API-only CI jobs (PHPUnit/Behat hit /api/* and need the
 # async worker for audit/email; they never touch the pwa container). Naming the php
 # + messenger_worker services pulls database + mailpit in as depends_on but excludes
-# pwa entirely — skips its build, `npm ci`, and ~180s cold `next dev` boot from the
+# pwa entirely — skips its build and its ~180s cold `next dev` boot from the
 # critical path. Mirrors the cold-boot retry-once logic of docker.up.wait.no-build.
 docker.up.wait.no-build.api: $(DOCKER_UP_GUARDS) ## Start backend only (php + worker + deps), --wait, skip rebuild — excludes pwa (CI: API-only jobs)
 	$(DOCKER_COMPOSE) up --wait --no-build --detach php messenger_worker \

@@ -24,6 +24,7 @@
   "backoffice_user_change_status": { "path": "/api/v1/backoffice/users/{id}/status", "methods": ["PATCH"] },
   "backoffice_user_erase": { "path": "/api/v1/backoffice/users/{id}", "methods": ["DELETE"] },
   "backoffice_user_get": { "path": "/api/v1/backoffice/users/{id}", "methods": ["GET"] },
+  "backoffice_user_invitation_resend": { "path": "/api/v1/backoffice/users/{userId}/invitation/resend", "methods": ["POST"] },
   "backoffice_user_invitation_revoke": { "path": "/api/v1/backoffice/users/{userId}/invitation", "methods": ["DELETE"] },
   "backoffice_user_search": { "path": "/api/v1/backoffice/users", "methods": ["GET"] },
   "backoffice_user_unlock": { "path": "/api/v1/backoffice/users/{id}/unlock", "methods": ["POST"] },

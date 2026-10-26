@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Organization\Membership\Application;
 
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Organization\Membership\Domain\Exception\MembershipCardinalityViolated;
 use Erpify\Organization\Membership\Domain\Exception\OrganizationNotProvisioned;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
@@ -27,9 +28,10 @@ final readonly class GrantMembership
     }
 
     /**
-     * @throws InvalidUuidException       when the user id is not a well-formed UUID
-     * @throws OrganizationNotProvisioned when no organization has been provisioned yet
-     * @throws UserAlreadyMember          when the user already belongs to the organization
+     * @throws InvalidUuidException          when the user id is not a well-formed UUID
+     * @throws OrganizationNotProvisioned    when no organization has been provisioned yet
+     * @throws UserAlreadyMember             when the user already belongs to the organization
+     * @throws MembershipCardinalityViolated when the store already holds several memberships for the user
      */
     public function grant(string $userId): Membership
     {

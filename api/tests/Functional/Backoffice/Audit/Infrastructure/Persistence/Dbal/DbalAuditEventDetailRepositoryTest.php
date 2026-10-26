@@ -13,6 +13,7 @@ use Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal\DbalAuditTimelineRep
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -68,9 +69,11 @@ final class DbalAuditEventDetailRepositoryTest extends KernelTestCase
             $entry = AuditLogEntry::create(
                 'BANK_UPDATED',
                 AuditLevel::CHANGE,
-                ActorContext::forUser(self::ACTOR_ID),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-03-01T11:30:00.123456+00:00'),
+                new AuditProvenance(
+                    ActorContext::forUser(self::ACTOR_ID),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-03-01T11:30:00.123456+00:00'),
+                ),
                 AuditResource::of('Bank', self::RESOURCE_ID),
                 ['changes' => ['name' => ['old' => 'BBVA', 'new' => 'BBVA S.A.']]],
             );
@@ -106,9 +109,11 @@ final class DbalAuditEventDetailRepositoryTest extends KernelTestCase
             $entry = AuditLogEntry::create(
                 'VIEW',
                 AuditLevel::ACTIVITY,
-                ActorContext::anonymous(),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-03-01T11:00:00.000000+00:00'),
+                new AuditProvenance(
+                    ActorContext::anonymous(),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-03-01T11:00:00.000000+00:00'),
+                ),
             );
             $writer->write($entry);
 

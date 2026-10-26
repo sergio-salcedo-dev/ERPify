@@ -27,10 +27,13 @@ jobs:
   #
   # The Symfony api/ is NOT analysed here: CodeQL ships no PHP analyzer, and
   # make/codeql.mk targets the PWA source root. Its dataflow coverage is the
-  # repo-owned Semgrep ruleset in the api-semgrep job of ci.yml, backed by the
+  # repo-owned Semgrep ruleset in the static job of ci.yml, backed by the
   # security checklist in the root CLAUDE.md applied in review.
   analyze:
     name: CodeQL (${{ matrix.language }})
+    # Skipped on dependabot pull requests, for the reason ci.yml's api-build gives:
+    # they are re-resolved into one /deps-update batch PR, which this analyses.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -54,7 +57,7 @@ jobs:
           persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: ${{ matrix.language }}
           source-root: ${{ matrix.source-root }}
@@ -69,6 +72,6 @@ jobs:
               - '**/tests'
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           category: "/language:${{ matrix.language }}"

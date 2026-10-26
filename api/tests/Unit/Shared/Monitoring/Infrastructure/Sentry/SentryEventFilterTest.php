@@ -30,12 +30,15 @@ final class SentryEventFilterTest extends TestCase
             },
         ]);
 
-        $result = (new SentryEventFilter())(Event::createEvent(), $hint);
+        $event = Event::createEvent();
+        $event->setRequest(['url' => 'https://erpify.test/api/v1/banks/1', 'method' => 'DELETE']);
+
+        $result = (new SentryEventFilter())($event, $hint);
 
         $this->assertNotInstanceOf(
             Event::class,
             $result,
-            'A ClientError (expected 4xx) must be dropped before Sentry.',
+            'A ClientError (expected 4xx) on an HTTP request must be dropped before Sentry.',
         );
     }
 

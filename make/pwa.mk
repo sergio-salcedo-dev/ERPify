@@ -128,12 +128,26 @@ E2E_ORG_NAME ?= E2E-Test-Organization
 E2E_SUSPENDABLE_EMAIL ?= e2e-suspendable@erpify.test
 E2E_SUSPENDABLE_ID ?= 0190e2e5-5050-7050-8050-000000000001
 
+# Recovery-redemption fixture user — the identity `recovery-redeemed-notice-real-api.spec.ts` redeems a recovery
+# secret as. Never the shared admin above: a redemption signs out every OTHER session of the account, which would
+# revoke the per-worker sessions `authenticatedTest` mints for that admin under every sibling spec. Seeded through
+# the same CLI bootstrap as the admin (password hashed by the configured hasher, ADMIN identity + membership in one
+# transaction) because it must sign in with a password, which neither SQL nor an invitation can give it without a
+# precomputed hash or reading a mail. Idempotent the same way: a duplicate email fails the CLI, swallowed.
+# Keep the values in sync with E2E_RECOVERY_USER_* in pwa/tests/e2e/constants.ts.
+E2E_RECOVERY_EMAIL ?= e2e-recovery@erpify.test
+E2E_RECOVERY_PASSWORD ?= e2eRecoveryPassword123
+
 pwa.test.e2e: pwa.install.if-missing ## Run end-to-end tests with Playwright; CI_SHARD=N CI_TOTAL_SHARDS=M for sharded runs; pass c='…' for extra args
 	@echo "[e2e] seeding org + admin $(E2E_USER_EMAIL) (idempotent; non-zero is expected when already seeded)…"
 	@$(MAKE) --no-print-directory sf c='organization:provision $(E2E_ORG_NAME)' >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory sf c='organization:administrator:create $(E2E_USER_EMAIL) $(E2E_USER_PASSWORD)' >/dev/null 2>&1 \
 		&& echo "[e2e] org + admin seeded." \
 		|| echo "[e2e] seed non-zero: fine if already seeded; if login then fails, provision/admin-create genuinely failed (check the stack)."
+	@echo "[e2e] seeding recovery-redemption identity $(E2E_RECOVERY_EMAIL) (idempotent; non-zero is expected when already seeded)…"
+	@$(MAKE) --no-print-directory sf c='organization:administrator:create $(E2E_RECOVERY_EMAIL) $(E2E_RECOVERY_PASSWORD)' >/dev/null 2>&1 \
+		&& echo "[e2e] recovery-redemption identity seeded." \
+		|| echo "[e2e] recovery seed non-zero: fine if already seeded; if the recovery-redeemed-notice spec then fails to log in, admin-create genuinely failed (check the stack)."
 	@echo "[e2e] seeding ACTIVE non-admin $(E2E_SUSPENDABLE_EMAIL) (re-activated each run for the suspend spec)…"
 	@$(MAKE) --no-print-directory sf c="dbal:run-sql \"INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('$(E2E_SUSPENDABLE_ID)', '$(E2E_SUSPENDABLE_EMAIL)', NULL, json_build_array('VIEWER'), 'ACTIVE', 0, NOW(), NOW()) ON CONFLICT (email) DO UPDATE SET status = 'ACTIVE', roles = json_build_array('VIEWER'), updated_at = NOW()\"" >/dev/null 2>&1 \
 		&& echo "[e2e] suspendable member seeded (ACTIVE, VIEWER)." \

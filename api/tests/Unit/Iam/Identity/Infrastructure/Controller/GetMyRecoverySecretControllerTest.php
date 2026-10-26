@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Controller;
 
+use DateInterval;
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Application\Resource\RecoverySecretResource;
 use Erpify\Iam\Identity\Domain\Entity\RecoverySecret;
@@ -51,6 +52,7 @@ final class GetMyRecoverySecretControllerTest extends TestCase
         $payload = $this->emit(new InMemoryRecoverySecretRepository());
 
         $this->assertFalse($payload['exists']);
+        $this->assertFalse($payload['live']);
         $this->assertNull($payload['mintedAt']);
         $this->assertNull($payload['expiresAt']);
     }
@@ -63,6 +65,7 @@ final class GetMyRecoverySecretControllerTest extends TestCase
         $payload = $this->emit(new InMemoryRecoverySecretRepository($this->secret()));
 
         $this->assertTrue($payload['exists']);
+        $this->assertTrue($payload['live']);
         // Both instants are pinned to a VALUE, not to a type. `expiresAt` comes from the injected clock, but
         // `mintedAt` is the aggregate's `createdAt`, taken from the ambient {@see SystemClock} — so asserting
         // only `assertIsString` here leaves the two slots interchangeable: feeding `expiresAt` into the
@@ -70,6 +73,29 @@ final class GetMyRecoverySecretControllerTest extends TestCase
         // minted today. Freezing the ambient clock is what makes the value assertable at all.
         $this->assertSame(self::NOW, $payload['mintedAt']);
         $this->assertSame(self::LAPSES, $payload['expiresAt']);
+    }
+
+    #[Test]
+    public function aLapsedSecretStillExistsButIsNotLive(): void
+    {
+        // An expired row still occupies the slot, so `exists` alone would read as "covered" over a credential
+        // that no longer signs anyone in. The read is judged against the injected clock, at the exact
+        // instant of expiry — the boundary redemption itself refuses at.
+        $payload = $this->emit(new InMemoryRecoverySecretRepository($this->secret()), self::LAPSES);
+
+        $this->assertTrue($payload['exists']);
+        $this->assertFalse($payload['live']);
+        $this->assertSame(self::LAPSES, $payload['expiresAt']);
+    }
+
+    #[Test]
+    public function aSecretOneSecondShortOfItsExpiryIsStillLive(): void
+    {
+        $lapses = new DateTimeImmutable(self::LAPSES);
+        $oneSecondShort = $lapses->sub(new DateInterval('PT1S'))->format(DATE_ATOM);
+        $payload = $this->emit(new InMemoryRecoverySecretRepository($this->secret()), $oneSecondShort);
+
+        $this->assertTrue($payload['live']);
     }
 
     #[Test]
@@ -120,9 +146,14 @@ final class GetMyRecoverySecretControllerTest extends TestCase
     }
 
     /** The endpoint driven end to end, handing back the response so a case can read the bytes it emits. */
-    private function respond(InMemoryRecoverySecretRepository $secrets): Response
+    private function respond(InMemoryRecoverySecretRepository $secrets, string $readAt = self::NOW): Response
     {
-        $controller = new GetMyRecoverySecretController($secrets, ResourceResponderBuilder::wired());
+        // The read instant is installed as the ambient clock too: an injected clock disagreeing with it throws
+        // on read, and the aggregate was already stamped, so moving the ambient one changes nothing it holds.
+        $clock = FixedClock::at($readAt);
+        SystemClock::set($clock);
+
+        $controller = new GetMyRecoverySecretController($secrets, ResourceResponderBuilder::wired(), $clock);
 
         return $controller(new SecurityUser(UserMother::create()));
     }
@@ -141,11 +172,11 @@ final class GetMyRecoverySecretControllerTest extends TestCase
      *
      * The closed set lives here rather than in one case, so every case pays it.
      *
-     * @return array{exists: bool, mintedAt: string|null, expiresAt: string|null}
+     * @return array{exists: bool, live: bool, mintedAt: string|null, expiresAt: string|null}
      */
-    private function emit(InMemoryRecoverySecretRepository $secrets): array
+    private function emit(InMemoryRecoverySecretRepository $secrets, string $readAt = self::NOW): array
     {
-        $response = $this->respond($secrets);
+        $response = $this->respond($secrets, $readAt);
 
         $this->assertSame(Response::HTTP_OK, $response->getStatusCode(), (string) $response->getContent());
 
@@ -155,18 +186,21 @@ final class GetMyRecoverySecretControllerTest extends TestCase
 
         $data = $body['data'];
         $this->assertIsArray($data);
-        $this->assertSame(['exists', 'mintedAt', 'expiresAt'], \array_keys($data));
+        $this->assertSame(['exists', 'live', 'mintedAt', 'expiresAt'], \array_keys($data));
         $this->assertArrayHasKey('exists', $data);
+        $this->assertArrayHasKey('live', $data);
         $this->assertArrayHasKey('mintedAt', $data);
         $this->assertArrayHasKey('expiresAt', $data);
 
         $exists = $data['exists'];
+        $live = $data['live'];
         $mintedAt = $data['mintedAt'];
         $expiresAt = $data['expiresAt'];
         $this->assertIsBool($exists);
+        $this->assertIsBool($live);
         $this->assertTrue(null === $mintedAt || \is_string($mintedAt));
         $this->assertTrue(null === $expiresAt || \is_string($expiresAt));
 
-        return ['exists' => $exists, 'mintedAt' => $mintedAt, 'expiresAt' => $expiresAt];
+        return ['exists' => $exists, 'live' => $live, 'mintedAt' => $mintedAt, 'expiresAt' => $expiresAt];
     }
 }

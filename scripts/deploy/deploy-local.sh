@@ -27,8 +27,11 @@ ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 HEALTH_PATH="${HEALTH_PATH:-/api/v1/health}"
 CA_PATH_IN_CONTAINER="/data/caddy/pki/authorities/local/root.crt"
 CA_OUT="erpify-local-root-ca.crt"
-# Make `docker compose` target the same project make uses, regardless of cwd basename.
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
+# The project follows the env file's TLS profile (lib/prod-env.sh); exported so the
+# nested `make` calls and `docker compose` below act on the same one.
+# shellcheck source=scripts/deploy/lib/prod-env.sh
+source "$REPO_ROOT/scripts/deploy/lib/prod-env.sh"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(prod_project_name "$ENV_FILE")}"
 
 DRY_RUN=0
 SKIP_MIGRATIONS=0
@@ -63,8 +66,8 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-MAKE="make ENV=prod PROD_ENV_FILE=$ENV_FILE"
-COMPOSE="docker compose --env-file $ENV_FILE -f compose.yaml -f compose.prod.yaml"
+MAKE="make COMPOSE_PROJECT_NAME=$COMPOSE_PROJECT_NAME ENV=prod PROD_ENV_FILE=$ENV_FILE"
+COMPOSE="docker compose -p $COMPOSE_PROJECT_NAME --env-file $ENV_FILE $(prod_compose_files "$ENV_FILE")"
 OS="$(uname -s)"
 
 # —— 1. Preflight ——————————————————————————————————————————————————————————
@@ -75,8 +78,22 @@ docker compose version >/dev/null 2>&1 || { log_error "'docker compose' v2 not a
 # Secret guard — fails fast with copy-from-example instructions.
 make PROD_ENV_FILE="$ENV_FILE" prod.env.check
 
+# A container of another project holding a host port this stack publishes
+# (usually dev's `erpify` on 80/443/8025) makes `docker.up` die on a bare
+# port-bind error; name the holder and the fix instead. The list, protocol
+# included, is lib/prod-env.sh's.
+while read -r published; do
+    holder="$(docker ps --filter "publish=${published}" \
+        --format '{{.Label "com.docker.compose.project"}}|{{.Names}}' 2>/dev/null \
+        | grep -v "^${COMPOSE_PROJECT_NAME}|" | head -n1 || true)"
+    if [[ -n "$holder" ]]; then
+        log_error "Port ${published} is held by '${holder#*|}' (project '${holder%%|*}'). Stop it first (dev: 'make docker.down')."
+        exit 1
+    fi
+done < <(prod_published_ports "$ENV_FILE")
+
 # Resolve the served host from the env file (default erpify.local).
-SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
+SERVER_NAME="$(prod_env_value SERVER_NAME "$ENV_FILE" 2>/dev/null || true)"
 SERVER_NAME="${SERVER_NAME:-erpify.local}"
 HOSTS_LINE="127.0.0.1   ${SERVER_NAME}"
 NSS_DB="$HOME/.pki/nssdb"
@@ -131,8 +148,7 @@ NSS_TRUSTED=0
 if [[ $TRUST -eq 1 ]]; then
     # Public TLS (ACME) ships no internal CA root to export — clients trust the
     # public chain, so there is nothing to install locally.
-    SERVER_DIRECTIVES="$(grep -E '^CADDY_SERVER_EXTRA_DIRECTIVES=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"' | xargs || true)"
-    if [[ -z "${SERVER_DIRECTIVES//[[:space:]]/}" ]]; then
+    if [[ "$(prod_tls_profile "$ENV_FILE")" != internal ]]; then
         log_info "Public/ACME TLS profile detected — clients trust the public CA; skipping internal-CA export."
     else
         log_info "Setting up client trust for the internal CA..."

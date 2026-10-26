@@ -45,6 +45,8 @@ const ALLOWED_PUBLIC_ENV_VARS = new Set<string>([
   // Sentry DSN — write-only, browser-embeddable identifier (the SDK runs
   // client-side). Not a secret; see pwa/CLAUDE.md's NEXT_PUBLIC_ table.
   "NEXT_PUBLIC_SENTRY_DSN",
+  // Sentry `environment` tag override (`rehearsal`). A label, never a secret.
+  "NEXT_PUBLIC_SENTRY_ENVIRONMENT",
 ]);
 
 const PWA_ROOT = path.resolve(__dirname, "..");
@@ -156,6 +158,7 @@ describe("NEXT_PUBLIC_* env allowlist", () => {
       "NEXT_PUBLIC_API_BASE_URL",
       "NEXT_PUBLIC_APP_ENV",
       "NEXT_PUBLIC_SENTRY_DSN",
+      "NEXT_PUBLIC_SENTRY_ENVIRONMENT",
     ]);
   });
 });

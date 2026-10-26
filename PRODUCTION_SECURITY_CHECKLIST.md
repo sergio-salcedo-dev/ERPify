@@ -23,15 +23,16 @@ you change anything here.
 - [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were freshly
       generated (`openssl rand …`), not reused from dev.
 - [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is used as **raw 32-byte**
-      key material — the app fails fast unless the value is exactly 32 bytes long.
+      key material — `make prod.env.check` refuses any value that is not exactly 32 bytes,
+      and the app throws `InvalidKek` on the first audited write if one gets past it.
       Generate a printable 32-byte key with `openssl rand -base64 24` (24 random bytes →
       32 base64 chars, no padding); `-hex 32` (64 chars) or `-base64 32` (44 chars)
-      produce the wrong length and abort boot. Freshly generated, not reused from dev.
+      produce the wrong length. Freshly generated, not reused from dev.
       Custodied **outside the app** (env / secret manager), never beside the DEKs it
       wraps and never committed. Destroying a DEK (subject erasure) is irreversible by
       design. KEK rotation is **not yet automated**: rotating `AUDIT_KEK` in place makes
       every existing DEK unreadable, so a batch re-wrap tool is a prerequisite (not yet
-      shipped) — do not rotate the live KEK until it exists. Required in prod: listed in
+      shipped) — do not rotate the live KEK until it exists. Required in prod: checked by
       `make prod.env.check` and guarded by `${VAR:?}` on every PHP service in
       `compose.prod.yaml`, so a missing value aborts the deploy by name like the other
       prod secrets (otherwise the app boots and fails closed on the first audited write).
@@ -108,7 +109,8 @@ you change anything here.
       breadcrumbs and exception messages are out of that scope.
 - [ ] No secret hides behind a `NEXT_PUBLIC_*` name — those are inlined into the
       browser bundle at build time. Only `NEXT_PUBLIC_API_BASE_URL`,
-      `NEXT_PUBLIC_APP_ENV`, and `NEXT_PUBLIC_SENTRY_DSN` are allowed; the
+      `NEXT_PUBLIC_APP_ENV`, `NEXT_PUBLIC_SENTRY_DSN` and
+      `NEXT_PUBLIC_SENTRY_ENVIRONMENT` (a tag) are allowed; the
       `pwa/tests/next-public-env-allowlist.test.ts` guard (in `make pwa.test.unit`)
       fails the build on any other. The Sentry DSN is intentionally public
       (write-only, browser-embeddable); the real Sentry secret is
@@ -288,15 +290,17 @@ you change anything here.
 - [ ] `audit_log` (raw-DBAL append-only table) **contains live PII**: `actor_id`,
       `ip`, `user_agent`. Capture is now wired: generic `/api` navigation on
       `kernel.terminate` (→ `activity`) and permission denials on `kernel.exception`
-      (→ `security`), with `ip` (`Request::getClientIp()`, trusted-proxy aware so a
-      spoofed `X-Forwarded-For` cannot forge it) and `user_agent` (trimmed to the
+      (→ `security`), with `ip` (`Request::getClientIp()`, which honours `X-Forwarded-For`
+      only from a hop in `SYMFONY_TRUSTED_PROXIES` — empty in `compose.prod.yaml`, so prod
+      records the TCP peer; see §7) and `user_agent` (trimmed to the
       column width) sealed onto every entry. **Write capture is also wired:** every
       create/update/delete of an aggregate marked `AuditedEntity` records a `change`
       row with a field-level before/after diff, written synchronously inside the
       business transaction so the row is atomic with the write (out-of-band flushes —
       fixtures, seeds — are not captured). `Bank` (a catalog) is audited in clear; a
       **PII-bearing diff is crypto-shredded**: `BankAccount`'s `#[PersonalData]` fields
-      (`holderName`/`iban`) are AEAD-encrypted (libsodium) under a per-subject DEK before
+      (`holderName`, its search twin `holderNameNormalized`, `iban`, `alias`) are
+      AEAD-encrypted (libsodium) under a per-subject DEK before
       the row is written (A.5.12 classification), so no personal data is ever stored in
       clear; the row references its `encryption_scope_id` and the read UI shows a sealed
       sentinel, never the ciphertext. Its `ip` / `user_agent` / `metadata` are
@@ -570,10 +574,13 @@ you change anything here.
       transaction, so a concurrent reset and a concurrent change serialise on it. Post-commit, in this order:
       **every session is revoked** (`RevokeSessionsBestEffort`, containment first) then the password-changed mail
       is sent (best-effort, so a hung mailer can neither roll the change back nor hold the revoked sessions open);
-      `Security::login()` afterwards mints a replacement registry session with the anti-fixation `migrate(true)`
-      regeneration, so the device that made the change walks away signed in. That teardown is **best-effort by
-      construction**: it swallows its own failure and the 204 carries no word on it, so "every other device is
-      out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
+      `Security::login()` afterwards mints a replacement registry session with the anti-fixation id rotation, so
+      the device that made the change walks away signed in on an id it did not hold. The rotation is applied by
+      the `RotateSessionIdOnLogin` listener on every `main` login: the firewall's own `migrate(true)` skips a
+      login as the identity the session already carried — this flow, and `POST /login` from a signed-in
+      device — so without it the id held before would carry the new login.
+      That teardown is **best-effort by construction**: it swallows its own failure and the 204 carries no word
+      on it, so "every other device is out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
       mail both point at _Active sessions_ instead of asserting it. The login is likewise contained (a failure
       logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
       can no longer succeed). `Security::login()` re-enters only `checkPreAuth`, so it does **not** re-run the
@@ -637,7 +644,10 @@ you change anything here.
 - [ ] **Pre-identity cross-cutting hardening (login · invitation accept · forgot/reset):**
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
-      rejection and **every** forgot outcome, so latency correlates with nothing (`identity-invitation-lifecycle.md` D10). A dead reset/accept
+      rejection and **every** forgot outcome (`identity-invitation-lifecycle.md` D10). The floor is ADDED to each branch,
+      not a deadline each is padded to, so it hides only differentials smaller than its own variance: the forgot
+      route's ACTIVE branch still pays a locked transaction and a synchronous SMTP send on top of it — open in §7,
+      *`/forgot-password` latency separates an active account from every other address*. A dead reset/accept
       link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (same ADR, D11):
       `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
       subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
@@ -655,9 +665,9 @@ you change anything here.
       reach was whatever a person remembered to write. **The threat model the old acceptance was signed
       against was the wrong one**: it argued that whoever plants an index past the cap already knows the
       identifier, which answers confidentiality and answers nothing about **retention** — the harm is that
-      the deployment then holds a person's identifier in a sink bounded by size alone, with no TTL and no
-      owner of erasure, and any client can force that for free. Both cliffs (index and sub-index) are closed by the
-      strip rather than by a longer list. **Caddy also drops the `Referer` header**, because a
+      the deployment then holds a person's identifier in a sink with no owner of erasure, for as long as its
+      retention keeps the line (about 15 days, §7), and any client can force that for free. Both cliffs
+      (index and sub-index) are closed by the strip rather than by a longer list. **Caddy also drops the `Referer` header**, because a
       log line records more than its URI: for a same-origin API call the referring document is the screen the
       ids live on, so an unfiltered `Referer` reproduces in clear exactly what the `uri` filter blanked, on the
       same entry. The **application** log answers the same vocabulary through a Monolog processor over every
@@ -749,8 +759,10 @@ you change anything here.
       a proven login → **403 `account-locked`**, minting no session); a successful login or a lapsed window clears
       it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
       nothing** — the pre-identity 401 stays indistinguishable, and a wrong password on a locked account still
-      returns the uniform 401 (an anonymous caller never sees `locked`). Catches a distributed credential-stuffing
-      run that sprays one account from many IPs and so evades the per-IP throttle. The lock is orthogonal to
+      returns the uniform 401 (an anonymous caller never sees `locked`). It **bounds the rate** at which a run spraying
+      one account from many IPs can land a session, but **not the number of guesses**: a locked account still
+      verifies every password, counts none of the failures, and answers the correct one with that 403 — open in §7,
+      *The persisted lockout confirms a correct password while it is in force*. The lock is orthogonal to
       `IdentityStatus` (a locked identity stays `ACTIVE`); the lock trip emits a PII-free `UserLocked` domain event.
       A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
       uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
@@ -782,6 +794,25 @@ you change anything here.
       detection/notification half (`NotifyLockedIdentities`) shipped in #683 and #857; #602 stays open on the
       stolen-session composition recorded in §7 (*A stolen session can deny the owner a credential rotation,
       but not an eviction*).
+- [ ] **The console's invitation levers — resend (`POST /backoffice/users/{userId}/invitation/resend`) and
+      revoke (`DELETE /backoffice/users/{userId}/invitation`) — are bounded and attributed.** Both are
+      `ADMIN`-only (`users.resendInvitation`, `users.revokeInvitation`). Every resend kills the link the invitee
+      already holds and mails a new one, so an unbounded resend let one administrator session — stolen or
+      scripted — keep a person's link permanently dead and flood their mailbox. `InvitationResendThrottle`
+      spends `invitation_resend_per_invitee` (5 / day between deploys — the limiter state lives in the `app`
+      cache pool, which a deploy resets — keyed by an HMAC of the case-folded invitee id under `kernel.secret`,
+      so the stored bucket names nobody, and shared by every administrator)
+      after the id is validated and before any row is touched, and answers a visible 429. Each caller may spend
+      at most its own share of it (`invitation_resend_per_actor_invitee`, 2 / day per invitee, spent first), so
+      one session cannot drain it for the others. The cost is that a drained bucket blocks every administrator's
+      HTTP resend of that person until it refills (§7); the console command `iam:invitation:resend`, which
+      neither budget covers, is the way round it. Each act writes a `security` row naming the invitee (`INVITATION_RESENT`,
+      `INVITATION_REVOKED`), because the event store records the transition and never who caused it. The row is
+      written by `Iam/Identity`'s `RecordInvitationAudit` — the context that owns and erases the person — under
+      the invitee's `identity_user` row lock, nested in the lever's transaction after the invitation rows: the
+      order `FulfilIdentityErasure` takes them in, so the row either commits before the erasure's pass over the
+      trail or finds the identity gone and is never written (`SubjectAuditWriteSerialisationGateTest`,
+      `PersonResourceErasureGateTest`).
 - [ ] **The recovery secret (`identity_recovery_secret`): the lockout edge that depends on no peer.** A
       `<selector>.<secret>` credential in its own aggregate, one row per identity (UNIQUE on `user_id`).
       **Minted** from a live session against a re-proof of the current password and shown in clear exactly
@@ -898,7 +929,9 @@ you change anything here.
       and `SecurityUser::isEqualTo` (`EquatableInterface`) for the copy deserialised from the session, which
       the firewall compares on every request and which reaches that comparison through no provider. That
       second guard also owns the guarantee both password-replacement flows rest on when they swallow a failed
-      session revoke: a credential change de-authenticates the sessions that predate it.
+      session revoke: a credential change de-authenticates the sessions that predate it. It compares the
+      lifecycle status too, so a suspension or deactivation whose post-commit revoke failed still ends every
+      live session of that identity on its next request (`session.feature`, `SecurityUserEqualityTest`).
 - [x] **The tolerance has a detective counterpart.** Because both shapes are handled silently and well,
       nothing surfaces the drift: no exception, no log line, every gate green over a table that is rotting.
       `identity:integrity:inspect` reads the raw columns (never through the aggregate, which filters the
@@ -970,14 +1003,30 @@ mitigated state. Accepting one means recording who accepted it and against which
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
       **The pass clears what is committed when it runs**, so it is closed only together with the item below.
+- [ ] **`audit_log.metadata` is a closed vocabulary, but two of its shapes still admit text the server did
+      not choose, and none of it is erasable.** `AuditLogEntry::create()` refuses any key outside
+      `AuditMetadataKey`, any value outside its key's shape and any `metadata` over 16 KiB, so a producer
+      can no longer drop an `iban` or a request body into the one column no erasure pass rewrites. What it
+      does not close: (a) **`orphan_role_values`** carries a sample of the raw `identity_user.roles` text the
+      integrity probe could not explain — whatever the corruption wrote there, a person's email included —
+      and **the clear fields of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]`
+      field is sealed) carry what a user typed; neither is reached by the anonymisers, which rewrite columns
+      and never this JSON. (b) **A UUID under a key is indistinguishable from a person's id**: the shape
+      admits a pseudonym under `anonymized_actor_id` exactly as it would admit the real id, so what keeps a
+      person's id out is the identity erasure's acceptance witness (`features/backoffice/users/erase.feature`),
+      not the vocabulary. Decision and costs: ADR [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4.
+
 - [ ] **A row naming the subject that commits after the erasure's pass is kept out by a lock, and the gate
       over it sees one directory.** The four post-commit writers that name a `User` in `resource_id` — the
       lockout, the lockout notice, the recovery throttle and the recovery-secret projections — each write under
       the subject's `identity_user` row lock (`IdentityRowLock`, `FOR KEY SHARE`), which `FulfilIdentityErasure`
       holds `FOR UPDATE` from its administrator re-check to its commit, ahead of the trail pass; so each row
       either commits first and is redacted, or waits and finds no subject. A login holds the same row
-      (`SessionSubjectLock`) before it writes its session, so a session and its `SessionStarted` are purged and
-      rewritten with the rest or never written; a bulk revocation (`RevokeAllSessions`, after a role, status or
+      (`SessionSubjectLock::holdForAdmission()`, `FOR SHARE`, reading the status it waited for) before it writes
+      its session, so a session and its `SessionStarted` are purged and rewritten with the rest or never
+      written — and a status write in flight is waited for, so a suspension's revoke-everything never runs before
+      a session minted alongside it (`LoginRacingASuspensionFunctionalTest`, which observes the wait in
+      `pg_stat_activity` rather than timing it); a bulk revocation (`RevokeAllSessions`, after a role, status or
       password change) holds it too, so its `AllSessionsRevoked` is rewritten with the rest or never written.
       Pinned against a second Postgres connection holding and deleting
       the row in `LateAuditWriterErasureSerialisationFunctionalTest` and `LoginRacingAnErasureFunctionalTest`.
@@ -1161,7 +1210,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       deploy used to reach it: `MAILER_DSN` defaulted to `null://null` in every compose file and
       `MAILER_SECURITY_FROM` appeared in none, falling through to a reserved domain that receives
       nothing while passing the non-blank / non-no-reply guard. Both are now `${VAR:?}` on all three
-      prod services, listed in `PROD_REQUIRED_KEYS`, and refused at send time by
+      prod services — which makes them required keys for `make prod.env.check` (`scripts/deploy/lib/prod-env.sh`, which also refuses a reserved-domain or no-reply sender before start) — and refused at send time by
       `DeliverableSecurityTransport` (discard transport) and `SecuritySenderAddress` (reserved sender
       domain). **The residual is that non-delivery on this channel is unobservable from the outside:**
       the notice is unsolicited, so no recipient reports its absence — the `warning` its best-effort
@@ -1196,22 +1245,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       requirement to `symfony/mercure ^0.6.1|^0.7`, so staying on it would have coupled the tree to
       the abandoned 0.4/0.7 pair and put a future advisory in Mercure's JWT-minting path out of
       reach. The bundle keeps `protocol_version: 0.x` by default, so the hub contract is unchanged.
+      Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
       **Superseded 2026-10-20:** mercure-bundle 0.6 defaults to protocol 1.0, which the embedded 0.x
       hub refuses, so `config/packages/mercure.yaml` pins `protocol_version: '0.x'` explicitly and
       `MercureHubProtocolFunctionalTest` asserts it on the container's own hub.
-      **Superseded 2026-10-22:** the FrankenPHP 1.13 image (taken for PHP 8.5.12, CVE-2026-109618 /
-      CVE-2026-109619) embeds dunglas/mercure 1.x, which refuses to boot with top-level
-      `publisher_jwt`/`subscriber_jwt` unless compatibility mode is named. `frankenphp/Caddyfile`
-      sets `protocol_version_compatibility 8`, which validates a 0.x token as the 0.x hub did (no `aud`,
-      no `exp` required) — no stricter and no looser than before. Measured against the v1.13.2 binary:
-      a `mercure`-claim publish is accepted, a wrong key and a missing token are 401, a private update
-      reaches the `mercureAuthorization` cookie on `?topic=` and not an anonymous subscriber. Residual:
-      the hub also accepts a 1.0 token whose `aud` names it; moving to an `issuer` block and protocol 1.0
-      is the way out of compatibility mode, and the two move together. The hub is also named
-      (`name erpify`): `SERVER_NAME` lists the origin and `php:80`, so the block yields two servers, and
-      1.x refuses two unnamed hubs; the shared name is what pools them onto one transport, so an update
-      published on `php:80` still reaches a subscriber on the origin (measured across two servers).
-      Its `stability-flags` entry dropped with the pin, leaving two, both `require-dev`.
+      **Superseded 2026-10-22:** the embedded hub is now dunglas/mercure 1.x in compatibility mode; what
+      that leaves open is its own item, "The embedded Mercure 1.x hub runs in compatibility mode".
       **Verified by forcing the broken path, not by a green run:** on a genuinely cold container
       cache `v0.4.2` exits 1 with `Deprecations: 1` naming
       `HttpKernel\DependencyInjection\Extension`, and the tagged line exits 0 over 2698 tests.
@@ -1247,6 +1286,37 @@ mitigated state. Accepting one means recording who accepted it and against which
       customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
       re-resolves the ranges in a single install and reads every claimed version back out of the
       lock) and re-run `composer audit`.
+- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order.** `SendInvitation`
+      and `ResendInvitation` commit the token rotation and then mail the link synchronously, outside the
+      transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent resends of one person are
+      serialised by the invitation row lock, but their SMTP sends race after the commit, so the email that
+      arrives last can carry the link the other resend already killed. And an SMTP exchange slower than the
+      PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. Both are
+      bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
+      operator to resend again, and a refused send answers 503 rather than a false 204.
+      **When an outbox earns its place** — any one of: a second transactional email producer that needs
+      at-least-once delivery rather than best-effort; the 30 s timeout observed against real SMTP latency; an
+      invitee who reports holding only a dead link after a resend; or invitations sent in bulk, where a
+      synchronous SMTP exchange per row stops fitting a request. **And the shape it must take:** a token-bearing
+      email may never sit in a Messenger transport (`docs/rules/security.md`, "Token hygiene"), so the outbox
+      would enqueue the INTENT — "deliver the current link of invitation X" — and mint the token when the
+      message is delivered, not enqueue the rendered email. That moves the token rotation off the request, so
+      the resend's answer stops meaning "the old link is dead", and that contract change is the real cost to
+      weigh. **Accepted:** not recorded (opened 2026-10-26).
+- [ ] **Three administrator identities acting together can hold one invitee's HTTP resend shut for a day.** The
+      per-invitee budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`,
+      5 / day, shared by every administrator — §6) is what stops the lever from killing a person's link for ever,
+      and sharing it means it can be drained. One identity cannot drain it alone: each caller may spend at most
+      its own share (`invitation_resend_per_actor_invitee`, 2 / day per invitee), spent first, so a single stolen
+      session — or one operator retrying through a mail outage — kills at most two of a person's links a day and
+      leaves the rest to the other administrators. Three distinct administrator identities can still spend all
+      five, and then nobody resends that person over HTTP until the window refills. The invitee keeps the last
+      link that was delivered, inside its three-day TTL; after a mail outage they hold none, because each 503 has
+      already rotated it. **Way round:** the console command `iam:invitation:resend <invitationId>`, which a shell
+      operator runs and neither budget covers. Every resend that spent the budget is attributed
+      (`INVITATION_RESENT`, `security`). **Revisit when** an operator reports a resend refused with 429 that they
+      did not cause, or the console surfaces invitation resend to a role other than `ADMIN`. **Accepted:** not
+      recorded (opened 2026-10-25; narrowed 2026-10-26 by the per-caller share).
 - [ ] **A stolen session can deny the owner a credential _rotation_, but not an _eviction_.** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
@@ -1284,7 +1354,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       role or status change aimed at its own identity, which is refused (ii).
       **What still survives, each outside what an eviction can reach:**
       **(i) An identity with no live secret** — never minted, spent and not yet re-minted, or lapsed (a lapsed
-      row counts as none, although `GET /me/recovery-secret` still reports it and minting over it answers 409
+      row counts as none — `GET /me/recovery-secret` reports it as `exists: true, live: false` — and minting over it answers 409
       until it is revoked). The composition is then intact: another administrator's `users.unlock` clears the
       lock only until the attacker's next ten failures re-seal it — seconds, not a lockout window — and for a
       **sole administrator** even that lever is absent (nobody else holds `users.unlock`, and the product
@@ -1332,7 +1402,23 @@ mitigated state. Accepting one means recording who accepted it and against which
       Until #602 closes, what the product owes is **(1) getting every administrator to mint a recovery secret,
       re-mint after every redemption, and warning while none is live**, and **(2) ordering guidance for an
       owner who can still sign in — evict first, rotate second** — in the UI copy and the password-changed
-      mail; the redemption flow needs none, because it evicts on its own.
+      mail; the redemption flow needs none, because it evicts on its own. The warning half of (1) exists: every
+      back-office page tells an `ADMIN` session whose secret is not live (none, spent or lapsed — the server's
+      `live`, never a client clock) so, in a non-dismissible `<aside>` that leaves the moment a mint answers. It
+      warns; it does not close (i). (2) exists too: the password-changed mail tells a reader who did not make the
+      change to redeem their recovery secret or reset from the sign-in page — either one signs every other device
+      out — and only then set a new password, with the security mailbox as the fallback; the change-password form
+      opens with the same order and a link to *Active sessions*. A redemption whose session is confirmed says the
+      second half itself: its toast states the other sessions were signed out, and the dashboard it lands on says
+      once what is still owed — a new password, since redemption changes none, and a new secret, since the used one
+      is spent — never that the account is now safe. A redemption whose session probe fails gets neither: its copy
+      says only that the secret is spent and to open the back office. That notice lives in the tab's memory until a
+      dashboard mounts, and it is consumed by that mount: a reload loses it, so does a session probe that fails
+      while the dashboard is showing it (the page unmounts and comes back without it), and if the redirect lands
+      elsewhere it waits and shows at that tab's next dashboard visit. Only the back-office "no live recovery
+      secret" banner — administrators only, and only about the secret — repeats any of it; nothing else restates
+      that redemption changed no password. The sign-in page links the recovery page, so the mail's "use your
+      recovery secret … from the sign-in page" names a reachable step.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an
@@ -1553,7 +1639,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       and nothing more.** Rotation evicts by VOLUME, so a busy deployment reaches a bounded window of hours
       while an IDLE one keeps its oldest line indefinitely — there is still no age-based expiry, and nothing
       in `FulfilIdentityErasure` can reach this sink. A person id that lands here can still outlive the
-      erasure the application confirmed to the subject, which is why this entry stays unchecked. Closing it
+      erasure the application confirmed to the subject, which is why this entry stays unchecked. **Caddy's
+      access log is no longer in this sink** ([#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879)):
+      it writes its own file with its own budget and a TTL (the URL-path entry below). What remains here is
+      Monolog's prod output — the flushed `fingers_crossed` buffer and the always-on `observability` channel —
+      the embedded Mercure hub's `http.handlers.mercure` logger, and every other container's stdout/stderr
+      (`database`, `pwa`, the workers). Closing it
       needs a different mechanism — a log driver whose retention the erasure path can act on, or shipping to
       a sink that has one — and is deliberately not attempted while there is no production deployment and no
       customer, mirroring how the mail-boundary residuals are accepted. Gate:
@@ -1574,11 +1665,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       construction — and the application log's `request_uri` leaves the path alone by the same decision, so
       the residual is one residual across both logs rather than a difference between them. The producer is
       `pwa/src/context/shared/http-client/infrastructure/ApiEndpoints.ts`, which composes
-      `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The sink has no owner of erasure:
-      the compose files bound the driver by size alone, so it still has no TTL and no age-based expiry,
-      and nothing in `FulfilIdentityErasure` can reach it. An id that lands there outlives the erasure
-      the application confirmed to the subject. Closing it is not a wider `replace` but a different mechanism —
-      a log-level rewrite of `uri`, a `logging:` driver whose retention the erasure path can act on, or no
+      `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The access log has a TTL but no
+      owner of erasure: it is written to `/var/log/caddy/access.log` on the `caddy_access_log` volume, rolled
+      every day at 00:00 UTC (and at 32 MiB) with rolled files deleted after 14 days — literals in
+      `api/frankenphp/Caddyfile`, so a line lives about 15 days at most — **once the process has written its
+      first line**: the roll scheduler and the pruning start on the first write after a (re)start, so a
+      restart followed by no traffic at all keeps the files it found until a request arrives — and nothing in
+      `FulfilIdentityErasure` can reach it, so an id that lands there outlives the erasure the application
+      confirmed to the subject by up to that window. The volume is in no backup (`scripts/deploy/backup-prod.sh`
+      dumps Postgres only), so a restore cannot bring back a line the retention already deleted. The
+      application log's `request_uri` lands in the container json-file sink instead, which still has no TTL
+      (the entry above). Closing it is not a wider `replace` but a different mechanism —
+      a log-level rewrite of `uri`, a retention the erasure path can act on, or no
       access log for `/api/*` at all. **Accepted for now:** there is no production deployment, and the
       query-side leak that _was_ closed is the one with volume — it fired on every keystroke of a filter,
       against one entry per user record opened here.
@@ -1613,17 +1711,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       `api/features/backoffice/bank/search.feature` do reach with a list, declare it — that count is stated
       with the extraction that produces it at `DoctrineBankRepository::searchFieldMap()`, so a reader re-runs
       it rather than trusting it.
-- [ ] **The access log's filter is overridable from the environment at three points, and nothing detects
-      it.** `{$CADDY_GLOBAL_OPTIONS}` (`api/frankenphp/Caddyfile:7`), `{$CADDY_EXTRA_CONFIG}` (`:17`) and
-      `{$CADDY_SERVER_LOG_OPTIONS}` (`:25`) are each documented options (`api/docs/options.md`). The last
-      expands inside the `log` block **ahead of** `format filter`, so setting it to another encoder replaces
-      every rule below it; the first two can introduce a global logger or a whole second site block carrying
-      no `format filter` at all. Any of the three does it from a deployment, without touching this
-      repository, with every gate in the tree green — the whole-query strip included. No test here can see
-      it, because none reads a deployment's environment. **This is a bigger hole than any spelling the strip
-      closes**, and it bounds what every other claim on this page about the access log is worth. Dev and
-      test set the third deliberately, to point the log at a file the effect gate can read; that use sets
-      the destination and leaves `format filter` alone.
+- [ ] **The access log's filter can be bypassed from the environment at two points, and nothing detects
+      it.** `{$CADDY_GLOBAL_OPTIONS}` (`api/frankenphp/Caddyfile:8`) and `{$CADDY_EXTRA_CONFIG}` (`:17`) are
+      each documented options (`api/docs/options.md`), and both expand **outside** the site's `log` block:
+      the first can declare a global logger of its own, the second a whole second site block carrying no
+      `format filter` at all. Either does it from a deployment, without touching this repository, with every
+      gate in the tree green — the whole-query strip included. No test here can see it, because none reads a
+      deployment's environment. **This is a bigger hole than any spelling the strip closes**, and it bounds
+      what every other claim on this page about the access log is worth. The `log` block itself expands
+      nothing: its destination and retention are a literal `output file` block, and
+      `CaddyfileAccessLogRedactionGateTest` pins that block whole and refuses any `{$…}` inside `log`, so a
+      deployment can no longer point the log back at stderr or replace the encoder ahead of `format filter`.
+      Dev, test and prod therefore write the same file. Not checked against a running Caddy:
+      `{$CADDY_SERVER_EXTRA_DIRECTIVES}` (`:128`) also expands inside the site block, outside `log`, and
+      whether a directive placed there (a second named `log`, a `log_append` field) can reach these entries
+      unfiltered has not been measured — read it as a possible third point until it is.
 - [ ] **Everything a client controls OUTSIDE the query string still reaches the access log in clear.** The
       strip covers `request>uri` from the first `?` **or `%3f`** — the encoded delimiter is matched
       case-insensitively because the literal-only pattern was measured letting `/api/v1/health%3Ffoo=<value>`
@@ -1659,12 +1761,33 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **The embedded Mercure hub logs subscriber topics in clear, on a logger this site's filter does not
       govern.** Measured: `GET /.well-known/mercure?topic=<value>` produces an access line reading
       `?REDACTED` **and**, on stderr, `http.handlers.mercure … "topics": ["<value>"]`. They are separate
-      loggers, which is why the site's `format filter` reaches one and not the other.
+      loggers, which is why the site's `format filter` reaches one and not the other — and why they land in
+      different sinks: the access line in `/var/log/caddy/access.log`, the hub's line in the container log.
       `api/frankenphp/Caddyfile` enables `anonymous` and `subscriptions` unconditionally, so this is
       unauthenticated. The application's own topics are bank and bank-account UUIDs, so normal operation
-      leaks nothing — this is an injection channel into the same unrotated, un-TTL'd, unerasable sink, and it
-      is pre-existing rather than introduced. Closing it needs a `log` override for the
-      `http.handlers.mercure` logger, or dropping `subscriptions`.
+      leaks nothing — this is an injection channel into the container's json-file sink, rotated by volume
+      only, with no TTL and no erasure path, and it is pre-existing rather than introduced. Closing it needs
+      a `log` override for the `http.handlers.mercure` logger, or dropping `subscriptions`.
+- [ ] **The embedded Mercure 1.x hub runs in compatibility mode, which accepts more than the
+      application speaks.** The FrankenPHP 1.13 image (taken for PHP 8.5.12, CVE-2026-109618 /
+      CVE-2026-109619, #1072) embeds dunglas/mercure v1.1.4, which refuses top-level
+      `publisher_jwt`/`subscriber_jwt` unless compatibility mode is named, and refuses two unnamed hubs —
+      `SERVER_NAME` lists the origin and `php:80`, so the site block yields two servers. `frankenphp/Caddyfile`
+      therefore sets `protocol_version_compatibility 8` and `name erpify`; the shared name is also what pools
+      both servers onto one bolt transport. Measured against the v1.13.2 binary and the image's own binary
+      (same mercure version and build tags): a `mercure`-claim token is validated with no `aud` and no
+      `exp` required, as the 0.x hub did; a wrong key, a missing token, an expired `exp` and a foreign
+      `Origin` on a cookie publish are refused; a private update reaches the `mercureAuthorization` cookie
+      on `?topic=` and never an anonymous subscriber, across both servers. **What it accepts beyond that:**
+      a well-formed protocol-1.0 token (`typ at+jwt`, `authorization_details`) whose `aud` names the hub,
+      for publish and for subscribe, through the `__Secure-mercure_access_token` cookie it reads first.
+      **What it serves beyond that:** an unauthenticated
+      `/.well-known/oauth-protected-resource/.well-known/mercure` on every server, prod included, stating
+      the resource URL, the 1.0 cookie name and that the subscriptions API is on — informational, no
+      `Cache-Control`. Closing it means moving the keys into an `issuer` block, the bundle to protocol 1.0
+      and the PWA subscriber in one change; any half alone may break publish or subscribe **partially and
+      silently**, depending on the `aud` the bundle mints against the host the hub derives. Open; not
+      accepted.
 - [x] **A person's address is declared unmarked in 27 parameter declarations outside the pinned mail
       surface — closed by #811, extended by its follow-up (both 2026-08-20).** `#[SensitiveParameter]`
       covered only declarations named `recipientEmail` (`SensitiveRecipientAddressGateTest` pins that set);
@@ -1692,10 +1815,10 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **The Next.js container logs the full request URL, person ids included — measured in dev, unverified in
       prod.** The audit screen navigates to `/backoffice/audit?actorId=<uuid>&resourceId=<uuid>`, Caddy
       reverse-proxies the document to the PWA, and the container prints
-      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — the same json-file driver, bounded by size but
-      with no TTL, that Caddy's access log uses, and one that Caddy's `query` filter cannot reach because it is a
-      different process. **Caddy's redaction does not cover this**; anyone reading "the access log redacts
-      `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
+      `GET /backoffice/audit?actorId=… 200 in 73ms` to stderr — Docker's json-file driver, bounded by size but
+      with no TTL (unlike Caddy's access log, which has a file of its own with a 14-day TTL), and one that
+      Caddy's `query` filter cannot reach because it is a different process. **Caddy's redaction does not
+      cover this**; anyone reading "the access log redacts `actorId`" as "no log holds it" would be wrong. `pwa/next.config.ts` also sets
       `logging.fetches.fullUrl: true`, widening what server-side fetches record.
       **Scope, stated with its limit:** that line is emitted by `next dev`, and production runs the standalone
       `node server.js` (`pwa/Dockerfile`), where it was **not** observed — but nor was it verified against a
@@ -2019,13 +2142,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
       avatar) and not (a logo), and there is no consumer relation to vote on yet. It is a scope boundary, not
       an oversight — and it means this route has no forensic record of access at all.
-      **Nine — the container log has no isolation between producers, so a read failure can evict unrelated
-      history.** Caddy's access log, the default channel and `observability` share one retention budget
+      **Nine — the container log has no isolation between the application's channels, so a read failure can
+      evict unrelated history.** The default channel and `observability` share one retention budget
       (`json-file`, 10m x 5) and eviction is **by volume, not by ownership or age**, so a sustained failure on
       this path displaces the history of subsystems that have nothing to do with it — and nothing alerts,
       because no collector reads that channel and the Sentry handler is commented out. The correct framing is
       shared-sink eviction between independent producers rather than "too many logs", and the correct control
-      point is the logging infrastructure itself, which is transverse and not this module's.
+      point is the logging infrastructure itself, which is transverse and not this module's. **Caddy's access
+      log has left that budget** ([#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879)): it writes
+      `/var/log/caddy/access.log` on its own volume, rolled daily and kept 14 days, so a failure flood on this
+      path can no longer evict request history, nor a request flood these records. What #879 did
+      not change is the sharing between Monolog's channels, and between them and the Mercure hub's logger —
+      one budget per container, still evicted by volume, still with no TTL.
       **The read path's own contribution is now bounded, and the bound is narrower than it sounds.**
       `FailureSignalWindow` admits one record per `(operation, category)` per 60 seconds in both emitters, so
       a caller can no longer choose how much this deployment writes by looping one broken image. Its state is
@@ -2036,7 +2164,6 @@ mitigated state. Accepting one means recording who accepted it and against which
       and stops carrying how often it was retried. Reasoning, and the measurement that reversed the earlier
       decision to leave it unbounded:
       [`docs/adr/image-read-failure-signal-bound.md`](docs/adr/image-read-failure-signal-bound.md) D2 and D4.
-      Tracked as [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879).
       **Ten — the served `Content-Type` is a database column, and the allowlist that closes it lives only at
       the writer.** `ImageGetController` sets the response type verbatim from `Image::mediaType()`; the
       entity guarantees only that the value is non-blank, and Doctrine hydrates without the constructor, so
@@ -2058,7 +2185,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       the rows that exist when they run, and a request that loaded the subject before the identity row went can
       commit one afterwards. Three review rounds each found more writers able to. The session writers among
       them — `StartSession` and the revocations — are serialised with the erasure (the item above, and the
-      erasure purging sessions before the business-log pass), which leaves the access log and the four
+      erasure purging sessions before the business-log pass; a re-login that revokes another identity's
+      correlated row is serialised with that owner's erasure by the row lock alone), which leaves the access log and the four
       request-boundary security audit listeners on the actor axis as the live class. An enumeration that failed
       three times is not a control, so that class is closed by mechanism instead, and the mechanism backs up
       the serialised writers too: the erasure inserts the subject into `identity_erasure_resweep` inside its own transaction, and
@@ -2071,7 +2199,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       reset-token, recovery-secret, membership and invitation purges are not repeated, because their late
       writers contend on `identity_user` or `iam_invitation` and so cannot commit after the erasure. The late writers of `Iam/Identity` that run after their own
       commit stay serialised on `identity_user` (§7, the item above), which closes their window outright rather than bounding
-      it. What remains, **accepted by Sergio (product owner) on 2026-10-06 together with the mechanism**:
+      it. What remains, **accepted by Sergio (product owner) on 2026-10-21 together with the mechanism** (an earlier record dated it 2026-10-06, which could not be traced to him):
       - **a row committed after the subject's window closed is not reached.** Nothing bounds how long a
         request runs — `max_execution_time` does not count time spent waiting on the database, and neither
         Caddy nor Postgres sets a timeout — so the hour is a margin chosen far above any sane request, not a
@@ -2088,13 +2216,15 @@ mitigated state. Accepting one means recording who accepted it and against which
         of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
         vetoes.
       Re-affirm or close before the first customer.
-- [ ] **A `metadata.changes` map holding a personal field in clear is served by the audit detail route past its
-      subject's erasure.** The detail mapper withholds the content of a `changes` that is not a map, because
-      nothing on the erasure path reaches `metadata`; a map is served as stored, and per-field sealing only ever
-      covered the fields the classifier marks, written through `PiiDiffSealer`. A row written by raw SQL, or
-      before sealing existed, can therefore keep a person's data in clear for as long as the row is retained.
-      Telling such a map apart needs the field classification at read time. Nothing in this deployment writes
-      one today; close it (re-seal or redact by classification) or accept it before the first customer.
+- [ ] **A `change` row's `metadata.changes` map holding a personal field in clear is served by the audit detail
+      route past its subject's erasure.** Nothing on the erasure path reaches `metadata`, so the route reads the
+      row's level as the diff's provenance: a map is served only on a `change` row and withheld whole on every
+      other, `AuditLogEntry` refuses a `changes` key outside that level so no other writer can store one, and
+      `ChangeLevelProvenanceGateTest` holds the producers of that level and the `audit_log` insert path closed.
+      What remains is a `change` row that never went through `PiiDiffSealer`: one written before sealing
+      existed, or inserted directly in the database. Telling such a map apart needs the field classification
+      at read time. Nothing in this deployment holds one today; close it (re-seal or redact by classification)
+      or accept it before the first customer.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
@@ -2139,6 +2269,89 @@ mitigated state. Accepting one means recording who accepted it and against which
       the owner on #1036); a batch handler, and a leak after the worker's running tick, are not contained (none
       exists today); only the default connection is covered.
 
+- [x] **A client chose its own IP through `X-Forwarded-For` wherever its connection reached PHP from a
+      private address, closed 2026-10-23.** `compose.yaml` trusts every RFC1918 range as a proxy and prod
+      inherited it, while FrankenPHP is the edge and runs PHP inside the Caddy that accepted the connection — so
+      no hop exists that could vouch for the header, and the client's own value reached `getClientIp()`
+      whenever the TCP peer was private: Docker's userland proxy forwarding an IPv6 client to the IPv4 bridge,
+      a hairpin, a NAT. That is the key of `login_throttling` (both its limiters), `anonymous_api` and every
+      other IP-scoped budget, and the `ip` the audit trail and the session registry record. `compose.prod.yaml`
+      now sets `SYMFONY_TRUSTED_PROXIES` empty; a deployment with a real load balancer names that address
+      alone (`.env.prod.example`). **Residuals:** nothing gates the value, so a deployment can widen it again
+      from its env file; and an IPv6 client still reaches PHP as the bridge gateway when the `frontend` network
+      has no IPv6, so all such clients share one limiter bucket — an over-limit and a denial of service between
+      them, no longer a bypass. Enabling IPv6 on that network, or `userland-proxy: false` on the daemon, is a
+      host decision this repository cannot pin.
+
+- [x] **A request body reaching PHP is bounded at 1MB, closed 2026-10-23.** Symfony reads a JSON body whole,
+      so an anonymous POST to the login route could cost a worker as much memory as the client cared to send.
+      `request_body` in `api/frankenphp/Caddyfile` now caps every request the front controller serves, keyed on
+      the rewritten `index.php` rather than on an `/api*` spelling, because `/index.php/api/…` reaches the same
+      routes. **Residuals:** no gate reads the directive, so deleting it leaves every check green; a client past
+      the bound sees its request fail rather than a guaranteed 413; and the first upload route needs its own
+      bound (`erpify.images.max_input_bytes` is 20 MB).
+
+- [ ] **The persisted lockout confirms a correct password while it is in force.** `UserChecker::checkPostAuth`
+      reads the lock AFTER the firewall has verified the password, so a locked account answers a wrong password
+      with the uniform 401 and the right one with **403 `account-locked`**, and `User::recordFailedAttempt`
+      counts nothing while the lock stands. The lock therefore delays the USE of a guessed password by fifteen
+      minutes without bounding the guessing: the only ceiling left during it is `login_throttling`, per IP and
+      raw username. The specific 403 is the decision of `identity-invitation-lifecycle.md` D12 ("post-identity,
+      a response may be specific"), and what this entry disputes is its premise — a caller probing a locked
+      account has not demonstrated an identity, it is in the middle of guessing one. **The fix** is to read the
+      lock in `checkPreAuth`, before verification, and answer it with the uniform 401 behind the timing floor;
+      the owner already learns of the lock through `NotifyLockedIdentities`. It costs the legitimate owner the
+      specific "locked" message at the door, and it needs D12 re-decided by its owner, which is why it is
+      recorded rather than changed in the pull request that found it. Related and unmeasured: the throttle's key
+      is the username as typed, lower-cased, while `Email` also strips edge whitespace and zero-width characters
+      and normalises to NFC, so spellings resolving to one identity may each get their own bucket.
+
+- [ ] **`/forgot-password` latency separates an active account from every other address.**
+      `RequestPasswordReset::request()` pays the `PreIdentityTimingFloor` first on every branch, then returns for
+      a malformed, unknown or non-`ACTIVE` address while an `ACTIVE` one goes on to a `FOR UPDATE` transaction
+      (supersede, insert, event publish) and a **synchronous** mail send before the 202 — synchronous by
+      decision, because Symfony's `SendEmailMessage` is left unrouted so the plaintext token never reaches a
+      persisted transport. A floor added to both sides does not hide a difference between them, and an SMTP
+      round-trip is not sub-millisecond. Unmeasured against a real relay; the per-email recovery budget bounds
+      the samples per window, not their resolution. **The fix** is the one `kernel.terminate` already applies to
+      the recovery-throttle audit projection: answer first, issue and send after the response is on the wire —
+      or pad every branch to one deadline.
+
+- [ ] **Production CSP admits inline script.** `pwa/next.config.ts` emits `script-src 'self' 'unsafe-inline'`
+      with no nonce, and `img-src` admits any `https:` origin, so the policy adds nothing against an injected
+      script and leaves it an exfiltration channel. No injection sink exists in `pwa/src` today
+      (`dangerouslySetInnerHTML`, `innerHTML`, `eval` and every dynamic `href` are refused or routed through
+      `safeHref`); this is the second line being inert, not the first being breached. Accepted "for now" in
+      `pwa/CLAUDE.md` and recorded nowhere a decider reads until this entry. **The fix** is a per-request nonce
+      minted in `pwa/src/proxy.ts`, which needs its matcher widened and the pages rendered dynamically.
+
+- [ ] **The Mercure subscriber cookie outlives the session that obtained it.** The two realtime authorize
+      controllers set `mercureAuthorization` (a JWT, one hour by default) and nothing in `api/src` ever clears
+      it: signing out, revoking every other session, a suspension and a deactivation all leave it valid, and
+      the hub checks no revocation. A revoked or suspended holder keeps receiving the private bank and
+      bank-account updates — ids only, no IBAN or holder name — until it expires. **The fix** is
+      `Authorization::createClearCookie()` on the sign-out paths and a lifetime of minutes rather than an hour,
+      re-authorised on reconnect.
+
+- [ ] **A minted session can still end unreachable, in two narrow ways, and the mint's admission rule lives
+      twice.** `StartSession` retires the session the device's cookie carried in the same transaction that
+      mints the new one — and, when the identity no longer admits a login once its row is held, it still
+      commits that retirement before refusing, since the minting listener drops the native session either way
+      and the cookie is the same proof of possession the success path relies on. What stays open is bounded by
+      `PruneRetiredSessions` (~97 days after the login, see §6): **(a)** a failure writing the new correlation
+      after the commit leaves the NEW row `ACTIVE` with no cookie naming it; **(b)** a store failure that rolls
+      the mint back rolls the retirement back with it, while the listener still drops the cookie, so the
+      EARLIER row is left `ACTIVE` and equally unreachable. Neither grants anything — no bearer holds either
+      row — but each is listed in _Active sessions_ as a device until the sweep removes it. **The login waits
+      behind any open write of the identity's row** (`FOR SHARE` in `DbalSessionSubjectLock`): the status,
+      role, password, reset, recovery and unlock writers and the failed-login counter already take the row
+      `FOR UPDATE`, which `FOR KEY SHARE` waited for too; the invitation acceptance, the lockout-notice stamp
+      and the password-rehash swap take only a plain `UPDATE`, so a login now also waits for those
+      single-statement writes. **The admission rule is coupled** to `User::ensureActive()`, because the session
+      context may not read the aggregate: `DbalSessionSubjectLockAdmissionTest` holds the two in agreement over
+      every `IdentityStatus` case and reds on a new one, but a rule changed consistently in both places passes,
+      and review is the only control on whether that change is right.
+
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
@@ -2157,7 +2370,58 @@ mitigated state. Accepting one means recording who accepted it and against which
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
   | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
   | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
-  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of an `async` event; the issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
+  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of `ImageDeletionRequested` (none in `api/src` today) — the first `async` consumer whose effect cannot be undone, since it destroys stored bytes. The Bank and BankAccount events already publish to `async` inside the writer's transaction, so the guarantee is already relied on, but a message escaping a rollback there costs a stray email or realtime refresh. The issue's candidate mitigations (deploy-time smoke check, boot-time assertion on the resolved transport class, a §8 verification step) are none adopted | not recorded (opened 2026-08-28) |
+
+
+- [x] **A production restore could take the scriptable non-production path, closed 2026-10-23.**
+      `restore-prod.sh` classified its target from the FIRST `SERVER_NAME` in the env file, with its
+      own parser, and never refused a duplicate — `restore.prod` does not run `prod.env.check` — while
+      Compose serves the LAST. A file declaring `SERVER_NAME=erpify.local` and then a real domain, or
+      a comma-joined `prod.example.com,erpify.local` (Caddy's own list syntax, which the word split read
+      as one local token), let `RESTORE_YES=1` skip the typed confirmation and `ALLOW_PROD_RESTORE`
+      against a live database. The guard is now `scripts/deploy/lib/prod-env.sh server-is-local`: last
+      occurrence, blanks AND commas, scheme/port/brackets/case understood, and an empty, absent or
+      duplicated `SERVER_NAME` counts as production. Pinned in `ProdEnvReadingGateTest`; that the script
+      calls it is pinned in `ProdEnvProjectGateTest`. **Residual:** the guard reads the env file, not an
+      exported `SERVER_NAME`, which Compose would prefer.
+
+- [ ] **Backup and restore re-derive their compose project on every run, from the env file's TLS
+      profile.** `prod-env.sh project` answers `erpify-prodlocal` for a `tls internal` file and the
+      checkout's own project otherwise; nothing records which project a stack was STARTED under. Editing
+      `CADDY_SERVER_EXTRA_DIRECTIVES` between a stand-up and a `make backup.prod`/`restore.prod` therefore
+      moves those commands to the other project — a backup of an empty stack, or a restore into one.
+      Mitigated by the guide's rule that a box is promoted only after `make deploy.local.down`, and by
+      `make ENV=prod docker.info` printing the resolved project. Closing it means recording the project at
+      stand-up (a label or a state file) and refusing a run that resolves a different one.
+
+- [ ] **The domain security signals reach Sentry, nothing alerts on them, and it is accepted.**
+      `SentryEventFilter` reports the domain `Unauthenticated` (401), `Forbidden` (403, `AccountLocked` among
+      them) and `RateLimited` (429) raised on an HTTP request, together with the framework's own 401/403/422,
+      so a guessing run or a lockout wave arrives as events (`docs/api-error-contract.md` → "Client-error
+      suppression in Sentry").
+      No alert rule exists in the tree or is provisioned by any deploy step, so nobody is paged. Sentry
+      groups by exception type and stack, never by account or source address, so even a frequency alert
+      sees a volume — it cannot tell one account sprayed from many accounts probed — and a burst spends the
+      event quota the other issues share. **One 401 is not reported at all:** `SessionNoLongerActive`
+      (`session-expired`) implements `RoutineOutcome`, because every returning user raises it; a stolen
+      cookie replayed after its owner revoked it raises the same exception and leaves no signal. The row
+      still knows the difference (`status`, `revokedAt`, `expiresAt`, until the retention sweep deletes it),
+      but `SessionAdmissionGate` reads it through `findActiveById()`, which filters on `status = ACTIVE AND
+      expires_at > now` and so answers null for all three causes. Closing it needs frequency alert rules on
+      those issues plus a rate limit per issue, and — for the revoked-cookie case — a gate that tells revoked
+      from expired and emits a deduplicated security event carrying no session id.
+      **Accepted 2026-10-26 (Sergio):** no customer, and the Sentry organisation is on the free plan, so no alert
+      rule and no per-issue rate limit is configured. The control in their place is **triage by hand**: every issue
+      is read, and none is resolved without a comment on it stating why it occurred and how it is handled — the PR
+      that fixed it, or why it is expected and what already answers it — swept at least weekly and before every
+      deploy, inside the retention window. That comment trail is the data this entry's alert rules are to be
+      designed from: which issues recur, at what volume, and which of them ever meant an attack. Sentry ages events
+      out after the plan's retention window, so each verdict is also a row in the ledger of
+      [`docs/runbooks/sentry-issue-triage.md`](docs/runbooks/sentry-issue-triage.md), which holds the procedure.
+      What it does not buy is detection while nobody is looking, and the quota burst is unbounded: a guessing run
+      can spend the month's events and hide every later issue until the quota resets. Each sweep reads the
+      organisation's dropped-event stats first, because nothing else would notice the quota running out. Re-assess
+      before the first customer, on leaving the free plan, or the first time a sweep finds the quota spent.
 
 ## 8. Deploy & verify
 

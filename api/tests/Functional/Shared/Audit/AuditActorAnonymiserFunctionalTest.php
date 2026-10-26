@@ -11,6 +11,7 @@ use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditActorAnonymiser;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
@@ -29,6 +30,8 @@ use UnexpectedValueException;
  * addressed by their minted id, immune to other rows in the shared table.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(DbalAuditActorAnonymiser::class)]
 #[CoversClass(ActorAnonymisationResult::class)]
@@ -107,13 +110,15 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
             $entry = AuditLogEntry::create(
                 'USER_ROLES_CHANGED',
                 AuditLevel::SECURITY,
-                ActorContext::forUser($subject),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-07-02T09:00:00+00:00'),
+                new AuditProvenance(
+                    ActorContext::forUser($subject),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-07-02T09:00:00+00:00'),
+                    self::CLIENT_IP,
+                    'Mozilla/5.0',
+                ),
                 AuditResource::of('User', $subject),
                 [],
-                self::CLIENT_IP,
-                'Mozilla/5.0',
             );
             $writer->write($entry);
 
@@ -138,13 +143,15 @@ final class AuditActorAnonymiserFunctionalTest extends KernelTestCase
         $entry = AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
-            $actor,
-            Uuid::generate(),
-            $occurredOn,
+            new AuditProvenance(
+                $actor,
+                Uuid::generate(),
+                $occurredOn,
+                self::CLIENT_IP,
+                'Mozilla/5.0',
+            ),
             null,
             [],
-            self::CLIENT_IP,
-            'Mozilla/5.0',
         );
         $writer->write($entry);
 

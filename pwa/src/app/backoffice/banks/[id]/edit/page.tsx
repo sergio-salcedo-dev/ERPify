@@ -63,7 +63,7 @@ export default function EditBankPage() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const useCase = container.get<FindBank>("BackOfficeFindBank");
         const result = await useCase.run(id);

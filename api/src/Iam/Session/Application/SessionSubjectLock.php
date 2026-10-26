@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Session\Application;
 
+use Erpify\Iam\Session\Domain\SubjectAdmission;
+
 /**
  * Holds, in the caller's transaction, the identity a session is about to be minted for — so the session and the
  * event announcing it land on one side of that identity's erasure or the other.
@@ -15,8 +17,14 @@ namespace Erpify\Iam\Session\Application;
  * Arriving second, the login finds no identity and mints nothing.
  *
  * The lock is taken before any session row, which is the erasure's own order (identity, then sessions), so the two
- * cannot deadlock. It need not exclude a write that leaves the identity in place, and should not: a login that
- * waits on one waits for nothing it needs.
+ * cannot deadlock.
+ *
+ * Two strengths, one per caller. A revocation only needs the identity to EXIST — it revokes precisely the
+ * identities that stopped being active — so {@see holdsLive()} excludes the erasure and nothing else. A login
+ * mints a session that must belong to an identity that is still admitted, so {@see holdForAdmission()} also
+ * excludes a concurrent status change and reads the status it waited for: a suspension committing while a login
+ * mints would otherwise run its revoke-everything before the new row exists, and leave a suspended identity
+ * holding a live session.
  */
 interface SessionSubjectLock
 {
@@ -27,4 +35,17 @@ interface SessionSubjectLock
      * and protects nothing. An implementation refuses rather than complying silently.
      */
     public function holdsLive(string $userId): bool;
+
+    /**
+     * Holds the identity's row until the caller's transaction ends, against its erasure AND against any change
+     * of its status, and answers whether the identity may be signed in — or which wall it stands behind. A
+     * write of the row already in flight is waited for, and its committed outcome is what the answer reflects.
+     *
+     * The walls mirror the identity's own admission rule (`User::ensureActive()`): `SUSPENDED` is
+     * {@see SubjectAdmission::Suspended}, every other non-`ACTIVE` status {@see SubjectAdmission::Deactivated},
+     * and an identity with no row {@see SubjectAdmission::Gone}.
+     *
+     * **Must run inside that transaction**, for the reason {@see holdsLive()} gives.
+     */
+    public function holdForAdmission(string $userId): SubjectAdmission;
 }

@@ -74,6 +74,21 @@ beforeEach(() => {
 });
 
 describe("<ChangePasswordForm>", () => {
+  it("tells the user to sign the other devices out before changing the password, and links there", () => {
+    render(<ChangePasswordForm />);
+
+    const hint = screen.getByTestId("change-password-form__evict-first-hint");
+    expect(hint).toHaveTextContent(
+      "Think someone else is signed in? Sign out other devices first in Active sessions, then change your password here.",
+    );
+    const link = within(hint).getByTestId("change-password-form__sessions-link");
+    expect(link).toHaveTextContent("Active sessions");
+    expect(link).toHaveAttribute("href", "/backoffice/profile/sessions");
+    // Above the fields: the order is the advice, so the hint is read before anything is typed.
+    const field = screen.getByTestId("change-password-form__current-password");
+    expect(hint.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("posts both passwords and swaps the form for the success signal", async () => {
     changePassword.mockResolvedValue(undefined);
 

@@ -116,7 +116,7 @@ final readonly class FilterApplier
     {
         return [
             \sprintf('%s = :%s', $mapping->dqlPath, $parameterName),
-            $this->normalizedNotBlank($mapping, $this->scalarValue($filter), $filter->operator),
+            $this->normalizedNotBlank($mapping, $filter, $this->scalarValue($filter), 0),
             null,
         ];
     }
@@ -135,14 +135,13 @@ final readonly class FilterApplier
             throw new InvalidArgumentException('IN filter requires a non-empty list of values.');
         }
 
-        return [
-            \sprintf('%s IN (:%s)', $mapping->dqlPath, $parameterName),
-            \array_map(
-                fn (string $value): string => $this->normalizedNotBlank($mapping, $value, $filter->operator),
-                $values,
-            ),
-            null,
-        ];
+        $normalized = [];
+
+        foreach ($values as $position => $value) {
+            $normalized[] = $this->normalizedNotBlank($mapping, $filter, $value, $position);
+        }
+
+        return [\sprintf('%s IN (:%s)', $mapping->dqlPath, $parameterName), $normalized, null];
     }
 
     /**
@@ -150,7 +149,7 @@ final readonly class FilterApplier
      */
     private function containsCondition(FieldMapping $mapping, Filter $filter, string $parameterName): array
     {
-        $value = $this->normalizedNotBlank($mapping, $this->scalarValue($filter), $filter->operator);
+        $value = $this->normalizedNotBlank($mapping, $filter, $this->scalarValue($filter), 0);
 
         $pattern = '%' . $this->escapeLikeWildcards($value) . '%';
 
@@ -210,20 +209,18 @@ final readonly class FilterApplier
 
     /**
      * Normalizes the value with the field's normalizer and rejects results that are blank.
-     * The domain {@see Filter} constructor rejects A raw-blank value (empty after a Unicode-aware trim)
-     * before the applier runs, and the wire DTO rejects it earlier still.
-     * This guard remains as defense in depth for a field normalizer that folds a non-blank value
-     * to an empty string: a programmer error, since CONTAINS would degenerate into a match-everything
-     * `LIKE '%%'` and EQ/IN into a meaningless empty-string predicate. Fail loudly instead.
+     * The domain {@see Filter} constructor rejects a raw-blank value (empty after a Unicode-aware trim)
+     * before the applier runs, and the wire DTO rejects it earlier still. A value that is not blank can
+     * still fold to blank — ICU transliteration drops a lone Hangul jamo or an Indic virama — and that is
+     * client input, so it is the same 422 a blank value gets: CONTAINS would otherwise degenerate into a
+     * match-everything `LIKE '%%'` and EQ/IN into a meaningless empty-string predicate.
      */
-    private function normalizedNotBlank(FieldMapping $mapping, string $value, FilterOperator $operator): string
+    private function normalizedNotBlank(FieldMapping $mapping, Filter $filter, string $value, int $position): string
     {
         $normalized = $mapping->normalizer?->normalize($value) ?? $value;
 
         if ('' === \trim($normalized)) {
-            throw new InvalidArgumentException(
-                \sprintf('%s filter value must not normalize to an empty string.', $operator->name),
-            );
+            throw InvalidSearchValue::mustNotBeBlank($filter->field, $position);
         }
 
         return $normalized;

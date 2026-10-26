@@ -139,7 +139,7 @@ final class RequestBoundarySecurityAuditFunctionalTest extends KernelTestCase
     {
         // The second connection is opened up front, so tearDown() can always reach a row the body committed.
         $this->outsideConnection();
-        $this->marker = 'request-boundary-audit-' . Uuid::generate();
+        $this->marker = 'request_boundary_audit_' . \str_replace('-', '_', Uuid::generate());
 
         return $this->marker;
     }

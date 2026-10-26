@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Infrastructure\Persistence;
 
+use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Application\AuditPiiAad;
 use Erpify\Shared\Audit\Application\PiiFieldPosition;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
+use Erpify\Shared\Audit\Domain\AuditMetadataShape;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Privacy\Application\PersonalDataClassifier;
@@ -29,7 +31,7 @@ use Erpify\Shared\Privacy\Application\PersonalDataClassifier;
  */
 final readonly class PiiDiffSealer
 {
-    public const string ENCRYPTED_MARKER = '__enc__';
+    public const string ENCRYPTED_MARKER = AuditMetadataShape::SEALED_VALUE_KEY;
 
     public function __construct(
         private PersonalDataClassifier $classifier,
@@ -47,7 +49,7 @@ final readonly class PiiDiffSealer
      */
     public function seal(AuditedEntity $entity, array $diff, string $auditLogId): SealedDiff
     {
-        $changes = $diff['changes'];
+        $changes = $diff[AuditLogEntry::CHANGES_KEY];
         $personalFields = \array_intersect($this->classifier->personalFieldsOf($entity), \array_keys($changes));
 
         if ([] === $personalFields) {
@@ -68,7 +70,7 @@ final readonly class PiiDiffSealer
                 : $change;
         }
 
-        return new SealedDiff([...$diff, 'changes' => $sealedChanges], $scope->toString());
+        return new SealedDiff([...$diff, AuditLogEntry::CHANGES_KEY => $sealedChanges], $scope->toString());
     }
 
     /**

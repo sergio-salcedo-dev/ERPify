@@ -8,7 +8,7 @@
 #
 # DESTRUCTIVE: runs pg_restore (in a single transaction) over the live database.
 # It is meant first for the **restore drill and pre-prod verification** — prove a
-# backup restores on the erpify.local rehearsal or a scratch worktree stack
+# backup restores on the erpify.local rehearsal (project erpify-prodlocal)
 # before you ever need it for real. The dump is fully verified up front, so a
 # corrupt backup is caught before any live data is touched, and the run refuses
 # to proceed without an explicit confirmation. The writers are restarted on any
@@ -24,7 +24,7 @@
 #   STAMP                  dump to restore (or pass as $1); omit to list options
 #   BACKUP_DIR             source directory            (default /var/backups/erpify)
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
-#   COMPOSE_PROJECT_NAME   compose project             (default erpify)
+#   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/prod-env.sh)
 #   RESTORE_YES            set to 1 to skip confirmation — NON-production only
 #   ALLOW_PROD_RESTORE     set to 1 to permit a restore when SERVER_NAME is non-local
 #
@@ -36,7 +36,9 @@ cd "$REPO_ROOT"
 
 ENV_FILE="${PROD_ENV_FILE:-.env.prod.local}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/erpify}"
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-erpify}"
+# shellcheck source=scripts/deploy/lib/prod-env.sh
+source "$REPO_ROOT/scripts/deploy/lib/prod-env.sh"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(prod_project_name "$ENV_FILE")}"
 STAMP="${1:-${STAMP:-}}"
 
 source "$REPO_ROOT/scripts/deploy/lib/common.sh"
@@ -65,14 +67,11 @@ flock -n 9 || { log_error "a backup or restore is already running (lock: $BACKUP
 # as non-production. A real domain, an IP, or a bare internal hostname all gate
 # the stricter production confirmation below — an unrecognised target must never
 # silently fall through to the scriptable non-prod path.
-SERVER_NAME="$(grep -E '^SERVER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' || true)"
-IS_PROD=0
-for host in $SERVER_NAME; do
-  case "$host" in
-    *.local|*.localhost|localhost|127.0.0.1|::1) : ;;
-    *) IS_PROD=1 ;;
-  esac
-done
+# Read as Compose reads it (lib/prod-env.sh): the last occurrence wins, and a
+# duplicated SERVER_NAME counts as production.
+SERVER_NAME="$(prod_env_value SERVER_NAME "$ENV_FILE" 2>/dev/null || true)"
+IS_PROD=1
+prod_server_is_local "$ENV_FILE" && IS_PROD=0
 
 # —— Resolve the stamp ————————————————————————————————————————————————————
 if [[ -z "$STAMP" ]]; then

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Organization\Membership\Application;
 
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Organization\Membership\Domain\Exception\MembershipCardinalityViolated;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Override;
 
@@ -71,16 +72,23 @@ final class InMemoryMembershipRepository implements MembershipRepository
         return $deleted;
     }
 
+    /**
+     * Refuses a second match as the adapter does: answering with the first would let a use-case test pass over
+     * an organization production never picks.
+     */
     #[Override]
     public function findByUserId(string $userId): ?Membership
     {
-        foreach ($this->saved as $membership) {
-            if (0 === \strcasecmp($membership->userId(), $userId)) {
-                return $membership;
-            }
+        $matches = \array_values(\array_filter(
+            $this->saved,
+            static fn (Membership $m): bool => 0 === \strcasecmp($m->userId(), $userId),
+        ));
+
+        if (\count($matches) > 1) {
+            throw MembershipCardinalityViolated::severalForOneUser();
         }
 
-        return null;
+        return $matches[0] ?? null;
     }
 
     #[Override]

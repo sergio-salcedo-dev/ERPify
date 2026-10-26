@@ -44,6 +44,9 @@ const LIVE_REGION_SURFACES: Readonly<Record<string, string>> = {
   "app/backoffice/BackOfficeLayoutClient.tsx":
     "the sign-out window: both menus close over the relabelled entry, so this region is the " +
     "only signal that survives the click",
+  "app/backoffice/_components/GoToPalette.tsx":
+    "the result of a user action — how many pages match the query just typed, the only " +
+    "signal a screen reader gets that the listbox under the input changed",
   "app/backoffice/bank-accounts/_components/BankAccountIbanLookup.tsx":
     "the result of a user action — a well-formed IBAN with no matching account, replacing " +
     "the just-submitted search, distinct from the mutation-error surface reserved for a " +

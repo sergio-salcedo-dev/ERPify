@@ -1,6 +1,6 @@
 # Story RR-1: An administrator without a live recovery secret is told so on every back-office page
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 

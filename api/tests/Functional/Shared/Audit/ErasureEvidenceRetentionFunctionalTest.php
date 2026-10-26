@@ -9,6 +9,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogPruner;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
@@ -35,6 +36,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Each case runs inside a transaction that is always rolled back, so nothing escapes the shared dev database.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversNothing]
 final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
@@ -117,9 +120,11 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
         $entry = AuditLogEntry::create(
             $action,
             AuditLevel::SECURITY,
-            ActorContext::system(),
-            Uuid::generate(),
-            $occurredOn,
+            new AuditProvenance(
+                ActorContext::system(),
+                Uuid::generate(),
+                $occurredOn,
+            ),
             null,
             $metadata,
         );

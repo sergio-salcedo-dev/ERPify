@@ -6,10 +6,13 @@ namespace Erpify\Tests\Functional\Backoffice\Bank\Infrastructure\Controller;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
+use Erpify\Backoffice\Bank\Infrastructure\Controller\BankSearchController;
+use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository;
+use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,7 +20,7 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Proof-of-wire for the PR3 cursor-only flip against REAL Postgres: it asserts that
- * `Page<Bank>` + {@see \Erpify\Shared\Search\Infrastructure\Http\SearchResponder} + the keyset
+ * `Page<Bank>` + {@see SearchResponder} + the keyset
  * engine survive real navigation, not just compilation. Navigation uses ONLY the server-composed
  * `links.next`/`links.prev` (verbatim) + the opaque cursor — never client-side query reconstruction
  * (W2/W9). `SearchResponder` is the sole envelope compositor.
@@ -27,7 +30,9 @@ use Symfony\Component\Uid\Uuid;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
-#[CoversNothing]
+#[CoversClass(BankSearchController::class)]
+#[CoversClass(DoctrineBankRepository::class)]
+#[CoversClass(SearchResponder::class)]
 final class BankSearchCursorFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;

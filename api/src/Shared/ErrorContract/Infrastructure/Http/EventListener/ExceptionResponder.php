@@ -18,6 +18,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use ReflectionClass;
 use RuntimeException;
+use Sentry\State\HubInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -171,6 +172,7 @@ final readonly class ExceptionResponder
         private ProblemDetailsResponder $problemDetailsResponder,
         private LoggerInterface $logger,
         private ApiRequestMatcher $apiRequestMatcher,
+        private ?HubInterface $errorTracker = null,
     ) {
     }
 
@@ -232,6 +234,14 @@ final readonly class ExceptionResponder
      * fallback line. The log call is wrapped in its own `try { ... } catch (\Throwable) {}`
      * so a broken logger cannot prevent the response from being produced.
      *
+     * The self-failure is also handed to Sentry, where the tracker is installed (absent in the test
+     * kernel). Its `kernel.exception` listener captured the ORIGINAL throwable at a higher priority, and
+     * when that was a client error `before_send` dropped it — so without this capture a request that
+     * should have been a 4xx and became a 500 because this pipeline broke would reach no alert.
+     * It is wrapped rather than captured bare: the wrapper names the original class and the
+     * correlation id the CRITICAL line carries, so the event can be tied to it, and it can never be
+     * a `ClientError` itself, which `before_send` would drop like the original.
+     *
      * No `\json_encode` on this path — the body is a string literal so no exception can
      * escape from the fallback emission itself. Order is load-bearing: the response is set
      * BEFORE the log call so a logger throw still leaves the response in place.
@@ -266,6 +276,20 @@ final readonly class ExceptionResponder
             ]);
         } catch (Throwable) {
             // A broken primary logger MUST NOT prevent the response. Swallow.
+        }
+
+        try {
+            $this->errorTracker?->captureException(new RuntimeException(
+                \sprintf(
+                    'Error pipeline failed answering %s (correlation id %s).',
+                    $originalThrowable::class,
+                    $correlationId,
+                ),
+                0,
+                $selfFailure,
+            ));
+        } catch (Throwable) {
+            // Same contract as the logger: reporting never decides whether the response exists.
         }
     }
 

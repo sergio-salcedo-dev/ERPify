@@ -50,6 +50,12 @@ status: open
 
 **(pwa/context/backoffice/audit — alcance de privacidad) El render incondicional de campos `Empty` es genérico a toda `AuditedEntity`, pero el argumento de privacidad que lo autorizó solo razonó sobre `BankAccount.alias`.** `AuditChangeDiff` muestra "Not set" para cualquier campo `#[PersonalData]` nullable nunca poblado, en cualquier entidad auditada — no solo `alias`, el único ejemplo con el que el product owner argumentó la decisión en el spec. Es un hecho forense deliberado y correcto para el caso motivador; lo que falta razonar es la generalización. Trigger: la primera entidad auditada con un campo `#[PersonalData]` nullable donde la mera presencia/ausencia sea más sensible que en `alias` — revisar si ese campo necesita un opt-out por campo en vez de la regla genérica. Ref: `pwa/src/context/backoffice/audit/infrastructure/ui/AuditChangeDiff.tsx` (`ChangeKind.Empty`), `_bmad-output/implementation-artifacts/spec-gh-413-campos-vacios-y-direccion-inferida.md`.
 
+**Re-medido el 2026-10-24: sigue abierta, el trigger no ha saltado.**
+
+- **Evidencia:** solo dos entidades implementan `AuditedEntity` (`Bank` y `BankAccount`), y `#[PersonalData]` solo aparece en `BankAccount`: `holderName` e `iban`, ambos `string`, y `alias`, `?string`. El único campo `#[PersonalData]` nullable de una entidad auditada sigue siendo `BankAccount.alias`, el mismo sobre el que razonó el product owner.
+- **Condición de cierre:** el trigger de arriba, es decir, la primera entidad auditada con otro campo `#[PersonalData]` nullable.
+- **Alcance de la evidencia:** lo medido es un `grep` de `implements AuditedEntity` y `#[PersonalData]` sobre `api/src`. No juzga si la presencia o ausencia de `alias` es sensible; eso lo decidió el product owner.
+
 ### DW-8: EventStoreSubjectAnonymiser::anonymise takes two consecutive strings; swapping them is a silent no-op
 
 status: done 2026-09-28
@@ -92,12 +98,9 @@ archived: 2026-09-28
 
 ### DW-13: Erasure-chain prose (command class docblock, setHelp(), controller) still ungated
 
+status: done 2026-10-23
 origin: migrated from legacy ledger ("Deferred from: code review of PR #618 — pase adversarial del eje de referencias a persona (2026-08-01)"), 2026-09-24
-location: api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php, api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php
-reason: The consent prompt is now rendered from ERASED_CATEGORIES and test-pinned; what remains is free prose that a map cannot reach, deliberately left ungated because a prose gate is fragile — review is the control.
-status: open
-
-**(api/Iam/Identity — deriva por construcción) Los tres docblocks que describen la cadena de borrado siguen sin gate.** La mitad que importaba está cerrada: el **prompt de consentimiento** —lo único que el operador consiente— se renderiza hoy desde `FulfilIdentityErasureResult::ERASED_CATEGORIES`, un mapa que vive junto a las propiedades del constructor y que `FulfilIdentityErasureResultTest` mantiene igual a ellas en ambas direcciones, así que una décima propiedad no puede llegar sin su etiqueta. Esa mitad se cerró porque **la deriva que esta bala predijo ocurrió**: `recoverySecretsDeleted` entró en el DTO y en la línea de éxito del CLI mientras el prompt, el `setHelp()` y dos docblocks seguían nombrando ocho eslabones, o sea que el operador consentía a menos de lo que el borrado destruye — medido el 2026-09-20, nueve propiedades contra siete enunciadas. Lo que queda abierto es lo que un mapa no puede alcanzar: el docblock de la clase del comando, el texto de `setHelp()` y el del controlador siguen siendo prosa suelta, corregidos a mano en esa misma pasada. Un gate sobre prosa es frágil y no se construyó a propósito; el control es la revisión. Ref: `api/src/Iam/Identity/Application/FulfilIdentityErasureResult.php`, `api/src/Iam/Identity/Infrastructure/Cli/EraseIdentitySubjectCommand.php`.
+archived: 2026-10-24
 
 ### DW-14: event_store axis not covered by ReconcileErasedSubjectReferences — detective control missing, for measurable reasons
 
@@ -114,14 +117,20 @@ status: open
 
 **Trigger:** el día que `event_store` gane un flag de borrado, o que un agregado-persona pase a ser event-sourced de verdad (el mismo trigger (a) que D12 ya declara). Un medio-control cuyo ruido de base es ~100 % deja de leerse, y un hueco nombrado es mejor que un control que nadie cree.
 
+**Re-medido el 2026-10-23 (#1103): sigue abierta por diseño, con decisión del usuario.**
+
+- **Evidencia:** `api/src/Shared/Event/Application/EventStore.php` solo expone `append` y `stream`. Ningún agregado-persona se rehidrata desde `event_store` y la tabla no tiene flag de borrado. El trigger de D12 no ha saltado.
+- **Riesgo residual:** si el borrado preventivo deja escapar un id de persona en `event_store`, nadie lo detecta. Los proyectores lo leen en cada replay.
+- **Condición de cierre:** el trigger de D12, es decir, un flag de borrado en `event_store` o un agregado-persona event-sourced de verdad.
+- **Por qué no ahora:** añadir ese flag reabre D12.
+- **Alcance de la evidencia:** que el trigger no haya saltado prueba solo que ese mecanismo no existe hoy. No prueba que no haya riesgo.
+- **Lo que sí cambió:** #1103 indexa el predicado preventivo (DW-15) sin estrechar su alcance.
+
 ### DW-15: Erasure UPDATE on event_store is a sequential scan inside the erase transaction
 
+status: done 2026-10-23
 origin: migrated from legacy ledger ("Deferred from: G-5 — ids de persona fuera del `event_store` (2026-08-04)"), 2026-09-24
-location: api/src/Shared/Event/Infrastructure (DbalEventStoreSubjectAnonymiser)
-reason: payload::text ILIKE '%uuid%' cannot use any index (would need GIN + pg_trgm) and runs holding the erasure chain's locks; free today at zero rows and no production. Measure before it matters; not a blocker. Since #1037 the erasure re-sweep repeats the same scan for every subject in its window on each five-minute tick (about 13 scans per erasure, one per subject per tick, on the single scheduler worker, while holding that subject's audit_log row locks), so the trigger is a re-sweep tick taking more than ~30 s or an event_store of millions of rows; the answer then is a trigram index, not a design change.
-status: open
-
-**(api/Shared/Event — tiempo de lock) El `UPDATE` del borrado hace un scan secuencial y corre dentro de la transacción del erase.** El predicado `payload::text ILIKE '%uuid%'` no lo puede servir ninguno de los cinco índices de la tabla (haría falta GIN + `pg_trgm`), y el `OR` fuerza el scan igualmente. Hoy es gratis —la tabla está a cero filas y no hay producción— pero cuando tenga volumen ese scan corre sosteniendo los locks que la cadena ya tiene sobre `identity_user`, `audit_log`, sesiones, membresía e invitaciones. Medir antes de que importe; no es un blocker.
+archived: 2026-10-24
 
 ### DW-16: event_store stream UNIQUE enforces nothing (NULL tenant_id, NULLS DISTINCT); promised optimistic concurrency does not exist
 
@@ -162,23 +171,15 @@ status: open
 
 ### DW-20: Bulk session revocation publishes OtherSessionsRevoked/AllSessionsRevoked even when 0 rows are affected
 
+status: done 2026-10-22
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-11, revisión fresca)"), 2026-09-24 — merged with ("Deferred from: code review of u-3-cambio-de-estado-suspend-deactivate (2026-07-18)")
-location: api/src/Iam/Session/Application/RevokeOtherSessions.php:38, api/src/Iam/Session/Application/RevokeAllSessions.php, api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php:129
-reason: bulkRevokeActive ignores the rowcount and both use cases publish unconditionally; inert today (no consumer) but a 'your sessions were closed' reaction would fire on a no-op. Fix when wiring the consumer: return the affected-row count and publish only when > 0 — note status.feature currently pins the event for identities that never logged in and would need updating.
-status: open
-
-**(api/Iam/Session — eventos) La revocación bulk emite su evento aunque afecte 0 filas.** `DoctrineSessionRepository::bulkRevokeActive` ejecuta el `UPDATE` dirigido sin mirar el rowcount, y `RevokeOtherSessions`/`RevokeAllSessions` publican `OtherSessionsRevoked`/`AllSessionsRevoked` incondicionalmente en el outbox. Inerte hoy (R2 wire-on-consumer, Decisión H: sin reactor/consumidor); muerde cuando II-5 (force re-login everywhere) o una notificación reaccione — un «tus sesiones se cerraron» dispararía sobre un revoke de 0 filas (usuario sin sesiones activas, o «cerrar las demás» siendo la actual la única). Fix al cablear el consumidor: `bulkRevokeActive` devuelve el nº de filas afectadas y el handler solo publica si >0. Ref: `api/src/Iam/Session/Application/RevokeOtherSessions.php:38`, `api/src/Iam/Session/Application/RevokeAllSessions.php`, `api/src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php:129`.
-
-**(session · semántica · low) `AllSessionsRevoked` se emite aunque el objetivo tenga 0 sesiones, y el éxito lo fija duro.** `RevokeAllSessions::revoke` publica el evento incondicionalmente; los escenarios de éxito de `status.feature` asertan `1 event … "erpify.iam.session.all-revoked"` para identidades que «never log in». El significado del evento («se revocaron sesiones») diverge de lo ocurrido («nada que revocar»); si `RevokeAllSessions` se endurece a emitir-solo-si-revocó, este test de status (módulo ajeno) rompe. Pre-existente al módulo Session. Ref: `api/src/Iam/Session/Application/RevokeAllSessions.php`.
+archived: 2026-10-22
 
 ### DW-21: FindUserOrganizationId resolves the org with a non-deterministic findOneBy under multi-membership
 
+status: done 2026-10-22
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-11, revisión fresca)"), 2026-09-24
-location: api/src/Organization/Membership/Infrastructure/Persistence/Doctrine/DoctrineMembershipRepository.php:39
-reason: Safe under today's one-membership-per-user UNIQUE index, but a future multi-org slice would bind sessions to an arbitrary org. Fix when multi-org lands: explicit ordering / deterministic admission org, or a uniqueness assertion.
-status: open
-
-**(api/Organization/Membership — determinismo) `FindUserOrganizationId` resuelve la org con `findOneBy` no determinista bajo multi-membership.** `DoctrineMembershipRepository::findByUserId` usa `findOneBy(['userId' => ...])` sin `ORDER BY` ni aserción de fila única; si un usuario llegara a tener >1 membership, la `organizationId` sellada en la sesión acuñada sería la fila que Postgres devuelva primero (arbitraria). Seguro bajo el invariante «una membership por usuario» de hoy (UNIQUE index `membership(user_id)`), pero un futuro slice multi-org ataría sesiones a una org aleatoria sin guardarraíl en este seam. Fix al entrar multi-org: orden explícito / selección de org de admisión determinista, o aserción de unicidad. Ref: `api/src/Organization/Membership/Infrastructure/Persistence/Doctrine/DoctrineMembershipRepository.php:39`, `api/src/Organization/Membership/Application/FindUserOrganizationId.php`.
+archived: 2026-10-22
 
 ### DW-22: PWA collapses every non-401 /me failure (incl. 503) to 'unauthenticated'
 
@@ -190,12 +191,9 @@ archived: 2026-10-21
 
 ### DW-23: MembershipNotFound mapped to SessionStoreUnavailable (503 store-unreachable)
 
+status: done 2026-10-22
 origin: migrated from legacy ledger ("Deferred from: code review of ii-7-session-lifecycle-registry-gate-failclosed (2026-07-10)"), 2026-09-24
-location: api/src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php:57
-reason: The catch-all rethrows any minting failure as a store outage, including a permanent admission data gap, which mislabels the cause and floods Sentry. Subsumed by O3 (Sentry dedup/fingerprint); consider a distinct marker for admission data gaps vs store down.
-status: open
-
-**(api/Iam/Identity — observabilidad) `MembershipNotFound` mapeado a `SessionStoreUnavailable` (503 «store-unreachable»).** El `catch (Throwable)` del `SessionMintingSuccessListener` rethrowea `SessionStoreUnavailable::storeUnreachable($throwable)` para cualquier fallo del acuñado, incluido `FindUserOrganizationId` lanzando `MembershipNotFound` para un usuario válidamente autenticado sin membership. G1 ratificó 503 fail-closed, pero el marker miente semánticamente (no es un outage de store) y floodea Sentry ante un gap de datos permanente que un reintento del usuario no resuelve. Subsumido por O3 (dedup/fingerprint Sentry pre-prod); considerar un marker/observabilidad distinta para «gap de datos de admisión» vs «store caído». Ref: `api/src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php:57`.
+archived: 2026-10-22
 
 ### DW-24: Orphaned ACTIVE iam_session rows (post-commit correlation failure, re-login without revoke)
 
@@ -224,11 +222,13 @@ archived: 2026-10-21
 ### DW-27: Keyset cursor base-query identity coupled to Doctrine's getDQL() formatting
 
 origin: migrated from legacy ledger ("Deferred from: code review of rm-2-cierre-fingerprint-keyset-437 (2026-07-07)"), 2026-09-24
-location: api/src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSearchEngine.php (baseQueryIdentity)
+location: api/src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSearchEngine.php (baseQueryIdentity), api/src/Backoffice/Audit/Infrastructure/Persistence/Dbal/AuditTimelineKeysetSource.php (fingerprint)
 reason: Byte-for-byte DQL determinism between mint and follow-up is an unguarded precondition; no trigger today (4 fixed-shape consumers). Risks: a consumer with auto-generated params or request-conditional JOIN/WHERE (spurious 422 on page 2), or a Doctrine upgrade re-minting all fingerprints. Hardening: a format-independent identity or a request-invariance guardrail.
 status: open
 
 **(Shared/Search — hardening) La identidad base-query del cursor está acoplada al formato de `getDQL()` de Doctrine.** `DoctrineSearchEngine::baseQueryIdentity()` sella `$queryBuilder->getDQL()` en el fingerprint; su determinismo byte-a-byte entre mint y follow-up es precondición **no guardada** (mitigada sólo con nota en el docblock). Dos ejes de riesgo, sin trigger hoy (los **4** consumidores son fixed-shape con placeholders nombrados — re-medidos uno a uno el 2026-09-20, y son cuatro consumidores del motor, no los 6 que esta bala registró el 2026-09-03 (el árbol tiene cinco `->paginate(`; el quinto es `AuditTimelineKeysetPaginator`, que es el paginador DBAL hermano y acuña su fingerprint de los criterios, no del texto DQL, así que el eje de riesgo de `baseQueryIdentity()` no le aplica): `git log -S` no encuentra ningún consumidor borrado desde entonces, así que el 6 nunca fue. `doctrine/orm` está bloqueado en 3.6.8, el dato que al eje (b) le faltaba: ninguno usa parámetro auto-generado ni JOIN/WHERE condicional por request, y el único `join` del árbol es incondicional): (a) un consumidor futuro con parámetro auto-generado (`?1`, `expr()->in()`) o JOIN/WHERE condicional por request → 422 espurio en la página 2; (b) un upgrade de Doctrine que cambie la generación de DQL re-acuña todos los fingerprints a la vez (acotado — cursores efímeros). Endurecimiento posible: derivar una identidad base-query estable e independiente del formato (p. ej. parts normalizados o un token de identidad explícito), o un guardrail que asegure base-query request-invariante. Ref: `api/src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSearchEngine.php` (`baseQueryIdentity`).
+
+**Ampliado el 2026-10-26 (DW-70): el riesgo ya aplica también al timeline de auditoría.** La frase de arriba según la cual `AuditTimelineKeysetPaginator` «acuña su fingerprint de los criterios, no del texto DQL» dejó de ser cierta: `AuditTimelineKeysetSource::fingerprint()` sella ahora `QueryBuilder::getSQL()` de DBAL. Es el mismo acoplamiento al formato, con el SQL que DBAL renderiza para la plataforma en lugar del DQL: (a) un parámetro posicional o una cláusula condicional por request daría un 422 espurio en la página 2, y (b) un upgrade de `doctrine/dbal` que cambie el renderizado re-acuña todos los fingerprints de auditoría a la vez. Su único consumidor construye hoy una consulta de forma fija y sin `WHERE` propio, así que el disparador sigue sin saltar.
 
 ### DW-28: Should User store Email as a Doctrine embeddable (VO as persisted state)?
 
@@ -260,26 +260,15 @@ archived: 2026-09-28
 
 ### DW-32: audit metadata PII-free rule (FR12) has no structural enforcement
 
+status: done 2026-10-23
 origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
-location: api/src/Shared/Audit (log() callsites, AuditEntryFactory::create), api/.audit-metadata-keys (absent)
-reason: Non-empty metadata is passed at 12 callsites across 4 contexts, plus a 13th producer via AuditWriteCaptureListener that bypasses log(); the revisit trigger has long fired. Closing it is a registry + engine + gate (api/.audit-metadata-keys, like .audit-resource-types) — size L, its own PR, kept out of the 2026-08-28 sweep by explicit product-owner decision.
-status: open
-decision: 2026-09-28 Keep open for a dedicated PR outside the sweep
-
-**(Epic 2+) `metadata` PII-free sin enforcement estructural.** FR12 ("nunca PII/payload en `metadata`") es hoy solo prosa; un dev puede pasar `metadata: ['iban' => …]` y compila/pasa gates. Aceptable en Epic 1 (un consumidor, `metadata` vacío). Revisit trigger: al entrar el 2.º/3.er consumidor con `metadata` no vacío, añadir un guardrail testable (test de arquitectura que escanee los callsites de `log(...)`, o una allowlist de claves de `metadata` por acción).
-
-**Re-medido el 2026-09-20: el conteo NO ha crecido** — siguen siendo 12 puntos de llamada, 11 ficheros y 4 contextos, y `api/.audit-metadata-keys` sigue sin existir. Lo que la medición de 2026-08-28 no vio es un **decimotercer productor que no pasa por `log()`**: el tier de cambios escribe `metadata` a través de `AuditEntryFactory::create()` después de que `AuditWriteCaptureListener:88` le inyecte `$diff['operation']`, así que un gate que barra sólo los callsites de `log(...)` nacería ciego a él.
-
-**Disparador ya cumplido (medido el 2026-08-28).** El `metadata` no vacío se pasa hoy en **12 puntos de llamada**, en 11 ficheros y **4 contextos acotados** (`Backoffice/Audit`, `Backoffice/BankAccount`, `Iam/Identity`, `Shared/Audit`); en tres de ellos el conjunto de claves se calcula fuera del punto de llamada — `AuditTrailReadAuditListener::metadataFor()`, `StoredIdentityDrift::toAuditMetadata()` y el ternario `lockedUntil` de `RecordLockoutNoticeAuditBestEffort` — así que ahí las claves no son ni legibles en el callsite. El «Revisit trigger» de arriba dejó de estar pendiente hace tiempo. Lo que cierra la bala es un registro `api/.audit-metadata-keys` + motor + gate, al modo de `.audit-resource-types`: talla L y PR propia, fuera del barrido de 2026-08-28 por decisión explícita del product owner.
+archived: 2026-10-24
 
 ### DW-33: audit_log.metadata jsonb has no size bound
 
+status: done 2026-10-23
 origin: migrated from legacy ledger ("Deferred from: code review of Epic 1 audit specs (2026-06-23)"), 2026-09-24
-location: api/src/Shared/Audit (writer, audit_log schema)
-reason: Unlike user_agent VARCHAR(512) or action VARCHAR(100), metadata JSONB is unbounded — an inflation/PII vector once a generic producer fills it. AccessLogAuditListener exists but passes default [] metadata, so the trigger has not fired. Consider a writer-side size bound or an AC forbidding raw query/body dumps.
-status: open
-
-**(Epic 2) `metadata` jsonb sin tope de tamaño.** A diferencia de `user_agent` (`VARCHAR(512)`) o `action` (`VARCHAR(100)`), `metadata` jsonb no tiene cota → vector de inflado PII/almacenamiento cuando el access-log genérico de Epic 2 lo pueble automáticamente. **Ese access-log ya no es futuro y el disparador sigue sin saltar** (medido el 2026-09-20): `AccessLogAuditListener` existe desde el 2026-06-25 y es el «access-log genérico» que esta bala esperaba, pero emite `log($action, $level, $resource)` con tres argumentos, así que `metadata` toma el default `[]` y la fila guarda un jsonb vacío. La cota sigue sin existir (`metadata JSONB NOT NULL` sin opciones, frente a `user_agent VARCHAR(512)` y `action VARCHAR(100)`), y el escritor tampoco la impone. Considerar una cota de tamaño en el escritor o un AC de Epic 2 que prohíba volcar `query`/`body` crudos.
+archived: 2026-10-24
 
 ### DW-34: Failure contract of the audit security branch never re-reviewed against its live producer
 
@@ -301,27 +290,29 @@ PWA component-layer gate — latent coverage gap, hardening only (no current bre
 origin: migrated from legacy ledger ("Deferred from: code review of rm-1-nucleo-autorizacion-voter-puerto-politica (2026-07-06)"), 2026-09-24
 location: api/src (PermissionVoter), config security access_decision_manager
 reason: Correct only while the decision strategy stays affirmative and no dotted non-permission attribute (e.g. feature.flag) is introduced; safe today and mandated by AC5. Future hardening: a namespaced positive marker or resource/action registry plus a test pinning the strategy assumption.
-status: open
+status: done 2026-10-26
+resolution: fixed by #1134 — PermissionVoter::supports() asks PublishedPermissions (PermissionCatalog) instead of the attribute's shape, so an unpublished dotted attribute draws no vote and the decision manager denies it (UnpublishedPermissionAttributeDecisionTest, PermissionVoterTest); the affirmative-strategy pin stays in PermissionVoterAccessDecisionTest, and AuthorizationCoreIsClosedForModificationTest keeps proving a new resource edits no part of the core.
 
 **`PermissionVoter::supports()` es sólo-forma (`<resource>.<action>`), así que su corrección de composición depende de dos supuestos externos.** (a) La estrategia del `access_decision_manager` sigue siendo `affirmative` (bajo `unanimous`/`consensus` un DENY del PermissionVoter sobre un atributo no-permiso participaría mal); (b) nunca se introduce un atributo con-punto que NO sea un permiso (p. ej. `feature.flag`) — el voter lo reclamaría y votaría DENY. Hoy es seguro (el vocabulario nativo de Symyfony —`ROLE_*`/`IS_AUTHENTICATED_*`/`PUBLIC_ACCESS`— no lleva punto, y la estrategia es `affirmative` por defecto), y AC5 manda explícitamente el `supports()` basado en forma. Endurecimiento futuro (marcador positivo namespaced o registry de recursos/acciones + test que fije el supuesto de estrategia) = roadmap RM-2+, fuera del alcance aditivo de RM-1.
 
+**Re-medido el 2026-10-24 (#1108): el supuesto (a) queda fijado y el (b) sigue abierto, y es peor de lo que dice esta entrada.**
+
+- **(a) fijado:** `PermissionVoterAccessDecisionTest::testPermissionAttributesAreDecidedAffirmativelyWithThePermissionVoterAsTheirOnlyVoter` lee la estrategia de la decisión que toma el `access_decision_manager` cableado (`AccessDecision::$strategy`) y exige `affirmative`. También exige que `PermissionVoter` sea el único voter que vota sobre un atributo de permiso. Declarar otra estrategia en cualquier fichero de configuración lo pone en rojo.
+- **(b) abierto:** el voter no votaría DENY sobre un atributo con punto que no sea un permiso, como dice la entrada. Puede votar **GRANT**. `StaticAuthorizationPolicy` concede por tier cualquier recurso que no esté en `TIER_OPT_OUT`, así que `featureFlag.read` se concede a VIEWER y cualquier `<x>.<y>` a ADMIN (`ADMIN => ['*']`). Bajo `affirmative`, ese GRANT anula el DENY de un voter propio de ese atributo. Que la estrategia sea `affirmative` no lo protege, sino que lo hace posible.
+- **Condición de cierre:** un marcador positivo o un registro de recursos y acciones en `PermissionVoter::supports()`. Es un cambio del núcleo de autorización (`AuthorizationCoreIsClosedForModificationTest`) y lo decide el usuario.
+- **Hoy:** no existe ningún atributo con punto que no sea un permiso, así que el riesgo no está vivo.
+
 ### DW-37: Invitation accept: no negative CSRF test (403 without mutation)
 
+status: done 2026-10-22
 origin: migrated from legacy ledger ("Deferred from: code review of ii-4-invitation-accept-pantallas-acceso (2026-07-13)"), 2026-09-24
-location: api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php:34
-reason: With check_header off (Decision C) stateless CSRF is satisfied by same-origin, which AcceptInvitationOriginListener already enforces, so no input fails CSRF but passes Origin and a negative test cannot fail. Writable once the double-submit check_header follow-up is enabled.
-status: open
-
-**(Iam/Invitation · test seguridad · con el follow-up CSRF `check_header`) Sin test negativo de CSRF (403 sin mutación).** El accept exige `#[IsCsrfTokenValid('invitation_accept')]`, pero con `check_header` **off** (diferido por Decisión C) el CSRF stateless se satisface por same-origin — que `AcceptInvitationOriginListener` (prio 9) ya impone antes del firewall. No existe un input que CSRF rechace y Origin no, así que un test funcional negativo no puede fallar tal como está cableado. Escribible cuando se habilite el double-submit `check_header` (follow-up de consolidación `LoginOriginListener`). Ref: `api/src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php:34`.
+archived: 2026-10-22
 
 ### DW-38: Invitation accept: no assertion that the session id is regenerated (anti-fixation, NFR3)
 
+status: done 2026-10-22
 origin: migrated from legacy ledger ("Deferred from: code review of ii-4-invitation-accept-pantallas-acceso (2026-07-13)"), 2026-09-24
-location: api/tests/Functional/Iam/Invitation/InvitationAcceptFunctionalTest.php
-reason: Security::login triggers the native migrate(true); the gap is a regression guard should a future change abandon that path. A robust assertion requires planting the session cookie (fragile with the test client) — bundle with the check_header follow-up.
-status: open
-
-**(Iam/Invitation · test seguridad · anti-fixation) Sin assert de que el id de sesión se regenera (NFR3).** `Security::login` dispara el `migrate(true)` nativo; el funcional ya aserta «exactamente 1 sesión acuñada» pero no planta un id de sesión previo y compara pre/post. Garantía provista por el framework; el gap es un guard de regresión si un futuro cambio abandona el camino `Security::login`. Una aserción funcional robusta requiere plantar la cookie de sesión (frágil con el test client) → bundle con el follow-up `check_header`. Ref: `api/tests/Functional/Iam/Invitation/InvitationAcceptFunctionalTest.php`.
+archived: 2026-10-22
 
 ### DW-39: Public Navbar not auth-aware: authenticated users still see 'Sign in' (and 'Backoffice')
 
@@ -501,12 +492,12 @@ severity: low
 archived: 2026-10-21
 
 ### DW-60: Las filas de audit_log persistidas antes de este cambio con un User-Agent igual a [REDACTED] no se reescriben.
+
+status: done 2026-10-23
 origin: spec-deferred ee2d683b793e
-location: api/src/Shared/Audit/Domain/AuditRedaction.php
 source_spec: `spec-dw-47-audit-user-agent-sentinel-forgery.md`
 severity: low
-reason: La neutralización es sólo en captura; no hay backfill, que sería un UPDATE nuevo sobre audit_log (línea en SANCTIONED de SanctionedLogMutationGateTest y decisión en el ADR D4). La atribución NO depende de él: el predicado de flags (actor_erased, o resource_erased con actor_type = 'anonymous') atribuye bien el centinela también en filas anteriores, así que lo único que queda es que esas filas guarden el literal de un cliente. Sólo importa con datos reales dentro de la ventana de retención.
-status: open
+archived: 2026-10-24
 
 ### DW-61: docs/rules/security.md y docs/rules/database.md describen el centinela [REDACTED] y sus dos escritores sin mencionar su reserva ni la reescritura [client-supplied].
 
@@ -525,13 +516,12 @@ severity: low
 archived: 2026-10-21
 
 ### DW-63: Un changes escalar corrupto nunca pasó por el sellado por campo, así que podría llevar PII sin cifrar servida tal cual por la ruta de detalle.
+
+status: done 2026-10-03
 origin: spec-deferred fb38058ee328
-location: api/src/Backoffice/Audit/Infrastructure/Http/AuditEventDetailResourceMapper.php
 source_spec: `spec-dw-52-audit-detail-changes-shape.md`
 severity: low
-reason: Preexistente: la API ya servía el escalar verbatim antes de este cambio (sólo cambia el cliente). Ningún escritor produce un escalar; sólo una fila corrupta. Lo zanjaría comprobar si el anonimizador de recurso o el crypto-shredding alcanzan un metadata.changes no-mapa.
-status: done 2026-10-03
-resolution: verified a real gap and fixed in #1037: neither anonymiser nor crypto-shredding reaches a non-map metadata.changes, so AuditEventDetailResourceMapper withholds its content (scalar → '[unsealed value withheld]', list → same-length list) while keeping the shape; a map with clear-text personal fields is still served as stored (PRODUCTION_SECURITY_CHECKLIST.md §7)
+archived: 2026-10-22
 
 ### DW-64: event_store.payload se escribe como array JSON `[]` para eventos cuyo toPrimitives() está vacío (p.ej. BankDeletedDomainEvent).
 
@@ -581,3 +571,53 @@ source_spec: `spec-dw-48-serialise-late-audit-writers-on-identity.md`
 severity: medium
 archived: 2026-10-21
 
+
+### DW-70: La huella del cursor del timeline de auditoría no incluye su consulta base (la divergencia de #457 sigue en el lado DBAL)
+
+origin: cierre de #373 tras #1108, decisión del usuario, 2026-10-25
+location: api/src/Backoffice/Audit/Infrastructure/Persistence/Dbal/AuditTimelineKeysetSource.php (fingerprint()), api/src/Shared/Search/Infrastructure/Persistence/Doctrine/DoctrineSearchEngine.php (baseQueryIdentity())
+reason: #457 ató la huella ORM a la consulta base; la DBAL de auditoría hashea un `'table' => 'audit_log'` fijo. Hoy no es explotable porque esa consulta base es una sola y sin ámbito. Unificar los dos esquemas invalida una vez todos los cursores de auditoría en vuelo, así que se mantuvo idéntica en #1108.
+status: done 2026-10-26
+resolution: fixed by #1134 — `AuditTimelineKeysetSource::fingerprint()` adds the base query's rendered SQL (shape, not bound values); `AuditTimelineBaseQueryScopeTest` replays a cursor across two base queries and expects `InvalidCursor` (cause fingerprint). Audit cursors in flight at that deploy get one 422 `invalid-cursor`; reloading the screen restarts from page 1.
+severity: low
+
+**Qué entra hoy en la huella de auditoría:** `table`, `sort`, `direction`, `limit` y `filters` (`AuditTimelineKeysetSource::fingerprint()`). La consulta base no entra. El lado ORM sí la ata desde #457 (`QueryExecutionTrace` lleva `baseQueryIdentity()`). #1108 unificó el algoritmo, no los dos esquemas de huella. Los mantuvo byte a byte para que los cursores emitidos antes del despliegue sigan resolviéndose.
+
+**Por qué no es un riesgo vivo:** `DbalAuditTimelineRepository::search()` construye una única consulta base, `SELECT … FROM audit_log a`, sin ningún `WHERE` fuera de los filtros, y los filtros sí entran en la huella. No existe otro listado de `audit_log` sobre el que se pueda reproducir un cursor ajeno.
+
+**Disparador, revisar cuando:**
+- se añada un segundo listado de auditoría con ámbito propio fuera de los filtros (por ejemplo, el timeline de un recurso o de un actor fijado por la ruta), o
+- la consulta base del timeline gane cualquier `WHERE`, `JOIN` o `GROUP BY`.
+
+En ese momento, un cursor de un ámbito se podría reproducir sobre otro: es la clase de defecto que cerró #457.
+
+**Forma del cierre:**
+- Derivar la identidad de la consulta base del `QueryBuilder` DBAL, igual que hace `baseQueryIdentity()` con el DQL, e incluirla en `fingerprint()`.
+- Aceptar el 422 único sobre los cursores en vuelo del despliegue que lo introduzca, y anotarlo en el PR.
+- Añadir un test que reproduzca un cursor de un ámbito sobre otro y espere `InvalidCursor`.
+
+### DW-71: npm audit reportó 7 vulnerabilidades altas que no se reproducen en pwa/
+
+origin: sesión de mantenimiento, petición del usuario, 2026-10-26
+location: pwa/package-lock.json, pwa/node_modules
+reason: el usuario vio 7 altas en `npm audit`; sobre `main` en 3e1a856 el lockfile de pwa/ da 0, y no se sabe dónde se ejecutó el audit que dio 7.
+status: open
+severity: medium
+
+**Medido el 2026-10-26:**
+- `npm audit` en `pwa/` sobre 3e1a856: 0 vulnerabilidades en 858 dependencias. El endpoint de avisos responde: `lodash@4.17.20` devuelve su alta.
+- Las 687 versiones instaladas en `pwa/node_modules`, consultadas contra `/-/npm/v1/security/advisories/bulk`: 0 avisos.
+- Historia del lockfile: `8b7bbd4` (#1111) tenía 3 altas, `fe40884` (#1104) 4 altas y 1 moderada, `ce45691` 3 críticas, 9 altas y 8 moderadas; desde `1c8aca9` (#1112), 0. Ninguna revisión da 7.
+
+**Hipótesis, por orden:**
+1. El audit se lanzó en `tmp/sonar/`, un entorno desechable de `eslint-plugin-sonarjs` con su propio lockfile. Se borró en esta sesión y no se puede comprobar. Rehecho con las versiones de hoy da 0.
+2. La copia local de `pwa/package-lock.json` es anterior a #1112. Comprobar `git log -1 -- pwa/package-lock.json`.
+3. Son alertas de Dependabot en GitHub y no la salida de `npm audit`.
+
+**Para cerrarla:**
+- Volver a ejecutar `npm audit --json` en la máquina nueva, desde `pwa/` y después de `git pull`, y anotar la carpeta.
+- Si da 0, cerrar con `status: done` y la causa.
+- Si da altas, arreglarlas en un PR (`npm audit fix` sin `--force`, o un `overrides` justificado) y leer las versiones resueltas del lock antes de commitear.
+- Revisar también las alertas de Dependabot del repositorio.
+
+**Aparte:** el `pwa/node_modules` de esa sesión no coincidía con el lock. Sobraban `@google/genai` y `@protobufjs/*`, y `@hookform/resolvers` estaba en 5.9.1 frente a `^5.9.2`. Reinstalar con `npm ci` en el contenedor `pwa` antes de auditar.

@@ -182,6 +182,10 @@ RUN <<-EOF
 	# root and the unprivileged runtime user cannot write a single byte into it.
 	mkdir -p /app/storage
 	chown www-data:www-data /app/storage
+	# Caddy's access-log volume mount point, owned for the same reason: Caddy creates the file but cannot
+	# create its directory as the unprivileged user, and fails to start without it.
+	mkdir -p /var/log/caddy
+	chown www-data:www-data /var/log/caddy
 	# Remove setuid/setgid bits
 	find / -perm /6000 -type f -exec chmod a-s {} + 2>/dev/null || true
 EOF

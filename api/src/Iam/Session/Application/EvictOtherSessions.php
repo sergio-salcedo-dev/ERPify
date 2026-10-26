@@ -50,7 +50,11 @@ final readonly class EvictOtherSessions
 
         $survived = $survivor->isAmong($this->sessions->lockActiveForUser($userId));
 
-        $this->sessions->revokeOthersForUser($userId, $survivor);
+        // No row flipped, no fact: the event states that sessions were revoked, and recording one over an empty
+        // set would claim an eviction that did not happen. What the caller is told does not depend on it.
+        if (0 === $this->sessions->revokeOthersForUser($userId, $survivor)) {
+            return $survived;
+        }
 
         // The fact names what the store now holds. With the survivor already revoked nothing was kept, and an
         // `OtherSessionsRevoked` naming it as kept would be a permanent record of a session spared that was

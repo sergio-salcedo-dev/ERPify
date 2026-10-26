@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Frontoffice\Dev\Infrastructure\Controller;
 
-use PHPUnit\Framework\Attributes\CoversNothing;
+use Erpify\Frontoffice\Dev\Infrastructure\Controller\WebDebugToolbarLoaderController;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
  * @internal
  */
-#[CoversNothing]
+#[CoversClass(WebDebugToolbarLoaderController::class)]
 final class WebDebugToolbarLoaderFunctionalTest extends WebTestCase
 {
     public function testRendersToolbarLoaderForToken(): void

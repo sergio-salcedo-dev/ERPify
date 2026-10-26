@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Application;
 
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -31,6 +32,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * invitation id it just listed; the console holds a row of the users register, which knows the person and not
  * the delivery record — so {@see revokeForInvitedUser()} resolves the invitations here, inside the context
  * that owns `invited_user_id`, rather than surfacing an invitation id through the Identity-owned read model.
+ *
+ * Each revocation records who pulled the person's invitation back through {@see RecordInvitationAudit}, in the
+ * same transaction and after the identity is withdrawn, once per call rather than once per invitation.
  */
 final readonly class RevokeInvitation
 {
@@ -39,6 +43,7 @@ final readonly class RevokeInvitation
         private UserRepository $users,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private RecordInvitationAudit $audit,
     ) {
     }
 
@@ -64,6 +69,7 @@ final readonly class RevokeInvitation
 
             $this->revokeOne($invitation);
             $this->withdrawIdentity($invitation->invitedUserId());
+            $this->audit->revoked($invitation->invitedUserId());
         });
     }
 
@@ -102,6 +108,7 @@ final readonly class RevokeInvitation
             }
 
             $this->withdrawIdentity($userId);
+            $this->audit->revoked($userId);
         });
     }
 

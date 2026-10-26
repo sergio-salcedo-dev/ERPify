@@ -2,7 +2,8 @@
 # lib/common.sh — shared helpers for the backup/restore scripts
 # =============================================================================
 # Sourced by backup-prod.sh and restore-prod.sh. The caller must already have
-# cd'd to the repo root and set COMPOSE_PROJECT_NAME and ENV_FILE before
+# cd'd to the repo root, sourced lib/prod-env.sh (compose() takes its overlay
+# list from prod_compose_files) and set COMPOSE_PROJECT_NAME and ENV_FILE before
 # invoking compose()/require_running_stack()/verify_dump().
 #
 # Not executable on its own; meant for `source`.
@@ -19,8 +20,9 @@ log_warn()    { echo -e "${YELLOW}! ${*}${NC}"; return 0; }
 log_error()   { echo -e "${RED}✗ ${*}${NC}" >&2; return 0; }
 
 compose() {
-  docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$ENV_FILE" \
-    -f compose.yaml -f compose.prod.yaml "$@"
+  local files
+  read -ra files <<< "$(prod_compose_files "$ENV_FILE")"
+  docker compose -p "$COMPOSE_PROJECT_NAME" --env-file "$ENV_FILE" "${files[@]}" "$@"
   return $?
 }
 

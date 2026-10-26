@@ -6,23 +6,26 @@ namespace Erpify\Tests\Functional\Backoffice\Audit\Infrastructure\Controller;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditTimelineSearchController;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
+use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
  * Proof-of-wire for the audit investigation timeline against REAL Postgres: the DBAL keyset
- * paginator + filters + {@see \Erpify\Shared\Search\Infrastructure\Http\SearchResponder} survive real
+ * paginator + filters + {@see SearchResponder} survive real
  * navigation (forward/backward, microsecond ties, gap recovery), the error contract maps filter and
  * cursor faults to the right status, and the NFR9 indexes are usable for the timeline query.
  * Navigation uses ONLY the server-composed `links` verbatim — never client-side reconstruction.
@@ -34,7 +37,8 @@ use Symfony\Component\HttpFoundation\Request;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
-#[CoversNothing]
+#[CoversClass(AuditTimelineSearchController::class)]
+#[CoversClass(SearchResponder::class)]
 final class AuditTimelineSearchCursorFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;
@@ -300,9 +304,11 @@ final class AuditTimelineSearchCursorFunctionalTest extends WebTestCase
             $writer->write(AuditLogEntry::create(
                 \sprintf('ACTION_%02d', $i),
                 0 === $i % 2 ? AuditLevel::SECURITY : AuditLevel::ACTIVITY,
-                $i <= 3 ? ActorContext::forUser(self::ACTOR_ID) : ActorContext::anonymous(),
-                Uuid::generate(),
-                $base->modify(\sprintf('-%d minutes', $i)),
+                new AuditProvenance(
+                    $i <= 3 ? ActorContext::forUser(self::ACTOR_ID) : ActorContext::anonymous(),
+                    Uuid::generate(),
+                    $base->modify(\sprintf('-%d minutes', $i)),
+                ),
                 $i <= 2 ? AuditResource::of('Bank', self::RESOURCE_ID) : null,
             ));
         }
@@ -319,9 +325,11 @@ final class AuditTimelineSearchCursorFunctionalTest extends WebTestCase
         return AuditLogEntry::create(
             $action,
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            $occurredOn,
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                $occurredOn,
+            ),
         );
     }
 

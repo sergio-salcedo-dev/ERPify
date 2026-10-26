@@ -13,8 +13,8 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     test.use({ viewport: VIEWPORT_DESKTOP });
 
     test("shows core nav and Account items", async ({ page }) => {
-      const aside = page.locator("aside");
-      await expect(aside.getByRole("button", { name: "Dashboard" })).toBeVisible();
+      const aside = page.getByTestId("bo-layout__sidebar");
+      await expect(aside.getByRole("link", { name: "Dashboard" })).toBeVisible();
       await expect(aside.getByRole("button", { name: "User Profile" })).toBeVisible();
       await clickUntilVisible(
         aside.getByRole("button", { name: "User Profile" }),
@@ -26,7 +26,7 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     });
 
     test("reaches the profile page from the Account group", async ({ page }) => {
-      const aside = page.locator("aside");
+      const aside = page.getByTestId("bo-layout__sidebar");
       await clickUntilVisible(
         aside.getByRole("button", { name: "User Profile" }),
         aside.getByTestId("bo-layout__sidebar-profile"),
@@ -39,10 +39,10 @@ test.describe("BackOffice - Sidebar Navigation", () => {
     });
 
     test("expands and collapses User Profile sub-items", async ({ page }) => {
-      const aside = page.locator("aside");
+      const aside = page.getByTestId("bo-layout__sidebar");
       const userProfile = aside.getByRole("button", { name: "User Profile" });
-      const notifications = aside.getByRole("button", { name: "Notifications" });
-      const settings = aside.getByRole("button", { name: "Settings" });
+      const notifications = aside.getByRole("link", { name: "Notifications" });
+      const settings = aside.getByRole("link", { name: "Settings" });
 
       await expect(notifications).not.toBeVisible();
       await expect(settings).not.toBeVisible();
@@ -64,8 +64,8 @@ test.describe("BackOffice - Sidebar Navigation", () => {
         page.getByRole("button", { name: "Open navigation menu" }),
         page.getByRole("dialog"),
       );
-      await expect(page.getByRole("button", { name: "Dashboard" }).first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "User Profile" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "Dashboard" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "User Profile" }).first()).toBeVisible();
       await expect(page.getByRole("button", { name: "Logout" }).first()).toBeVisible();
     });
 
@@ -74,9 +74,9 @@ test.describe("BackOffice - Sidebar Navigation", () => {
         page.getByRole("button", { name: "Open navigation menu" }),
         page.getByRole("dialog"),
       );
-      await expect(page.getByRole("button", { name: "My profile" }).first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "Notifications" }).first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "Settings" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "My profile" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
+      await expect(page.getByRole("link", { name: "Settings" }).first()).toBeVisible();
     });
   });
 });

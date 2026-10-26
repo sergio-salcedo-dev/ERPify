@@ -106,7 +106,7 @@ export function useBankAccountEditLoader({
   useEffect(() => {
     if (!accountId) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const useCase = container.get<FindBankAccount>("BackOfficeFindBankAccount");
         const result = await useCase.run(accountId);

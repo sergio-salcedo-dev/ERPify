@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Application;
 
 /**
- * Outcome of {@see FulfilIdentityErasure}: what the chained erasure actually removed across the identity,
- * the trail, the reproducible business log, the sessions, the organization membership and the invitations
- * addressed to the subject. The two credential-recovery counts are reported apart for the reason
- * {@see IdentityErasureResult} gives: one table lapses within the hour, the other holds a decade.
- * `identityErased` is the surface-neutral fact each caller reads differently — the
- * HTTP controller turns `false` into a 404, the CLI turns it into an idempotent "nothing to erase" — while
- * the counts feed the operator's report and the compliance self-audit.
+ * Outcome of {@see FulfilIdentityErasure}: what the chained erasure actually removed, one property per link of the
+ * chain — {@see self::ERASED_CATEGORIES} is the one place that enumerates them. The two credential-recovery counts
+ * are reported apart for the reason {@see IdentityErasureResult} gives: one table lapses within the hour, the
+ * other holds a decade. `identityErased` is the surface-neutral fact each caller reads differently — the HTTP
+ * controller turns `false` into a 404, the CLI turns it into an idempotent "nothing to erase" — while the counts
+ * feed the operator's report and the compliance self-audit.
  *
  * The three anonymisation counts are separate because they are different row sets answering different
  * questions: `anonymizedAuditRows` are trail rows the subject **authored**, `anonymizedResourceRows` are
@@ -39,8 +38,12 @@ final readonly class FulfilIdentityErasureResult
      * its own sentence, and {@see FulfilIdentityErasureResultTest} holds the two sets equal in both
      * directions, so a tenth property cannot arrive without its label.
      *
-     * It does not reach the prose in a docblock — that stays a review matter — and it says nothing about
-     * whether a label describes its property correctly.
+     * This map is the only enumeration of WHAT the chain erases: every console surface that lists the links —
+     * the consent prompt, the help, the "nothing to erase" notice and the success report — renders it, and the
+     * docblocks that describe the chain point here instead of listing it. The ORDER the chain runs in is not
+     * here and is argued in {@see FulfilIdentityErasure}'s docblock, which walks the links for that reason.
+     * What the map cannot vouch for is whether a label describes its property correctly; that stays a review
+     * matter.
      *
      * @var array<string, string>
      */

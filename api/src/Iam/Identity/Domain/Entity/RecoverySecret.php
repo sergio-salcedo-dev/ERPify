@@ -133,6 +133,19 @@ final class RecoverySecret extends AggregateRoot
     }
 
     /**
+     * Whether this secret still signs its holder in at `$now`. It delegates to the same
+     * {@see SingleUseToken::isExpired()} that {@see verify()} consults, so "live" and "redeemable" are one rule
+     * rather than two that can drift: the instant of expiry itself already counts as lapsed.
+     *
+     * A lapsed row is not removed by anything but revocation or erasure, so "a row exists" and "a secret is
+     * live" are different facts, and the owner is owed the second.
+     */
+    public function isLiveAt(DateTimeImmutable $now): bool
+    {
+        return !SingleUseToken::fromHash($this->secretHash, $this->expiresAt)->isExpired($now);
+    }
+
+    /**
      * Records that this secret was spent — the holder proved possession and a session was established for
      * its owner.
      *

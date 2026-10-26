@@ -55,13 +55,13 @@ final readonly class UnavailableSessionRepository implements SessionRepository
     }
 
     #[Override]
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): int
     {
         throw SessionStoreUnavailable::storeUnreachable();
     }
 
     #[Override]
-    public function revokeAllForUser(string $userId): void
+    public function revokeAllForUser(string $userId): int
     {
         throw SessionStoreUnavailable::storeUnreachable();
     }

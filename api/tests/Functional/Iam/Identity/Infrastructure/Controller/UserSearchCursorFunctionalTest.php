@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Infrastructure\Controller\UserSearchController;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserSearchRepository;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
@@ -20,7 +21,7 @@ use Symfony\Component\Uid\Uuid;
 
 /**
  * Proof-of-wire for the cursor-only register list against REAL Postgres: `Page<UserRow>` + the
- * {@see \Erpify\Shared\Search\Infrastructure\Http\SearchResponder} + the keyset engine survive real
+ * {@see SearchResponder} + the keyset engine survive real
  * navigation, not just compilation. Navigation uses ONLY the server-composed `links.next` / `links.prev`
  * verbatim — never client-side query reconstruction. Runs as an ADMIN (the only tier the opt-out register
  * admits) and filters to a seeded `cursor-*` subset so the walk is deterministic amid the suite's other
@@ -32,6 +33,7 @@ use Symfony\Component\Uid\Uuid;
  */
 #[CoversClass(UserSearchController::class)]
 #[CoversClass(DoctrineUserSearchRepository::class)]
+#[CoversClass(SearchResponder::class)]
 final class UserSearchCursorFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;

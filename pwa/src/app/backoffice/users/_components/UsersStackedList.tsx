@@ -20,8 +20,8 @@ interface UsersStackedListProps {
   /** Fired when `o` is pressed on a focused row — opens the record peek. */
   onUserPeek?: (id: string) => void;
   density?: "compact" | "comfortable";
-  onInvitationRevoked: () => void;
-  onRevokeFailed: (problem: ProblemDetails) => void;
+  onInvitationChanged: () => void;
+  onInvitationActionFailed: (problem: ProblemDetails) => void;
   className?: string;
 }
 
@@ -38,8 +38,8 @@ export function UsersStackedList({
   onSelectionChange,
   onUserPeek,
   density = "compact",
-  onInvitationRevoked,
-  onRevokeFailed,
+  onInvitationChanged,
+  onInvitationActionFailed,
   className,
 }: Readonly<UsersStackedListProps>) {
   const { focusedRow, setFocusedRow, rowRefs, handleKeyDown } = useRowKeyboardNavigation<User>({
@@ -110,8 +110,8 @@ export function UsersStackedList({
               email={user.email}
               status={user.status}
               surface="stacked"
-              onInvitationRevoked={onInvitationRevoked}
-              onRevokeFailed={onRevokeFailed}
+              onInvitationChanged={onInvitationChanged}
+              onInvitationActionFailed={onInvitationActionFailed}
               className="relative z-10 flex-none"
             />
           </li>

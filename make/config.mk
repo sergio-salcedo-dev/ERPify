@@ -34,6 +34,25 @@ DB_SERVICE   ?= database
 # Everything below is `?=`/overridable: exporting COMPOSE_PROJECT_NAME or any
 # *_PORT in your environment or on the command line wins.
 
+# A prod/staging stack's project and overlays come from
+# scripts/deploy/lib/prod-env.sh — the same answer every deploy, backup and
+# restore script gets. A tls-internal env file is the local rehearsal
+# (erpify.local): project `erpify-prodlocal`, never dev's volumes, plus
+# compose.rehearsal.yaml (its own mailpit). Any other file runs as the checkout's
+# project, the rule below for dev: `erpify` in the primary checkout,
+# `erpify-<slug>` in a worktree.
+PROD_ENV_FILE ?= .env.prod.local
+PROD_ENV_PATH := $(if $(filter /%,$(PROD_ENV_FILE)),$(PROD_ENV_FILE),$(PROJECT_ROOT)/$(PROD_ENV_FILE))
+ifneq ($(filter $(ENV),prod staging),)
+  PROD_TLS_PROFILE := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" profile "$(PROD_ENV_PATH)")
+  ifeq ($(origin COMPOSE_PROJECT_NAME),undefined)
+    COMPOSE_PROJECT_NAME := $(shell bash "$(PROJECT_ROOT)/scripts/deploy/lib/prod-env.sh" project "$(PROD_ENV_PATH)" "$(PROJECT_ROOT)")
+    ifeq ($(strip $(COMPOSE_PROJECT_NAME)),)
+      $(error prod-env.sh resolved no compose project for $(PROD_ENV_PATH) — set COMPOSE_PROJECT_NAME explicitly)
+    endif
+  endif
+endif
+
 # True only inside a linked worktree (git-common-dir's parent != this checkout).
 # Resolves a possibly-relative --git-common-dir against PROJECT_ROOT.
 IS_LINKED_WORKTREE := $(shell cd "$(PROJECT_ROOT)" 2>/dev/null && \
@@ -46,8 +65,10 @@ ifeq ($(IS_LINKED_WORKTREE),true)
 	| tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')
   COMPOSE_PROJECT_NAME ?= erpify-$(WORKTREE_SLUG)
   # Ephemeral host ports for dev-overlay worktree stacks only; never touch the
-  # fixed ports a real staging/prod deploy needs.
-  ifeq ($(filter $(ENV),prod staging),)
+  # fixed ports a real staging/prod deploy needs. `deploy.local` is evaluated
+  # without ENV=prod and is prod all the same: these exports would reach its
+  # nested `make ENV=prod` calls and publish the rehearsal on random ports.
+  ifeq ($(filter $(ENV),prod staging)$(filter deploy.local%,$(MAKECMDGOALS)),)
     HTTP_PORT       ?= 0
     HTTPS_PORT      ?= 0
     HTTP3_PORT      ?= 0
@@ -68,8 +89,8 @@ endif
 
 # —— Compose overlay by ENV ————————————————————————————————————————————————
 # dev      : compose.yaml + compose.dev.yaml
-# staging  : compose.yaml + compose.prod.yaml
-# prod     : compose.yaml + compose.prod.yaml
+# staging  : compose.yaml + compose.prod.yaml  (+ compose.rehearsal.yaml for a tls-internal env file)
+# prod     : compose.yaml + compose.prod.yaml  (+ compose.rehearsal.yaml for a tls-internal env file)
 #
 # CI runs with ENV unset (= dev overlay). If CI-specific Compose behavior is
 # ever needed, introduce compose.ci.yaml and re-add ENV=ci deliberately.
@@ -78,7 +99,6 @@ endif
 # Compose interpolation (`${VAR}` in a compose file) only reads the shell env
 # or `--env-file`/default `.env` — NOT a service's `env_file:` — so prod
 # secrets MUST flow through this wiring, not an `env_file:` on a service.
-PROD_ENV_FILE ?= .env.prod.local
 ifeq ($(ENV),prod)
   COMPOSE_FILES := -f compose.yaml -f compose.prod.yaml
   ENV_FILE_ARGS := --env-file $(PROD_ENV_FILE)
@@ -88,6 +108,13 @@ else ifeq ($(ENV),staging)
 else
   COMPOSE_FILES := -f compose.yaml -f compose.dev.yaml
   ENV_FILE_ARGS :=
+endif
+# The rehearsal's own overlay (mailpit), only for a tls-internal env file — the
+# list prod-env.sh compose-files answers. ProdEnvProjectGateTest refuses a worker,
+# consume command or replica count in it, so the worker stacks
+# ScheduleConsumptionGateTest reads stay the ones above.
+ifeq ($(PROD_TLS_PROFILE),internal)
+  COMPOSE_FILES += -f compose.rehearsal.yaml
 endif
 
 # The Sentry release of a prod/staging deploy: the checkout's commit SHA, handed
@@ -130,6 +157,7 @@ ifeq ($(IN_CONTAINER),false)
   PHP_DEV_CAPTURE  := cd $(API_ROOT) && APP_ENV=dev APP_DEBUG=1
   PHP_TEST_COVERAGE := cd $(API_ROOT) && APP_ENV=test XDEBUG_MODE=coverage
   PHP_BEHAT := cd $(API_ROOT) && APP_ENV=test MINK_BASE_URL=$(MINK_BASE_URL)
+  PHP_BEHAT_COVERAGE := cd $(API_ROOT) && APP_ENV=test XDEBUG_MODE=coverage MINK_BASE_URL=$(MINK_BASE_URL)
 else
   PHP_CONT  := $(DOCKER_COMPOSE_EXEC) $(PHP_SERVICE)
   PHP_TEST  := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test $(PHP_SERVICE)
@@ -148,6 +176,7 @@ else
   # the coverage run so the default test/lint targets keep Xdebug's overhead off.
   PHP_TEST_COVERAGE := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test -e XDEBUG_MODE=coverage $(PHP_SERVICE)
   PHP_BEHAT := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test -e MINK_BASE_URL=$(MINK_BASE_URL) $(PHP_SERVICE)
+  PHP_BEHAT_COVERAGE := $(DOCKER_COMPOSE_EXEC) -e APP_ENV=test -e XDEBUG_MODE=coverage -e MINK_BASE_URL=$(MINK_BASE_URL) $(PHP_SERVICE)
 endif
 
 PHP       := $(PHP_CONT) php

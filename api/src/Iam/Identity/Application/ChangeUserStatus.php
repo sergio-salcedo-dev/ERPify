@@ -36,10 +36,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * transition the state machine forbids, and appending its event to a log that cannot be rewritten.
  *
  * A successful transition then revokes the identity's live sessions ({@see RevokeSessionsBestEffort},
- * post-commit, best-effort). A pure status flip touches neither credential nor roles, so the native
- * de-authentication paths never fire; suspending is an access control that must cut live access at once, and
- * the fail-closed session gate only walls the suspended identity once its registry rows are gone. Swallowing a
- * revoke failure (logged for ops) mirrors {@see CompletePasswordReset}: the change already committed.
+ * post-commit, best-effort). Suspending is an access control that must cut live access at once, and the
+ * fail-closed session gate only walls the suspended identity once its registry rows are gone. Swallowing a
+ * revoke failure (logged for ops) mirrors {@see CompletePasswordReset}: the change already committed, and the
+ * firewall's session comparison includes the lifecycle status, so the next request carrying an old session is
+ * de-authenticated natively even when this revoke failed.
  *
  * **An administrator may never transition their own identity.** The refusal reads the trusted actor from
  * {@see ActorContextFactory} and runs before the transaction opens, so a self-targeted call touches no row and

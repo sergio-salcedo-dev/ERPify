@@ -9,6 +9,7 @@ use Erpify\Shared\Audit\Application\AuditEntryFactory;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -43,13 +44,13 @@ final readonly class FixedAuditEntryFactory implements AuditEntryFactory
         return AuditLogEntry::create(
             $action,
             $level,
-            $this->actor,
-            $this->correlationId,
-            $this->occurredOn,
+            new AuditProvenance(
+                $this->actor,
+                $this->correlationId,
+                $this->occurredOn,
+            ),
             $resource,
             $metadata,
-            null,
-            null,
             $encryptionScopeId,
             $id,
         );

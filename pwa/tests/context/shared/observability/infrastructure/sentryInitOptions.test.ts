@@ -26,6 +26,16 @@ describe("sentryInitOptions", () => {
     return resolved;
   };
 
+  it("tags the app env unless the Sentry environment override is set", () => {
+    expect(options().environment).toBe("prod");
+
+    vi.stubEnv("NEXT_PUBLIC_SENTRY_ENVIRONMENT", "  ");
+    expect(options().environment).toBe("prod");
+
+    vi.stubEnv("NEXT_PUBLIC_SENTRY_ENVIRONMENT", "rehearsal");
+    expect(options().environment).toBe("rehearsal");
+  });
+
   it("is inert without a DSN", () => {
     vi.stubEnv("NEXT_PUBLIC_SENTRY_DSN", "  ");
     expect(sentryInitOptions()).toBeNull();

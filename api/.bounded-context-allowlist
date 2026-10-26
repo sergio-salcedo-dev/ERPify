@@ -81,17 +81,23 @@ src/Iam/Identity/Infrastructure/Cli/CreateInitialAdministratorCommand.php => Erp
 
 # Session minting on login → two published seams. The LoginSuccessEvent listener (Iam/Identity
 # Infrastructure) is the post-admission orchestrator: it mints the server-side session via the published
-# StartSession use case (Iam/Session), failing closed with that context's SessionStoreUnavailable marker, and
+# StartSession use case (Iam/Session), failing closed with that context's SessionStoreUnavailable marker (an
+# outage) or SessionAdmissionUnresolvable (an identity with no organization to scope its session), and
 # resolves the admission-time organization via the published FindUserOrganizationId read use case (Organization).
 # It hands only primitives downstream, so Iam/Session stays unaware of SecurityUser and of Organization.
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Application\StartSession
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable
+src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionAdmissionUnresolvable
+src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible
+src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Iam\Session\Domain\SubjectAdmission
 src/Iam/Identity/Infrastructure/Security/SessionMintingSuccessListener.php => Erpify\Organization\Membership\Application\FindUserOrganizationId
 
 # Session minting holds the identity it names. StartSession (Iam/Session) declares the SessionSubjectLock port it
 # needs and Iam/Identity implements it, because identity_user is Identity's table: the session context learns only
-# whether the row is there, and the lock is taken in the same order the erasure takes it (identity, then sessions).
+# whether the row is there and, for a login, which SubjectAdmission it answers — and the lock is taken in the same
+# order the erasure takes it (identity, then sessions).
 src/Iam/Identity/Infrastructure/Persistence/Doctrine/DbalSessionSubjectLock.php => Erpify\Iam\Session\Application\SessionSubjectLock
+src/Iam/Identity/Infrastructure/Persistence/Doctrine/DbalSessionSubjectLock.php => Erpify\Iam\Session\Domain\SubjectAdmission
 
 # Invitation flow → Identity + Organization seams (II-4). The onboarding orchestration is inherently
 # cross-context: SendInvitation provisions an INVITED identity via the published InviteUser use case, funnels
@@ -114,6 +120,10 @@ src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Domai
 # accept path above, which drives both aggregates of the pair through this repository.
 src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Domain\Repository\UserRepository
 src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Domain\Exception\UserNotFound
+# Resending or revoking an invitation records who acted on whom through RecordInvitationAudit, the seam the
+# identity context publishes: the row names a person, so the context that owns and erases the person writes it.
+src/Iam/Invitation/Application/ResendInvitation.php => Erpify\Iam\Identity\Application\RecordInvitationAudit
+src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Application\RecordInvitationAudit
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort

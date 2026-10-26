@@ -10,6 +10,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditResourceAnonymiser;
@@ -35,6 +36,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * Each test runs inside a rolled-back transaction, so the shared dev DB is left as it was found.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(DbalAuditResourceAnonymiser::class)]
 final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
@@ -268,13 +271,15 @@ final class AuditResourceAnonymiserFunctionalTest extends KernelTestCase
         $entry = AuditLogEntry::create(
             'USER_ROLES_CHANGED',
             AuditLevel::SECURITY,
-            $actor,
-            Uuid::generate(),
-            new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
+            new AuditProvenance(
+                $actor,
+                Uuid::generate(),
+                new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
+                $ip,
+                $userAgent,
+            ),
             AuditResource::of($resourceType, $resourceId),
             [],
-            $ip,
-            $userAgent,
         );
         $writer->write($entry);
 

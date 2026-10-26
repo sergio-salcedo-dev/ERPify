@@ -46,8 +46,6 @@ use SensitiveParameter;
  */
 final readonly class SendInvitation
 {
-    private const string TTL_SPEC = 'P3D';
-
     public function __construct(
         private InviteUser $inviteUser,
         private GrantMembership $grantMembership,
@@ -62,7 +60,7 @@ final readonly class SendInvitation
     public function invite(#[SensitiveParameter] string $email, Role ...$roles): IssuedInvitation
     {
         $invitationId = Uuid::generate();
-        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));
+        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(Invitation::TTL_SPEC)));
 
         $recipientEmail = $this->transactionManager->transactional(
             function () use ($invitationId, $email, $generated, $roles): string {

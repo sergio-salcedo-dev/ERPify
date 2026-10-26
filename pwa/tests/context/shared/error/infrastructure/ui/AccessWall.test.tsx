@@ -72,8 +72,7 @@ describe("AccessWall", () => {
   });
 
   /**
-   * This wall is the only in-app door to `/recovery`, and its first action is the filled
-   * primary CTA. The order is the argument the wall makes: a password reset is keyed by the
+   * On this wall `/recovery` is the first action, the filled primary CTA. The order is the argument the wall makes: a password reset is keyed by the
    * same email address the lockout is, so whoever holds the account locked drains that budget
    * too, while a recovery secret is keyed by nothing the attacker knows. Demote it and the
    * screen leads with the two edges the attack already closes.

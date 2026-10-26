@@ -7,7 +7,9 @@ namespace Erpify\Tests\Functional\Shared\Audit;
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Audit\Domain\Exception\AuditSubjectLockRequiresTransaction;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditSubjectRowLock;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -43,6 +45,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * @internal
  */
 #[CoversClass(DbalAuditSubjectRowLock::class)]
+#[CoversClass(AuditSubjectLockRequiresTransaction::class)]
 final class AuditSubjectRowLockFunctionalTest extends KernelTestCase
 {
     use ObservesRowLocksOnASecondConnection;
@@ -141,5 +144,27 @@ final class AuditSubjectRowLockFunctionalTest extends KernelTestCase
 
             $this->assertTrue($this->isLocked($row));
         });
+    }
+
+    #[Test]
+    public function itRefusesToLockOutsideATransaction(): void
+    {
+        // Without a transaction Postgres drops the `FOR UPDATE` at the end of its own statement, so a lock
+        // that ran anyway would return normally and hold nothing by the time the anonymisers update. No row
+        // state can tell that apart from a refusal — both leave every row free — so the exception IS the
+        // observable.
+        $connection = $this->containerEntityManager()->getConnection();
+        $this->assertFalse($connection->isTransactionActive(), 'the precondition of this test does not hold');
+
+        try {
+            (new DbalAuditSubjectRowLock($connection))
+                ->lock(AuditResource::of(self::PERSON_TYPE, self::SUBJECT_ID))
+            ;
+            $this->fail('a lock outside any transaction was taken without complaint');
+        } catch (DomainException $domainException) {
+            $this->assertInstanceOf(AuditSubjectLockRequiresTransaction::class, $domainException);
+            $this->assertSame(AuditSubjectLockRequiresTransaction::TYPE, $domainException->type());
+            $this->assertSame(['resourceType' => self::PERSON_TYPE], $domainException->context());
+        }
     }
 }

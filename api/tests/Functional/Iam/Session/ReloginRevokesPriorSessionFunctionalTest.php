@@ -8,12 +8,14 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Session\Application\StartSession;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\AssertsSessionIdRotation;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Functional\SeedsAnOrganizationMember;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\BrowserKit\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -33,8 +35,10 @@ use Symfony\Component\HttpFoundation\Response;
  * @internal
  */
 #[CoversClass(StartSession::class)]
+#[CoversClass(\Erpify\Iam\Identity\Infrastructure\Security\RotateSessionIdOnLogin::class)]
 final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
 {
+    use AssertsSessionIdRotation;
     use ResolvesContainerServices;
     use SeedsAnOrganizationMember;
 
@@ -109,6 +113,20 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->assertTrue($listed[0]['current']);
     }
 
+    /**
+     * The firewall skips its own `migrate(true)` when the browser is already signed in as the identity that
+     * logs in again, so the id it held would carry the new login; the rotation listener closes that.
+     */
+    public function testASecondLoginFromTheSameBrowserIsHandedASessionIdItDidNotHold(): void
+    {
+        $this->login();
+        $held = $this->sessionIdHeldBy($this->client);
+
+        $this->login();
+
+        $this->assertSessionIdRotatedAwayFrom($this->client, $held);
+    }
+
     public function testALoginFromAnotherBrowserLeavesTheFirstBrowsersSessionAlive(): void
     {
         $this->login();
@@ -166,25 +184,33 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
     }
 
     /**
-     * Another identity logging in over the same cookie (a shared browser): the row that cookie correlated belongs
-     * to the first member, so it is left live for its owner and no event about them is written by a request they
-     * did not make.
+     * Another identity logging in over the same cookie (a shared browser): the row that cookie correlated is
+     * revoked although it is not the new identity's, because once the second login commits it has no bearer left
+     * — the firewall migrated the native session, and the first member's other browser holds a row of its own,
+     * which stays live.
      */
-    public function testALoginAsAnotherMemberOverTheSameCookieLeavesTheFirstMembersSessionAlive(): void
+    public function testALoginAsAnotherMemberOverTheSameCookieRevokesTheFirstMembersSession(): void
     {
         $this->otherUserId = Uuid::generate();
         $this->otherEmail = \sprintf('relogin-other-%s@erpify.test', \str_replace('-', '', $this->otherUserId));
         $this->seedAnOrganizationMember($this->otherUserId, $this->otherEmail, self::PASSWORD);
 
         $this->login();
-        $first = $this->sessionIdsIn('ACTIVE');
-        $this->assertCount(1, $first);
+        $elsewhere = $this->sessionIdsIn('ACTIVE');
+        $this->assertCount(1, $elsewhere);
+        $elsewhereCookies = $this->client->getCookieJar()->all();
+
+        $this->client->getCookieJar()->clear();
+        $this->login();
+        $shared = \array_values(\array_diff($this->sessionIdsIn('ACTIVE'), $elsewhere));
+        $this->assertCount(1, $shared);
+        $sharedCookies = $this->client->getCookieJar()->all();
 
         $this->login($this->otherEmail);
 
-        $this->assertSame($first, $this->sessionIdsIn('ACTIVE'), "the first member's session is still theirs");
-        $this->assertSame([], $this->sessionIdsIn('REVOKED'));
-        $this->assertSame(0, $this->revokedEventCount($first[0]), 'and nothing announced a revocation of it');
+        $this->assertSame($elsewhere, $this->sessionIdsIn('ACTIVE'), "the first member's other browser keeps its row");
+        $this->assertSame($shared, $this->sessionIdsIn('REVOKED'));
+        $this->assertSame(1, $this->revokedEventCount($shared[0]));
 
         $otherActive = $this->sessionIdsIn('ACTIVE', $this->otherUserId);
         $this->assertCount(1, $otherActive, 'the second member holds exactly one live session');
@@ -193,6 +219,24 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
         $this->assertCount(1, $listed, "the second member's list names only its own session");
         $this->assertSame($otherActive[0], $listed[0]['id']);
         $this->assertTrue($listed[0]['current']);
+
+        // The premise the revocation rests on, independently of it: the shared browser's earlier cookie, replayed
+        // as it was, carries no identity at all. Refused as `session-expired` it would still be a bearer whose
+        // registry row merely happens to be revoked.
+        $this->replaceCookies($sharedCookies);
+        $this->service(EntityManagerInterface::class)->clear();
+        $this->client->request(Request::METHOD_GET, self::SESSIONS_PATH, server: ['HTTP_ACCEPT' => 'application/json']);
+        $replayed = $this->client->getResponse();
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $replayed->getStatusCode(), (string) $replayed->getContent());
+        $problem = \json_decode((string) $replayed->getContent(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertIsArray($problem);
+        $this->assertSame('unauthenticated', $problem['type'] ?? null);
+
+        // And the first member's other browser lists no phantom of the shared one.
+        $this->replaceCookies($elsewhereCookies);
+        $ownListed = $this->mySessions();
+        $this->assertCount(1, $ownListed, "the first member's list shows the shared browser's session as gone");
+        $this->assertSame($elsewhere[0], $ownListed[0]['id']);
     }
 
     /**
@@ -279,6 +323,18 @@ final class ReloginRevokesPriorSessionFunctionalTest extends WebTestCase
             'CREATE TRIGGER ' . self::FAULT . ' BEFORE INSERT ON iam_session FOR EACH ROW'
             . " WHEN (NEW.user_id = '" . $this->userId . "'::uuid) EXECUTE FUNCTION " . self::FAULT . '()',
         );
+    }
+
+    /**
+     * @param array<Cookie> $cookies
+     */
+    private function replaceCookies(array $cookies): void
+    {
+        $this->client->getCookieJar()->clear();
+
+        foreach ($cookies as $cookie) {
+            $this->client->getCookieJar()->set($cookie);
+        }
     }
 
     private function login(?string $email = null): void

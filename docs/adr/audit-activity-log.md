@@ -1,7 +1,7 @@
 # ADR — Auditoría operativa / de actor (`AuditLogger` → `audit_log`), eje separado del stream de dominio
 
-> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-06 (D4.2 — deferred re-sweep of the
-> erasure passes; 2026-09-28: D3 reviewed — request-boundary
+> **Status:** accepted · **Date:** 2026-06-14 · **Last reviewed:** 2026-10-23 (D4 — the closed, shaped and bounded
+> vocabulary of `metadata`; 2026-10-22: D4 — the row's level as the provenance of `metadata.changes`; 2026-10-21: D4.2 — deferred re-sweep of the erasure passes; 2026-09-28: D3 reviewed — request-boundary
 > `security` writes are refused inside an open transaction; D3.1 — `activity` writes synchronously)
 > · **Scope:** cross-cutting `Shared` subsystem (capture + contract) + `Backoffice/Audit` module
 > (read side). `BankAccountsViewed` is its first consumer; the **subsystem implementation** is
@@ -257,8 +257,11 @@ dispare (SIGTERM/reciclado del worker), que ningún reintento de BD toca.
 **Alcance de esa decisión: el `INSERT` de `activity`, no toda contención de la aplicación.** El argumento mide un
 write concreto —una fila, autocommit, esquema con solo PK— y para ése se sostiene. No cubre la transacción del
 borrado GDPR, que tiene otra forma: `FulfilIdentityErasure` corre el pase de actor, el pase de recurso y el
-anonimizador del `event_store` bajo una sola transacción, y el último es un `payload::text ILIKE` que fuerza scan
-secuencial sobre filas que el outbox está insertando en paralelo. Ahí las clases reintentables sí son plausibles.
+anonimizador del `event_store` bajo una sola transacción, y el último reescribe y bloquea filas de la tabla en la
+que el outbox está insertando en paralelo. Desde la enmienda de 2026-10-23 a D12 de
+[`event-store-and-projections.md`](./event-store-and-projections.md) las encuentra con un índice y no con un scan
+secuencial, lo que acorta la transacción pero no elimina esa concurrencia: el `UPDATE` sigue tomando locks de fila
+mientras dura el borrado. Ahí las clases reintentables sí son plausibles.
 **Lo que se añade no es reintento** —la decisión de arriba sigue intacta— **sino traducción**:
 `DoctrineTransactionManager` convierte cualquier `RetryableException` de DBAL en `TransientTransactionFailure`, o
 sea 503 `transient-transaction-failure`, de modo que un `40P01` deja de salir como 500 `unhandled-exception`. El
@@ -366,12 +369,13 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `UPDATE` reescribe `actor_id` en todas las filas del sujeto con **un UUID aleatorio nuevo acuñado en el
   borrado** —sin valor original, sin tabla de mapeo, sin derivación determinista— y redige
   `ip`/`user_agent` al centinela `[REDACTED]` —literal **reservado** a las dos sentencias de supresión:
-  `AuditLogEntry::create()` reescribe un valor capturado que lo iguale (sin espacios en los extremos, sin
-  distinguir mayúsculas) como `[client-supplied] <valor>`, así que una cabecera `User-Agent: [REDACTED]` no
-  fabrica evidencia de una redacción en las filas capturadas desde que esa regla se desplegó (las
-  anteriores no se reescribieron y pueden conservar un literal enviado por el cliente; los flags lo
-  atribuyen igual, ver más abajo; y el prefijo también es forjable: sólo garantiza que el valor difiere del
-  centinela)—. No borra filas; la traza (`action`, `level`, `occurred_on`,
+  el constructor de `AuditProvenance`, por el que pasa toda entrada de `AuditLogEntry::create()`, reescribe un
+  valor capturado que lo iguale (sin espacios en los extremos, sin distinguir mayúsculas) como
+  `[client-supplied] <valor>`, así que una cabecera `User-Agent: [REDACTED]` no fabrica evidencia de una
+  redacción en las filas capturadas desde que esa regla se desplegó (las anteriores no se reescribieron y
+  pueden conservar un literal enviado por el cliente; los flags lo atribuyen igual, ver más abajo; y el
+  prefijo también es forjable: sólo garantiza que el valor difiere del centinela)—. No borra filas; la traza
+  (`action`, `level`, `occurred_on`,
   recurso, correlación) sobrevive y queda **correlacionada intra-sujeto** porque las N filas comparten el
   nuevo id. Al no quedar nada que invierta el reemplazo, el vínculo con la persona se rompe de verdad
   (anonimización efectiva, Recital 26), no una pseudonimización con clave reversible (Art. 4(5)).
@@ -496,8 +500,9 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   infalsificable. **Lo que esto no es:** la derivación es una consulta que nadie ha escrito todavía, no un
   invariante comprobado — el mismo estado en que sigue el *cross-check* de D4.1. Se revisita cuando exista un
   consumidor que la haga falsificable, o si la fila llega a sellar un discriminante del solicitante; y no
-  antes, porque una novena clave libre en `metadata` gastaría el YAGNI con que este ADR aplazó pasar esa
-  estructura a tipos.
+  antes, porque una novena clave en esa fila —un caso más de `AuditMetadataKey`, revisado como todos— gastaría
+  el YAGNI con que este ADR aplazó dar a cada acción su propio conjunto tipado de claves: el vocabulario cierra
+  qué claves existen y qué forma tiene su valor, no cuáles lleva cada acción.
   **Que sea del contexto dueño lo vuelve una obligación distribuida**, así que lleva su control detectivo,
   igual que el crypto-shredding lleva el suyo: `api/.audit-resource-types` clasifica cada `resource_type`
   como persona o no, y una línea `person` declara **dos** rutas —quién lo borra y qué lo atestigua—. El gate
@@ -515,15 +520,38 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   ya tiene anonimizador. La asimetría es la razón: ninguna mutación de este conjunto entra en el JSON, así
   que un id de persona en `metadata` sobrevive al borrado que lo escribió, mientras que en el eje de recurso
   lo reescribe el anonimizador que ese mismo borrado ya ejecuta, en la misma transacción.
-  **Lo que sostiene la invariante no es un gate**, y la elección está argumentada: un pseudónimo es un UUID
-  indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería el contrato de
-  `anonymized_actor_id` (D4.1), y prohibir **por nombre de clave** sería una declaración que se comprueba a
-  sí misma. Lo sostiene un testigo de aceptación falsable en `api/features/backoffice/users/erase.feature`.
-  **Trigger de revisita vigente:** **cualquier** camino de escritura que vuelva a meter un id de persona en
-  `metadata`. Decía «un segundo», y estaba descontado en uno: tras el cambio no queda ninguno, así que «el
-  segundo» se habría negado a dispararse ante la primera regresión — que es exactamente recrear la fuga que
-  esta decisión cerró. Lo que la Regla de Tres protege es el **registro declarativo de claves**, y para eso
-  la cuenta que importa es cuántos caminos existen a la vez, no cuántos han existido.
+  **Lo que sostiene que no entre un id de persona sigue sin ser un gate**, y la elección está argumentada: un
+  pseudónimo es un UUID indistinguible por forma de un id real, luego prohibir «UUIDs en `metadata`» rompería
+  el contrato de `anonymized_actor_id` (D4.1). Lo sostiene un testigo de aceptación falsable en
+  `api/features/backoffice/users/erase.feature`. **Trigger de revisita vigente:** **cualquier** camino de
+  escritura que vuelva a meter un id de persona en `metadata`.
+  **Lo que sí está cerrado es el vocabulario (2026-10-23).** La Regla de Tres que protegía el registro
+  declarativo de claves se cumplió hace tiempo —hoy son catorce ficheros que escriben `metadata` no vacío y veinticinco claves—, y
+  `AuditMetadataKey` (`Shared/Audit/Domain`) es ese registro: cada clave con la **forma** de su valor
+  (`AuditMetadataShape`: un recuento, un flag, un nombre de ruta, un token del servidor, un pseudónimo, un
+  scope `<Tipo>:<uuid>`, nombres de rol, un instante ATOM, el diff de cambio, la operación). Lo impone
+  `AuditLogEntry::create()` —clave desconocida, valor fuera de forma, o `changes`/`operation` fuera de una fila
+  `change`, todo `InvalidAuditLogEntry`, sin marcador y por tanto un fallo de programación visible—, y la
+  objeción de arriba a «prohibir por nombre de clave» no lo alcanza por dos razones. **Dónde:** el
+  constructor es el único punto por el que pasan todas las filas, también las del capturador de cambios que
+  no pasa por `log()` y las tres cuyas claves se calculan lejos de la llamada (`StoredIdentityDrift`,
+  `AuditTrailReadAuditListener::metadataFor()`, el ternario de `lockedUntil`); un barrido textual de
+  `log(...)` nacía ciego a ellas, y por eso se descartó el registro en fichero con gate al modo de
+  `.audit-resource-types`. **Qué:** la forma, no el nombre, es lo que da contenido a la declaración —una clave
+  `route` sin forma admitiría una ruta con un id dentro—. Dos formas admiten texto que el servidor no eligió y
+  están nombradas como tales: los valores crudos que la sonda de integridad no pudo explicar (el operador
+  repara la cadena que se le mostró) y el diff, cuyos campos personales llegan sellados. El sentido inverso
+  —una clave que deja de escribirse y sigue admitida— lo lee `AuditMetadataVocabularyLivenessGateTest`.
+  **Y está acotado**, como `action` y `user_agent` por su ancho de columna: 16 KiB medidos como texto JSON con
+  Unicode y barras sin escapar —una cota superior de lo que guarda un `jsonb`: comillas, barras invertidas y
+  controles siguen contando escapados—. El mayor `metadata` legítimo es una actualización de `Bank` con sus tres
+  columnas de nombre al ancho máximo: 4 792 bytes en caracteres de cuatro bytes, unos 6,9 KB si todos fueran
+  controles escapados como `\u00XX`, y un test construye ambos y los admite: la cota existe para rechazar a un productor que empiece a volcar un cuerpo o una lista, nunca a uno
+  que llene sus columnas, porque una fila `change` rechazada hace fallar la escritura que la produjo. Por la
+  misma razón `orphan_role_values` es una **muestra** —veinte valores de 64 caracteres como máximo, con el total
+  en `orphan_role_value_count`—: su número y su longitud los decide la corrupción, y una fila rechazada por
+  tamaño dejaría el rastro sin constancia de que la deriva se detectó; el listado completo lo imprime el
+  comando.
   **Las dos claves de una fila `change`, y por qué ambas caben en la invariante:** `changes` —el diff campo
   a campo, con los valores clasificados `#[PersonalData]` sellados por `PiiDiffSealer`— y su hermana
   `operation`, el nombre del caso de `AuditWriteOperation` (`CREATED`/`UPDATED`/`DELETED`), que el sellado
@@ -531,11 +559,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   porque no es derivable del diff: un update que sólo rellena campos vacíos es indistinguible de un alta
   mirando los pares `old`/`new`. Las filas escritas antes de que el capturador la estampe no la llevan, así
   que el lector lee su ausencia como «desconocido» y nunca como una cuarta clase de escritura. No mueve la
-  cuenta de «una novena clave libre» de más arriba: aquélla cuenta las ocho claves de la fila
+  cuenta de «una novena clave» de más arriba: aquélla cuenta las ocho claves de la fila
   `GDPR_ERASURE_EXECUTED` **que escribe `FulfilIdentityErasure`**, no las del JSON en general — y nombrar el
   camino importa porque esa acción tiene tres escritores: el del CLI de actor escribe sólo dos claves, y el
   re-barrido de D4.2 seis —`resweep` entre ellas—, que tampoco mueven esa cuenta.
-  **En el cable, un `changes` vacío o con claves es un objeto JSON** —`{}` cuando el diff queda vacío—.
+  **En el cable, un `changes` vacío —o con claves, en una fila `change`— es un objeto JSON** —`{}` cuando el
+  diff queda vacío—.
   `json_decode(…, true)` colapsa `{}` y `[]` en el mismo array PHP, así que la forma la fija
   `AuditEventDetailResourceMapper`, el único mapper que sirve `metadata`, tanto para filas nuevas como para las
   históricas. Tres formas que el capturador nunca produce conservan su **forma** en el cable: una **lista no
@@ -556,12 +585,30 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `AuditEventDetailResourceMapper::WITHHELD`, que no es el centinela de borrado porque nada se borró.
   Coste declarado: el valor crudo no está en el cable; quien investigue una fila corrupta la lee de la
   tabla.
+  **Un mapa sólo se sirve en una fila `change`: el nivel es la procedencia del diff, la forma no.** Un mapa
+  tiene la forma de un diff sellado lo haya sellado alguien o no, así que servir todo mapa entregaría en
+  claro un `{"email": {"old": …}}` escrito por cualquier otro camino, que además sobreviviría al borrado por
+  la razón de arriba. El nivel sí lo prueba, y lo sostienen tres mecanismos: sólo
+  `AuditWriteCaptureListener` acuña una entrada `change` y `SymfonyAuditLogger` rechaza ese nivel;
+  `AuditLogEntry::create()` rechaza la clave `changes` en cualquier otro nivel, de modo que tampoco llega a
+  **guardarse** —el defecto de RGPD es el almacenamiento, no sólo el cable—; y `ChangeLevelProvenanceGateTest`
+  fija el conjunto cerrado de ficheros que nombran `AuditLevel::CHANGE`, prohíbe acuñar un nivel desde un
+  string y exige que `src` inserte en `audit_log` sólo a través del escritor de `AuditLogEntry`. En una fila
+  que no es `change` el mapper retiene **entero** como `WITHHELD` escalar cualquier `changes` no vacío, mapa o
+  lista —claves incluidas, porque vienen del mismo escritor sin sellar y una clave puede nombrar a una persona
+  igual que un valor—, y el cliente lo degrada a diff ilegible. La lista conserva su forma sólo en una fila
+  `change`, donde sólo puede ser un fallo del constructor del diff y el rechazo del sobre es la señal; en otra
+  fila ningún constructor de diff la escribió, y rechazar el sobre escondería un registro de actividad o de
+  seguridad tras el error de un escritor. Descartadas: decidir sólo en lectura (el dato seguiría guardado en
+  claro) y sólo en escritura (no cubre filas ya guardadas ni las escritas por SQL a mano). Residual: una fila
+  `change` escrita antes de existir el sellado o directamente en la base de datos —
+  `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
-**Origen de `ip` (trust boundary).** El valor de `ip` se toma de la entrada *rightmost* de
-`X-Forwarded-For` —la que añade Caddy, no falsificable—, con trusted proxies configurados, heredando
-exactamente la decisión que ya usa el rate-limiter del PWA (ver `PRODUCTION_SECURITY_CHECKLIST.md`).
-**Nunca** el `X-Forwarded-For` crudo del cliente (spoofeable). La captura se ejecuta en Epic 2; aquí
-se fija el contrato del dato.
+**Origen de `ip` (trust boundary).** El valor de `ip` es `Request::getClientIp()`, la misma decisión
+que toma el rate-limiter de la API. FrankenPHP es el borde —ejecuta PHP dentro del Caddy que aceptó la
+conexión— y prod no confía en ningún salto (`SYMFONY_TRUSTED_PROXIES` vacío en `compose.prod.yaml`), así
+que es el par TCP. Sólo un despliegue con un balanceador real delante nombra ahí su dirección, y entonces
+cuenta la entrada que añade ese salto. **Nunca** el `X-Forwarded-For` crudo del cliente (spoofeable).
 
 **Input no confiable (*tainted*).** `ip`, `user_agent` y `metadata` son datos controlados por el
 cliente / no confiables: deben escaparse al renderizarse en la UI admin (Epic 4) —nunca
@@ -658,7 +705,8 @@ vida», justo la mezcla de ejes que D7 evita.
 
 **Trigger de revisita.** Cuando aparezca un **segundo** evento de cumplimiento
 (`GDPR_EXPORT_COMPLETED`, `GDPR_ERASURE_FAILED`, …), introducir una **estructura tipada** para esos
-eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo evento de cumplimiento).
+eventos en vez de confiar en un vocabulario compartido por todas las acciones —`AuditMetadataKey` (D4)
+cierra qué claves existen y su forma, no cuáles lleva cada acción— (hoy YAGNI: un solo evento de cumplimiento).
 
 ### D4.2 — Re-barrido diferido de los pases de borrado (enmienda D3.1 y D4)
 
@@ -667,10 +715,10 @@ eventos en vez de confiar en claves libres de `metadata` (hoy YAGNI: un solo eve
 cuando corren. Una petición que cargó al sujeto antes de que desapareciera su fila de identidad puede confirmar
 otra después. Tres rondas de revisión encontraron cada una escritores nuevos, así que aceptar «la lista» dejó de
 ser un control. Los de sesión —`StartSession` y las revocaciones, en `event_store` e `iam_session`— quedan
-serializados con el borrado (`SessionSubjectLock`, y el borrado purga las sesiones antes del log de negocio); la
+serializados con el borrado (`SessionSubjectLock`, y el borrado purga las sesiones antes del log de negocio; un re-login que revoca la fila correlada de otra identidad queda serializado con el borrado de esa dueña sólo por el bloqueo de la fila); la
 clase viva es el log de acceso y los cuatro escritores de auditoría del borde de la petición en el eje de actor.
 
-**Decisión** (Sergio, 2026-10-06). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
+**Decisión** (Sergio, 2026-10-21; un registro anterior la fechaba el 2026-10-06, sin rastro de que la tomara él). El borrado inserta al sujeto en `identity_erasure_resweep` dentro de su
 propia transacción, y sólo si su identidad estaba viva —la misma condición que el pase de `event_store`, que
 casa por valor sobre cualquier agregado—. `ResweepErasedSubjects`, cada **5 minutos** en el schedule
 `identity_maintenance`, repite para cada sujeto aún programado —una **hora** desde que el borrado construyó su
@@ -819,7 +867,7 @@ actor_id        uuid         NULL si y solo si anonymous/system (D7); CHECK audi
 correlation_id  uuid         obligatorio (request id estable)
 resource_type   string       NULL  (p.ej. BankAccount)
 resource_id     uuid         NULL
-metadata        jsonb        sin payload sensible
+metadata        jsonb        sin payload sensible; claves y formas de AuditMetadataKey, ≤ 16 KiB (D4)
 ip              varchar(45)  NULL
 user_agent      string       NULL
 actor_erased    boolean      NOT NULL — false al insertar (writer); true tras erasure GDPR (D4.1), fijado en

@@ -17,6 +17,22 @@
 - Follow AAA pattern (Arrange, Act, Assert)
 - Use test doubles appropriately, named per the convention below
 
+## Who credits coverage (PHP)
+
+A class counts as covered only where a test **verifies its behaviour**, never because a test passes through it.
+SonarCloud imports two Clover reports and merges them per line by logical OR, so each lane is scoped to what it
+verifies:
+
+- **PHPUnit** credits the classes a test declares with `#[CoversClass]` — declare a class only when the test
+  asserts that class's behaviour, and nothing for one it merely constructs or traverses.
+- **Behat** credits **entry points only**: every class carrying `#[Route]` (class or method) or `#[AsCommand]`,
+  derived by reflection in `api/tests/Support/AcceptanceEntryPoints.php` and fed to the `coverage` profile of
+  `api/behat.dist.php`. A scenario's oracle is the request's or command's observable contract, which is the
+  entry point's responsibility; the listeners, voters, serializers and adapters it traverses are executed, not
+  verified, so they get a PHPUnit test of their own or stay uncovered. Gate: `BehatCoverageScopeGateTest`
+  (the profile feeds the derived list, every production route resolves into it, the derivation agrees with a
+  text sweep, and the profile overrides no tester option — CI gates on it).
+
 ## Test double naming convention
 
 Name **ports by capability** and **implementations by technology/strategy** — the same naming axis holds in `src/` and `tests/`, so a port's production and test adapters read as siblings.

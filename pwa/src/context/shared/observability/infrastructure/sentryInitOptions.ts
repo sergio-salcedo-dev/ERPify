@@ -56,7 +56,8 @@ const PROD_TRACES_SAMPLE_RATE = 0.2;
  * skips `Sentry.init` entirely, keeping the SDK fully inert (no init, no
  * network) in tests and bare checkouts, mirroring the API's empty-DSN behaviour.
  * The DSN selects the project (`erpify-pwa-dev` vs `erpify-pwa-prod`), baked per
- * build; `environment` further tags dev / staging / prod.
+ * build; `environment` further tags dev / staging / prod, or the `NEXT_PUBLIC_SENTRY_ENVIRONMENT`
+ * override (`rehearsal` for the local prod rehearsal).
  */
 export function sentryInitOptions(): SentryInitOptions | null {
   // Trim so a whitespace-only value doesn't pass the gate and init the SDK with
@@ -67,10 +68,13 @@ export function sentryInitOptions(): SentryInitOptions | null {
   }
 
   const appEnv = process.env.NEXT_PUBLIC_APP_ENV;
+  // The local prod rehearsal builds with APP_ENV=prod against the prod project; this override is
+  // what keeps its events from reading as the real deployment's. Empty falls back to the app env.
+  const environment = process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT?.trim() || appEnv;
 
   return {
     dsn,
-    environment: appEnv,
+    environment,
     dataCollection: DATA_COLLECTION,
     tracesSampleRate:
       appEnv === AppEnv.DEVELOPMENT ? DEV_TRACES_SAMPLE_RATE : PROD_TRACES_SAMPLE_RATE,

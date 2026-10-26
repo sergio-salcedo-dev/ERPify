@@ -20,18 +20,33 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * leave `SELECT aggregate_id FROM event_store` green while the identifier stayed alive in the `payload` of
  * the row beside it — a claim whose only evidence is the half it chose to look at.
  *
- * **Why the JSON columns are matched as text.** The identifier appears under different key names — `userId` in
- * two session events today, `invitedUserId` in every invitation row written before that envelope moved the id
- * to its aggregate column, which are not migrated and are still here. Matching by key name would be a
- * declaration that checks only itself: it would go green on exactly the events nobody remembered to list, and
- * on none of the historical shapes. Matching the value over the serialised column reaches any key, including
- * one nobody has written yet and one nobody remembers having written.
+ * **Why the JSON columns are matched by value, under any key.** The identifier appears under different key names —
+ * `userId` in two session events today, `invitedUserId` in every invitation row written before that envelope moved
+ * the id to its aggregate column, which are not migrated and are still here. Matching by key name would be a
+ * declaration that checks only itself: it would go green on exactly the events nobody remembered to list, and on
+ * none of the historical shapes. Matching the value over the serialised column reaches any key, including one
+ * nobody has written yet and one nobody remembers having written: the `WHERE` reads the UUIDs extracted from that
+ * serialised text, and the `SET` rewrites the text itself.
  *
  * **Case-insensitively, and that is not defensive programming.** `aggregate_id` is a `uuid` column, so
  * Postgres normalises its case on both sides of a comparison; `payload` and `metadata` are jsonb TEXT and it
  * does not, while the HTTP layer hands the identifier down in whatever case the caller spelled it
  * (`Uuid::ensure()` validates without normalising). The sibling axis was measured to leak exactly this way:
- * the same identifier in upper case passed a `LIKE` and failed an `ILIKE`.
+ * the same identifier in upper case passed a `LIKE` and failed an `ILIKE`. The `WHERE` gets case folding from
+ * comparing `uuid` values; the `SET` gets it from the `'gi'` flags.
+ *
+ * **Why the `WHERE` reads an array of UUIDs rather than the text.** Matching `col::text ILIKE '%id%'` is a
+ * sequential scan of the whole log (measured: ~3 s at 1M rows). `event_store_uuids(col)` collects every
+ * UUID-shaped window of the serialised text, de-duplicated: it takes the maximal runs of `[0-9a-fA-F-]`, splits
+ * each on `-` and reads every sequence of the last 8 characters of a group, three groups of 4 and the first 12
+ * of the next — so overlapping windows are all found, in one linear pass, and with no `'i'` flag whose meaning
+ * would depend on a collation. A GIN index over that expression answers `@>` in 9–144 ms at 1M rows.
+ * It selects exactly the rows `ILIKE '%id%'` selects, for any key, any depth and any case:
+ * `EventStoreSubjectPredicateEquivalenceFunctionalTest` holds the two equal over an adversarial corpus. A
+ * trigram index over the text was measured too and lost on size and insert cost — 425 MB against 138 MB,
+ * and inserts ×7.8 against roughly ×2–×7 (a noisy range). The expression in this statement
+ * must stay the one the migration indexes, character for character, or the planner cannot use the index;
+ * `EventStoreSubjectAnonymiserPlanFunctionalTest` asks the planner whether it still does.
  *
  * **Both members of the pair are validated UUIDs, and both have to be.** The pattern needs it because a
  * regular expression would otherwise read metacharacters out of it; the replacement needs it because Postgres
@@ -77,12 +92,11 @@ final readonly class DbalEventStoreSubjectAnonymiser implements EventStoreSubjec
             . "payload = CAST(regexp_replace(payload::text, :subject_id, :pseudonym, 'gi') AS JSONB), "
             . "metadata = CAST(regexp_replace(metadata::text, :subject_id, :pseudonym, 'gi') AS JSONB) "
             . 'WHERE aggregate_id = CAST(:subject_id AS UUID) '
-            . 'OR payload::text ILIKE :subject_pattern '
-            . 'OR metadata::text ILIKE :subject_pattern',
+            . 'OR event_store_uuids(payload) @> ARRAY[CAST(:subject_id AS UUID)] '
+            . 'OR event_store_uuids(metadata) @> ARRAY[CAST(:subject_id AS UUID)]',
             [
                 'subject_id' => $subjectId,
                 'pseudonym' => $pseudonym,
-                'subject_pattern' => '%' . $subjectId . '%',
             ],
         );
     }

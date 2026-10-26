@@ -8,7 +8,7 @@ use DateTimeImmutable;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Audit\Domain\AuditRedaction;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Domain\Exception\InvalidAuditLogEntry;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -23,7 +23,6 @@ use Symfony\Component\Uid\UuidV7;
  */
 #[CoversClass(AuditLogEntry::class)]
 #[CoversClass(InvalidAuditLogEntry::class)]
-#[CoversClass(AuditRedaction::class)]
 final class AuditLogEntryTest extends TestCase
 {
     public function testExposesEveryFieldItIsBuiltWith(): void
@@ -32,31 +31,33 @@ final class AuditLogEntryTest extends TestCase
         $correlationId = Uuid::generate();
         $resourceId = Uuid::generate();
         $occurredOn = new DateTimeImmutable('2026-01-01T12:34:56.789012+00:00');
-        $metadata = ['filters' => ['status' => 'active']];
+        $metadata = ['route' => 'backoffice_bank_account_search'];
 
         $entry = AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::SECURITY,
-            $actor,
-            $correlationId,
-            $occurredOn,
+            new AuditProvenance(
+                $actor,
+                $correlationId,
+                $occurredOn,
+                '203.0.113.7',
+                'Mozilla/5.0',
+            ),
             AuditResource::of('bank_account', $resourceId),
             $metadata,
-            '203.0.113.7',
-            'Mozilla/5.0',
         );
 
         $this->assertSame(AuditLevel::SECURITY, $entry->level);
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
-        $this->assertSame($actor, $entry->actor);
-        $this->assertSame($correlationId, $entry->correlationId);
-        $this->assertSame($occurredOn, $entry->occurredOn);
+        $this->assertSame($actor, $entry->provenance->actor);
+        $this->assertSame($correlationId, $entry->provenance->correlationId);
+        $this->assertSame($occurredOn, $entry->provenance->occurredOn);
         $this->assertInstanceOf(AuditResource::class, $entry->resource);
         $this->assertSame('bank_account', $entry->resource->type);
         $this->assertSame($resourceId, $entry->resource->id);
         $this->assertSame($metadata, $entry->metadata);
-        $this->assertSame('203.0.113.7', $entry->ip);
-        $this->assertSame('Mozilla/5.0', $entry->userAgent);
+        $this->assertSame('203.0.113.7', $entry->provenance->ip);
+        $this->assertSame('Mozilla/5.0', $entry->provenance->userAgent);
     }
 
     public function testMintsAValidTimeOrderedV7Id(): void
@@ -67,14 +68,12 @@ final class AuditLogEntryTest extends TestCase
         $this->assertInstanceOf(UuidV7::class, SymfonyUuid::fromString($entry->id));
     }
 
-    public function testOmittingTheResourceLeavesItNullAlongsideTheOtherOptionalContext(): void
+    public function testOmittingTheResourceAndMetadataLeavesThemEmpty(): void
     {
         $entry = $this->anEntry();
 
         $this->assertNotInstanceOf(AuditResource::class, $entry->resource);
         $this->assertSame([], $entry->metadata);
-        $this->assertNull($entry->ip);
-        $this->assertNull($entry->userAgent);
     }
 
     #[DataProvider('provideRejectsBlankActionCases')]
@@ -85,9 +84,11 @@ final class AuditLogEntryTest extends TestCase
         AuditLogEntry::create(
             $blank,
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
         );
     }
 
@@ -107,9 +108,11 @@ final class AuditLogEntryTest extends TestCase
         AuditLogEntry::create(
             \str_repeat('A', 101),
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
         );
     }
 
@@ -120,9 +123,11 @@ final class AuditLogEntryTest extends TestCase
         AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
             AuditResource::of(\str_repeat('A', 101), Uuid::generate()),
         );
     }
@@ -135,9 +140,11 @@ final class AuditLogEntryTest extends TestCase
         $entry = AuditLogEntry::create(
             $action,
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
             AuditResource::of($resourceType, Uuid::generate()),
         );
 
@@ -151,32 +158,14 @@ final class AuditLogEntryTest extends TestCase
         $entry = AuditLogEntry::create(
             '  BANK_ACCOUNTS_VIEWED  ',
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
         );
 
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
-    }
-
-    /**
-     * The rule itself is pinned case by case in AuditRedactionTest; this proves the one factory every
-     * `audit_log` row passes through applies it to both captured fields.
-     */
-    public function testNeutralisesACapturedIpAndUserAgentEqualToTheRedactionSentinel(): void
-    {
-        $entry = AuditLogEntry::create(
-            'BANK_ACCOUNTS_VIEWED',
-            AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
-            ip: AuditRedaction::SENTINEL,
-            userAgent: '  [redacted] ',
-        );
-
-        $this->assertSame('[client-supplied] [REDACTED]', $entry->ip);
-        $this->assertSame('[client-supplied] [redacted]', $entry->userAgent);
     }
 
     private function anEntry(): AuditLogEntry
@@ -184,9 +173,11 @@ final class AuditLogEntryTest extends TestCase
         return AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
         );
     }
 }

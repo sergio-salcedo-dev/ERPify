@@ -30,7 +30,10 @@ On a VPS with a real domain:
      `tls internal` to automatic **ACME** — a publicly-trusted cert, so clients
      import **no** CA.
    - For real outbound mail, set a real `MAILER_DSN=` (the default `null://null`
-     silently discards mail) and `MAILER_FROM` / `DEFAULT_NOTIFICATION_EMAIL`.
+     silently discards mail) and `MAILER_FROM`. `DEFAULT_NOTIFICATION_EMAIL` (where
+     bank-change notices go) is **required**: `compose.prod.yaml` aborts without it.
+   - Leave `SYMFONY_TRUSTED_PROXIES` unset: FrankenPHP is the edge, so Symfony
+     trusts no hop. Set it only to the address of a load balancer you put in front.
    - **Sentry is required in prod:** set `SENTRY_DSN=` (from the Sentry MCP) and
      `SENTRY_TRACES_SAMPLE_RATE=0.2` — `make prod.env.check` and the compose `:?`
      guards abort the deploy without them. Events are tagged environment `prod`
@@ -69,7 +72,7 @@ data source keeps working.
 
 ```bash
 ssh user@your.domain
-make db.shell            # interactive psql via `docker exec` — no port, no tunnel
+make ENV=prod db.shell   # interactive psql via `docker exec` — no port, no tunnel
 ```
 
 Best for ad-hoc inspection and monitoring. Fully SSH-gated; nothing to open or
@@ -121,12 +124,12 @@ If the VPS firewall drops host→container forwarding (see caveat), publish a
 
 ```bash
 # on the VPS
-make db.tunnel            # socat sidecar → binds 127.0.0.1:15432 (loopback only)
+make ENV=prod db.tunnel   # socat sidecar → binds 127.0.0.1:15432 (loopback only)
 # from your laptop
 ssh -N -L 15432:127.0.0.1:15432 user@your.domain
 # GUI / psql → 127.0.0.1:15432
 # when done, on the VPS:
-make db.tunnel.stop
+make ENV=prod db.tunnel.stop
 ```
 
 `db.tunnel` bridges `frontend` (to publish) and `backend` (to reach the db); it
@@ -140,7 +143,7 @@ you need it — never as a standing service.
 | A — `db.shell` over SSH | none | n/a (CLI) | Quick checks, monitoring |
 | B — GUI SSH tunnel → IP | none | SSH tab + Host=`10.89.0.10` | Day-to-day GUI work |
 | C — `~/.ssh/config` forward | none | plain `127.0.0.1:15432` | One config for shell + GUI |
-| D — socat sidecar | `make db.tunnel` | plain `127.0.0.1:15432` | Firewall blocks B/C |
+| D — socat sidecar | `make ENV=prod db.tunnel` | plain `127.0.0.1:15432` | Firewall blocks B/C |
 
 ### Firewall caveat (test before relying on B/C)
 
@@ -199,8 +202,10 @@ more, and they carry the same personal data as the dump. See *Orphan object arch
 
 Knobs (env vars): `BACKUP_DIR`, `RETENTION_DAYS` (default 14, local pruning),
 `BACKUP_MIN_FREE_MB` (default 500, abort if the target FS is below it),
-`COMPOSE_PROJECT_NAME` (default `erpify` — `make docker.info` prints the
-resolved value), `BACKUP_SYNC_CMD` (offsite hook, below).
+`COMPOSE_PROJECT_NAME` (default: from the env file's TLS profile — the checkout's
+own project on a public host, `erpify` from a primary checkout; `erpify-prodlocal`
+for the `tls internal` rehearsal;
+`make ENV=prod docker.info` prints it), `BACKUP_SYNC_CMD` (offsite hook, below).
 
 ### Schedule it (cron)
 
@@ -306,8 +311,9 @@ STAMP=<stamp> make restore.prod                    # asks for confirmation
 RESTORE_YES=1 STAMP=<stamp> make restore.prod      # drills/CI: skip the prompt (NON-prod only)
 ```
 
-Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME` must match
-what the backup used. If the local dump was already pruned by retention, pull
+Knobs mirror the backup: `BACKUP_DIR`, and `COMPOSE_PROJECT_NAME`, which
+resolves from the env file exactly as it did for the backup — set it only if
+you overrode it then. If the local dump was already pruned by retention, pull
 `db-<stamp>.dump` back from the offsite copy into `BACKUP_DIR` first.
 
 **Production guard.** Unless `SERVER_NAME` in the env file is explicitly local
@@ -328,7 +334,8 @@ point. The checklist it enforces:
 5. You are on the correct host (`COMPOSE_PROJECT_NAME`).
 
 Under the hood (the raw commands, e.g. for a host without this checkout —
-substitute the project name the backup ran under for `erpify`):
+substitute the project name the backup ran under for `erpify`, and on the
+`tls internal` rehearsal add `-f compose.rehearsal.yaml`):
 
 ```bash
 # 0) stop writers FIRST — they must not race the restore below
@@ -353,13 +360,16 @@ fails, the writers stay stopped — rerun step 2 yourself to bring them back.
 ### Restore drill (quarterly)
 
 A backup is only proven by a restore. Once a quarter, restore the latest dump
-into a scratch stack (a worktree stack works) with
-`STAMP=<stamp> make restore.prod` and confirm a record seeded before the backup
-comes back.
+into the `erpify.local` rehearsal — never the live host. On the workstation that
+runs it (`make deploy.local`, see `erpify-local-test-deployment.md`), copy the
+dump into a local `BACKUP_DIR`, run
+`BACKUP_DIR=<dir> STAMP=<stamp> make restore.prod` and confirm a record seeded
+before the backup comes back. The target is the rehearsal env file's project,
+`erpify-prodlocal`, so neither the live host nor a dev stack is it.
 
 #### End-to-end smoke checklist
 
-Run the whole loop on the `erpify.local` rehearsal (or a scratch worktree stack)
+Run the whole loop on the `erpify.local` rehearsal (project `erpify-prodlocal`)
 — never first on real production:
 
 - [ ] **Stand up the prod profile** — `make deploy.local` (preflight → up → migrate → smoke). Confirm the stack is healthy.

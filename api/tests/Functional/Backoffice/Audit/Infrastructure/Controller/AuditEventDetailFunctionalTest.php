@@ -7,17 +7,21 @@ namespace Erpify\Tests\Functional\Backoffice\Audit\Infrastructure\Controller;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\Connection;
+use Erpify\Backoffice\Audit\Application\AuditEventDetailFinder;
+use Erpify\Backoffice\Audit\Domain\Exception\AuditEventNotFound;
+use Erpify\Backoffice\Audit\Infrastructure\Controller\AuditEventDetailController;
 use Erpify\Backoffice\Audit\Infrastructure\Http\AuditEventDetailResourceMapper;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use JsonException;
 use Override;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -33,7 +37,9 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
-#[CoversNothing]
+#[CoversClass(AuditEventDetailController::class)]
+#[CoversClass(AuditEventDetailFinder::class)]
+#[CoversClass(AuditEventNotFound::class)]
 final class AuditEventDetailFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;
@@ -131,15 +137,46 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
         $entry = AuditLogEntry::create(
             'BANK_UPDATED',
             AuditLevel::CHANGE,
-            ActorContext::forUser(self::ACTOR_ID),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-03-02T10:11:12.123456+00:00'),
+            new AuditProvenance(
+                ActorContext::forUser(self::ACTOR_ID),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-03-02T10:11:12.123456+00:00'),
+            ),
             AuditResource::of('Bank', self::RESOURCE_ID),
             $changes,
         );
         (new DbalAuditLogWriter($this->connection()))->write($entry);
 
         return $entry->id;
+    }
+
+    /**
+     * A `change` row `AuditLogEntry` refuses to build — a diff that is not a map of `{old, new}` pairs — seeded
+     * by raw SQL, because that is the only road such a row ever took: it predates the metadata vocabulary, or
+     * reached the table by another writer.
+     *
+     * @param array<string, mixed> $metadata
+     *
+     * @throws JsonException
+     */
+    private function seedUnbuildableChangeRow(array $metadata): string
+    {
+        $id = Uuid::generate();
+        $this->connection()->executeStatement(
+            'INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, '
+            . 'resource_id, metadata, occurred_on) '
+            . "VALUES (CAST(:id AS UUID), 'change', 'BANK_UPDATED', 'user', CAST(:actorId AS UUID), "
+            . "CAST(:correlationId AS UUID), 'Bank', CAST(:resourceId AS UUID), CAST(:metadata AS JSONB), NOW())",
+            [
+                'id' => $id,
+                'actorId' => self::ACTOR_ID,
+                'correlationId' => Uuid::generate(),
+                'resourceId' => self::RESOURCE_ID,
+                'metadata' => \json_encode($metadata, JSON_THROW_ON_ERROR),
+            ],
+        );
+
+        return $id;
     }
 
     /**
@@ -226,7 +263,7 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
     #[DataProvider('provideANonMapChangesKeepsItsShapeAndLosesItsContentCases')]
     public function testANonMapChangesKeepsItsShapeAndLosesItsContent(mixed $changes, mixed $served): void
     {
-        $id = $this->seedChangeRow(['changes' => $changes, 'operation' => 'UPDATED']);
+        $id = $this->seedUnbuildableChangeRow(['changes' => $changes, 'operation' => 'UPDATED']);
 
         $data = $this->detail($id);
 
@@ -254,6 +291,40 @@ final class AuditEventDetailFunctionalTest extends WebTestCase
         yield 'true' => [true, $withheld];
         yield 'false' => [false, $withheld];
         yield 'list' => [[['old' => 'jane.doe@example.test', 'new' => 'x'], 'jane.doe'], [$withheld, $withheld]];
+    }
+
+    /**
+     * A map has the shape of a sealed diff whether or not anything sealed it, so on a row that is not `change`
+     * — the one level only the change-capture listener mints — it is withheld whole, keys included, however
+     * exactly it imitates a diff. Seeded by raw SQL because `AuditLogEntry` refuses to build such an entry,
+     * which is the population this read-side rule exists for: rows that reached the table by another road.
+     *
+     * @throws JsonException
+     */
+    public function testADiffShapedMapOnARowThatIsNotAChangeRowIsWithheldWhole(): void
+    {
+        $id = Uuid::generate();
+        $this->connection()->executeStatement(
+            'INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, metadata, occurred_on) '
+            . "VALUES (CAST(:id AS UUID), 'activity', 'BANK_UPDATED', 'user', CAST(:actorId AS UUID), "
+            . 'CAST(:correlationId AS UUID), CAST(:metadata AS JSONB), NOW())',
+            [
+                'id' => $id,
+                'actorId' => self::ACTOR_ID,
+                'correlationId' => Uuid::generate(),
+                'metadata' => \json_encode(
+                    ['changes' => ['jane.doe@example.test' => ['old' => 'jane.doe@example.test', 'new' => 'x']]],
+                    JSON_THROW_ON_ERROR,
+                ),
+            ],
+        );
+
+        $data = $this->detail($id);
+
+        $this->assertArrayHasKey('metadata', $data);
+        $this->assertIsArray($data['metadata']);
+        $this->assertSame(AuditEventDetailResourceMapper::WITHHELD, $data['metadata']['changes'] ?? null);
+        $this->assertStringNotContainsString('jane.doe', (string) $this->client->getResponse()->getContent());
     }
 
     /**

@@ -1093,3 +1093,20 @@ export function computeRoadmapProgress(phases: RoadmapPhase[] = roadmapPhases): 
   const donePercent = total === 0 ? 0 : Math.round((done / total) * 100);
   return { done, inProgress, planned, total, donePercent };
 }
+
+/** The module with this dotted code, or `undefined` when no phase declares it. */
+export function roadmapModule(
+  code: string,
+  phases: RoadmapPhase[] = roadmapPhases,
+): RoadmapModule | undefined {
+  return phases.flatMap((phase) => phase.modules).find((mod) => mod.code === code);
+}
+
+/**
+ * The fragment a module's card on the roadmap page answers to, so another surface can link
+ * straight to it. Dots become dashes: `#module-1.2c` is a valid fragment, but the same string as
+ * a CSS selector would read `.2c` as a class.
+ */
+export function roadmapModuleAnchor(code: string): string {
+  return `roadmap-module-${code.replaceAll(".", "-")}`;
+}

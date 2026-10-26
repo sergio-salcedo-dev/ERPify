@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Domain\Exception;
 use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
 use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\Monitoring\Domain\RoutineOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -25,5 +26,6 @@ final class SessionNoLongerActiveTest extends TestCase
         $this->assertTrue($reflection->implementsInterface(Unauthenticated::class));
         $this->assertTrue($reflection->implementsInterface(ClientError::class));
         $this->assertSame('session-expired', $exception->type());
+        $this->assertTrue($reflection->implementsInterface(RoutineOutcome::class));
     }
 }

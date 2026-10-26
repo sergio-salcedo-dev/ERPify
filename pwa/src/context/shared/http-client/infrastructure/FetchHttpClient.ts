@@ -91,10 +91,11 @@ interface ReadResponse {
 //    origin/CSRF rejection is a handshake failure the token-action screen owns,
 //    so it must not be bounced to `/login?reason=session-expired`. Their 401 does
 //    not come from the firewall — all three are PUBLIC_ACCESS — it comes from the
-//    CSRF listener, which is why "the firewall cannot 401 these" is not a reason
-//    to drop any of them from this list. Measured against the running stack: a
-//    request to any of the three with a missing or malformed `X-CSRF-Token`
-//    answers 401 `unauthenticated`.
+//    CSRF listener, or from the session mint when the identity was erased while
+//    the request was in flight; that is why "the firewall cannot 401 these" is not
+//    a reason to drop any of them from this list. Measured against the running
+//    stack: a request to any of the three with a missing or malformed
+//    `X-CSRF-Token` answers 401 `unauthenticated`.
 //    The redemption is the one that would hurt most: it exists for somebody who
 //    CANNOT log in, so bouncing them to the login screen with "session expired"
 //    is both false and a dead end.

@@ -1,7 +1,11 @@
-# Sentry — filtering `domain_error` noise (deferred improvement)
+# Sentry — filtering `domain_error` noise
 
-> **Status:** NOT implemented. This is a design note for a deliberate future
-> tuning decision. Captured so the trade-off isn't re-derived from scratch.
+> **Status:** partly implemented. `SentryEventFilter` drops a domain 404/409/422/400
+> and an expired session's 401 raised on an HTTP request (see
+> [`api-error-contract.md`](../api-error-contract.md) → "Client-error suppression in
+> Sentry"); the domain security signals (401/403/429) and the framework's own
+> 401/403/422 are still reported, for the reasons under *The trade-off* below. The options and the
+> sampling discussion are kept so the trade-off isn't re-derived from scratch.
 > Related: [`api-error-contract.md`](../api-error-contract.md) (the `exception_category`
 > taxonomy) and [`../_bmad-output/implementation-artifacts/deferred-work.md`](../../_bmad-output/implementation-artifacts/deferred-work.md).
 
@@ -18,11 +22,11 @@ But the API also throws **domain exceptions**, which are the server behaving
 
 These are **not bugs**. They are the API correctly saying "no".
 
-### Why they reach Sentry today
+### Why they would reach Sentry unfiltered
 
 The SentryBundle `ErrorListener` captures **every** throwable on
-`kernel.exception` except those in `ignore_exceptions`, which currently only
-lists framework noise:
+`kernel.exception` except those in `ignore_exceptions`, which lists only
+framework noise:
 
 ```yaml
 # api/config/packages/sentry.yaml
@@ -32,9 +36,11 @@ ignore_exceptions:
     - 'Symfony\Component\HttpKernel\Exception\NotFoundHttpException'  # unmatched-route 404s
 ```
 
-`DomainException` subclasses are **not** excluded, so every client 400/404/409
-becomes a Sentry event. (Verified live: probing endpoints with bad input
-produced `domain_error` events in the dev Sentry project.)
+`DomainException` subclasses are **not** excluded there, so without the
+`before_send` filter every client 400/404/409 would become a Sentry event
+(measured live in the dev Sentry project before the filter existed). Note the
+last entry: an unmatched-route 404 never reaches Sentry at all, whatever the
+filter decides.
 
 ### Why it matters
 
@@ -107,7 +113,7 @@ The base class is
 [`DomainException`](../../api/src/Shared/Domain/Exception/DomainException.php)
 (`Erpify\Shared\ErrorContract\Domain\Exception\DomainException`).
 
-## The trade-off — why this is deferred, not a default
+## The trade-off — why the drop is not a blanket one
 
 **0% can be too aggressive.** Silencing *all* domain errors also blinds you to
 patterns that matter:
@@ -119,7 +125,7 @@ patterns that matter:
 
 So the right policy isn't a blanket 0% — it usually lands on a **low sample**
 (2–5%) or **keep 5xx / security exceptions**, and that decision wants real
-traffic to inform it. Hence: deferred.
+traffic to inform it. This is why the framework's own 401/403/422 are reported.
 
 ## Recommendation
 

@@ -1,10 +1,17 @@
 # generated: 2026-09-28
-# last_updated: 2026-10-21
+# last_updated: 2026-10-22
 # project: ERPify
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: {project-root}/_bmad-output/implementation-artifacts
 
+# FROZEN 2026-10-22 — this epic is tracked in _bmad-output/specs/spec-recovery-readiness/ (SPEC.md +
+# stories.yaml), the shape `bmad-loop run --spec` dispatches. The keys below are its state at migration and
+# are not updated any more: RR-2's live status is the folder's stories/rr-2-*.md, and whether it shipped is
+# read from git. The two keys below will read in-progress/backlog for ever by design. Kept as history.
+# CLOSED 2026-10-23 — rr-2 shipped in #1087 and rr-3 in #1093; the spec folder was deleted once both merged
+# (git history keeps it).
+#
 # SCOPED SPRINT FILE — the recovery-readiness epic only (the product half of GitHub #602).
 # Separate from sprint-status.yaml on purpose: bmad-build/bmad-sprint-planning resolve the canonical file
 # by convention and must be pointed here explicitly; `make bmad.status.audit` reads it on its own.
@@ -12,10 +19,10 @@
 #
 # Story Status: backlog → ready-for-dev → in-progress → review → done
 # A story moves to `done` when the three-layer code review of the complete task is done.
-# RR-2 is `backlog` with no spec yet; #1001, whose behaviour its redemption copy states, merged 2026-09-28.
+# RR-2 was `backlog` at migration; its spec now lives in the spec folder (see FROZEN above); #1001, whose behaviour its redemption copy states, merged 2026-09-28.
 
 generated: 2026-09-28
-last_updated: 2026-10-21
+last_updated: 2026-10-22
 project: ERPify
 project_key: NOKEY
 tracking_system: file-system
@@ -23,6 +30,6 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts"
 
 development_status:
   epic-recovery-readiness: in-progress
-  rr-1-recovery-secret-readiness-warning: ready-for-dev
+  rr-1-recovery-secret-readiness-warning: done
   rr-2-evict-first-guidance: backlog
   epic-recovery-readiness-retrospective: optional

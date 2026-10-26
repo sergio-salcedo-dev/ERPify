@@ -6,8 +6,10 @@
 #   - prod (test machine + VPS): a real SENTRY_DSN is REQUIRED — the deploy
 #     (make prod.env.check + compose `:?`) aborts without it.
 #
-# `environment` is just %kernel.environment% (= APP_ENV: "dev" / "prod"), so no
-# extra env var is needed to tell the surfaces apart.
+# `environment` is SENTRY_ENVIRONMENT when set, else %kernel.environment% (= APP_ENV:
+# "dev" / "prod"). The override exists for the local prod rehearsal (erpify.local),
+# which runs APP_ENV=prod against the prod Sentry project: without it, rehearsal
+# traffic is tagged "prod" and indistinguishable from the real deployment's.
 #
 # Unhandled exceptions are captured by the bundle's kernel.exception listener
 # (register_error_listener, full throwable + stack), independently of — and
@@ -18,10 +20,13 @@
 #
 # The listener captures EVERYTHING, including expected 4xx domain outcomes (a 409
 # bank-in-use, a 422 validation error) — user/state errors, not actionable faults.
-# So `before_send` (SentryBeforeSend) DROPS every throwable implementing the
-# `ClientError` marker before transmission, then scrubs PII on what remains. 5xx
-# paths (a marker-less DomainException → unhandled-exception, or any non-domain
-# throwable) are not ClientError and still flow through. See docs/api-error-contract.md.
+# So `before_send` (SentryBeforeSend) DROPS, on an HTTP request, every DomainException
+# carrying an expected-outcome marker (404/409/422/400) or the RoutineOutcome marker (an
+# expired session's 401), then scrubs PII on what remains. Everything else flows through:
+# 5xx paths, the domain security signals (Unauthenticated 401, Forbidden 403, RateLimited
+# 429), the framework's own 4xx (Security 401/403, validation 422) and anything raised in
+# the messenger worker. The full rule is SentryEventFilter's docblock.
+# See docs/api-error-contract.md.
 
 # Dev: errors + 100% performance tracing (local profiling — N+1, slow queries,
 # external-call latency), opt-in via DSN. The long-running messenger:consume worker
@@ -31,7 +36,7 @@ when@dev:
         dsn: '%env(SENTRY_DSN)%'
         register_error_listener: true
         options:
-            environment: '%kernel.environment%'
+            environment: '%env(default:kernel.environment:SENTRY_ENVIRONMENT)%'
             # 100% of requests/commands traced — cheap locally, full DB/HTTP waterfall.
             traces_sample_rate: 1.0
             send_default_pii: false
@@ -64,7 +69,7 @@ when@prod:
         dsn: '%env(SENTRY_DSN)%'
         register_error_listener: true
         options:
-            environment: '%kernel.environment%'
+            environment: '%env(default:kernel.environment:SENTRY_ENVIRONMENT)%'
             # Performance tracing. 0 = no transactions sent; prod injects ~0.2.
             # `float:default::` coalesces an empty/unset value to null → 0.0. The
             # order matters: a bare `float:` of an empty string throws and would

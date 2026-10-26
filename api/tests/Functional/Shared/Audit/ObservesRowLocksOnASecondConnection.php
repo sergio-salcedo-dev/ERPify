@@ -14,6 +14,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditSubjectRowLock;
@@ -82,13 +83,15 @@ trait ObservesRowLocksOnASecondConnection
         $entry = AuditLogEntry::create(
             'USER_ROLES_CHANGED',
             AuditLevel::SECURITY,
-            $actor,
-            Uuid::generate(),
-            new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
+            new AuditProvenance(
+                $actor,
+                Uuid::generate(),
+                new DateTimeImmutable('2026-07-01T10:00:00+00:00'),
+                '203.0.113.7',
+                'Mozilla/5.0',
+            ),
             AuditResource::of($resourceType, $resourceId),
             [],
-            '203.0.113.7',
-            'Mozilla/5.0',
         );
         (new DbalAuditLogWriter($this->outsideConnection()))->write($entry);
         $this->seeded[] = $entry->id;

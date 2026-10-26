@@ -5,6 +5,8 @@
 > This record exists because it **overrides a written requirement**. The acceptance criteria of the `Shared/Images` epic breakdown (introduced by PR #850; git history keeps it) ordered the read path's confirmed-absence signal to be bounded, and a code review of the previous story deferred that finding into the story that exposes `read()`. Measuring the complete logging path changed the answer, and a story does not get to reinterpret its own acceptance criterion from inside — hence an argued exception here rather than an edit and a shrug.
 >
 > **Amended 2026-08-31, and the amendment reverses D2.** The story's own code review found two things this record could not have known when it was written: the read path had grown to **five** producers while every document describing it still said three, and D2's decisive discarding argument — that worker mode offers no state for free — is false. The signal is now bounded. The original reasoning is kept below rather than rewritten, because what makes the new decision trustworthy is seeing exactly which premise failed.
+>
+> **Note 2026-10-26 — the access log has left the shared sink; D4 stands for the rest.** [#879](https://github.com/sergio-salcedo-dev/ERPify/issues/879), the concern D4 hands off, gave Caddy's access log a file of its own: `/var/log/caddy/access.log` on the `caddy_access_log` volume, rolled daily at 00:00 UTC and deleted after 14 days (`api/frankenphp/Caddyfile`). Where Context, D4 and the residuals below name the access log as a member of the shared `json-file` budget, read it out: it has its own budget and a TTL, though still no erasure owner. The buffered default channel and `observability` still share the php container's 10m × 5 budget, evicted by volume with no TTL, so D4's framing and every residual below still hold for them.
 
 ## Context
 
@@ -70,7 +72,7 @@ So D2 does not buy a preserved alarm. It buys not paying a semantic cost for a c
 
 The real problem the measurements expose is that Caddy's access log, the buffered default channel and `observability` compete for **one** retention budget with no isolation, so any producer can evict any other's history. That is a property of the logging infrastructure — routing, isolation, quotas, retention — and it is transverse to every context, not a defect of `Shared/Images`. Fixing it inside this module would be the wrong owner and would leave the same hole for every other producer.
 
-Recorded as a separate concern rather than absorbed here.
+Recorded as a separate concern rather than absorbed here. *(2026-10-26: #879 moved the access log out of this budget; the two Monolog channels still share it — see the note at the top.)*
 
 ## What this ADR does **not** close
 

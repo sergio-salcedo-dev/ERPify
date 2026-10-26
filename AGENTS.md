@@ -9,5 +9,6 @@ It is tool-agnostic guidance despite the filename — read it first.
 - **Coding rules:** `docs/rules/*.md`
 - **Stack versions & project facts:** [`docs/project-context.md`](docs/project-context.md)
 - **Command catalog & layout:** [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md)
+- **Triaging a Sentry issue:** [`docs/runbooks/sentry-issue-triage.md`](docs/runbooks/sentry-issue-triage.md)
 
 Always start the stack from the repo root with `make app.dev` (or `make docker.up`).

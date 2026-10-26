@@ -14,24 +14,27 @@ use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Search\Domain\Filter;
 use Erpify\Shared\Search\Domain\FilterOperator;
 use Erpify\Shared\Search\Domain\Filters;
+use Erpify\Shared\Search\Domain\NavigationDirection;
 use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineKeysetSource;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FilterApplier;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\Cursor;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorCodec;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\CursorPositionExtractor;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\FingerprintCanonicalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetPredicateBuilder;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\RowUniquenessGuard;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\Cursor;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\CursorCodec;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\KeysetPaginator;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
@@ -65,6 +68,7 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(DoctrineSearchEngine::class)]
+#[CoversClass(DoctrineKeysetSource::class)]
 final class KeysetOrderStabilityPropertyTest extends KernelTestCase
 {
     /** Below the dominant tie group of ~40, so every boundary lands inside a tie. */
@@ -90,13 +94,15 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
 
         // Built from concrete collaborators (not the container) so the gate is deterministic and the
         // test secret is fixed — the engine under test is pure wiring over the PR1 kernel.
+        $codec = new CursorCodec('keyset-property-test-secret');
         $this->engine = new DoctrineSearchEngine(
             new FilterApplier(),
-            new CursorCodec('keyset-property-test-secret'),
+            $codec,
             new FingerprintCanonicalizer(),
             new KeysetPredicateBuilder(),
             new CursorPositionExtractor(PropertyAccess::createPropertyAccessor()),
             new RowUniquenessGuard(),
+            new KeysetPaginator($codec),
         );
     }
 
@@ -143,13 +149,13 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
             $ids = $this->seedAdversarialDataset();
             $oracle = $this->oracleOrder($ids, $column, $direction);
 
-            $firstPage = $this->paginate($ids, $field, $direction, null, Cursor::DIRECTION_AFTER);
-            $secondPage = $this->paginate($ids, $field, $direction, $firstPage->nextCursor, Cursor::DIRECTION_AFTER);
+            $firstPage = $this->paginate($ids, $field, $direction, null, NavigationDirection::After);
+            $secondPage = $this->paginate($ids, $field, $direction, $firstPage->nextCursor, NavigationDirection::After);
 
             $this->assertNotNull($secondPage->prevCursor);
 
             // before(page2.prevCursor) must return page 1, in the same caller-facing order.
-            $back = $this->paginate($ids, $field, $direction, $secondPage->prevCursor, Cursor::DIRECTION_BEFORE);
+            $back = $this->paginate($ids, $field, $direction, $secondPage->prevCursor, NavigationDirection::Before);
 
             $expectedFirstPage = \array_slice($oracle, 0, self::PAGE_LIMIT);
             $this->assertSame($expectedFirstPage, $this->ids($firstPage));
@@ -229,7 +235,7 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
         $maxIterations = self::DATASET_SIZE + 2;
 
         do {
-            $page = $this->paginate($ids, $field, $direction, $cursor, Cursor::DIRECTION_AFTER);
+            $page = $this->paginate($ids, $field, $direction, $cursor, NavigationDirection::After);
             $collected = [...$collected, ...$this->ids($page)];
             $cursor = $page->nextCursor;
             ++$guard;
@@ -248,7 +254,7 @@ final class KeysetOrderStabilityPropertyTest extends KernelTestCase
         string $field,
         SortDirection $direction,
         ?string $cursor,
-        string $routingDirection,
+        NavigationDirection $routingDirection,
     ): Page {
         $criteria = new SearchCriteria(
             cursor: $cursor,

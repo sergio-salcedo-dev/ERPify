@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Search\Infrastructure\Persistence\Doctrine\Ke
 use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\KeysetPredicateBuilder;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\OrderByColumns;
-use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\Keyset\WirePaginationPolicy;
+use Erpify\Shared\Search\Infrastructure\Persistence\Keyset\WirePaginationPolicy;
 use InvalidArgumentException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;

@@ -6,7 +6,9 @@ namespace Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\NonUniqueResultException;
 use Erpify\Organization\Membership\Domain\Entity\Membership;
+use Erpify\Organization\Membership\Domain\Exception\MembershipCardinalityViolated;
 use Erpify\Organization\Membership\Domain\Exception\UserAlreadyMember;
 use Erpify\Organization\Membership\Domain\Repository\MembershipRepository;
 use Erpify\Shared\Persistence\Infrastructure\AffectedRows;
@@ -64,10 +66,32 @@ final readonly class DoctrineMembershipRepository implements MembershipRepositor
         return AffectedRows::from($affected);
     }
 
+    /**
+     * Unbounded and unordered on purpose. `findOneBy()` adds `LIMIT 1`, which turns a second row into a
+     * silent pick of whichever the scan meets first; reading every match is what lets the ORM see the
+     * second one and refuse.
+     *
+     * @throws MembershipCardinalityViolated when the user resolves to more than one membership
+     */
     #[Override]
     public function findByUserId(string $userId): ?Membership
     {
-        return $this->entityManager->getRepository(Membership::class)->findOneBy(['userId' => $userId]);
+        try {
+            $membership = $this->entityManager->createQueryBuilder()
+                ->select('m')
+                ->from(Membership::class, 'm')
+                ->where('m.userId = :userId')
+                ->setParameter('userId', $userId)
+                ->getQuery()
+                ->getOneOrNullResult()
+            ;
+        } catch (NonUniqueResultException $nonUniqueResultException) {
+            throw MembershipCardinalityViolated::severalForOneUser($nonUniqueResultException);
+        }
+
+        \assert(null === $membership || $membership instanceof Membership);
+
+        return $membership;
     }
 
     #[Override]

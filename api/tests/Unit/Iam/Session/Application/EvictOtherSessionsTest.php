@@ -14,6 +14,7 @@ use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Session\Domain\Entity\Mother\SessionMother;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -83,6 +84,43 @@ final class EvictOtherSessionsTest extends TestCase
         // Nothing was kept, so the fact may not name the dead survivor as kept.
         $this->assertCount(1, $eventBus->publishedEvents);
         $this->assertInstanceOf(AllSessionsRevoked::class, $eventBus->publishedEvents[0]);
+    }
+
+    /**
+     * With nothing else active the UPDATE flips no row, so neither bulk fact is true and neither is recorded —
+     * whether the survivor is alive or was revoked before the lock. What the caller is told about the survivor
+     * is a separate answer and does not move with it.
+     */
+    #[Test]
+    #[DataProvider('provideWithNoOtherActiveSessionNothingIsPublishedCases')]
+    public function withNoOtherActiveSessionNothingIsPublished(bool $survivorAlive): void
+    {
+        $survivor = SessionMother::active();
+
+        if (!$survivorAlive) {
+            $survivor->revoke();
+        }
+
+        $sessions = new InMemorySessionRepository($survivor);
+        $eventBus = new RecordingEventBus();
+
+        $survived = $this->useCase($sessions, $eventBus)->evict(
+            SessionMother::DEFAULT_USER_ID,
+            SessionId::fromString(SessionMother::DEFAULT_ID),
+        );
+
+        $this->assertSame($survivorAlive, $survived);
+        $this->assertSame([SessionMother::DEFAULT_USER_ID], $sessions->revokeOthersCalls, 'the revocation still ran');
+        $this->assertSame([], $eventBus->publishedEvents);
+    }
+
+    /**
+     * @return iterable<string, array{bool}>
+     */
+    public static function provideWithNoOtherActiveSessionNothingIsPublishedCases(): iterable
+    {
+        yield 'survivor alive' => [true];
+        yield 'survivor revoked' => [false];
     }
 
     #[Test]

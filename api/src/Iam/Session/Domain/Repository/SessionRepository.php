@@ -27,7 +27,7 @@ use UnexpectedValueException;
  * A store that ANSWERS, with something that is not an affected-row count, is a different event and keeps a
  * different status: it is not an outage, retrying changes nothing, and reporting 503 would invite a retry
  * that fails identically. Every method whose implementation runs a bulk statement therefore also declares
- * `\UnexpectedValueException` (→ 500) — the two `void` revocations included, because they run one too.
+ * `\UnexpectedValueException` (→ 500).
  */
 interface SessionRepository
 {
@@ -103,20 +103,29 @@ interface SessionRepository
 
     /**
      * Bulk-revokes every currently-active session of the user EXCEPT `$currentSessionId` — the "close the
-     * others" action, which never self-expels the session in hand.
+     * others" action, which never self-expels the session in hand — and returns how many rows it flipped.
+     *
+     * The count is what decides whether a revocation HAPPENED: a caller publishes the bulk event only over a
+     * non-zero one, so an identity with nothing to revoke records no fact about its sessions. Like
+     * {@see deleteAllForUser()}'s, it is a fact about the store, never a stand-in for one.
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      * @throws UnexpectedValueException                                     when the store yields no affected-row count
+     *
+     * @return int the number of sessions revoked
      */
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void;
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): int;
 
     /**
-     * Bulk-revokes every currently-active session of the user (the reset-everywhere capability).
+     * Bulk-revokes every currently-active session of the user (the reset-everywhere capability) and returns
+     * how many rows it flipped, with the meaning {@see revokeOthersForUser()} gives that count.
      *
      * @throws \Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable when the store is unreachable
      * @throws UnexpectedValueException                                     when the store yields no affected-row count
+     *
+     * @return int the number of sessions revoked
      */
-    public function revokeAllForUser(string $userId): void;
+    public function revokeAllForUser(string $userId): int;
 
     /**
      * Hard-deletes every session row of the user — active or not — and returns how many were removed. Unlike

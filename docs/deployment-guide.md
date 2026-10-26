@@ -39,6 +39,7 @@ Defined in `compose.prod.yaml` on top of the base stack:
 - `APP_SECRET`
 - `CADDY_MERCURE_JWT_SECRET`
 - `POSTGRES_PASSWORD`
+- `DEFAULT_NOTIFICATION_EMAIL`
 
 Plus SMTP credentials and the `SERVER_NAME` / `NEXT_PUBLIC_API_BASE_URL`
 origin for the deployment host.
@@ -116,7 +117,7 @@ To stand up a prod host:
 3. `make deploy.local` (first stand-up) or `make docker.up ENV=prod` (restart)
    picks them up; `make prod.env.check` validates them first.
 
-The Sentry `environment` tag is just `APP_ENV` (`dev` / `prod`) — no extra var.
+The Sentry `environment` tag is `SENTRY_ENVIRONMENT` when set, else `APP_ENV` (`dev` / `prod`) — for the API services at runtime, and for the PWA at build time through `NEXT_PUBLIC_SENTRY_ENVIRONMENT`. Leave it empty on a real host; the local prod rehearsal must set `rehearsal` (`make prod.env.check` refuses a `tls internal` file without it, and a public one with it), because it runs `APP_ENV=prod` against the prod Sentry project and would otherwise report as production.
 
 **Release.** For `ENV=prod|staging`, `make` exports the checkout's commit SHA as
 `SENTRY_RELEASE` (`make/config.mk`). Nothing inside a build can derive it
@@ -242,6 +243,17 @@ container that the web `php` container recompiled out from under it — see
   bound. **It caps size, not age** — rotation evicts by volume, so an idle deployment keeps its
   oldest line indefinitely; there is still no TTL and no erasure path, carried as an open residual
   in §7 of the security checklist. Gate: `make php.lint.log-retention`.
+- Caddy's access log is **not** in that sink. It writes `/var/log/caddy/access.log` on the
+  `caddy_access_log` volume (`php` service, `compose.yaml`), from a literal `output file` block in
+  `api/frankenphp/Caddyfile`: rolled at 32 MiB and every day at 00:00 UTC, idle or not, once the
+  process has written its first line (size rolling alone never rolls an idle file, and pruning runs
+  only on a roll), rolled files deleted after 14 days, at most 20 kept — so a line lives about 15
+  days. A restart with no traffic after it defers the next roll until the first request. It has its own budget, so neither
+  the application's channels nor a request flood can evict the other's history. The same file in
+  every environment, and no environment variable reaches the `log` block. Read it with
+  `docker compose exec php tail -F /var/log/caddy/access.log`; `docker compose logs php` carries no
+  access lines. The volume is deliberately in no backup, so a restore cannot bring back a line the
+  retention deleted. No erasure path reaches it — open residual in §7 of the security checklist.
 - Postgres is on an `internal` `backend` network with **no published host port**.
 - `pwa` runs with a read-only root filesystem.
 - `php` and `messenger_worker` disable core dumps (`ulimits.core: 0` in the base
@@ -259,7 +271,13 @@ To stand the prod profile up on a LAN box or laptop at `https://erpify.local`:
 ```bash
 cp .env.prod.example .env.prod.local   # fill in the CHANGE_ME secrets
 make deploy.local                      # preflight → up → migrate → smoke
+make deploy.local.down                 # stop it (volumes kept) before `make app.dev`
 ```
+
+With `tls internal` the stack runs as project `erpify-prodlocal`, never on dev's
+`erpify` volumes; on public ACME it runs as the checkout's own project — `erpify` on a VPS deploying from its primary checkout
+(`scripts/deploy/lib/prod-env.sh`); the rehearsal also loads `compose.rehearsal.yaml`,
+which adds a loopback-only mailpit for its security mail.
 
 Step-by-step (incl. internal-CA trust and `/etc/hosts`) and VPS promotion:
 [`erpify-local-test-deployment.md`](erpify-local-test-deployment.md).

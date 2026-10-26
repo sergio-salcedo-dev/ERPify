@@ -110,7 +110,8 @@ final readonly class RecordRecoverySecretAuditBestEffort
      * another session of the identity, and evicted every session without consuming. A valid presentation that
      * signed every device out is a security fact whatever its outcome, and nothing else attributes it to this
      * channel: the consumption was withheld, so no `RECOVERY_SECRET_REDEEMED` row follows, and the event store
-     * holds only a session-context `AllSessionsRevoked` naming no cause.
+     * holds at most a session-context `AllSessionsRevoked` naming no cause — none when no other session was
+     * active, because the bulk facts are recorded only over a revocation that flipped a row.
      */
     public function recordRedemptionInterrupted(string $userId): void
     {

@@ -34,8 +34,8 @@ use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
  * was already replaced, so the mutation stands. Here it would be the worst possible outcome: the session
  * failing silently while the use case goes on to spend the secret would leave the administrator with nothing
  * left to present. The use case takes the login as a closure and runs it BEFORE consuming the row precisely
- * so that this failure costs nothing, and a raised `SessionStoreUnavailable` reaches the client as the 503 it
- * is.
+ * so that this failure costs nothing, and whatever the minting raised reaches the client as it was graded
+ * there — 503 for an outage, 500 for an identity with no organization, 401 for one no longer admissible.
  *
  * Same-origin is enforced by {@see RecoveryOriginListener} (403). The stateless CSRF token is defence in
  * depth on the same terms the reset endpoint states: the manager length-checks the value, then reads

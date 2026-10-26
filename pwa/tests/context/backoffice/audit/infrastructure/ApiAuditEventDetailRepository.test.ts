@@ -199,7 +199,7 @@ describe("ApiAuditEventDetailRepository response guard", () => {
  * The API withholds the content of a `changes` that is not a map but keeps its shape: a scalar arrives as
  * {@link WITHHELD}, a non-empty list as a list of the same length holding only it, `null` as `null`. A `null`
  * or a scalar carries no `{old, new}` pair, so it degrades to an unreadable diff rather than losing the whole
- * event. A list or a malformed map is a diff builder that lost its field names, so it stays drift and still
+ * event — which is also how a map on a row whose level is not `change` arrives: as the marker alone. A list or a malformed map is a diff builder that lost its field names, so it stays drift and still
  * rejects (reasoning: `docs/adr/audit-activity-log.md`, D4).
  */
 describe("ApiAuditEventDetailRepository null/scalar changes", () => {

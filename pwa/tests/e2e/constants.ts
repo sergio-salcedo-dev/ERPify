@@ -11,5 +11,14 @@ export const HEALTH_CHECK_TIMEOUT_MS = 30_000;
 export const E2E_USER_EMAIL = "e2e@erpify.test";
 export const E2E_USER_PASSWORD = "e2ePassword123";
 
+/**
+ * The identity that redeems a recovery secret in `recovery-redeemed-notice-real-api.spec.ts`. Never the
+ * user above: a redemption signs out every other session of the account, so redeeming as the shared
+ * administrator would revoke the per-worker session every sibling spec is running on. Seeded as a second
+ * installation administrator by the `E2E_RECOVERY_*` line of `make/pwa.mk` — keep the values in sync.
+ */
+export const E2E_RECOVERY_USER_EMAIL = "e2e-recovery@erpify.test";
+export const E2E_RECOVERY_USER_PASSWORD = "e2eRecoveryPassword123";
+
 export const VIEWPORT_DESKTOP = { width: 1280, height: 720 } as const;
 export const VIEWPORT_MOBILE = { width: 390, height: 844 } as const;

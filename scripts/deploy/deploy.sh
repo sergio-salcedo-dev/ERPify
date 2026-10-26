@@ -20,6 +20,11 @@ case "$DEPLOY_ENV" in
     dev|ci|staging|prod) ;;
     *) echo "✗ Invalid DEPLOY_ENV='$DEPLOY_ENV' (expected: ci|staging|prod)" >&2; exit 1 ;;
 esac
+# The served host is the env file's, read as Compose reads it (lib/prod-env.sh);
+# an exported SERVER_NAME still wins, and erpify.local is the last resort.
+# shellcheck source=scripts/deploy/lib/prod-env.sh
+source "$REPO_ROOT/scripts/deploy/lib/prod-env.sh"
+SERVER_NAME="${SERVER_NAME:-$(prod_env_value SERVER_NAME "$REPO_ROOT/${PROD_ENV_FILE:-.env.prod.local}" 2>/dev/null || true)}"
 SERVER_NAME="${SERVER_NAME:-erpify.local}"
 HEALTH_URL="${HEALTH_URL:-https://${SERVER_NAME}/api/v1/health}"
 

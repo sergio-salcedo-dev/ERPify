@@ -236,26 +236,28 @@ final class InMemorySessionRepository implements SessionRepository
     }
 
     #[Override]
-    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): void
+    public function revokeOthersForUser(string $userId, SessionId $currentSessionId): int
     {
         $this->revokeOthersCalls[] = $userId;
         $this->lastRevokeOthersexcept = $currentSessionId;
 
-        $this->bulkRevokeActive($userId, $currentSessionId);
+        return $this->bulkRevokeActive($userId, $currentSessionId);
     }
 
     #[Override]
-    public function revokeAllForUser(string $userId): void
+    public function revokeAllForUser(string $userId): int
     {
         $this->revokeAllCalls[] = $userId;
 
-        $this->bulkRevokeActive($userId, null);
+        $revoked = $this->bulkRevokeActive($userId, null);
 
         // Fired after the flip so the hook observes the store the revocation left behind, which is the state
         // a caller reasoning about "the sessions are gone by now" would read.
         if ($this->onRevokeAll instanceof Closure) {
             ($this->onRevokeAll)();
         }
+
+        return $revoked;
     }
 
     #[Override]
@@ -326,11 +328,13 @@ final class InMemorySessionRepository implements SessionRepository
      * Flips every currently-`ACTIVE` session of the user, optionally sparing the one in hand. The `$except`
      * comparison is on the id string rather than {@see SessionId::equals()} because what is indexed is the
      * entity's own nullable id, and a session that never got one is not addressable by the adapter either.
+     * Returns the number flipped, as the UPDATE's affected-row count does.
      */
-    private function bulkRevokeActive(string $userId, ?SessionId $except): void
+    private function bulkRevokeActive(string $userId, ?SessionId $except): int
     {
         $now = SystemClock::now();
         $spared = $except?->toString();
+        $revoked = 0;
 
         foreach ($this->byId as $id => $session) {
             // Both comparisons are case-insensitive because the adapter's are: `user_id` and `id` are
@@ -351,7 +355,10 @@ final class InMemorySessionRepository implements SessionRepository
             }
 
             $this->flipToRevoked($session, $now);
+            ++$revoked;
         }
+
+        return $revoked;
     }
 
     /**

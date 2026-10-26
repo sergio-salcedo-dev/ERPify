@@ -175,9 +175,10 @@ Feature: Redeem a recovery secret (the sole administrator's only lockout edge)
 
   Scenario: A session that cannot be established leaves the secret entirely intact
     # The partial-failure contract, end to end. `leo` has no membership, so session minting raises and the
-    # endpoint answers 503 — the same shape a session-store outage produces. What matters is what did NOT
-    # happen: the re-login runs BEFORE the row is retired, so a failure here costs nothing and the holder can
-    # try again. Inverted, this would be the worst outcome the design has: secret spent, row gone, and a
+    # endpoint answers 500 session-admission-unresolvable — a permanent gap in the data, deliberately not the
+    # 503 a session-store outage produces, since no retry clears it. What matters is what did NOT happen: the
+    # re-login runs BEFORE the row is retired, so a failure here costs nothing and the holder can try again
+    # once the gap is repaired. Inverted, this would be the worst outcome the design has: secret spent, row gone, and a
     # signed-out sole administrator with nothing left to present.
     Given I execute the SQL query "INSERT INTO identity_recovery_secret (id, user_id, secret_hash, expires_at, created_at, updated_at) VALUES ('0190f400-0000-7000-8000-0000000000a5', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64', '1eb66bb65a0c3db8c8bc00d65db18d26f8a7aba9e7ed643bbc2bf8ba63b6d70b', '2099-01-01 00:00:00', NOW(), NOW())"
     When I send a POST request to "/backoffice/recovery/redeem" with body:
@@ -186,6 +187,7 @@ Feature: Redeem a recovery secret (the sole administrator's only lockout edge)
       "secret": "0190f400-0000-7000-8000-0000000000a5.behat-recovery-secret-plaintext-000000000000"
     }
     """
-    Then the response status code should be 503
+    Then the response status code should be 500
+    And the JSON node "type" should be equal to "session-admission-unresolvable"
     And I execute the SQL query "SELECT id FROM identity_recovery_secret WHERE id = '0190f400-0000-7000-8000-0000000000a5'"
     And there should have 1 records in SQL result

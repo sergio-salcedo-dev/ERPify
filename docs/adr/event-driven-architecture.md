@@ -239,4 +239,6 @@ roto, peor observabilidad que `failed`). Descartado: `allow_no_handlers: true` g
 y D6 se actualiza; se activa el ratchet de generación-control de D5 y los `Creator`/`Finder` empiezan a
 converger a handlers (`cqrs-naming.md`). (b) Construcción de la épica de auditoría → `BankAccountSearcher` pasa a
 `AuditLogger` y **sale** de la allowlist. (c) Adopción de un broker externo → se añade el relay aguas
-abajo del outbox (D1) sin tocar productor ni atomicidad.
+abajo del outbox (D1) sin tocar productor ni atomicidad. (d) Un correo transaccional que necesite entrega al menos
+una vez → los criterios y la forma (encolar la intención, nunca el correo con su token) están en
+`PRODUCTION_SECURITY_CHECKLIST.md` §7, «The invitation emails are sent after the commit».

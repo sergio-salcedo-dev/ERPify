@@ -73,11 +73,11 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * (they bypass the router) and the limiter still gates every non-preflight method
  * including those an attacker would actually use to enumerate the API.
  *
- * Client IP resolution is via `Request::getClientIp()`. For correct values behind FrankenPHP's
- * embedded Caddy / a load balancer, callers MUST configure `framework.trusted_proxies` (env
- * `SYMFONY_TRUSTED_PROXIES`) so `X-Forwarded-For` is honoured. Without trusted proxies the
- * limiter keys on the immediate connection IP — still safe (over-limits a NAT pool) but not
- * granular per real client. Documented in `docs/api-error-contract.md`.
+ * Client IP resolution is via `Request::getClientIp()`. FrankenPHP runs PHP inside the Caddy that
+ * accepted the connection, so the peer address already IS the client and prod trusts no hop. Only a
+ * real load balancer in front of the stack is configured as `framework.trusted_proxies` (env
+ * `SYMFONY_TRUSTED_PROXIES`); a wider range lets the client pick its own key through
+ * `X-Forwarded-For`. Documented in `docs/api-error-contract.md`.
  *
  * Null `getClientIp()` (only possible when the underlying socket has no remote address, i.e.
  * CLI / unit tests) collapses onto the literal `'unknown'` so the limiter still receives a
