@@ -369,8 +369,9 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   `UPDATE` reescribe `actor_id` en todas las filas del sujeto con **un UUID aleatorio nuevo acuñado en el
   borrado** —sin valor original, sin tabla de mapeo, sin derivación determinista— y redige
   `ip`/`user_agent` al centinela `[REDACTED]` —literal **reservado** a las dos sentencias de supresión:
-  `AuditLogEntry::create()` reescribe un valor capturado que lo iguale (sin espacios en los extremos, sin
-  distinguir mayúsculas) como `[client-supplied] <valor>`, así que una cabecera `User-Agent: [REDACTED]` no
+  el constructor de `AuditProvenance`, por el que pasa toda entrada de `AuditLogEntry::create()`, reescribe
+  un valor capturado que lo iguale (sin espacios en los extremos, sin distinguir mayúsculas) como
+  `[client-supplied] <valor>`, así que una cabecera `User-Agent: [REDACTED]` no
   fabrica evidencia de una redacción en las filas capturadas desde que esa regla se desplegó (las
   anteriores no se reescribieron y pueden conservar un literal enviado por el cliente; los flags lo
   atribuyen igual, ver más abajo; y el prefijo también es forjable: sólo garantiza que el valor difiere del
