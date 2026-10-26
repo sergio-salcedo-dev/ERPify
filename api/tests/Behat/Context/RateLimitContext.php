@@ -8,6 +8,7 @@ use Behat\Behat\Context\Context;
 use Behat\Step\Given;
 use Erpify\Iam\Identity\Infrastructure\Security\RecoveryBudgetKey;
 use Erpify\Iam\Invitation\Infrastructure\Security\InvitationResendThrottle;
+use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\RateLimiter\LimiterInterface;
@@ -44,6 +45,8 @@ final class RateLimitContext extends AbstractContext implements Context
         private readonly RateLimiterFactoryInterface $perIdentityLimiter,
         #[Autowire(service: 'limiter.invitation_resend_per_invitee')]
         private readonly RateLimiterFactoryInterface $perInviteeLimiter,
+        #[Autowire(service: 'limiter.invitation_resend_per_actor_invitee')]
+        private readonly RateLimiterFactoryInterface $perActorInviteeLimiter,
         private readonly InvitationResendThrottle $invitationResendThrottle,
     ) {
     }
@@ -100,6 +103,21 @@ final class RateLimitContext extends AbstractContext implements Context
         $this->exhaust(
             $this->perInviteeLimiter->create($this->invitationResendThrottle->keyOf($userId)),
             'invitation_resend_per_invitee',
+        );
+    }
+
+    /**
+     * One administrator's share of an invitee's resend budget, keyed the way the throttle keys it for that
+     * administrator acting as a signed-in user.
+     */
+    #[Given('the invitation-resend share of administrator :actorId is exhausted for invitee :userId')]
+    public function theInvitationResendShareOfAdministratorIsExhaustedForInvitee(string $actorId, string $userId): void
+    {
+        $this->exhaust(
+            $this->perActorInviteeLimiter->create(
+                $this->invitationResendThrottle->actorKeyOf(ActorContext::forUser($actorId), $userId),
+            ),
+            'invitation_resend_per_actor_invitee',
         );
     }
 

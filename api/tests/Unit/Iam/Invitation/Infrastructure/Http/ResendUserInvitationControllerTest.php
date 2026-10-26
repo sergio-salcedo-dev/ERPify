@@ -13,6 +13,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationEmailNotSent;
 use Erpify\Iam\Invitation\Infrastructure\Http\ResendUserInvitationController;
 use Erpify\Iam\Invitation\Infrastructure\Security\InvitationResendThrottle;
+use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Token\Domain\SingleUseToken;
@@ -24,6 +25,7 @@ use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Invitation\Application\RecordingEventBus;
 use Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Cli\CapturingInvitationEmailSender;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FixedActorContextFactory;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -53,6 +55,8 @@ final class ResendUserInvitationControllerTest extends TestCase
     private const string ORG_ID = '0190b1c2-d3e4-7f5a-8b6c-1d2e3f4a5ba1';
 
     private const string NOW = '2026-07-17T10:00:00+00:00';
+
+    private const string ADMIN_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66';
 
     private RecordingAuditLogger $auditLogger;
 
@@ -157,7 +161,12 @@ final class ResendUserInvitationControllerTest extends TestCase
                 ['id' => 'per_invitee', 'policy' => 'sliding_window', 'limit' => $budget, 'interval' => '1 day'],
                 new InMemoryStorage(),
             ),
+            new RateLimiterFactory(
+                ['id' => 'per_actor_invitee', 'policy' => 'sliding_window', 'limit' => 100, 'interval' => '1 day'],
+                new InMemoryStorage(),
+            ),
             new RequestStack(),
+            new FixedActorContextFactory(ActorContext::forUser(self::ADMIN_ID)),
             'test-kernel-secret',
         ));
     }

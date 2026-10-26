@@ -171,3 +171,18 @@ framework:
             limit: '%env(int:RATE_LIMIT_INVITATION_RESEND_PER_INVITEE_LIMIT)%'
             interval: '%env(RATE_LIMIT_INVITATION_RESEND_PER_INVITEE_INTERVAL)%'
             lock_factory: null
+
+        # `invitation_resend_per_actor_invitee` — the share of the budget above that ONE caller may spend on
+        # one invitee: 2 / day, keyed by an HMAC of the acting identity and the invitee. Spent before the shared
+        # bucket, so a caller over its share leaves the shared one untouched. Without it a single administrator
+        # session — stolen, or an operator retrying through a mail outage — could drain the shared bucket alone
+        # and hold every other administrator's resend of that person shut for the day; with it, that takes three
+        # distinct administrator identities, and one session can kill at most two of a person's links a day.
+        # Two leaves an operator a corrected address and one lost email. A caller within its share whose resend
+        # the shared bucket then refuses has spent one of its own two for nothing; that is the price of never
+        # spending the shared bucket on a caller already over its share.
+        invitation_resend_per_actor_invitee:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_INVITATION_RESEND_PER_ACTOR_INVITEE_LIMIT)%'
+            interval: '%env(RATE_LIMIT_INVITATION_RESEND_PER_ACTOR_INVITEE_INTERVAL)%'
+            lock_factory: null
