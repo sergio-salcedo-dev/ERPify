@@ -38,8 +38,9 @@ use PHPUnit\Framework\TestCase;
  *
  * **What a green does NOT prove.** That no other logger writes the same request: `{$CADDY_GLOBAL_OPTIONS}` and
  * `{$CADDY_EXTRA_CONFIG}` expand outside the site's `log` block and can still add one from a deployment's
- * environment — recorded as an open weakness rather than gated, because nothing here can read that
- * environment. Inside the block nothing expands, and that much is gated below. Nor that the roll ever ran:
+ * environment, and `{$CADDY_SERVER_EXTRA_DIRECTIVES}` (inside the site block, outside `log`) possibly can too —
+ * recorded as an open weakness rather than gated, because nothing here can read that environment. Inside the
+ * block nothing expands, and that much is gated below. Nor that the roll ever ran:
  * the file says when Caddy should roll and prune, never that it did.
  *
  * @internal

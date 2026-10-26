@@ -29,7 +29,7 @@ use RuntimeException;
  *   - It reads the deployed DESTINATION: the Caddyfile writes the access log to `/var/log/caddy/access.log`
  *     in every environment, as a literal, so the line read here is the line production writes. It says
  *     nothing about `{$CADDY_GLOBAL_OPTIONS}` or `{$CADDY_EXTRA_CONFIG}`, which can still add a logger of their
- *     own from a deployment's environment.
+ *     own from a deployment's environment, nor about `{$CADDY_SERVER_EXTRA_DIRECTIVES}`, which possibly can.
  *   - It says nothing about the URL PATH. `/api/v1/backoffice/users/<uuid>` carries a person's id and is a
  *     separately recorded, separately accepted residual.
  *   - It says nothing about any other sink, and those sinks are NOT equally covered — a reader must not take
@@ -76,11 +76,11 @@ final class AccessLogQueryContainmentGateTest extends TestCase
     {
         $sentinel = 'sentinel' . \bin2hex(\random_bytes(10));
         $anchor = 'anchor' . \bin2hex(\random_bytes(10));
-        $offset = $this->accessLogSize();
+        $position = $this->accessLogPosition();
 
         $this->get(\str_replace('{sentinel}', $sentinel, $path . '?' . $queryTemplate), $anchor);
 
-        $written = $this->accessLogWrittenSince($offset, $anchor);
+        $written = $this->accessLogWrittenSince($position, $anchor);
 
         $this->assertStringNotContainsString($sentinel, $written, \sprintf(
             "A query value reached the access log in clear.\nSpelling: %s\nThe log has no owner of erasure "
@@ -172,13 +172,13 @@ final class AccessLogQueryContainmentGateTest extends TestCase
     public function theProbeReachesTheLogAtAll(): void
     {
         $anchor = 'anchor' . \bin2hex(\random_bytes(10));
-        $offset = $this->accessLogSize();
+        $position = $this->accessLogPosition();
 
         $this->get(self::SERVED_PATH . '?probe=arrival', $anchor);
 
         $this->assertStringContainsString(
             self::SERVED_PATH,
-            $this->accessLogWrittenSince($offset, $anchor),
+            $this->accessLogWrittenSince($position, $anchor),
             'The probe produced no access-log entry, so every containment assertion in this class would '
                 . 'have passed over an empty string. Check that the stack is up and that the Caddyfile still '
                 . 'writes the access log to the file this reads.',
@@ -244,20 +244,31 @@ final class AccessLogQueryContainmentGateTest extends TestCase
         return $path;
     }
 
-    private function accessLogSize(): int
+    /**
+     * Where the file ends now, and WHICH file it is: Caddy rolls it daily and by size by renaming it and
+     * starting a new one, and only the inode tells the new file from the old one — a fresh file can already be
+     * larger than the old offset, so comparing sizes alone would seek past the start of the probe's entry.
+     *
+     * @return array{inode: int, offset: int}
+     */
+    private function accessLogPosition(): array
     {
         \clearstatcache(true, $this->accessLogPath());
 
-        return (int) \filesize($this->accessLogPath());
+        $path = $this->accessLogPath();
+
+        return ['inode' => (int) \fileinode($path), 'offset' => (int) \filesize($path)];
     }
 
     /**
      * Caddy writes the entry after the response is sent, so a read taken the instant `curl` returns can
      * legitimately find nothing. Polls until the probe's OWN entry arrives — identified by the per-probe
      * anchor it sent as its user agent, not by the path, which eight of the nine cases share — then returns
-     * everything written since the offset. A timeout throws rather than returning what it has.
+     * everything written since the position. A timeout throws rather than returning what it has.
+     *
+     * @param array{inode: int, offset: int} $position
      */
-    private function accessLogWrittenSince(int $offset, string $anchor): string
+    private function accessLogWrittenSince(array $position, string $anchor): string
     {
         $deadline = self::FLUSH_TIMEOUT_MICROSECONDS;
         $written = '';
@@ -270,10 +281,11 @@ final class AccessLogQueryContainmentGateTest extends TestCase
                 throw new RuntimeException('Could not open the access log.');
             }
 
-            // The file is rolled daily and by size, so it can be replaced between the offset and this read:
-            // a size below the offset means a fresh file, which holds the probe's entry from its start.
-            $rolled = \filesize($this->accessLogPath()) < $offset;
-            \fseek($handle, $rolled ? 0 : $offset);
+            // A file rolled since the position is a fresh one, which holds the probe's entry from its start.
+            // Read from the handle, not the path, so a roll between the open and this check cannot mismatch.
+            $stat = \fstat($handle);
+            $rolled = false === $stat || $stat['ino'] !== $position['inode'] || $stat['size'] < $position['offset'];
+            \fseek($handle, $rolled ? 0 : $position['offset']);
             $written = (string) \stream_get_contents($handle);
             \fclose($handle);
 

@@ -178,7 +178,8 @@ framework:
         # bucket, so a caller over its share leaves the shared one untouched. Without it a single administrator
         # session — stolen, or an operator retrying through a mail outage — could drain the shared bucket alone
         # and hold every other administrator's resend of that person shut for the day; with it, that takes three
-        # distinct administrator identities, and one session can kill at most two of a person's links a day.
+        # distinct administrator identities, and one session can kill about two of a person's links a day (a
+        # sliding window estimates, so a burst straddling two windows can admit one more).
         # Two leaves an operator a corrected address and one lost email. A caller within its share whose resend
         # the shared bucket then refuses has spent one of its own two for nothing; that is the price of never
         # spending the shared bucket on a caller already over its share.
