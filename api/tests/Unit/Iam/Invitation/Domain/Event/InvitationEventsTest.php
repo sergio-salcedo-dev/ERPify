@@ -6,9 +6,9 @@ namespace Erpify\Tests\Unit\Iam\Invitation\Domain\Event;
 
 use DateTimeImmutable;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
-use Erpify\Iam\Invitation\Domain\Event\CarriesInvitationSnapshot;
 use Erpify\Iam\Invitation\Domain\Event\InvitationAccepted;
 use Erpify\Iam\Invitation\Domain\Event\InvitationCreated;
+use Erpify\Iam\Invitation\Domain\Event\InvitationEvent;
 use Erpify\Iam\Invitation\Domain\Event\InvitationExpired;
 use Erpify\Iam\Invitation\Domain\Event\InvitationResent;
 use Erpify\Iam\Invitation\Domain\Event\InvitationRevoked;
@@ -19,10 +19,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 
 /**
- * The six invitation events share one envelope via {@see CarriesInvitationSnapshot}: the invited user IS the
+ * The six invitation events share one envelope via {@see InvitationEvent}: the invited user IS the
  * aggregateId and the payload is empty. Each event keeps its own stable name.
  *
  * The envelope invariants are asserted over a **discovered** set rather than a listed one, because the thing
@@ -32,7 +31,7 @@ use ReflectionClass;
  *
  * @internal
  */
-#[CoversClass(CarriesInvitationSnapshot::class)]
+#[CoversClass(InvitationEvent::class)]
 #[CoversClass(InvitationCreated::class)]
 #[CoversClass(InvitationSent::class)]
 #[CoversClass(InvitationResent::class)]
@@ -176,11 +175,7 @@ final class InvitationEventsTest extends TestCase
                 continue;
             }
 
-            if (!\is_subclass_of($candidate, DomainEvent::class)) {
-                continue;
-            }
-
-            if (\in_array(CarriesInvitationSnapshot::class, (new ReflectionClass($candidate))->getTraitNames(), true)) {
+            if (\is_subclass_of($candidate, InvitationEvent::class)) {
                 $eventClasses[] = $candidate;
             }
         }
