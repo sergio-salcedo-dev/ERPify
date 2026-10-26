@@ -115,16 +115,18 @@ final readonly class DbalEventStore implements EventStore
      */
     private function toStoredEvent(array $row): StoredEvent
     {
+        $sequence = $this->intField($row, 'sequence');
+
         return new StoredEvent(
-            $this->intField($row, 'sequence'),
+            $sequence,
             $this->stringField($row, 'event_id'),
             $this->stringField($row, 'aggregate_id'),
             $this->stringField($row, 'aggregate_type'),
             $this->intField($row, 'aggregate_version'),
             $this->stringField($row, 'event_name'),
             $this->intField($row, 'event_version'),
-            $this->decode('payload', $row['payload'] ?? null),
-            $this->decode('metadata', $row['metadata'] ?? null),
+            $this->decode('payload', $sequence, $row['payload'] ?? null),
+            $this->decode('metadata', $sequence, $row['metadata'] ?? null),
             $this->nullableStringField($row, 'tenant_id'),
             $this->stringField($row, 'occurred_on'),
             $this->stringField($row, 'recorded_on'),
@@ -175,7 +177,7 @@ final readonly class DbalEventStore implements EventStore
 
     /**
      * Both JSON columns are written as an object (see {@see encodeObject()}) and constrained in the database, so
-     * any other root is a corrupt row: a scalar or `null` would otherwise decode to an empty body the 18
+     * any other root is a corrupt row: a scalar or `null` would otherwise decode to an empty body the
      * payload-less events never inspect, and a list to a map keyed `'0'`, `'1'`. The one exception is the empty
      * list `[]`, which rows written before the writer's object coercion still hold and which ADR D4 accepts
      * without a backfill. The root is read off the text because PHP's associative decode cannot tell `[]` from
@@ -183,16 +185,16 @@ final readonly class DbalEventStore implements EventStore
      *
      * @return array<string, mixed>
      */
-    private function decode(string $column, mixed $json): array
+    private function decode(string $column, int $sequence, mixed $json): array
     {
         if (!\is_string($json)) {
-            throw CorruptEventStoreRow::nonObjectColumn($column);
+            throw CorruptEventStoreRow::nonObjectColumn($column, $sequence);
         }
 
         $decoded = \json_decode($json, true, self::JSON_MAX_DEPTH, JSON_THROW_ON_ERROR);
 
         if (!\is_array($decoded) || ([] !== $decoded && !\str_starts_with(\ltrim($json), '{'))) {
-            throw CorruptEventStoreRow::nonObjectColumn($column);
+            throw CorruptEventStoreRow::nonObjectColumn($column, $sequence);
         }
 
         $result = [];

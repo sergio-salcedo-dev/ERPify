@@ -48,7 +48,7 @@ final class EventStoreJsonObjectConstraintFunctionalTest extends KernelTestCase
     public static function provideRefusesAJsonRootThatIsNotAnObjectCases(): iterable
     {
         foreach (['payload', 'metadata'] as $column) {
-            foreach (['"x"', '5', 'null', '[1]'] as $json) {
+            foreach (['"x"', '5', 'null', 'true', '[1]', '[[]]'] as $json) {
                 yield $column . ' ' . $json => [$column, $json];
             }
         }

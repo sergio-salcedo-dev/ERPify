@@ -22,12 +22,12 @@ final class CorruptEventStoreRow extends DomainException
         );
     }
 
-    public static function nonObjectColumn(string $column): self
+    public static function nonObjectColumn(string $column, int $sequence): self
     {
         return new self(
             type: 'corrupt-event-store-row',
-            title: \sprintf('The event_store column "%s" does not hold a JSON object.', $column),
-            context: ['column' => $column],
+            title: \sprintf('The event_store column "%s" of row %d does not hold a JSON object.', $column, $sequence),
+            context: ['column' => $column, 'sequence' => $sequence],
         );
     }
 

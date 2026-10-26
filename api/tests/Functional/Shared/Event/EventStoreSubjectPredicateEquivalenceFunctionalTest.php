@@ -31,8 +31,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * The corpus is the shapes a text match catches and a naive UUID extractor would not: the id under a nested
  * value, as a KEY, upper-cased, glued to hex and non-hex neighbours, overlapping another UUID-shaped window,
  * in `metadata`, in `aggregate_id`; near-misses that must match nothing; and the document's root, which is an
- * object or the legacy empty list `[]` — the only roots the table admits (`event_store_*_is_object`), so a
- * scalar or a non-empty list as root is no longer a shape the predicate can meet; multibyte text glued to the
+ * object or the legacy empty list `[]` — the only roots the table admits (`event_store_*_is_object`), so the
+ * corpus holds no scalar or non-empty list at the root; multibyte text glued to the
  * id, the id in both JSON columns of one row and several times in one document, and a long hex/dash run
  * holding it, which is the shape a scan restarting from the start of the text pays for quadratically. The
  * overlap row is there because an extractor resuming after a match, like `regexp_matches(…, 'g')` over the UUID

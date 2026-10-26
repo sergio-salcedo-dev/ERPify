@@ -50,7 +50,7 @@ final class DbalEventStoreDecodeTest extends TestCase
                 $this->streamOne($payload, $metadata);
                 $this->fail(\sprintf('A non-object %s was read as an empty body.', $column));
             } catch (CorruptEventStoreRow $e) {
-                $this->assertSame(['column' => $column], $e->context());
+                $this->assertSame(['column' => $column, 'sequence' => 1], $e->context());
             }
         }
     }

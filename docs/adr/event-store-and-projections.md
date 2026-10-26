@@ -108,7 +108,10 @@ CREATE TABLE event_store (
     recorded_on       TIMESTAMPTZ  NOT NULL,                -- tiempo de SISTEMA; sin default: el escritor pone clock_timestamp()
     PRIMARY KEY (sequence),
     CONSTRAINT event_store_event_id_uniq UNIQUE (event_id),
-    CONSTRAINT event_store_stream_version_uniq UNIQUE (tenant_id, aggregate_id, aggregate_version)
+    CONSTRAINT event_store_stream_version_uniq UNIQUE (tenant_id, aggregate_id, aggregate_version),
+    -- añadidas por migración (D4): objeto, o la lista vacía de las filas viejas
+    CONSTRAINT event_store_payload_is_object  CHECK (jsonb_typeof(payload)  = 'object' OR payload  = '[]'::jsonb),
+    CONSTRAINT event_store_metadata_is_object CHECK (jsonb_typeof(metadata) = 'object' OR metadata = '[]'::jsonb)
 );
 CREATE INDEX event_store_aggregate_idx ON event_store (aggregate_type, aggregate_id, sequence);
 CREATE INDEX event_store_name_idx      ON event_store (event_name, sequence);
@@ -145,13 +148,15 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
   antes: con él activo, una carrera abortaría la transacción de escritura.
 - **`payload`** y **`metadata`** se escriben siempre como **objeto** JSON (`{}` si están vacíos: un array PHP
   vacío se codificaría `[]`). La coerción es **solo de nivel superior** (`(object)`, como el escritor de
-  `audit_log`): un valor anidado conserva la forma que traiga. Ningún lector la nota — `stream()` decodifica
-  con `json_decode(…, true)`, donde `[]` y `{}` dan el mismo array vacío, y el anonimizador reescribe el texto
+  `audit_log`): un valor anidado conserva la forma que traiga. Ningún lector distingue `[]` de `{}` — `stream()`
+  decodifica con `json_decode(…, true)`, donde ambos dan el mismo array vacío, y el anonimizador reescribe el texto
   sin mirar la forma. Las columnas no declaran default — la migración las crea `NOT NULL` sin él. La
   garantía es del escritor **y** del esquema: un `CHECK (jsonb_typeof(…) = 'object' OR … = '[]'::jsonb)` rechaza
   cualquier otra raíz, y `stream()` trata como fila corrupta (`CorruptEventStoreRow`, un 500) un escalar, un
-  `null` o una lista no vacía en lugar de leerlos como cuerpo vacío — los 18 eventos sin payload no inspeccionan
-  el cuerpo y no lo habrían notado. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
+  `null` o una lista no vacía en lugar de leerlos como cuerpo vacío — los eventos sin payload no inspeccionan
+  el cuerpo y no lo habrían notado. Una fila así detiene el catch-up de su proyector y, como `catchUpAll()` no
+  aísla por proyector, el de los registrados después; el CHECK impide crearlas y una heredada se resuelve
+  reparando la fila. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
   sin backfill**: reescribirlas sería otra mutación sancionada (D12) para corregir una forma que nada lee como
   array. Quien consulte cualquiera de las dos como objeto en SQL acota por `jsonb_typeof(…) = 'object'`, nunca
   asume la forma.

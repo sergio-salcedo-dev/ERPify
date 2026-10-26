@@ -24,9 +24,9 @@ final class CorruptEventStoreRowTest extends TestCase
 
     public function testNonObjectColumnCarriesTheOffendingColumn(): void
     {
-        $exception = CorruptEventStoreRow::nonObjectColumn('payload');
+        $exception = CorruptEventStoreRow::nonObjectColumn('payload', 42);
 
         $this->assertSame('corrupt-event-store-row', $exception->type());
-        $this->assertSame(['column' => 'payload'], $exception->context());
+        $this->assertSame(['column' => 'payload', 'sequence' => 42], $exception->context());
     }
 }
