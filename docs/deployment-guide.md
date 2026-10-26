@@ -117,7 +117,7 @@ To stand up a prod host:
 3. `make deploy.local` (first stand-up) or `make docker.up ENV=prod` (restart)
    picks them up; `make prod.env.check` validates them first.
 
-The Sentry `environment` tag is just `APP_ENV` (`dev` / `prod`) — no extra var.
+The Sentry `environment` tag is `SENTRY_ENVIRONMENT` when set, else `APP_ENV` (`dev` / `prod`). Leave it empty on a real host; the local prod rehearsal must set `rehearsal` (`make prod.env.check` refuses a `tls internal` file without it, and a public one with it), because it runs `APP_ENV=prod` against the prod Sentry project and would otherwise report as production.
 
 **Release.** For `ENV=prod|staging`, `make` exports the checkout's commit SHA as
 `SENTRY_RELEASE` (`make/config.mk`). Nothing inside a build can derive it
@@ -228,8 +228,8 @@ container that the web `php` container recompiled out from under it — see
   survived; an in-flight uncommitted one did not). What is real is a bounded unavailability window
   that, until this change, nothing observed at all — the entrypoint's wait-exhaustion branch now
   logs it clearly, the one point in this retry loop that runs before Sentry's SDK even boots
-  (Sentry's own `before_send` filter already lets a genuine mid-flight outage through; among
-  connection losses it drops only the worker's graceful-teardown noise — see `SentryEventFilter`). That log line is a
+  (Sentry's own `before_send` filter already lets a genuine mid-flight outage through; it drops
+  only the worker's graceful-teardown noise — see `SentryEventFilter`). That log line is a
   readability fix, not an alert: nothing here pages anyone or sets a ceiling on the crash-loop —
   it only makes the state legible to whoever is reading `docker compose logs` at the time. (Dev
   overrides `restart` for `pwa` only — see `compose.dev.yaml`.)

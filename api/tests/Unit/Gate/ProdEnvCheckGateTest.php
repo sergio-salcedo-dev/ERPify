@@ -37,7 +37,7 @@ final class ProdEnvCheckGateTest extends ProdEnvScriptTestCase
     {
         $this->writeComposeFixtures();
         $base = "S=real\nAUDIT_KEK=" . self::VALID_KEK
-            . "\nMAILER_SECURITY_FROM=security@erpify.dev\nPOSTGRES_PASSWORD=abc123\n";
+            . "\nMAILER_SECURITY_FROM=security@erpify.dev\nPOSTGRES_PASSWORD=abc123\nSENTRY_ENVIRONMENT=rehearsal\n";
 
         $result = ProdEnvScript::run($this->root(), ['check', $this->envFile($extra . $base), $this->scratch]);
 
@@ -78,6 +78,11 @@ final class ProdEnvCheckGateTest extends ProdEnvScriptTestCase
         yield 'any key declared twice' => ["HTTP_PORT=80\nHTTP_PORT=8080\n", false, 'HTTP_PORT'];
         yield 'a $ Compose would interpolate' => ["MAILER_SMTP_TIMEOUT=\$TIMEOUT\n", false, 'interpolate'];
         yield 'a single-quoted $ is literal' => ["X='a\$b'\n", true, ''];
+        yield 'public host tagged as the rehearsal' => [
+            "CADDY_SERVER_EXTRA_DIRECTIVES=\n",
+            false,
+            'tag real production events as the rehearsal',
+        ];
     }
 
     #[Test]
@@ -90,6 +95,7 @@ final class ProdEnvCheckGateTest extends ProdEnvScriptTestCase
             'AUDIT_KEK' => self::VALID_KEK,
             'MAILER_SECURITY_FROM' => 'security@erpify.dev',
             'POSTGRES_PASSWORD' => 'abc123',
+            'SENTRY_ENVIRONMENT' => 'rehearsal',
             $key => $value,
         ];
         $contents = \implode('', \array_map(
@@ -133,6 +139,8 @@ final class ProdEnvCheckGateTest extends ProdEnvScriptTestCase
             '',
         ];
         yield 'a $ in a required value' => ['S', 'ab$cd', 'interpolate'];
+        yield 'rehearsal tagged prod' => ['SENTRY_ENVIRONMENT', '', 'must set'];
+        yield 'rehearsal tagged as a real host' => ['SENTRY_ENVIRONMENT', 'production', 'must set'];
     }
 
     /**
@@ -143,12 +151,16 @@ final class ProdEnvCheckGateTest extends ProdEnvScriptTestCase
     {
         $this->writeComposeFixtures("r: \${REHEARSAL_ONLY:?r}\n");
         $file = "S=real\nAUDIT_KEK=" . self::VALID_KEK
-            . "\nMAILER_SECURITY_FROM=security@erpify.dev\nPOSTGRES_PASSWORD=abc123\n";
+            . "\nMAILER_SECURITY_FROM=security@erpify.dev\nPOSTGRES_PASSWORD=abc123\nSENTRY_ENVIRONMENT=rehearsal\n";
 
         $internal = ProdEnvScript::run($this->root(), ['check', $this->envFile($file), $this->scratch]);
         $public = ProdEnvScript::run(
             $this->root(),
-            ['check', $this->envFile($file . "CADDY_SERVER_EXTRA_DIRECTIVES=\n"), $this->scratch],
+            ['check', $this->envFile(\str_replace(
+                "SENTRY_ENVIRONMENT=rehearsal\n",
+                "CADDY_SERVER_EXTRA_DIRECTIVES=\n",
+                $file,
+            )), $this->scratch],
         );
 
         $this->assertSame(1, $internal['exit']);

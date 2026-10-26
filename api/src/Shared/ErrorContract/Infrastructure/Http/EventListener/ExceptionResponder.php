@@ -238,6 +238,9 @@ final readonly class ExceptionResponder
      * kernel). Its `kernel.exception` listener captured the ORIGINAL throwable at a higher priority, and
      * when that was a client error `before_send` dropped it — so without this capture a request that
      * should have been a 4xx and became a 500 because this pipeline broke would reach no alert.
+     * It is wrapped rather than captured bare: the wrapper names the original class and the
+     * correlation id the CRITICAL line carries, so the event can be tied to it, and it can never be
+     * a `ClientError` itself, which `before_send` would drop like the original.
      *
      * No `\json_encode` on this path — the body is a string literal so no exception can
      * escape from the fallback emission itself. Order is load-bearing: the response is set
@@ -276,7 +279,15 @@ final readonly class ExceptionResponder
         }
 
         try {
-            $this->errorTracker?->captureException($selfFailure);
+            $this->errorTracker?->captureException(new RuntimeException(
+                \sprintf(
+                    'Error pipeline failed answering %s (correlation id %s).',
+                    $originalThrowable::class,
+                    $correlationId,
+                ),
+                0,
+                $selfFailure,
+            ));
         } catch (Throwable) {
             // Same contract as the logger: reporting never decides whether the response exists.
         }

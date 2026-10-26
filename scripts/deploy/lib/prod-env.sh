@@ -244,7 +244,7 @@ prod_mem_limit_error() {
 
 prod_env_check() {
   local file="$1" root="${2:-$PROD_ENV_ROOT_DEFAULT}" keys key value missing=() duplicated interpolated kek_bytes
-  local sender domain pw tmo bad_mem=""
+  local sender domain pw tmo sentry_env bad_mem=""
   local -a overlays=()
   [[ "$(prod_tls_profile "$file")" == internal ]] && overlays=("$PROD_COMPOSE_REHEARSAL")
   keys="$(prod_required_keys "$root" "${overlays[@]}")" || return 1
@@ -292,6 +292,20 @@ prod_env_check() {
   if [[ "$sender" == *noreply* || "$sender" == *no-reply* ]] || [[ " ${PROD_UNDELIVERABLE_DOMAINS[*]} " == *" $domain "* ]]; then
     echo "✗ MAILER_SECURITY_FROM='$sender' is refused at send time: it must be a monitored, replyable mailbox"
     echo "  on a real domain (no no-reply@, no .local/.test/.example/.invalid/localhost)."
+    return 1
+  fi
+
+  # The rehearsal runs APP_ENV=prod against the prod Sentry project, so the environment tag is the
+  # only thing telling its events from the real deployment's — derived here from the same TLS
+  # profile that selects the rehearsal overlay, rather than left to a line someone remembers.
+  sentry_env="$(prod_env_value SENTRY_ENVIRONMENT "$file" 2>/dev/null || true)"
+  if [[ ${#overlays[@]} -gt 0 && "$sentry_env" != rehearsal ]]; then
+    echo "✗ SENTRY_ENVIRONMENT='$sentry_env': a tls-internal file is the local rehearsal and must set"
+    echo "  SENTRY_ENVIRONMENT=rehearsal, or its events reach the prod Sentry project tagged prod."
+    return 1
+  fi
+  if [[ ${#overlays[@]} -eq 0 && "$sentry_env" == rehearsal ]]; then
+    echo "✗ SENTRY_ENVIRONMENT=rehearsal on a public host would tag real production events as the rehearsal."
     return 1
   fi
 

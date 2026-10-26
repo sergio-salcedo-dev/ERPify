@@ -17,11 +17,10 @@ namespace Erpify\Shared\ErrorContract\Domain\Exception;
  * them is a ClientError transitively — there is no per-class opt-in to maintain.
  *
  * Consumed by {@see \Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter}, which
- * drops a ClientError raised on an HTTP request in Sentry's `before_send` so expected 4xx never
- * pollute error tracking — the domain half of what it drops; the framework bridges the error
- * contract answers 4xx carry no marker and are recognised there by type. A marker-less
- * {@see DomainException} (`unhandled-exception`) is deliberately NOT ClientError and keeps
- * flowing to Sentry. The
+ * drops a domain ClientError raised on an HTTP request in Sentry's `before_send` so expected 4xx
+ * never pollute error tracking. The 5xx paths keep flowing to Sentry: a marker-less
+ * {@see DomainException} (`unhandled-exception`) is deliberately NOT ClientError, and the marker on a
+ * non-domain throwable is honoured by no one — the factory answers it 500. The
  * status↔ClientError equivalence is pinned by
  * `MarkerStatusMapContractTest::testMarkerIsClientErrorIffStatusIs4xx`.
  */

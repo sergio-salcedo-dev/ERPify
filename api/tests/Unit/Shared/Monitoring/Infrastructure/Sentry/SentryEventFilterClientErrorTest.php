@@ -10,7 +10,6 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\Http\Infrastructure\UnknownPayloadMemberListener;
-use Erpify\Shared\Monitoring\Infrastructure\Sentry\ExpectedClientError;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -26,7 +25,6 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
-use Symfony\Component\Security\Core\Exception\AuthenticationServiceException;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Core\Exception\InsufficientAuthenticationException;
@@ -36,9 +34,9 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
 /**
- * The client-error half of {@see SentryEventFilter} ({@see ExpectedClientError}), held against the
- * error contract: what an HTTP request is answered with a 4xx never leaves the process, whichever
- * family raised it, and the same throwable outside a request still does.
+ * The client-error half of {@see SentryEventFilter}, held against the error contract: only a domain
+ * `ClientError` on an HTTP request is dropped, the framework's own 4xx are reported, and nothing the
+ * contract answers with a non-4xx status is ever hidden.
  *
  * The coupling is the corpus itself — one throwable type per bridge the factory maps.
  *
@@ -47,23 +45,30 @@ use Throwable;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(SentryEventFilter::class)]
-#[CoversClass(ExpectedClientError::class)]
 final class SentryEventFilterClientErrorTest extends TestCase
 {
-    #[DataProvider('provideDropsFrameworkClientErrorOnAnHttpRequestCases')]
-    public function testDropsFrameworkClientErrorOnAnHttpRequest(Throwable $throwable): void
+    public function testDropsADomainClientErrorOnAnHttpRequest(): void
     {
-        $this->assertNotInstanceOf(Event::class, $this->filter($this->httpEvent(), $throwable));
+        $this->assertNotInstanceOf(Event::class, $this->filter($this->httpEvent(), self::domainNotFound()));
+    }
+
+    #[DataProvider('provideReportsFrameworkClientErrorOnAnHttpRequestCases')]
+    public function testReportsFrameworkClientErrorOnAnHttpRequest(Throwable $throwable): void
+    {
+        $event = $this->httpEvent();
+
+        $this->assertSame($event, $this->filter($event, $throwable));
     }
 
     /**
-     * The framework family of client errors: none implements a marker. The first three are the shapes
-     * a production-mode stack has reported — a failed login, an anonymous `/me`, a cross-origin
-     * recovery request.
+     * The framework family of client errors implements no marker, and a spike of any of them is a
+     * signal — an attack, a misconfigured voter, a client regression. The first three are the shapes a
+     * production-mode stack has reported: a failed login, an anonymous `/me`, a cross-origin recovery
+     * request.
      *
      * @return iterable<string, array{Throwable}>
      */
-    public static function provideDropsFrameworkClientErrorOnAnHttpRequestCases(): iterable
+    public static function provideReportsFrameworkClientErrorOnAnHttpRequestCases(): iterable
     {
         yield 'failed login (401)' => [new CustomUserMessageAuthenticationException(
             'Invalid credentials.',
@@ -81,63 +86,33 @@ final class SentryEventFilterClientErrorTest extends TestCase
         yield 'unknown payload member (422)' => [new ExtraAttributesException(['surplus'])];
     }
 
-    #[DataProvider('provideKeepsAClientErrorTypeRaisedOutsideAnHttpRequestCases')]
-    public function testKeepsAClientErrorTypeRaisedOutsideAnHttpRequest(Throwable $throwable): void
+    public function testKeepsADomainClientErrorRaisedOutsideAnHttpRequest(): void
     {
+        // Sentry's Messenger listener unwraps a `HandlerFailedException` and captures each nested
+        // throwable top-level, so this is the exact shape a worker's failure arrives in.
         $event = Event::createEvent();
 
+        $this->assertSame($event, $this->filter($event, self::domainNotFound()));
+    }
+
+    public function testKeepsAMarkerOnANonDomainThrowable(): void
+    {
+        $event = $this->httpEvent();
+        $throwable = new class ('not a domain exception') extends RuntimeException implements NotFound {
+        };
+
         $this->assertSame($event, $this->filter($event, $throwable));
     }
 
     /**
-     * Sentry's Messenger listener unwraps a `HandlerFailedException` and captures each nested throwable
-     * top-level, so this is the exact shape a worker's failure arrives in: the type a client error
-     * has, and no request.
-     *
-     * @return iterable<string, array{Throwable}>
+     * The filter restates a decision the error contract owns, so one corpus runs through both: whatever
+     * the filter drops must be answered with a 4xx. A filter that starts hiding a 5xx reds here. The
+     * contract side is the factory fed what it actually receives — Sentry captures at `kernel.exception`
+     * priority 128, and `UnknownPayloadMemberListener` rewrites the throwable at 24 before
+     * `ExceptionResponder` (16).
      */
-    public static function provideKeepsAClientErrorTypeRaisedOutsideAnHttpRequestCases(): iterable
-    {
-        yield 'validation failure in a handler' => [
-            new ValidationFailedException('value', new ConstraintViolationList()),
-        ];
-        yield 'access denied in a handler' => [new AccessDeniedException()];
-        yield 'domain client error in a handler' => [
-            new class ('not-found', 'gone') extends DomainException implements NotFound {
-            },
-        ];
-    }
-
-    public function testKeepsALoginRefusedBecauseTheAuthenticationSystemFailed(): void
-    {
-        // The failure handler wraps every authentication failure in the same generic 401, so the
-        // client cannot tell a provider fault from a wrong password — and neither can a filter that
-        // reads only the top of the chain.
-        $event = $this->httpEvent();
-        $throwable = new CustomUserMessageAuthenticationException(
-            'Invalid credentials.',
-            previous: new AuthenticationServiceException('The user provider must return a UserInterface object.'),
-        );
-
-        $this->assertSame($event, $this->filter($event, $throwable));
-    }
-
-    public function testKeepsAnHttpExceptionCarryingAServerStatus(): void
-    {
-        $event = $this->httpEvent();
-
-        $this->assertSame($event, $this->filter($event, new HttpException(502, 'upstream down')));
-    }
-
-    /**
-     * The filter restates a decision the error contract owns. Running one corpus through both is what
-     * stops the two drifting apart: a bridge the contract learns to answer 4xx without the filter
-     * learning it reds here, and so does a filter that starts hiding a 5xx. The contract side is the
-     * factory fed what it actually receives — Sentry captures at `kernel.exception` priority 128, and
-     * `UnknownPayloadMemberListener` rewrites the throwable at 24 before `ExceptionResponder` (16).
-     */
-    #[DataProvider('provideDropsExactlyWhatTheErrorContractAnswersWithAClientStatusCases')]
-    public function testDropsExactlyWhatTheErrorContractAnswersWithAClientStatus(Throwable $throwable): void
+    #[DataProvider('provideNeverDropsWhatTheErrorContractAnswersWithANonClientStatusCases')]
+    public function testNeverDropsWhatTheErrorContractAnswersWithANonClientStatus(Throwable $throwable): void
     {
         $exceptionEvent = new ExceptionEvent(
             $this->createStub(HttpKernelInterface::class),
@@ -151,19 +126,19 @@ final class SentryEventFilterClientErrorTest extends TestCase
 
         $dropped = !$this->filter($this->httpEvent(), $throwable) instanceof Event;
 
-        $this->assertSame(
-            $status >= 400 && $status < 500,
-            $dropped,
-            \sprintf('%s answers %d; the Sentry filter must drop it iff that is a 4xx.', $throwable::class, $status),
+        $this->assertTrue(
+            !$dropped || ($status >= 400 && $status < 500),
+            \sprintf('%s answers %d and the Sentry filter drops it.', $throwable::class, $status),
         );
     }
 
     /**
      * @return iterable<string, array{Throwable}>
      */
-    public static function provideDropsExactlyWhatTheErrorContractAnswersWithAClientStatusCases(): iterable
+    public static function provideNeverDropsWhatTheErrorContractAnswersWithANonClientStatusCases(): iterable
     {
-        yield from self::provideDropsFrameworkClientErrorOnAnHttpRequestCases();
+        yield from self::provideReportsFrameworkClientErrorOnAnHttpRequestCases();
+        yield 'domain client error (404)' => [self::domainNotFound()];
         yield 'domain client error (409)' => [
             new class ('conflict', 'in use') extends DomainException implements Conflict {
             },
@@ -176,13 +151,23 @@ final class SentryEventFilterClientErrorTest extends TestCase
             new class ('down', 'store down') extends DomainException implements ServiceUnavailable {
             },
         ];
+        yield 'client marker beside service unavailable (503)' => [
+            new class ('down', 'store down') extends DomainException implements ServiceUnavailable, NotFound {
+                public const string TYPE = 'store-down';
+            },
+        ];
         yield 'marker on a non-domain throwable (500)' => [
             new class ('not a domain exception') extends RuntimeException implements NotFound {
             },
         ];
         yield 'http exception with a server status (502)' => [new HttpException(502, 'upstream down')];
-        yield 'not found http exception (404)' => [new HttpException(404, 'no route')];
         yield 'plain runtime exception (500)' => [new RuntimeException('boom')];
+    }
+
+    private static function domainNotFound(): DomainException
+    {
+        return new class ('not-found', 'gone') extends DomainException implements NotFound {
+        };
     }
 
     private function httpEvent(): Event

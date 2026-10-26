@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http\EventListener;
 
+use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder;
@@ -884,8 +885,11 @@ final class ExceptionResponderTest extends TestCase
         $exceptionResponder($this->makeEvent('/api/v1/anything', $exception));
 
         $this->assertCount(1, $captured);
-        $this->assertInstanceOf(UnexpectedValueException::class, $captured[0]);
-        $this->assertSame('factory boom', $captured[0]->getMessage());
+        $this->assertNotInstanceOf(ClientError::class, $captured[0]);
+        $this->assertStringContainsString($exception::class, $captured[0]->getMessage());
+        $selfFailure = $captured[0]->getPrevious();
+        $this->assertInstanceOf(UnexpectedValueException::class, $selfFailure);
+        $this->assertSame('factory boom', $selfFailure->getMessage());
     }
 
     public function testLastResortResponseSurvivesABrokenErrorTracker(): void
