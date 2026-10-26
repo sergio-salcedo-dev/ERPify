@@ -236,7 +236,7 @@ export function BanksFilters({
             placeholder="Search by name…"
             aria-label="Search banks by name"
             title="Search banks by name (press / to focus)"
-            className="banks-filters__search-input min-h-7 pl-8"
+            className="banks-filters__search-input min-h-7 pl-8 pointer-coarse:min-h-11"
             data-testid="banks-filters__name"
           />
         </div>
@@ -250,7 +250,7 @@ export function BanksFilters({
           aria-controls={panelId}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="banks-filters__toggle order-2 h-auto min-h-7 w-full sm:order-3 sm:w-auto"
+          className="banks-filters__toggle order-2 h-auto min-h-7 w-full sm:order-3 sm:w-auto pointer-coarse:min-h-11"
           data-testid="banks-filters__toggle"
           data-icon="inline-start"
         >

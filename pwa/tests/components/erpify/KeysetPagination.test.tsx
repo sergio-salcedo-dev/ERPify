@@ -80,4 +80,17 @@ describe("KeysetPagination (cursor-only, D-A11y)", () => {
     expect(screen.getByTestId("x-pagination__next")).toBeInTheDocument();
     expect(screen.getByTestId("x-pagination__page-size")).toBeInTheDocument();
   });
+
+  it("grows every control to a 44px touch target on coarse pointers (DESIGN.md hit targets)", () => {
+    renderPagination();
+
+    // jsdom evaluates no media query, so this pins the rendered utility rather than the computed size;
+    // the utility itself compiles to `@media (pointer: coarse)` at `calc(var(--spacing) * 11)`.
+    for (const id of ["x-pagination__prev", "x-pagination__next"]) {
+      const control = screen.getByTestId(id);
+      expect(control).toHaveClass("pointer-coarse:h-11", "pointer-coarse:min-w-11");
+      expect(control).toHaveClass("h-7");
+    }
+    expect(screen.getByTestId("x-pagination__page-size")).toHaveClass("pointer-coarse:h-11", "h-7");
+  });
 });

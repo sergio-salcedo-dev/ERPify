@@ -225,7 +225,7 @@ export function BankAccountsFilters({
             placeholder="Search by holder…"
             aria-label="Search accounts by holder"
             title="Search accounts by holder (press / to focus)"
-            className="bank-accounts-filters__search-input min-h-7 pl-8"
+            className="bank-accounts-filters__search-input min-h-7 pl-8 pointer-coarse:min-h-11"
             data-testid="bank-accounts-filters__holder"
           />
         </div>
@@ -239,7 +239,7 @@ export function BankAccountsFilters({
           aria-controls={panelId}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="bank-accounts-filters__toggle order-2 h-auto min-h-7 w-full sm:order-3 sm:w-auto"
+          className="bank-accounts-filters__toggle order-2 h-auto min-h-7 w-full sm:order-3 sm:w-auto pointer-coarse:min-h-11"
           data-testid="bank-accounts-filters__toggle"
           data-icon="inline-start"
         >

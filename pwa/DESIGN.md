@@ -479,7 +479,7 @@ Every API non-2xx response returns:
 
 - **WCAG 2.2 AA** baseline. Body contrast ≥ 4.5:1; UI controls ≥ 3:1.
 - Focus rings always visible in both modes. 2 px solid `--color-focus-ring`, offset 2 px.
-- Hit targets ≥ 24 × 24 px (44 × 44 px on touch).
+- Hit targets ≥ 24 × 24 px (44 × 44 px on touch). The touch size is applied with Tailwind's `pointer-coarse:` variant (`pointer-coarse:h-11`, `pointer-coarse:min-w-11`), never a width breakpoint: a phone in landscape and a touch laptop are both wider than `sm`, and a narrow desktop window is not a touch screen. Applied today to `KeysetPagination` and the list filter toolbars (search, Filters toggle); the shared `Input`, `ListDisplayToggles` and the row actions are still 28–32 px.
 - Color is never the sole signal. Always pair with icon, label, or position.
 - `prefers-reduced-motion` respected at the token layer.
 - Keyboard-only path through every primary task; `Esc` closes overlays; focus restores after dialogs.
