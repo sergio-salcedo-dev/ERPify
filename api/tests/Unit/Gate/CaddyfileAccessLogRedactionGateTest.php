@@ -129,7 +129,7 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
                 static fn (string $line): string => (string) \preg_replace('/\s+/', ' ', \trim($line)),
                 \explode("\n", $output[2]),
             ))),
-            'The access log\'s roll changed. Its retention is a decision recorded in '
+            "The access log's roll changed. Its retention is a decision recorded in "
             . 'PRODUCTION_SECURITY_CHECKLIST.md §7, and without `roll_at` an idle deployment never rolls the '
             . 'active file, so nothing in it ever expires.',
         );
@@ -146,7 +146,7 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
         $this->assertStringNotContainsString(
             '{$',
             $this->logBlock(),
-            'The site\'s `log` block expands an environment variable again, so a deployment can change where '
+            "The site's `log` block expands an environment variable again, so a deployment can change where "
             . 'the access log goes or what it filters without this file changing.',
         );
     }

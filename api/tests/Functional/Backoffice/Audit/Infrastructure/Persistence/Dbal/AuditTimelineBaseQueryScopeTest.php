@@ -35,6 +35,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * container wires, against real Postgres, so the SQL text compared is the one DBAL renders for this platform.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(AuditTimelineKeysetSource::class)]
 final class AuditTimelineBaseQueryScopeTest extends KernelTestCase
@@ -111,7 +113,7 @@ final class AuditTimelineBaseQueryScopeTest extends KernelTestCase
 
             $replayed = $this->paginate($this->scopedQuery(AuditLevel::SECURITY), $page->nextCursor);
 
-            $this->assertInstanceOf(Page::class, $replayed);
+            $this->assertNotEmpty($replayed->items, 'The replay must be accepted and walk the other value.');
         });
     }
 
@@ -128,7 +130,7 @@ final class AuditTimelineBaseQueryScopeTest extends KernelTestCase
             new SortFieldMap(['occurredOn' => 'a.occurred_on']),
             static function (array $row): object {
                 $entry = new stdClass();
-                $entry->id = $row['id'];
+                $entry->id = $row['id'] ?? null;
 
                 return $entry;
             },

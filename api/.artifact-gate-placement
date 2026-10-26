@@ -242,7 +242,6 @@ tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 # saying so — `home` and `mirrored` both assert a placement, and this file's placement under
 # `tests/Functional/` is not in question. Recorded rather than moved, because moving it into the home would
 # file a test that needs a running stack beside tests that need nothing.
-tests/Functional/Shared/Monitoring/AccessLogQueryContainmentGateTest.php :: functional :: sends real requests through Caddy and reads the line it wrote, so it needs the running stack
 tests/Unit/Gate/ForeignSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
 tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home

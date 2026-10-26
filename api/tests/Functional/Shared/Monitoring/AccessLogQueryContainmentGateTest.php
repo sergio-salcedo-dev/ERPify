@@ -272,7 +272,8 @@ final class AccessLogQueryContainmentGateTest extends TestCase
 
             // The file is rolled daily and by size, so it can be replaced between the offset and this read:
             // a size below the offset means a fresh file, which holds the probe's entry from its start.
-            \fseek($handle, \filesize($this->accessLogPath()) < $offset ? 0 : $offset);
+            $rolled = \filesize($this->accessLogPath()) < $offset;
+            \fseek($handle, $rolled ? 0 : $offset);
             $written = (string) \stream_get_contents($handle);
             \fclose($handle);
 
