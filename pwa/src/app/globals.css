@@ -365,15 +365,19 @@
   }
 }
 
-/* prefers-reduced-motion: collapse motion at the root */
+/* prefers-reduced-motion: collapse motion at the root.
+ * Unlayered on purpose: an unlayered declaration outranks every `@layer`, so it beats
+ * each Tailwind / tw-animate-css utility whatever their specificity. What it cannot beat
+ * is an inline `style` or another unlayered rule setting these properties — both held
+ * out by tests/reduced-motion-reset.test.ts. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0ms !important;
-    scroll-behavior: auto !important;
+    animation-duration: 0ms;
+    animation-iteration-count: 1;
+    transition-duration: 0ms;
+    scroll-behavior: auto;
   }
 }
 
