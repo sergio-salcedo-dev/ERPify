@@ -1,0 +1,65 @@
+- id: "doc-1"
+  title: Stream-oriented envelope encryption in Shared/Crypto
+  description: >-
+    Add the stream sibling of EnvelopeEncryptor so a multi-gigabyte original can be sealed
+    without buffering (CAP-3). Pure Shared/Crypto, no Documents code yet.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Reuse EncryptionScopeId, Keystore and destroyScope(); do not change the string-oriented
+    encrypt/decrypt contract. Measure peak memory on a large input rather than asserting it.
+- id: "doc-2"
+  title: Documents bounded context skeleton and storage port
+  description: >-
+    Create the context, the Document aggregate shell and its own stream-writing storage port
+    with a first adapter (CAP-1 groundwork). Blocked on the persistence-strategy and
+    host-context decisions.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Stop and present the persistence-strategy decision (state-oriented vs event-sourced) to the
+    user before modelling. Do not reuse ImageStorage or any generic storage port.
+- id: "doc-3"
+  title: UploadEvidence ingest
+  description: >-
+    Accept an evidence upload through the Symfony 8.1 resolver and the transport-only
+    denormalizer, store it sealed and untransformed, and record digest and metadata (CAP-1).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    No transport type or caller-supplied path past Infrastructure; add the scan and regression
+    test ADR invariant 6 asks for. Declare the voter and audit the read.
+- id: "doc-4"
+  title: Scan and readiness gate
+  description: >-
+    Scan on ingest and refuse content outside the Ready state; fail closed while the scanner
+    is unavailable (CAP-2). Needs the scanner decision.
+- id: "doc-5"
+  title: Erasure by key destruction
+  description: >-
+    Erase a document by destroyScope(), keeping digest and custody, with person-reference
+    ownership and audit classification registered (CAP-4).
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Owes a recorded adversarial pass. Register the person column, the audit resource type and
+    the PersonReferenceSource in the same PR; no person event on a persisted transport.
+- id: "doc-6"
+  title: Dependent derivatives through the images module
+  description: >-
+    Materialise previews via the third images entry point with origin recorded, and delete them
+    after commit when the document is erased (CAP-5).
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Owes a recorded adversarial pass. Removal goes through the outbox, never inside the
+    erasure transaction; verify cached variant URLs stop resolving.
+- id: "doc-7"
+  title: Custody trail and document metadata
+  description: >-
+    Make each state change auditable and listable in order, and carry the metadata the
+    ADR names (CAP-6).
+- id: "doc-8"
+  title: Document versioning
+  description: >-
+    A new version is a new immutable original linked to its predecessor (CAP-7).
+- id: "doc-9"
+  title: OCR of scanned PDFs
+  description: >-
+    Extract searchable text from scanned PDFs as a derivative (CAP-8).
