@@ -119,6 +119,8 @@ toolbar DOM under sfjs's global AJAX handlers) — see «Symfony debug toolbar (
 
 Which classes write there is held by `BestEffortReportChannelGateTest`; that the channel stays always-on is held by `ObservabilityChannelGateTest`.
 
+**Caddy's access log is a file of its own in every environment**, `/var/log/caddy/access.log` on the `caddy_access_log` volume, rolled daily and kept 14 days — not in `docker compose logs`. Read it with `docker compose exec php tail -F /var/log/caddy/access.log`.
+
 Dev file logs are visible on the host because `compose.dev.yaml` bind-mounts `./api/var:/app/api/var`. Files are root-owned — use `sudo rm -rf api/var/log/*` to clean.
 
 ```bash

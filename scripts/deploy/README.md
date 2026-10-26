@@ -63,6 +63,8 @@ Assumes the stack is already up (`make deploy.local` on first stand-up).
 
 # 4. Verify
 make ENV=prod docker.logs   # follows every service from now; for history: docker compose -p <project> … logs php messenger_worker
+# HTTP access lines are not in either: Caddy writes them to its own file (rolled daily, kept 14 days)
+docker compose -p <project> … exec php tail -F /var/log/caddy/access.log
 ```
 
 ## Manual Commands
@@ -131,4 +133,7 @@ deploy:
 - Always test with `--dry-run` before production
 - Run from repository root or use full path
 - Check logs: `make ENV=prod docker.logs` (new lines only) or `docker compose -p <project> … logs php` for history
+- HTTP access history is not in `docker compose logs`: read `/var/log/caddy/access.log` inside `php`
+  (`docker compose -p <project> … exec php tail -n 200 /var/log/caddy/access.log`); earlier days are the
+  rolled files beside it in `/var/log/caddy/`, deleted after 14 days and in no backup
 - Monitor workers post-deploy for issues

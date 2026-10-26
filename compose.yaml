@@ -1,6 +1,7 @@
 # Every container's stdout/stderr lands in Docker's json-file driver, and that driver is the sink
 # `php://stderr` reaches: Monolog's prod `nested` handler writes there, so a flushed `fingers_crossed`
-# buffer ends up here. Declared because the DEFAULT IS UNBOUNDED — with no `logging:` block the driver
+# buffer ends up here. Caddy's access log does not: it writes a file of its own on the `caddy_access_log`
+# volume (declared at the bottom). Declared because the DEFAULT IS UNBOUNDED — with no `logging:` block the driver
 # keeps every line for ever, so any record that reaches it outlives every other retention control this
 # application has (the `audit_log` prune, the `messenger_messages` prune, the GDPR erasure use cases),
 # which have owners while this had none.

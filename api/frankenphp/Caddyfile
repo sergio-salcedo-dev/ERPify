@@ -65,7 +65,7 @@
 		# `keyset_search` line per successful search. What those keep is the route, the limit, the direction,
 		# the pagination mode and the correlation id; none of them carries
 		# the filter shape, and it deliberately did not gain it here. `filters[N][field]` is a caller's
-		# string, and moving one into a stream with the same absence of TTL and erasure owner would
+		# string, and moving one into `observability`, which has neither a TTL nor an erasure owner, would
 		# reproduce this defect one channel over to recover a diagnostic nobody had asked for. Doing it
 		# safely means emitting the field the SERVER resolved, from the route's own field map, which is a
 		# change to what the listener is given rather than a line here. Path, method, status and timing stay.
