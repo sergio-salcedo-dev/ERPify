@@ -236,12 +236,6 @@ tests/Unit/Support/SignatureReaderTest.php :: mirrored :: tests/Support
 tests/Unit/Support/ResourceResponderBuilderTest.php :: mirrored :: tests/Support
 tests/Unit/Support/TypeScriptSourceTest.php :: mirrored :: tests/Support
 
-# Kernel-free by shape, which is what the detector reads, but its subject is a RUNNING behaviour rather than
-# an artifact read as data: it sends real requests through Caddy and reads the line Caddy wrote. By the
-# definition at the top of this file that puts it outside the category, and the category has no spelling for
-# saying so — `home` and `mirrored` both assert a placement, and this file's placement under
-# `tests/Functional/` is not in question. Recorded rather than moved, because moving it into the home would
-# file a test that needs a running stack beside tests that need nothing.
 tests/Unit/Gate/ForeignSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
 tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home

@@ -110,9 +110,9 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     }
 
     /**
-     * The access log's own file, rolled every day and pruned after 14 days. On the container's stdio it shared
-     * one json-file budget with the application's channels, where any producer could evict another's history
-     * and nothing expired by age. `roll_at` is the half that makes the TTL real: size rolling never rolls an
+     * The access log's own file, rolled every day and pruned after 14 days. On the container's stdio it would
+     * share one json-file budget with the application's channels, where any producer can evict another's
+     * history and nothing expires by age. `roll_at` is the half that makes the TTL real: size rolling never rolls an
      * idle file, and pruning runs only when a file is rolled. Compared whole, so a value widened in place
      * reds as surely as a directive dropped.
      */
@@ -136,8 +136,8 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
     }
 
     /**
-     * An environment expansion inside the block is how a deployment used to point this log back at stderr, or
-     * swap the encoder ahead of `format filter`, with every rule here still green. Nothing in the block may be
+     * An environment expansion inside the block would let a deployment point this log back at stderr, or swap
+     * the encoder ahead of `format filter`, with every rule here still green. Nothing in the block may be
      * decided outside the file.
      */
     #[Test]

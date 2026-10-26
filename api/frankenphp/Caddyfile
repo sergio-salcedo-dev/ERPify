@@ -19,10 +19,10 @@
 {$SERVER_NAME:localhost} {
 	log {
 		# The access log has a file of its own, on the `caddy_access_log` volume, rather than the container's
-		# stdio. There it shared one json-file budget (10m × 5) with Monolog's buffered channel and the
-		# always-on `observability` channel, so any producer could evict any other's history, and eviction by
-		# volume is not expiry: an idle deployment kept its oldest line for ever. Here it has its own budget
-		# and a TTL. `roll_at` rolls the active file every day at 00:00 UTC even when nothing is written —
+		# stdio, where it would share one json-file budget (10m × 5) with Monolog's buffered channel and the
+		# always-on `observability` channel: any producer could evict any other's history, and eviction by
+		# volume is not expiry, so an idle deployment would keep its oldest line for ever. Here it has its own
+		# budget and a TTL. `roll_at` rolls the active file every day at 00:00 UTC even when nothing is written —
 		# size rolling alone never rolls an idle file, and the cleanup below runs only when a file is rolled —
 		# and `roll_keep_for` deletes rolled files older than 14 days, so a line lives about 15 days at most.
 		# `roll_keep` is a count ceiling above those 14 daily files, so a size flood evicts only this log's own

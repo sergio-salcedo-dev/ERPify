@@ -161,8 +161,9 @@ framework:
         # Exhaustion is a VISIBLE 429, for the reason `password_change_per_identity` gives: the route is reached
         # only through an administrator session that can already list the register, so nothing is disclosed.
         # The cost is that a drained bucket blocks every administrator's resend of that person until it
-        # refills — drained by a hostile session, or by an operator retrying through a mail outage, where each
-        # 503 has already rotated a link nobody received. Revoking and re-inviting is NOT a way round it: a
+        # refills — drained by three administrator identities, or by several operators retrying through a mail
+        # outage, where each 503 has already rotated a link nobody received; one identity alone is held to its
+        # share (`invitation_resend_per_actor_invitee`, below). Revoking and re-inviting is NOT a way round it: a
         # revoked identity keeps its address and `identity_user.email` is unique. The way round is the console
         # command `iam:invitation:resend <invitationId>`, which a shell operator runs and this budget does not
         # cover.
