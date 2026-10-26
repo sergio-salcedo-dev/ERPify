@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
 use Erpify\Backoffice\BankAccount\Domain\Event\BankAccountCreatedDomainEvent;
+use Erpify\Shared\Kernel\Domain\Enum\Currency;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -41,6 +42,19 @@ final class BankAccountTest extends TestCase
         $account = BankAccountMother::create(iban: 'de89 3704 0044 0532 0130 00');
 
         $this->assertSame('DE89370400440532013000', $account->getIban());
+    }
+
+    public function testCreateAndUpdateFoldTheHolderNameIntoItsSearchTwinKeepingTheDisplayAsTyped(): void
+    {
+        $account = BankAccountMother::create(holderName: '  José Muñoz Ibáñez ');
+
+        $this->assertSame('  José Muñoz Ibáñez ', $account->getHolderName());
+        $this->assertSame('jose munoz ibanez', $account->getHolderNameNormalized());
+
+        $account->update('Strauß Ångström', 'DE89370400440532013000', null, null, Currency::EUR);
+
+        $this->assertSame('Strauß Ångström', $account->getHolderName());
+        $this->assertSame('strauss angstrom', $account->getHolderNameNormalized());
     }
 
     public function testCreateUppercasesBic(): void

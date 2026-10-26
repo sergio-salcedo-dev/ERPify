@@ -299,7 +299,8 @@ you change anything here.
       business transaction so the row is atomic with the write (out-of-band flushes —
       fixtures, seeds — are not captured). `Bank` (a catalog) is audited in clear; a
       **PII-bearing diff is crypto-shredded**: `BankAccount`'s `#[PersonalData]` fields
-      (`holderName`/`iban`) are AEAD-encrypted (libsodium) under a per-subject DEK before
+      (`holderName`, its search twin `holderNameNormalized`, `iban`, `alias`) are
+      AEAD-encrypted (libsodium) under a per-subject DEK before
       the row is written (A.5.12 classification), so no personal data is ever stored in
       clear; the row references its `encryption_scope_id` and the read UI shows a sealed
       sentinel, never the ciphertext. Its `ip` / `user_agent` / `metadata` are
