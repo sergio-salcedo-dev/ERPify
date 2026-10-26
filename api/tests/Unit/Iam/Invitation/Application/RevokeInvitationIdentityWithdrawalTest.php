@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
 use Erpify\Iam\Identity\Domain\Event\UserInvitationRevoked;
@@ -14,6 +15,7 @@ use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -137,7 +139,18 @@ final class RevokeInvitationIdentityWithdrawalTest extends TestCase
         InMemoryUserRepository $users,
         RecordingEventBus $eventBus,
     ): RevokeInvitation {
-        return new RevokeInvitation($invitations, $users, $eventBus, new CountingTransactionManager());
+        return new RevokeInvitation(
+            $invitations,
+            $users,
+            $eventBus,
+            new CountingTransactionManager(),
+            // A store of its own: the locks counted here are the withdrawal's, not the audit seam's.
+            new RecordInvitationAudit(
+                new InMemoryUserRepository($this->invitedUser()),
+                new RecordingAuditLogger(),
+                new InlineTransactionManager(),
+            ),
+        );
     }
 
     private function invitedUser(): User

@@ -50,7 +50,8 @@ final class InvitationCliFunctionalTest extends KernelTestCase
     use ResolvesContainerServices;
 
     private const string TRUNCATE_SQL
-        = 'TRUNCATE iam_invitation, iam_session, membership, organization, identity_user, event_store CASCADE';
+        = 'TRUNCATE iam_invitation, iam_session, membership, organization, identity_user, event_store, audit_log '
+        . 'CASCADE';
 
     private Connection $connection;
 

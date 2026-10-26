@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Application;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Invitation\Application\ResendInvitation;
 use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -19,6 +20,7 @@ use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Cli\CapturingInvitationEmailSender;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -49,10 +51,13 @@ final class ResendInvitationTest extends TestCase
 
     private const string NOW = '2026-07-13T10:00:00+00:00';
 
+    private RecordingAuditLogger $auditLogger;
+
     protected function setUp(): void
     {
         parent::setUp();
         SystemClock::set(FixedClock::at(self::NOW));
+        $this->auditLogger = new RecordingAuditLogger();
     }
 
     #[Test]
@@ -103,6 +108,7 @@ final class ResendInvitationTest extends TestCase
         $this->assertSame([], $invitations->saved);
         $this->assertSame([], $eventBus->publishedEvents);
         $this->assertSame([], $emailSender->sent);
+        $this->assertSame([], $this->auditLogger->records);
     }
 
     #[Test]
@@ -200,6 +206,7 @@ final class ResendInvitationTest extends TestCase
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
+            new RecordInvitationAudit($users, $this->auditLogger, new InlineTransactionManager()),
         ))->resendForInvitedUser(UserMother::DEFAULT_ID);
 
         // The send runs after the commit, so its failure cannot undo the reissue: the old link is dead either
@@ -250,6 +257,7 @@ final class ResendInvitationTest extends TestCase
         }
 
         $this->assertSame([], $emailSender->sent);
+        $this->assertSame([], $this->auditLogger->records);
     }
 
     #[Test]
@@ -277,6 +285,7 @@ final class ResendInvitationTest extends TestCase
         $this->assertSame([], $invitations->saved);
         $this->assertSame([], $eventBus->publishedEvents);
         $this->assertSame([], $emailSender->sent);
+        $this->assertSame([], $this->auditLogger->records);
     }
 
     private function useCase(
@@ -293,6 +302,7 @@ final class ResendInvitationTest extends TestCase
             $eventBus,
             $transactions ?? new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
+            new RecordInvitationAudit($users, $this->auditLogger, new InlineTransactionManager()),
         );
     }
 

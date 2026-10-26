@@ -45,6 +45,12 @@ use SensitiveParameter;
 #[ORM\Index(name: 'idx_iam_invitation_invited_user_id', columns: ['invited_user_id'])]
 final class Invitation extends AggregateRoot
 {
+    /**
+     * How long an issued accept link stays redeemable, as an ISO-8601 duration. Issuing and re-issuing a link
+     * are two use cases, and one window keeps them from drifting apart.
+     */
+    public const string TTL_SPEC = 'P3D';
+
     #[ORM\Column(name: 'organization_id', type: Types::GUID)]
     private string $organizationId;
 
