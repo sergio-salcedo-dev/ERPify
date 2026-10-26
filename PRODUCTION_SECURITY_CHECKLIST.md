@@ -1285,6 +1285,23 @@ mitigated state. Accepting one means recording who accepted it and against which
       customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
       re-resolves the ranges in a single install and reads every claimed version back out of the
       lock) and re-run `composer audit`.
+- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order.** `SendInvitation`
+      and `ResendInvitation` commit the token rotation and then mail the link synchronously, outside the
+      transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent resends of one person are
+      serialised by the invitation row lock, but their SMTP sends race after the commit, so the email that
+      arrives last can carry the link the other resend already killed. And an SMTP exchange slower than the
+      PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. Both are
+      bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
+      operator to resend again, and a refused send answers 503 rather than a false 204.
+      **When an outbox earns its place** — any one of: a second transactional email producer that needs
+      at-least-once delivery rather than best-effort; the 30 s timeout observed against real SMTP latency; an
+      invitee who reports holding only a dead link after a resend; or invitations sent in bulk, where a
+      synchronous SMTP exchange per row stops fitting a request. **And the shape it must take:** a token-bearing
+      email may never sit in a Messenger transport (`docs/rules/security.md`, "Token hygiene"), so the outbox
+      would enqueue the INTENT — "deliver the current link of invitation X" — and mint the token when the
+      message is delivered, not enqueue the rendered email. That moves the token rotation off the request, so
+      the resend's answer stops meaning "the old link is dead", and that contract change is the real cost to
+      weigh. **Accepted:** not recorded (opened 2026-10-26).
 - [ ] **Three administrator identities acting together can hold one invitee's HTTP resend shut for a day.** The
       per-invitee budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`,
       5 / day, shared by every administrator — §6) is what stops the lever from killing a person's link for ever,
