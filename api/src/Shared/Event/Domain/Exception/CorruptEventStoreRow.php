@@ -35,17 +35,4 @@ final class CorruptEventStoreRow extends DomainException
             context: ['event_name' => $eventName, 'member' => $member, 'expected' => $expected],
         );
     }
-
-    public static function undeclaredPayloadMember(string $eventName, string $member): self
-    {
-        return new self(
-            type: 'corrupt-event-store-row',
-            title: \sprintf(
-                'The stored "%s" payload carries the member "%s", which its schema version does not declare.',
-                $eventName,
-                $member,
-            ),
-            context: ['event_name' => $eventName, 'member' => $member],
-        );
-    }
 }

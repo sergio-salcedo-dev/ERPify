@@ -119,25 +119,6 @@ abstract class DomainEvent
         return $value;
     }
 
-    /**
-     * Refuses a payload where the current schema version declares none. Such an event's whole subject is its
-     * aggregate id, so {@see toPrimitives()} writes `[]`; a stored member is a row written under some other
-     * schema — a version that should have been upcast first, or a hand-edited row — and rebuilding the event
-     * without it would replay a fact the row does not state while discarding what it does.
-     *
-     * @param array<string, mixed> $body
-     *
-     * @throws CorruptEventStoreRow when the payload holds any member
-     */
-    final protected static function ensureEmptyPayload(array $body): void
-    {
-        $member = \array_key_first($body);
-
-        if (null !== $member) {
-            throw CorruptEventStoreRow::undeclaredPayloadMember(static::eventName(), (string) $member);
-        }
-    }
-
     final public function aggregateId(): string
     {
         return $this->aggregateId;
