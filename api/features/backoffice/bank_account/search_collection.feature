@@ -86,6 +86,9 @@ Feature: Search the cross-bank account collection
     And the JSON node "data" should have 1 element
     And the JSON node "data[0].bankName" should be equal to "Crédit Agricole"
     And the JSON node "data[0].holderName" should be equal to "José Muñoz Ibáñez"
+    # The database is restored per feature, not per scenario: drop the account so the counted scenarios
+    # below see the fixture collection alone.
+    And I reload the fixtures
 
   # bankId is exact-only (eq/in, UUID-valued): it scopes the collection to a single bank's accounts
   # without a route constraint — the bank is a tunable filter here, not the route.
