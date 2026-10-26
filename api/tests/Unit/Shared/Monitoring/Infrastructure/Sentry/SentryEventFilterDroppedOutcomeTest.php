@@ -134,8 +134,9 @@ final class SentryEventFilterDroppedOutcomeTest extends TestCase
 
     /**
      * The marker silences whatever security signal sits beside it, so a new member is a monitoring decision
-     * taken in review, never a side effect of a refactor. Read by text: a class reaching the marker only
-     * through an intermediate interface that never names it is invisible here.
+     * taken in review, never a side effect of a refactor. Read by text, so every path to the marker passes
+     * through a file naming it: an intermediate interface extending it is a member in its own right and reds
+     * here, which covers the classes implementing it. A `class_alias()` or a name built from strings escapes.
      */
     public function testTheRoutineOutcomesAreExactlyTheDecidedOnes(): void
     {
@@ -163,7 +164,9 @@ final class SentryEventFilterDroppedOutcomeTest extends TestCase
             $relative = \substr($file->getPathname(), \strlen($sourceRoot) + 1, -4);
             $class = 'Erpify\\' . \str_replace('/', '\\', $relative);
 
-            if (\class_exists($class) && \is_subclass_of($class, RoutineOutcome::class)) {
+            $declared = \class_exists($class) || \interface_exists($class);
+
+            if ($declared && \is_subclass_of($class, RoutineOutcome::class)) {
                 $members[] = $class;
             }
         }
