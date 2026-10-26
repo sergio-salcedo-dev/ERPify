@@ -14,7 +14,6 @@ use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
-use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
 use Erpify\Shared\Monitoring\Domain\RoutineOutcome;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter;
 use FilesystemIterator;
@@ -115,19 +114,11 @@ final class SentryEventFilterDroppedOutcomeTest extends TestCase
             },
         ];
         yield 'routine beside a bare client error (500)' => [
-            new class ('unexpected-state', 'corrupt') extends DomainException implements
-                RoutineOutcome,
-                ClientError
-            {
+            new class ('unexpected-state', 'corrupt') extends DomainException implements RoutineOutcome, ClientError {
             },
         ];
         yield 'routine beside service unavailable (503)' => [
-            new class ('down', 'store down') extends DomainException implements
-                RoutineOutcome,
-                Unauthenticated,
-                ServiceUnavailable
-            {
-                public const string TYPE = 'store-down';
+            new class ('down', 'gone') extends DomainException implements RoutineOutcome, NotFound, ServiceUnavailable {
             },
         ];
     }
