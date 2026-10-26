@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Invitation\Infrastructure\Cli;
 
 use DateTimeImmutable;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Invitation\Application\ResendInvitation;
 use Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
@@ -17,6 +18,7 @@ use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Invitation\Application\RecordingEventBus;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -99,13 +101,16 @@ final class ResendInvitationCommandTest extends TestCase
             ? CapturingInvitationEmailSender::refusing()
             : CapturingInvitationEmailSender::accepting();
 
+        $users = new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID));
+
         $command = new ResendInvitationCommand(new ResendInvitation(
             new InMemoryInvitationRepository($this->sentInvitation()),
-            new InMemoryUserRepository(UserMother::invited(UserMother::DEFAULT_ID)),
+            $users,
             new SendInvitationEmailBestEffort($emailSender, new NullLogger()),
             new RecordingEventBus(),
             new InlineTransactionManager(),
             new FixedClock(new DateTimeImmutable(self::NOW)),
+            new RecordInvitationAudit($users, new RecordingAuditLogger(), new InlineTransactionManager()),
         ));
 
         $tester = new CommandTester($command);

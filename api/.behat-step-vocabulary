@@ -255,6 +255,7 @@ the header :name should not be equal to :value => used
 the header :name should not contain :value => used
 the header :name should not exist => used
 the header :name should not match :regex => idle
+the invitation-resend budget is exhausted for invitee :userId => used
 the last command should fail => refused
 the last command should succeed => refused
 the last run output should be JSON with a :field field => used

@@ -52,6 +52,7 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
     private const array POPULATION = [
         'ChangeUserRoles.php' => 'locking-read',
         'InviteUser.php' => 'creates-subject',
+        'RecordInvitationAudit.php' => 'locking-read',
         'RecordLockoutAuditBestEffort.php' => 'row-lock',
         'RecordLockoutNoticeAuditBestEffort.php' => 'row-lock',
         'RecordRecoverySecretAuditBestEffort.php' => 'row-lock',
@@ -60,7 +61,7 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
         'UnlockUserAccount.php' => 'locking-read',
     ];
 
-    private const int SITES = 8;
+    private const int SITES = 9;
 
     #[Test]
     public function everySubjectAuditWriteIsSerialisedWithTheSubjectsRow(): void

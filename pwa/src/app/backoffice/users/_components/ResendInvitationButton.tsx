@@ -47,7 +47,8 @@ interface ResendInvitationButtonProps {
  * `<RevokeInvitationButton>`, with words and a non-destructive confirm of its own.
  *
  * A 503 `invitation-email-not-sent` reaches the owner's error surface like any refusal: the new link was minted
- * and the old one is dead, and the API's title says to resend once mail works. The accept token never reaches
+ * and the old one is dead, and the API's title says to resend once mail works. So does a 429 `rate-limited`:
+ * the per-invitee resend budget is spent, nothing was rotated, and the link the invitee holds still works. The accept token never reaches
  * this client — the API answers 204 with no body.
  */
 export function ResendInvitationButton({

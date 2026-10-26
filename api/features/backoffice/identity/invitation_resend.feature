@@ -30,6 +30,46 @@ Feature: Resend a pending invitation from the console
     And 1 notification email was sent
     And The notification email subject should be equal to "Your ERPify invitation"
     And The notification email recipient should be "iris@erpify.test"
+    # The event store records that the link was replaced, never by whom: the security row is who.
+    And I execute the SQL query "SELECT action, level, actor_type, actor_id, resource_type, resource_id FROM audit_log WHERE action = 'INVITATION_RESENT'"
+    And the SQL result as JSON should be:
+    """
+    [
+      {
+        "action": "INVITATION_RESENT",
+        "level": "security",
+        "actor_type": "user",
+        "actor_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66",
+        "resource_type": "User",
+        "resource_id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70"
+      }
+    ]
+    """
+
+  # The budget is primed in the SAME scenario as the request that observes it: the test cache pool is the array
+  # adapter, reset on every kernel.terminate, so "five succeed and the sixth is refused" cannot be expressed as
+  # six sequential HTTP steps.
+  Scenario Outline: A drained per-invitee budget refuses the resend out loud, before the link is touched
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    And the invitation-resend budget is exhausted for invitee "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70"
+    When I send a POST request to "/backoffice/users/<id>/invitation/resend"
+    Then the response status code should be 429
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "rate-limited"
+    And the header "Retry-After" should match "/^[1-9]\d*$/"
+    And the header "RateLimit-Remaining" should be equal to "0"
+    # The link the invitee holds is the one this budget protects: no rotation, no email, no audit row.
+    And there should be 0 events stored named "erpify.iam.invitation.resent"
+    And 0 notification emails were sent
+    And I execute the SQL query "SELECT id FROM audit_log WHERE action = 'INVITATION_RESENT'"
+    And there should have 0 records in SQL result
+
+    # The column is a Postgres uuid, so every spelling names the same person and must spend the same bucket.
+    Examples:
+      | case       | id                                   |
+      | lower case | 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70 |
+      | upper case | 0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A70 |
 
   Scenario: The previously delivered link stops working the moment the invitation is resent
     Given I am logged in as an administrator

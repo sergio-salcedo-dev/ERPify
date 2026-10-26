@@ -82,7 +82,8 @@ session gate. The `/api` boundary has one definition, `ApiRequestMatcher::PATH_P
   a per-target budget may answer 429 once the caller has already proved it holds the target, which is why
   `password_change_per_identity` refuses out loud on each of the three routes that spend it
   (`POST /me/password`, `POST /me/recovery-secret`, `POST /me/recovery-secret/revoke`) and nothing on this
-  surface does.
+  surface does. `invitation_resend_per_invitee` refuses out loud for the same reason: only an administrator
+  who can already list the invitee reaches it.
 - **Token hygiene:** a single-use token travels ONLY in the emailed link and the request body — never in a
   log — Caddy's access log carries no query string at all (it strips everything from the `?`, so a token
   cannot be there whatever it is named), and the application log redacts the `token` parameter alongside the

@@ -142,3 +142,32 @@ framework:
             limit: '%env(int:RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_LIMIT)%'
             interval: '%env(RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_INTERVAL)%'
             lock_factory: null
+
+        # `invitation_resend_per_invitee` — per-TARGET budget on POST /backoffice/users/{userId}/invitation/resend,
+        # keyed by an HMAC of the invited person's case-folded id (the column is a Postgres `uuid`, so every
+        # spelling of one id is one person and must be one bucket; and the limiter serialises its key into the
+        # stored bucket, so the raw id would leave a person's identifier in a cache no erasure reaches). Shared
+        # across every administrator on purpose.
+        #
+        # Each resend mails the invitee AND kills the link they already hold, so without a ceiling one
+        # administrator session — stolen or merely scripted — can keep a person's working link permanently dead
+        # and flood their mailbox at the per-IP rate. The window is a DAY rather than minutes because the harm is
+        # the killed link, not the request rate: a budget that refills every quarter of an hour still lets a
+        # loop kill a link every few minutes for ever. Five per day leaves an operator room for a wrong address
+        # corrected and a lost email; once it is spent the last link that was DELIVERED survives the rest of the
+        # window, inside its three-day TTL. Like every limiter here it lives in the `app` pool under var/cache,
+        # so a deploy resets it: the bound is five per day between deploys.
+        #
+        # Exhaustion is a VISIBLE 429, for the reason `password_change_per_identity` gives: the route is reached
+        # only through an administrator session that can already list the register, so nothing is disclosed.
+        # The cost is that a drained bucket blocks every administrator's resend of that person until it
+        # refills — drained by a hostile session, or by an operator retrying through a mail outage, where each
+        # 503 has already rotated a link nobody received. Revoking and re-inviting is NOT a way round it: a
+        # revoked identity keeps its address and `identity_user.email` is unique. The way round is the console
+        # command `iam:invitation:resend <invitationId>`, which a shell operator runs and this budget does not
+        # cover.
+        invitation_resend_per_invitee:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_INVITATION_RESEND_PER_INVITEE_LIMIT)%'
+            interval: '%env(RATE_LIMIT_INVITATION_RESEND_PER_INVITEE_INTERVAL)%'
+            lock_factory: null
