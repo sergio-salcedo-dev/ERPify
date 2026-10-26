@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Application;
 
 use DateInterval;
+use Erpify\Iam\Identity\Application\RecordInvitationAudit;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Exception\InvitationNotFound;
@@ -29,15 +30,17 @@ use LogicException;
  * not the delivery record — so {@see resendForInvitedUser()} resolves the invitations here, inside the context
  * that owns `invited_user_id`.
  *
+ * Each resend records who resent the person's invitation through {@see RecordInvitationAudit}, the seam the
+ * identity context publishes for it, inside this transaction and after the invitations are locked — the order
+ * the erasure takes them in.
+ *
  * The object coupling is the two entry points sharing one reissue: each adds the not-found answer its own
- * caller is owed, over the same token, mailer, event bus and transaction collaborators.
+ * caller is owed, over the same token, mailer, event bus, audit and transaction collaborators.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class ResendInvitation
 {
-    private const string TTL_SPEC = 'P3D';
-
     public function __construct(
         private InvitationRepository $invitations,
         private UserRepository $users,
@@ -45,6 +48,7 @@ final readonly class ResendInvitation
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private RecordInvitationAudit $audit,
     ) {
     }
 
@@ -72,7 +76,10 @@ final readonly class ResendInvitation
                     throw InvitedIdentityUnavailable::withdrawn();
                 }
 
-                return [$user->email(), $this->reissue($invitation, $invitationId)];
+                $acceptToken = $this->reissue($invitation, $invitationId);
+                $this->audit->resent($invitation->invitedUserId());
+
+                return [$user->email(), $acceptToken];
             },
         );
 
@@ -121,6 +128,9 @@ final readonly class ResendInvitation
                     $acceptTokens[] = $this->reissue($invitation, $this->idOf($invitation));
                 }
 
+                // One row per act, not per invitation: several live rows for one person are one decision.
+                $this->audit->resent($userId);
+
                 return [$user->email(), $acceptTokens];
             },
         );
@@ -140,7 +150,7 @@ final readonly class ResendInvitation
      */
     private function reissue(Invitation $invitation, string $selector): string
     {
-        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(self::TTL_SPEC)));
+        $generated = SingleUseToken::mint($this->clock->now()->add(new DateInterval(Invitation::TTL_SPEC)));
 
         $invitation->resend($generated->token);
 
