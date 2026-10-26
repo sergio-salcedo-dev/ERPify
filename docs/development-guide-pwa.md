@@ -12,16 +12,9 @@ All commands below are run from the **repo root** via the root `Makefile`. The M
 
 npm is pinned to **12.0.1** on all three surfaces — the host (`.nvmrc` + `engines`), CI (`.github/actions/node-setup`) and the `pwa` image (`pwa/Dockerfile` installs it globally). One npm resolves `package-lock.json` everywhere, so a lockfile written on a dev machine is the one CI and the image consume.
 
-**Dependency install scripts are blocked by default.** npm 12 skips `preinstall`/`install`/`postinstall` for any dependency not listed in `package.json#allowScripts`, and ends every install with the list it skipped — so the warning below is the expected steady state, not a broken install:
+**Dependency install scripts are blocked by default.** npm 12 skips `preinstall`/`install`/`postinstall` for any dependency not listed in `package.json#allowScripts`, and ends an install with the list it skipped. No package in the current tree declares one, so `allowScripts` is absent and a clean install prints no such warning — `npm install-scripts ls` answers `No packages with unreviewed install scripts.` A warning that does appear therefore names a script a dependency change has just brought in, and is worth reading rather than dismissing.
 
-```
-@google/genai (preinstall: no-op) · @sentry/cli (postinstall: downloads the sentry-cli binary)
-protobufjs (postinstall)
-```
-
-None of the three is load-bearing: the `@google/genai` preinstall is a literal no-op, `protobufjs` only prints a version-scheme warning, and the `@sentry/cli` postinstall is a **fallback binary downloader** — the package ships the real artifact as a platform `optionalDependency` (`@sentry/cli-linux-x64`), which npm installs normally. `sentry-cli` therefore stays functional on the host and in the image, so Sentry source-map upload works wherever `SENTRY_AUTH_TOKEN` and `SENTRY_ORG` are set.
-
-Review the list with `npm install-scripts ls`; `npm install-scripts approve|deny <pkg>` writes a pinned entry to `allowScripts`. Approve only after reading the script — the default-deny is a supply-chain control, not friction to route around. A platform without a prebuilt optional binary (e.g. a non-glibc or non-x64 image) would need an explicit approval to fall back to the download.
+`npm install-scripts approve|deny <pkg>` writes a pinned entry to `allowScripts`. Approve only after reading the script — the default-deny is a supply-chain control, not friction to route around.
 
 **Node major is deliberately *not* aligned.** The `pwa` image pins upstream Node by digest, currently **26.x on Debian 13**, while host and CI run the **24 LTS** line. Both satisfy `engines.node` (`^24.15.0 || >=26.0.0`) and npm 12's own range, so dependency resolution is identical — but the runtime executing `next build` and `node server.js` in containers is a different Node major from the one the unit suite validates on the host. Weigh that when debugging a failure that reproduces in Docker but not locally (or vice versa). corepack is unavailable in the image (Node no longer bundles it), which is why the npm pin is an explicit global install rather than a `packageManager` field.
 
