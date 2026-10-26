@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
 import { NavEntryLink } from "./NavEntryLink";
 
-interface SubItem {
+interface SubItem<TAction extends string> {
   name: string;
   path: string;
   icon?: LucideIcon;
@@ -12,9 +12,10 @@ interface SubItem {
   testId?: string;
   /**
    * Forwarded verbatim to `onClick` so the consumer can act on what an entry means rather
-   * than on where it points. This component never interprets it.
+   * than on where it points. This component never interprets it, so the vocabulary is the
+   * consumer's type parameter rather than a literal named here.
    */
-  action?: "sign-out";
+  action?: TAction;
   /**
    * Marks the entry as already working. Rendered as `aria-disabled`, not `disabled`: the
    * click must still reach `onClick`, because the consumer's own in-flight guard is what
@@ -30,13 +31,13 @@ interface SubItem {
   isPlanned?: boolean;
 }
 
-interface SidebarItemProps {
+interface SidebarItemProps<TAction extends string> {
   name: string;
   icon: LucideIcon;
   path: string;
   isActive: boolean;
-  onClick: (path: string, action?: "sign-out") => void;
-  subItems?: SubItem[];
+  onClick: (path: string, action?: TAction) => void;
+  subItems?: SubItem<TAction>[];
   isCompact?: boolean;
   /** Optional `data-testid` for the top-level item button. */
   testId?: string;
@@ -111,10 +112,10 @@ function SidebarItemContent({
   );
 }
 
-function SidebarSubItem({
+function SidebarSubItem<TAction extends string>({
   subItem,
   onClick,
-}: Readonly<{ subItem: SubItem; onClick: SidebarItemProps["onClick"] }>) {
+}: Readonly<{ subItem: SubItem<TAction>; onClick: SidebarItemProps<TAction>["onClick"] }>) {
   const SubIcon = subItem.icon;
   return (
     <NavEntryLink
@@ -138,7 +139,12 @@ function SidebarSubItem({
   );
 }
 
-export function SidebarItem({
+/**
+ * Generic over the consumer's action vocabulary, inferred from `subItems` and `onClick`: an entry
+ * carrying an action the consumer's handler does not accept fails to compile. `never` applies only
+ * when nothing names an action.
+ */
+export function SidebarItem<TAction extends string = never>({
   name,
   icon: Icon,
   path,
@@ -148,7 +154,7 @@ export function SidebarItem({
   isCompact = false,
   testId,
   isPlanned,
-}: Readonly<SidebarItemProps>) {
+}: Readonly<SidebarItemProps<TAction>>) {
   const hasSubItems = subItems !== undefined && subItems.length > 0;
   const subItemsId = useId();
 
