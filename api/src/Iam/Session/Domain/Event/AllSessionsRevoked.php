@@ -49,6 +49,8 @@ final class AllSessionsRevoked extends DomainEvent
         string $eventId,
         string $occurredOn,
     ): static {
+        self::ensureEmptyPayload($body);
+
         return new self($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
     }
 }

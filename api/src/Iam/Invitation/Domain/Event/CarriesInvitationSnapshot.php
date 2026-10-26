@@ -77,12 +77,7 @@ trait CarriesInvitationSnapshot
     }
 
     /**
-     * @param array<string, mixed> $body
-     *
-     * @SuppressWarnings("PHPMD.UnusedFormalParameter") the signature is mandated by the abstract
-     *                                                  `DomainEvent::fromPrimitives()`, and `$body` is empty at
-     *                                                  this schema version by design: the whole subject of these
-     *                                                  events is the aggregate id.
+     * @param array<string, mixed> $body empty at this schema version: the whole subject is the aggregate id
      */
     #[Override]
     public static function fromPrimitives(
@@ -91,6 +86,8 @@ trait CarriesInvitationSnapshot
         string $eventId,
         string $occurredOn,
     ): static {
+        self::ensureEmptyPayload($body);
+
         return new self($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
     }
 

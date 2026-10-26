@@ -21,4 +21,15 @@ final class CorruptEventStoreRowTest extends TestCase
         $this->assertSame('corrupt-event-store-row', $exception->type());
         $this->assertSame(['column' => 'sequence'], $exception->context());
     }
+
+    public function testNamesTheMemberAPayloadlessSchemaDoesNotDeclare(): void
+    {
+        $exception = CorruptEventStoreRow::undeclaredPayloadMember('erpify.iam.invitation.sent', 'invitedUserId');
+
+        $this->assertSame('corrupt-event-store-row', $exception->type());
+        $this->assertSame(
+            ['event_name' => 'erpify.iam.invitation.sent', 'member' => 'invitedUserId'],
+            $exception->context(),
+        );
+    }
 }
