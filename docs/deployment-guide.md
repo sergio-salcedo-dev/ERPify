@@ -245,9 +245,10 @@ container that the web `php` container recompiled out from under it — see
   in §7 of the security checklist. Gate: `make php.lint.log-retention`.
 - Caddy's access log is **not** in that sink. It writes `/var/log/caddy/access.log` on the
   `caddy_access_log` volume (`php` service, `compose.yaml`), from a literal `output file` block in
-  `api/frankenphp/Caddyfile`: rolled at 32 MiB and every day at 00:00 UTC even when idle (size
-  rolling alone never rolls an idle file, and pruning runs only on a roll), rolled files deleted
-  after 14 days, at most 20 kept — so a line lives about 15 days. It has its own budget, so neither
+  `api/frankenphp/Caddyfile`: rolled at 32 MiB and every day at 00:00 UTC, idle or not, once the
+  process has written its first line (size rolling alone never rolls an idle file, and pruning runs
+  only on a roll), rolled files deleted after 14 days, at most 20 kept — so a line lives about 15
+  days. A restart with no traffic after it defers the next roll until the first request. It has its own budget, so neither
   the application's channels nor a request flood can evict the other's history. The same file in
   every environment, and no environment variable reaches the `log` block. Read it with
   `docker compose exec php tail -F /var/log/caddy/access.log`; `docker compose logs php` carries no

@@ -22,9 +22,11 @@
 		# stdio, where it would share one json-file budget (10m × 5) with Monolog's buffered channel and the
 		# always-on `observability` channel: any producer could evict any other's history, and eviction by
 		# volume is not expiry, so an idle deployment would keep its oldest line for ever. Here it has its own
-		# budget and a TTL. `roll_at` rolls the active file every day at 00:00 UTC even when nothing is written —
-		# size rolling alone never rolls an idle file, and the cleanup below runs only when a file is rolled —
-		# and `roll_keep_for` deletes rolled files older than 14 days, so a line lives about 15 days at most.
+		# budget and a TTL. `roll_at` rolls the active file every day at 00:00 UTC, idle or not, once the
+		# process has written its first line — size rolling alone never rolls an idle file, and the cleanup
+		# below runs only when a file is rolled — and `roll_keep_for` deletes rolled files older than 14 days,
+		# so a line lives about 15 days at most. A restart followed by no traffic at all defers the next roll,
+		# and that residual is recorded in PRODUCTION_SECURITY_CHECKLIST.md §7.
 		# `roll_keep` is a count ceiling above those 14 daily files, so a size flood evicts only this log's own
 		# history. Literals, not an environment expansion: a deployment could otherwise point the log back at
 		# stderr, or replace the encoder ahead of the `format filter` below, without this file changing.

@@ -63,7 +63,8 @@ Assumes the stack is already up (`make deploy.local` on first stand-up).
 
 # 4. Verify
 make ENV=prod docker.logs   # follows every service from now; for history: docker compose -p <project> … logs php messenger_worker
-# HTTP access lines are not in either: Caddy writes them to its own file (rolled daily, kept 14 days)
+# HTTP access lines are not in either: Caddy writes them to its own file (rolled daily once it has logged
+# a line since its last start, kept 14 days)
 docker compose -p <project> … exec php tail -F /var/log/caddy/access.log
 ```
 

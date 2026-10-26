@@ -1667,7 +1667,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       `/api/v1/backoffice/users/<uuid>`, where the uuid is the person's id. The access log has a TTL but no
       owner of erasure: it is written to `/var/log/caddy/access.log` on the `caddy_access_log` volume, rolled
       every day at 00:00 UTC (and at 32 MiB) with rolled files deleted after 14 days — literals in
-      `api/frankenphp/Caddyfile`, so a line lives about 15 days at most — and nothing in
+      `api/frankenphp/Caddyfile`, so a line lives about 15 days at most — **once the process has written its
+      first line**: the roll scheduler and the pruning start on the first write after a (re)start, so a
+      restart followed by no traffic at all keeps the files it found until a request arrives — and nothing in
       `FulfilIdentityErasure` can reach it, so an id that lands there outlives the erasure the application
       confirmed to the subject by up to that window. The volume is in no backup (`scripts/deploy/backup-prod.sh`
       dumps Postgres only), so a restore cannot bring back a line the retention already deleted. The
