@@ -259,11 +259,11 @@ needless data duplication, and fights the framework. Symfony gives the
 structural base (PSR-4 autoload, service isolation, Messenger event boundary,
 per-context Doctrine mapping) — the gate itself is custom (see below).
 
-**Tenant scoping is orthogonal and also at query level.** When `company_id`
-lands (multi-tenant, Phase H of [`../saas-production-roadmap.md`](../saas-production-roadmap.md)),
+**Tenant scoping is orthogonal and also at query level.** When `organization_id`
+lands on the business tables (multi-tenant, Phase H of [`../saas-production-roadmap.md`](../saas-production-roadmap.md)),
 every tenant-owned table carries it and every query is tenant-scoped via a
 Doctrine filter / mandatory repository scope — never left to per-call discipline.
-Indexes are tenant-led composites (`(company_id, …)`).
+Indexes are tenant-led composites (`(organization_id, …)`).
 
 > **Enforcement status:** a 3-level static gate is wired into `make php.quality`
 > as `make php.lint.bounded-context` (PHPUnit gate that tokenizes imports —
