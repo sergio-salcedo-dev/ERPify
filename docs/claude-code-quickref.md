@@ -199,6 +199,10 @@ A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clea
 
 `/deps-update` (`.claude/commands/deps-update.md`; `--dry-run` inventories only) consolidates the open `chore: bump` PRs into one branch and one PR. Dependabot's one-PR-per-dependency shape cannot express a bump that spans several pin sites, so those PRs are red by construction — `github/codeql-action` covers three steps across `codeql.yml` and `ci.yml`, and none of the three passes alone (#628/#629/#630 → #632). The command classifies by the path segment after `dependabot/` rather than by substring, since `dependabot/github_actions/docker/bake-action-…` is an actions bump, not a docker one. For npm and composer it re-resolves the ranges in a single install instead of merging the branches, whose whole-lockfile rewrites conflict pairwise; expect the caret to land a patch ahead of what Dependabot pinned and peers to move packages nobody asked for. That install is not the whole batch: `npm install` moves nothing whose locked version already satisfies its range, so a bump needing no manifest edit (a PR touching only `package-lock.json`) is dropped silently and the *added: 0, removed: 0* supply-chain check passes over the gap — it proves nothing was gained, never that everything moved. Every claimed version is read back out of the resolved lock. It stops for branch authorization before creating anything, and never merges.
 
+### Merging a green PR
+
+`/merge-when-green <pr> [--remove-worktree]` (`.claude/commands/merge-when-green.md`) squash-merges one pull request once every check in `statusCheckRollup` is green and SonarCloud's quality gate for that PR reads `OK`, pinned with `--match-head-commit` to the head it verified, so a push landing between the check and the merge fails the merge instead of shipping an unseen head. Invoking it is the per-merge permission `CLAUDE.md` requires, for that PR only. `--remove-worktree` audits the PR's worktree before removing it (clean tree, local tip contained in `refs/pull/<n>/head`) and clears root-owned bind-mount residue with a container scoped to the exact directory.
+
 ---
 
 ## Services
