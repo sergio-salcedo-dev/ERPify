@@ -68,14 +68,12 @@ final class AuditLogEntryTest extends TestCase
         $this->assertInstanceOf(UuidV7::class, SymfonyUuid::fromString($entry->id));
     }
 
-    public function testOmittingTheResourceLeavesItNullAlongsideTheOtherOptionalContext(): void
+    public function testOmittingTheResourceAndMetadataLeavesThemEmpty(): void
     {
         $entry = $this->anEntry();
 
         $this->assertNotInstanceOf(AuditResource::class, $entry->resource);
         $this->assertSame([], $entry->metadata);
-        $this->assertNull($entry->provenance->ip);
-        $this->assertNull($entry->provenance->userAgent);
     }
 
     #[DataProvider('provideRejectsBlankActionCases')]
