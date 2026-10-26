@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Domain\Event;
 
 use DateTimeImmutable;
+use Erpify\Shared\Event\Domain\DomainEvent;
 use Override;
 
 /**
@@ -28,16 +29,18 @@ use Override;
  * and the invitation family remains filterable. It is also why `api/.persistent-transport-policy` classifies
  * this type as `person` — that registry judges what the `aggregate_id` denotes, never the type's name.
  *
- * Six near-identical shapes past the Rule of Three earn one trait so their envelope contract cannot diverge by
+ * Six near-identical shapes past the Rule of Three earn one base so their envelope contract cannot diverge by
  * copy-paste; kept PER MODULE (never unified with Session/Identity snapshots — see the
  * `bankaccount-event-envelope-trait-vs-bank` decision). Each event class only declares its own
  * {@see eventName()}; the constructor, the stream family, the schema version and the primitives round-trip live
- * here. `self` inside a trait resolves to the using class, so {@see fromPrimitives()} rebuilds the concrete
- * event.
+ * here, and {@see fromPrimitives()} rebuilds the concrete event through `new static`. It is a class rather than
+ * a trait because the six extend nothing else, so the inheritance slot is free, and because a trait hides from
+ * every reader — static analysers included — that these methods implement {@see DomainEvent}'s abstracts.
+ * Being abstract, it is never registered as an event of its own.
  */
-trait CarriesInvitationSnapshot
+abstract class InvitationEvent extends DomainEvent
 {
-    public function __construct(
+    final public function __construct(
         string $invitedUserId,
         ?string $eventId = null,
         ?DateTimeImmutable $occurredOn = null,
@@ -77,12 +80,9 @@ trait CarriesInvitationSnapshot
     }
 
     /**
-     * @param array<string, mixed> $body
+     * `$body` is empty at this schema version by design: the whole subject of these events is the aggregate id.
      *
-     * @SuppressWarnings("PHPMD.UnusedFormalParameter") the signature is mandated by the abstract
-     *                                                  `DomainEvent::fromPrimitives()`, and `$body` is empty at
-     *                                                  this schema version by design: the whole subject of these
-     *                                                  events is the aggregate id.
+     * @param array<string, mixed> $body
      */
     #[Override]
     public static function fromPrimitives(
@@ -91,7 +91,7 @@ trait CarriesInvitationSnapshot
         string $eventId,
         string $occurredOn,
     ): static {
-        return new self($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
+        return new static($aggregateId, $eventId, new DateTimeImmutable($occurredOn));
     }
 
     public function invitedUserId(): string
