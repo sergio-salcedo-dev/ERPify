@@ -11,6 +11,7 @@ use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Application\AuditLogWriter;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -36,9 +37,11 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $entry = AuditLogEntry::create(
                 'BANK_ACCOUNTS_VIEWED',
                 AuditLevel::ACTIVITY,
-                ActorContext::anonymous(),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+                new AuditProvenance(
+                    ActorContext::anonymous(),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+                ),
             );
 
             $writer->write($entry);
@@ -58,16 +61,20 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $first = AuditLogEntry::create(
                 'BANK_ACCOUNTS_VIEWED',
                 AuditLevel::ACTIVITY,
-                ActorContext::anonymous(),
-                $correlationId,
-                $occurredOn,
+                new AuditProvenance(
+                    ActorContext::anonymous(),
+                    $correlationId,
+                    $occurredOn,
+                ),
             );
             $second = AuditLogEntry::create(
                 'BANK_ACCOUNTS_VIEWED',
                 AuditLevel::ACTIVITY,
-                ActorContext::anonymous(),
-                $correlationId,
-                $occurredOn,
+                new AuditProvenance(
+                    ActorContext::anonymous(),
+                    $correlationId,
+                    $occurredOn,
+                ),
             );
 
             $this->assertNotSame($first->id, $second->id, 'each create() mints a fresh id');
@@ -95,13 +102,15 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $entry = AuditLogEntry::create(
                 'ACCESS_DENIED',
                 AuditLevel::SECURITY,
-                ActorContext::forUser($actorId),
-                $correlationId,
-                $occurredOn,
-                resource: AuditResource::of('Bank', $resourceId),
-                metadata: ['route' => 'backoffice_bank_detail', 'new_roles' => ['ADMIN', 'VIEWER']],
-                ip: '203.0.113.7',
-                userAgent: 'Mozilla/5.0',
+                new AuditProvenance(
+                    ActorContext::forUser($actorId),
+                    $correlationId,
+                    $occurredOn,
+                    '203.0.113.7',
+                    'Mozilla/5.0',
+                ),
+                AuditResource::of('Bank', $resourceId),
+                ['route' => 'backoffice_bank_detail', 'new_roles' => ['ADMIN', 'VIEWER']],
             );
 
             $writer->write($entry);
@@ -148,9 +157,11 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $entry = AuditLogEntry::create(
                 'BANK_ACCOUNTS_VIEWED',
                 AuditLevel::ACTIVITY,
-                ActorContext::anonymous(),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-04-01T08:00:00+00:00'),
+                new AuditProvenance(
+                    ActorContext::anonymous(),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-04-01T08:00:00+00:00'),
+                ),
             );
 
             $writer->write($entry);
@@ -188,16 +199,20 @@ final class AuditLogWriterIdempotencyTest extends KernelTestCase
             $empty = AuditLogEntry::create(
                 'BANK_ACCOUNTS_VIEWED',
                 AuditLevel::ACTIVITY,
-                ActorContext::anonymous(),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-05-01T09:00:00+00:00'),
+                new AuditProvenance(
+                    ActorContext::anonymous(),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-05-01T09:00:00+00:00'),
+                ),
             );
             $withLists = AuditLogEntry::create(
                 'USER_ROLES_CHANGED',
                 AuditLevel::SECURITY,
-                ActorContext::forUser(Uuid::generate()),
-                Uuid::generate(),
-                new DateTimeImmutable('2026-05-01T09:00:01+00:00'),
+                new AuditProvenance(
+                    ActorContext::forUser(Uuid::generate()),
+                    Uuid::generate(),
+                    new DateTimeImmutable('2026-05-01T09:00:01+00:00'),
+                ),
                 metadata: ['previous_roles' => ['ROLE_USER'], 'new_roles' => ['ROLE_USER', 'ROLE_ADMIN']],
             );
 

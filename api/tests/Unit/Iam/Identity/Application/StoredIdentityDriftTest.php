@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\StoredIdentityDrift;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -108,9 +109,11 @@ final class StoredIdentityDriftTest extends TestCase
         $entry = AuditLogEntry::create(
             'STORED_IDENTITY_DRIFT_DETECTED',
             AuditLevel::SECURITY,
-            ActorContext::system(),
-            Uuid::generate(),
-            new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            new AuditProvenance(
+                ActorContext::system(),
+                Uuid::generate(),
+                new DateTimeImmutable('2026-01-01T00:00:00+00:00'),
+            ),
             metadata: $metadata,
         );
 

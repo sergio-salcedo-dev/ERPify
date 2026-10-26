@@ -9,6 +9,7 @@ use Doctrine\DBAL\Connection;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Infrastructure\Cli\EraseActorAuditTrailCommand;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -99,9 +100,11 @@ final class EraseActorAuditTrailCommandFunctionalTest extends KernelTestCase
         $writer->write(AuditLogEntry::create(
             'BANK_ACCOUNTS_VIEWED',
             AuditLevel::ACTIVITY,
-            $actor,
-            Uuid::generate(),
-            $occurredOn,
+            new AuditProvenance(
+                $actor,
+                Uuid::generate(),
+                $occurredOn,
+            ),
         ));
     }
 

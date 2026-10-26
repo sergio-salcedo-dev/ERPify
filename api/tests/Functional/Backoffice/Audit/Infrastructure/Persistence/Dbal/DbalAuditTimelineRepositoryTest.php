@@ -15,6 +15,7 @@ use Erpify\Backoffice\Audit\Infrastructure\Persistence\Dbal\DbalAuditTimelineRep
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Search\Domain\Exception\InvalidCursor;
@@ -319,9 +320,11 @@ final class DbalAuditTimelineRepositoryTest extends KernelTestCase
             $writer->write(AuditLogEntry::create(
                 \sprintf('ACTION_%02d', $i),
                 0 === $i % 2 ? AuditLevel::SECURITY : AuditLevel::ACTIVITY,
-                $i <= 3 ? ActorContext::forUser(self::ACTOR_ID) : ActorContext::anonymous(),
-                Uuid::generate(),
-                $base->modify(\sprintf('-%d minutes', $i)),
+                new AuditProvenance(
+                    $i <= 3 ? ActorContext::forUser(self::ACTOR_ID) : ActorContext::anonymous(),
+                    Uuid::generate(),
+                    $base->modify(\sprintf('-%d minutes', $i)),
+                ),
                 $i <= 2 ? AuditResource::of('Bank', self::RESOURCE_ID) : null,
             ));
         }
@@ -332,9 +335,11 @@ final class DbalAuditTimelineRepositoryTest extends KernelTestCase
         return AuditLogEntry::create(
             $action,
             AuditLevel::ACTIVITY,
-            ActorContext::anonymous(),
-            Uuid::generate(),
-            $occurredOn,
+            new AuditProvenance(
+                ActorContext::anonymous(),
+                Uuid::generate(),
+                $occurredOn,
+            ),
         );
     }
 

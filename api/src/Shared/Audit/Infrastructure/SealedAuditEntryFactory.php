@@ -8,6 +8,7 @@ use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditEntryFactory;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Http\Infrastructure\CorrelationIdListener;
@@ -58,13 +59,15 @@ final readonly class SealedAuditEntryFactory implements AuditEntryFactory
         return AuditLogEntry::create(
             $action,
             $level,
-            $this->actorContextFactory->current(),
-            $this->resolveCorrelationId(),
-            $this->clock->now(),
+            new AuditProvenance(
+                $this->actorContextFactory->current(),
+                $this->resolveCorrelationId(),
+                $this->clock->now(),
+                $this->resolveClientIp(),
+                $this->resolveUserAgent(),
+            ),
             $resource,
             $metadata,
-            $this->resolveClientIp(),
-            $this->resolveUserAgent(),
             $encryptionScopeId,
             $id,
         );

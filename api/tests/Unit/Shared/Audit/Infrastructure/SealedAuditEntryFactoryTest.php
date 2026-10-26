@@ -49,13 +49,21 @@ final class SealedAuditEntryFactoryTest extends TestCase
 
         $this->assertSame('BANK_ACCOUNTS_VIEWED', $entry->action);
         $this->assertSame(AuditLevel::ACTIVITY, $entry->level);
-        $this->assertSame($actor, $entry->actor, 'the actor is sealed from the factory, not re-resolved later');
+        $this->assertSame(
+            $actor,
+            $entry->provenance->actor,
+            'the actor is sealed from the factory, not re-resolved later',
+        );
         $this->assertInstanceOf(AuditResource::class, $entry->resource);
         $this->assertSame('Bank', $entry->resource->type);
         $this->assertSame($resourceId, $entry->resource->id);
         $this->assertSame(['affected_rows' => 2], $entry->metadata);
-        $this->assertSame(self::CORRELATION_ID, $entry->correlationId, 'the request canonical id is adopted');
-        $this->assertSame(self::OCCURRED_ON, $entry->occurredOn->format('Y-m-d\TH:i:s.uP'));
+        $this->assertSame(
+            self::CORRELATION_ID,
+            $entry->provenance->correlationId,
+            'the request canonical id is adopted',
+        );
+        $this->assertSame(self::OCCURRED_ON, $entry->provenance->occurredOn->format('Y-m-d\TH:i:s.uP'));
     }
 
     public function testItSealsTheClientIpAndUserAgentFromTheRequest(): void
@@ -67,8 +75,8 @@ final class SealedAuditEntryFactoryTest extends TestCase
 
         $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
 
-        $this->assertSame('203.0.113.7', $entry->ip);
-        $this->assertSame('Mozilla/5.0 (probe)', $entry->userAgent);
+        $this->assertSame('203.0.113.7', $entry->provenance->ip);
+        $this->assertSame('Mozilla/5.0 (probe)', $entry->provenance->userAgent);
     }
 
     public function testItNeutralisesAUserAgentHeaderSpellingTheRedactionSentinel(): void
@@ -80,15 +88,15 @@ final class SealedAuditEntryFactoryTest extends TestCase
 
         $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
 
-        $this->assertSame('[client-supplied] [REDACTED]', $entry->userAgent);
+        $this->assertSame('[client-supplied] [REDACTED]', $entry->provenance->userAgent);
     }
 
     public function testItLeavesTheClientIpAndUserAgentNullOffRequest(): void
     {
         $entry = $this->factory(new RequestStack())->create('SYSTEM_TICK', AuditLevel::ACTIVITY);
 
-        $this->assertNull($entry->ip);
-        $this->assertNull($entry->userAgent);
+        $this->assertNull($entry->provenance->ip);
+        $this->assertNull($entry->provenance->userAgent);
     }
 
     public function testItTrimsAnOverLongUserAgentToTheColumnWidth(): void
@@ -100,7 +108,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
 
         $entry = $this->factory($requestStack)->create('ROUTE_BACKOFFICE_BANK_SEARCH', AuditLevel::ACTIVITY);
 
-        $this->assertSame(\str_repeat('a', 512), $entry->userAgent);
+        $this->assertSame(\str_repeat('a', 512), $entry->provenance->userAgent);
     }
 
     public function testItMintsACanonicalFallbackWhenNoRequestIsInFlight(): void
@@ -108,7 +116,7 @@ final class SealedAuditEntryFactoryTest extends TestCase
         $entry = $this->factory(new RequestStack())->create('SYSTEM_TICK', AuditLevel::ACTIVITY);
 
         $this->assertTrue(
-            CorrelationIdListener::isCanonical($entry->correlationId),
+            CorrelationIdListener::isCanonical($entry->provenance->correlationId),
             'off-request a fresh canonical correlation id is minted, never null',
         );
     }
@@ -119,8 +127,8 @@ final class SealedAuditEntryFactoryTest extends TestCase
 
         $entry = $this->factory($requestStack)->create('BANK_ACCOUNTS_VIEWED', AuditLevel::ACTIVITY);
 
-        $this->assertTrue(CorrelationIdListener::isCanonical($entry->correlationId));
-        $this->assertNotSame(self::CORRELATION_ID, $entry->correlationId);
+        $this->assertTrue(CorrelationIdListener::isCanonical($entry->provenance->correlationId));
+        $this->assertNotSame(self::CORRELATION_ID, $entry->provenance->correlationId);
     }
 
     private function factoryForRequest(ActorContext $actor, string $correlationId): SealedAuditEntryFactory
