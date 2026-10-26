@@ -26,12 +26,10 @@ use RuntimeException;
  *
  * **What a green does NOT prove.** Read this as the specification of the blind spots:
  *
- *   - It observes the dev/test DESTINATION. `compose.dev.yaml` points the access log at a file so this can
- *     read it; production leaves `CADDY_SERVER_LOG_OPTIONS` unset and keeps stderr. What is under test —
- *     the `format filter` block — is byte-identical on both, and the variable does not touch it. The one
- *     thing that direction hides is the hole the variable itself is: it expands ahead of `format filter`,
- *     so a deployment setting it to another encoder replaces the filtering entirely, and no test here or
- *     anywhere else would notice.
+ *   - It reads the deployed DESTINATION: the Caddyfile writes the access log to `/var/log/caddy/access.log`
+ *     in every environment, as a literal, so the line read here is the line production writes. It says
+ *     nothing about `{$CADDY_GLOBAL_OPTIONS}` or `{$CADDY_EXTRA_CONFIG}`, which can still add a logger of their
+ *     own from a deployment's environment.
  *   - It says nothing about the URL PATH. `/api/v1/backoffice/users/<uuid>` carries a person's id and is a
  *     separately recorded, separately accepted residual.
  *   - It says nothing about any other sink, and those sinks are NOT equally covered — a reader must not take
@@ -86,9 +84,8 @@ final class AccessLogQueryContainmentGateTest extends TestCase
 
         $this->assertStringNotContainsString($sentinel, $written, \sprintf(
             "A query value reached the access log in clear.\nSpelling: %s\nThe log has no owner of erasure "
-                . '(the compose `logging:` blocks bound the json-file driver by size, which is eviction by '
-                . 'volume and not an expiry — there is still no TTL), so whatever lands there outlives the '
-                . 'erasure the application '
+                . '(its file is rolled daily and deleted after 14 days, which bounds it, but nothing in the '
+                . 'erasure path reaches it), so whatever lands there outlives the erasure the application '
                 . 'confirmed to the subject.',
             \str_replace('{sentinel}', '<value>', $path . '?' . $queryTemplate),
         ));
@@ -183,8 +180,8 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             self::SERVED_PATH,
             $this->accessLogWrittenSince($offset, $anchor),
             'The probe produced no access-log entry, so every containment assertion in this class would '
-                . 'have passed over an empty string. Check that the stack is up and that '
-                . '`CADDY_SERVER_LOG_OPTIONS` still points the access log at the file this reads.',
+                . 'have passed over an empty string. Check that the stack is up and that the Caddyfile still '
+                . 'writes the access log to the file this reads.',
         );
     }
 
@@ -224,22 +221,22 @@ final class AccessLogQueryContainmentGateTest extends TestCase
 
     private function accessLogPath(): string
     {
-        $path = \dirname(__DIR__, 4) . '/var/log/caddy-access.log';
+        $path = '/var/log/caddy/access.log';
 
         if (!\is_readable($path)) {
             // Deliberately fatal rather than skipped: a gate that disappears when its instrument does is a
             // gate that reports success for the one state it exists to catch.
             // Fatal, and it stays fatal in the one run mode where it is inconvenient. `make php.unit
-            // IN_CONTAINER=false` runs on the host, where this file is root-owned and `https://localhost`
-            // is a different stack — so this gate aborts that mode rather than reporting a green it did not
-            // earn. That cost is deliberate: every sibling gate in this tree fails rather than skips when
+            // IN_CONTAINER=false` runs on the host, where this file lives inside a container volume and
+            // `https://localhost` is a different stack — so this gate aborts that mode rather than reporting
+            // a green it did not earn. That cost is deliberate: every sibling gate in this tree fails rather than skips when
             // its instrument is missing, because a check that quietly does nothing reports the same green
             // as a real pass.
             throw new RuntimeException(\sprintf(
-                'The access log is not readable at %s, so this gate can observe nothing. Inside the '
-                    . 'container `compose.dev.yaml` sets CADDY_SERVER_LOG_OPTIONS to write it there. If you '
-                    . 'are running with IN_CONTAINER=false this gate cannot work at all — run it in the '
-                    . 'container rather than relaxing it into a skip.',
+                'The access log is not readable at %s, so this gate can observe nothing. Inside the php '
+                    . 'container the Caddyfile writes it there, on the `caddy_access_log` volume. If you are '
+                    . 'running with IN_CONTAINER=false this gate cannot work at all — run it in the container '
+                    . 'rather than relaxing it into a skip.',
                 $path,
             ));
         }
@@ -273,7 +270,9 @@ final class AccessLogQueryContainmentGateTest extends TestCase
                 throw new RuntimeException('Could not open the access log.');
             }
 
-            \fseek($handle, $offset);
+            // The file is rolled daily and by size, so it can be replaced between the offset and this read:
+            // a size below the offset means a fresh file, which holds the probe's entry from its start.
+            \fseek($handle, \filesize($this->accessLogPath()) < $offset ? 0 : $offset);
             $written = (string) \stream_get_contents($handle);
             \fclose($handle);
 
@@ -291,7 +290,7 @@ final class AccessLogQueryContainmentGateTest extends TestCase
         throw new RuntimeException(\sprintf(
             'No access-log entry anchored on "%s" arrived within %d microseconds. The assertion this feeds '
                 . 'would have passed over an empty read. Check the stack is up and that Caddy still writes '
-                . 'the file CADDY_SERVER_LOG_OPTIONS points at.',
+                . 'the file the Caddyfile names.',
             $anchor,
             self::FLUSH_TIMEOUT_MICROSECONDS,
         ));

@@ -9,11 +9,11 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Static gate over the Caddy access-log filter. The log is a sink with no owner of erasure — the compose
- * `logging:` blocks bound the json-file driver by SIZE, which is eviction by volume and not an
- * expiry, so it still has no TTL and no erasure path can reach it. What lands there is retained, and
- * retention is the obligation this gate serves: not "an attacker could read it", but "we hold a
- * person's identifier and cannot erase it".
+ * Static gate over the Caddy access log: where it is written, how long it is kept, and what it filters. The
+ * log is a sink with no owner of erasure — its own file, rolled daily and deleted after 14 days, which bounds
+ * it, but no erasure path reaches it. What lands there is retained until then, and retention is the
+ * obligation this gate serves: not "an attacker could read it", but "we hold a person's identifier and cannot
+ * erase it".
  *
  * Two carriers reach the entry, and they need different mechanisms because a log line records more than
  * its URI:
@@ -36,10 +36,11 @@ use PHPUnit\Framework\TestCase;
  * the line that was written. Neither replaces the other: this one fails when the rule is *deleted* from
  * the file, that one fails when the rule is *ineffective*, and only this one runs without a stack.
  *
- * **What a green does NOT prove.** That Caddy is configured by this file at all: `{$CADDY_SERVER_LOG_OPTIONS}`
- * expands inside the `log` block ahead of `format filter`, so a deployment that sets it to another encoder
- * replaces every rule below it without touching this repository — recorded as an open weakness rather than
- * gated, because nothing here can read a deployment's environment.
+ * **What a green does NOT prove.** That no other logger writes the same request: `{$CADDY_GLOBAL_OPTIONS}` and
+ * `{$CADDY_EXTRA_CONFIG}` expand outside the site's `log` block and can still add one from a deployment's
+ * environment — recorded as an open weakness rather than gated, because nothing here can read that
+ * environment. Inside the block nothing expands, and that much is gated below. Nor that the roll ever ran:
+ * the file says when Caddy should roll and prune, never that it did.
  *
  * @internal
  */
@@ -61,8 +62,8 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
             $this->caddyfile(),
             'The Caddy access log no longer strips the query string from `request>uri`. Every value a '
             . 'client can put in a query — a person id under a name nobody listed, a single-use token, a '
-            . 'filter value under any index or sub-index — is then written in clear to a sink rotated by '
-            . 'volume alone, with no TTL and no owner of erasure.',
+            . 'filter value under any index or sub-index — is then written in clear to a sink kept for 14 '
+            . 'days with no owner of erasure.',
         );
     }
 
@@ -106,6 +107,61 @@ final class CaddyfileAccessLogRedactionGateTest extends TestCase
             . 'full, so any screen holding a person id in its query string puts that id back into the '
             . 'same log entry whose `uri` this filter strips.',
         );
+    }
+
+    /**
+     * The access log's own file, rolled every day and pruned after 14 days. On the container's stdio it shared
+     * one json-file budget with the application's channels, where any producer could evict another's history
+     * and nothing expired by age. `roll_at` is the half that makes the TTL real: size rolling never rolls an
+     * idle file, and pruning runs only when a file is rolled. Compared whole, so a value widened in place
+     * reds as surely as a directive dropped.
+     */
+    #[Test]
+    public function itWritesTheAccessLogToItsOwnDailyRolledFile(): void
+    {
+        $matched = \preg_match('/output file (\S+) \{([^{}]*)\}/', $this->logBlock(), $output);
+
+        $this->assertSame(1, $matched, 'The access log no longer declares an `output file` of its own.');
+        $this->assertSame('/var/log/caddy/access.log', $output[1]);
+        $this->assertSame(
+            ['roll_size 32MiB', 'roll_keep 20', 'roll_keep_for 336h', 'roll_at 00:00'],
+            \array_values(\array_filter(\array_map(
+                static fn (string $line): string => (string) \preg_replace('/\s+/', ' ', \trim($line)),
+                \explode("\n", $output[2]),
+            ))),
+            'The access log\'s roll changed. Its retention is a decision recorded in '
+            . 'PRODUCTION_SECURITY_CHECKLIST.md §7, and without `roll_at` an idle deployment never rolls the '
+            . 'active file, so nothing in it ever expires.',
+        );
+    }
+
+    /**
+     * An environment expansion inside the block is how a deployment used to point this log back at stderr, or
+     * swap the encoder ahead of `format filter`, with every rule here still green. Nothing in the block may be
+     * decided outside the file.
+     */
+    #[Test]
+    public function itExpandsNoEnvironmentVariableInsideTheLogBlock(): void
+    {
+        $this->assertStringNotContainsString(
+            '{$',
+            $this->logBlock(),
+            'The site\'s `log` block expands an environment variable again, so a deployment can change where '
+            . 'the access log goes or what it filters without this file changing.',
+        );
+    }
+
+    /**
+     * The site's `log { … }` block, nested blocks included. Fails loudly if it is gone, for the reason
+     * {@see formatFilterBlock()} does.
+     */
+    private function logBlock(): string
+    {
+        $matched = \preg_match('/\blog \{(?:[^{}]|\{[^{}]*\})*\}/s', $this->caddyfile(), $block);
+
+        $this->assertSame(1, $matched, 'The Caddyfile declares no `log` block at all.');
+
+        return $block[0];
     }
 
     /**
