@@ -350,6 +350,7 @@ passes had not — a storage key derived from the identifier's *spelling* while 
 
 - **Never force-push `main`** — no `git push --force` / `--force-with-lease` / `--force-if-includes` to `main`, ever.
 - **Never merge into `main` without explicit per-merge permission from the user** — neither a local `git merge`/`git rebase` onto `main` nor merging a PR (web UI, `gh pr merge`, MCP). Prepare the branch/PR and stop. Approval for one PR/branch does not carry over to the next.
+- **Merging once permitted** → `/merge-when-green <pr> [--remove-worktree]`: waits for CI, requires every check and the SonarCloud gate green, merges pinned to the verified head (`--match-head-commit`). Invoking it is the permission for that one PR.
 
 ### Finishing substantial work means committed **and pushed** (hard rule for agents)
 
