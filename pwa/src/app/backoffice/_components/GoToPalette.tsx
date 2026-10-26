@@ -190,7 +190,12 @@ export function GoToPalette({
             );
           })}
         </ul>
-        <output className="go-to-palette__status sr-only" data-testid="go-to-palette__status">
+        <output
+          aria-live="polite"
+          aria-atomic="true"
+          className="go-to-palette__status sr-only"
+          data-testid="go-to-palette__status"
+        >
           {resultSummary(query, results.length)}
         </output>
         {results.length === 0 ? (
