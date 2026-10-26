@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 
 use Doctrine\DBAL\Exception\ConnectionException;
-use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Sentry\Event;
 use Sentry\EventHint;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\PostgreSqlConnection;
@@ -17,12 +16,8 @@ use Throwable;
  * to {@see SentryEventScrubber} (composed by {@see SentryBeforeSend}). Returning `null` stops the
  * event from leaving the process, keeping error tracking signal-rich.
  *
- * 1. **Expected 4xx client errors** — any throwable implementing {@see ClientError} (a business
- *    outcome / invalid client request that needs no technical intervention, e.g. deleting a bank
- *    that still has accounts → 409). 5xx paths are untouched: a marker-less DomainException maps to
- *    `unhandled-exception` (500) and any non-domain throwable is not a ClientError — both keep
- *    flowing. The decision is type-based and reuses the RFC 9457 marker hierarchy as the single
- *    source of truth (see {@see ClientError}).
+ * 1. **Expected 4xx client errors on an HTTP request** — decided by {@see ExpectedClientError}, which
+ *    holds the error contract's 4xx set and the reasons it applies only where a client exists.
  *
  * 2. **Messenger-worker DB-connection teardown noise** — the long-lived `messenger:consume` worker
  *    holds a PostgreSQL `LISTEN messenger_messages` connection and runs an `UNLISTEN` in its
@@ -46,7 +41,7 @@ use Throwable;
  *    exception the transport itself raises keeps the drop tied to the origin rather than the process,
  *    and a process gains tenants while an origin does not.
  */
-final class SentryEventFilter
+final readonly class SentryEventFilter
 {
     /**
      * The Doctrine Messenger transport connection that issues the worker's `LISTEN`/`UNLISTEN
@@ -57,17 +52,16 @@ final class SentryEventFilter
 
     private const string MESSENGER_CONSUME_COMMAND = 'messenger:consume';
 
+    public function __construct(
+        private ExpectedClientError $expectedClientError = new ExpectedClientError(),
+    ) {
+    }
+
     public function __invoke(Event $event, ?EventHint $hint): ?Event
     {
         $throwable = $hint?->exception;
 
-        // Deliberate: only the top-level throwable is inspected, not the getPrevious() chain.
-        // ClientError is thrown solely in HTTP request flows today, reaching the kernel
-        // unwrapped — so a top-level check suffices. A ClientError surfacing WRAPPED (e.g. a
-        // Messenger HandlerFailedException around one) is not self-evidently noise: in async it
-        // can signal a malformed message, a publisher bug, or cross-context drift worth seeing.
-        // Revisit (chain-walk vs. keep dropping) only when such a case actually occurs.
-        if ($throwable instanceof ClientError) {
+        if ($throwable instanceof Throwable && $this->expectedClientError->isExpected($event, $throwable)) {
             return null;
         }
 

@@ -6,8 +6,7 @@
 > close it once it stays silent.
 > Siblings: [`sentry-boot-probe-noise.md`](./sentry-boot-probe-noise.md) (a
 > *different* dev-lifecycle Sentry flood, fixed) and
-> [`sentry-domain-error-filtering.md`](./sentry-domain-error-filtering.md)
-> (deferred 4xx noise tuning). The performance-tracing side of the same worker is
+> [`api-error-contract.md`](../api-error-contract.md) → "Client-error suppression in Sentry" (expected 4xx noise). The performance-tracing side of the same worker is
 > covered in [`deployment-guide.md`](../deployment-guide.md) ("Performance tracing
 > & the messenger worker").
 
@@ -190,8 +189,7 @@ a recurring staleness that only a volume drop fixes, and the recurrence is what 
 4. **Do not filter this in Sentry yet.** Apply the fix first. If
    `ERPIFY-API-DEV-7` stays silent for a few weeks, then decide whether a filter
    is even worth it — masking it now would only hide whether the fix worked. (Per
-   the repo rule against papering over findings; cf.
-   [`sentry-domain-error-filtering.md`](./sentry-domain-error-filtering.md).)
+   the repo rule against papering over findings.)
 
 ## Triage of the historical issue
 

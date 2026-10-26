@@ -1,8 +1,7 @@
 # Sentry — silencing the container boot DB-probe flood (fixed)
 
 > **Status:** FIXED in [`api/frankenphp/docker-entrypoint.sh`](../../api/frankenphp/docker-entrypoint.sh).
-> Sibling note: [`sentry-domain-error-filtering.md`](./sentry-domain-error-filtering.md)
-> (a *different*, still-deferred decision about 4xx `domain_error` noise).
+> Expected 4xx noise is a *different* mechanism: [`api-error-contract.md`](../api-error-contract.md) → "Client-error suppression in Sentry".
 
 ## Symptom
 

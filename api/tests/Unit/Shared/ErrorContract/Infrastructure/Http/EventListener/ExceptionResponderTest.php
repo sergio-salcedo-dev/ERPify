@@ -20,6 +20,7 @@ use Psr\Log\LogLevel;
 use Psr\Log\NullLogger;
 use ReflectionClass;
 use RuntimeException;
+use Sentry\State\HubInterface;
 use Stringable;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpFoundation\Request;
@@ -857,6 +858,61 @@ final class ExceptionResponderTest extends TestCase
         $this->assertSame('factory boom', $context['self_failure_message']);
     }
 
+    public function testLastResortHandsTheSelfFailureToTheErrorTracker(): void
+    {
+        // The original here is a NotFound, which `before_send` drops; the self-failure is the only
+        // trace of a 4xx that became a 500, so it must reach the tracker on its own.
+        $captured = [];
+        $errorTracker = $this->createMock(HubInterface::class);
+        $errorTracker->expects($this->once())
+            ->method('captureException')
+            ->willReturnCallback(static function (Throwable $throwable) use (&$captured): null {
+                $captured[] = $throwable;
+
+                return null;
+            })
+        ;
+        $exceptionResponder = $this->makeListener(
+            logger: new NullLogger(),
+            factoryLogger: $this->throwingLogger('factory boom'),
+            errorTracker: $errorTracker,
+        );
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
+        };
+
+        $exceptionResponder($this->makeEvent('/api/v1/anything', $exception));
+
+        $this->assertCount(1, $captured);
+        $this->assertInstanceOf(UnexpectedValueException::class, $captured[0]);
+        $this->assertSame('factory boom', $captured[0]->getMessage());
+    }
+
+    public function testLastResortResponseSurvivesABrokenErrorTracker(): void
+    {
+        $errorTracker = $this->createStub(HubInterface::class);
+        $errorTracker->method('captureException')->willThrowException(new RuntimeException('tracker boom'));
+        $exceptionResponder = $this->makeListener(
+            logger: new NullLogger(),
+            factoryLogger: $this->throwingLogger('factory boom'),
+            errorTracker: $errorTracker,
+        );
+        $contextProxy = ['proxy' => static fn (): int => 1];
+        $exception = new class ('', 'x', $contextProxy) extends DomainException implements NotFound {
+        };
+        $exceptionEvent = $this->makeEvent('/api/v1/anything', $exception);
+
+        $exceptionResponder($exceptionEvent);
+
+        $response = $exceptionEvent->getResponse();
+        $this->assertInstanceOf(Response::class, $response);
+        $this->assertSame(
+            Response::HTTP_INTERNAL_SERVER_ERROR,
+            $response->getStatusCode(),
+            (string) $response->getContent(),
+        );
+    }
+
     public function testLastResortPathSurvivesBrokenLogger(): void
     {
         // Both logger sinks throw: the factory's (forces fromThrowable to throw) AND the
@@ -1033,6 +1089,7 @@ final class ExceptionResponderTest extends TestCase
     private function makeListener(
         ?LoggerInterface $logger = null,
         ?LoggerInterface $factoryLogger = null,
+        ?HubInterface $errorTracker = null,
     ): ExceptionResponder {
         // The listener owns the BufferingLogger under test; the factory's PSR-3 sink is wired
         // separately to a NullLogger so any sentinel emissions from `applyUnserializableSentinel`
@@ -1049,6 +1106,7 @@ final class ExceptionResponderTest extends TestCase
             new ProblemDetailsResponder(),
             $logger ?? new BufferingLogger(),
             new ApiRequestMatcher(),
+            $errorTracker,
         );
     }
 

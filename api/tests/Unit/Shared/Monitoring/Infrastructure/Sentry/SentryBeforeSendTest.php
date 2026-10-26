@@ -28,7 +28,10 @@ final class SentryBeforeSendTest extends TestCase
             },
         ]);
 
-        $this->assertNotInstanceOf(Event::class, $this->beforeSend()(Event::createEvent(), $hint));
+        $event = Event::createEvent();
+        $event->setRequest(['url' => 'https://erpify.test/api/v1/banks/1', 'method' => 'DELETE']);
+
+        $this->assertNotInstanceOf(Event::class, $this->beforeSend()($event, $hint));
     }
 
     public function testKeepsAndScrubsNonClientErrorEvent(): void
