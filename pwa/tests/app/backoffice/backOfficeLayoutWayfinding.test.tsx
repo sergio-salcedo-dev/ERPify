@@ -221,7 +221,7 @@ describe("BackOfficeLayoutClient go-to palette", () => {
     const input = await openWithShortcut();
     const status = screen.getByTestId("go-to-palette__status");
 
-    expect(status).toHaveAttribute("role", "status");
+    expect(screen.getAllByRole("status")).toContain(status);
     expect(status).toBeEmptyDOMElement();
 
     fireEvent.change(input, { target: { value: "banks" } });
