@@ -98,15 +98,21 @@ final class TrigramIndexSchemaFunctionalTest extends KernelTestCase
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
         $this->assertInstanceOf(Connection::class, $connection);
 
+        // The first key is spelled by name or, for an expression, by its definition, and a second key is
+        // appended, so neither an expression nor an extra column can compare equal to a one-column
+        // declaration. Any key under a trigram operator class selects the index, not only the first.
         $rows = $connection->fetchAllKeyValue(
-            "SELECT c.relname, t.relname || ' ' || am.amname || ' ' || a.attname || ' ' || oc.opcname "
+            "SELECT c.relname, t.relname || ' ' || am.amname || ' ' "
+            . '|| COALESCE(a.attname, pg_get_indexdef(i.indexrelid, 1, true)) '
+            . "|| ' ' || oc.opcname || CASE WHEN i.indnatts > 1 THEN ' +' || (i.indnatts - 1) ELSE '' END "
             . 'FROM pg_index i '
             . 'JOIN pg_class c ON c.oid = i.indexrelid '
             . 'JOIN pg_class t ON t.oid = i.indrelid '
             . 'JOIN pg_am am ON am.oid = c.relam '
             . 'JOIN pg_opclass oc ON oc.oid = i.indclass[0] '
             . 'LEFT JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0] '
-            . "WHERE oc.opcname IN ('gin_trgm_ops', 'gist_trgm_ops') OR c.relname LIKE '%\\_trgm'",
+            . "WHERE c.relname LIKE '%\\_trgm' OR EXISTS (SELECT 1 FROM unnest(i.indclass) AS k(opclass) "
+            . "JOIN pg_opclass o ON o.oid = k.opclass WHERE o.opcname IN ('gin_trgm_ops', 'gist_trgm_ops'))",
         );
 
         $migrated = [];

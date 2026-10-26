@@ -325,6 +325,38 @@ final class FilterApplierTest extends KernelTestCase
         $this->assertCount(1, $queryBuilder->getParameters());
     }
 
+    /**
+     * "ㅇ" (U+3147) passes every Unicode-aware blank check and folds to "" under the ICU rule, so a caller can
+     * send it: it is client input and must be the blank-value 422, never an exception the pipeline turns 500.
+     */
+    public function testAValueThatFoldsToBlankIsRejectedAsABlankSearchValue(): void
+    {
+        try {
+            $this->filterApplier->apply(
+                $this->bankQueryBuilder(),
+                Filters::fromList([Filter::contains('name', 'ㅇ')]),
+                $this->bankFieldMap(),
+            );
+            $this->fail('Expected InvalidSearchValue to be thrown.');
+        } catch (InvalidSearchValue $invalidSearchValue) {
+            $this->assertSame(['field' => 'name', 'position' => 0], $invalidSearchValue->context());
+        }
+    }
+
+    public function testAListItemThatFoldsToBlankIsRejectedWithItsPosition(): void
+    {
+        try {
+            $this->filterApplier->apply(
+                $this->bankQueryBuilder(),
+                Filters::fromList([Filter::in('name', ['Société Générale', 'ㅇ'])]),
+                $this->bankFieldMap(),
+            );
+            $this->fail('Expected InvalidSearchValue to be thrown.');
+        } catch (InvalidSearchValue $invalidSearchValue) {
+            $this->assertSame(['field' => 'name', 'position' => 1], $invalidSearchValue->context());
+        }
+    }
+
     public function testEmptyInListIsRejectedAsProgrammerError(): void
     {
         $this->expectException(InvalidArgumentException::class);

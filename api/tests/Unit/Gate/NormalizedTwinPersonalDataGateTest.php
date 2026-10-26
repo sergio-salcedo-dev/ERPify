@@ -54,7 +54,7 @@ final class NormalizedTwinPersonalDataGateTest extends TestCase
         }
 
         foreach ($pairs as $twin => [$class, $field]) {
-            $this->assertTrue($class->hasProperty($field), \sprintf(
+            $this->assertArrayHasKey($field, $this->propertiesOf($class), \sprintf(
                 '%s folds a field named "%s", which %s does not declare. Name the twin after the field it '
                 . 'folds, so its classification can be compared with that field\'s.',
                 $twin,
@@ -62,8 +62,8 @@ final class NormalizedTwinPersonalDataGateTest extends TestCase
                 $class->getName(),
             ));
 
-            $fieldIsPersonal = $this->isPersonal($class->getProperty($field));
-            $twinIsPersonal = $this->isPersonal($class->getProperty($field . self::SUFFIX));
+            $fieldIsPersonal = $this->isPersonal($this->propertyOf($class, $field));
+            $twinIsPersonal = $this->isPersonal($this->propertyOf($class, $field . self::SUFFIX));
 
             $this->assertSame($fieldIsPersonal, $twinIsPersonal, \sprintf(
                 '%s and the field it folds disagree on #[PersonalData] (field: %s, twin: %s). A twin is a copy '
@@ -84,12 +84,6 @@ final class NormalizedTwinPersonalDataGateTest extends TestCase
         $pairs = [];
 
         foreach (ApiSourceFiles::phpFiles($root) as $file) {
-            $source = \file_get_contents($file->getPathname());
-
-            if (false === $source || !\str_contains($source, 'ORM\Entity')) {
-                continue;
-            }
-
             $relative = \substr($file->getPathname(), \strlen($root) + 1, -\strlen('.php'));
             $fqcn = 'Erpify\\' . \str_replace('/', '\\', $relative);
 
@@ -103,24 +97,70 @@ final class NormalizedTwinPersonalDataGateTest extends TestCase
                 continue;
             }
 
-            foreach ($class->getProperties() as $property) {
-                $name = $property->getName();
-
-                if (
-                    !\str_ends_with($name, self::SUFFIX)
-                    || self::SUFFIX === $name
-                    || [] === $property->getAttributes(Column::class)
-                ) {
-                    continue;
-                }
-
-                $pairs[$fqcn . '::$' . $name] = [$class, \substr($name, 0, -\strlen(self::SUFFIX))];
+            foreach ($this->twinsOf($class) as $twin => $field) {
+                $pairs[$fqcn . '::$' . $twin] = [$class, $field];
             }
         }
 
         \ksort($pairs);
 
         return $pairs;
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     *
+     * @return array<string, string> mapped `<field>Normalized` property => the field it folds
+     */
+    private function twinsOf(ReflectionClass $class): array
+    {
+        $twins = [];
+
+        foreach ($this->propertiesOf($class) as $name => $property) {
+            if (
+                !\str_ends_with($name, self::SUFFIX)
+                || self::SUFFIX === $name
+                || [] === $property->getAttributes(Column::class)
+            ) {
+                continue;
+            }
+
+            $twins[$name] = \substr($name, 0, -\strlen(self::SUFFIX));
+        }
+
+        return $twins;
+    }
+
+    /**
+     * Every property of the class and its ancestors, keyed by name, nearest declaration first. Reflection
+     * hides a parent's private properties from the child, and a twin mapped on a parent is still mapped.
+     *
+     * @param ReflectionClass<object> $class
+     *
+     * @return array<string, ReflectionProperty>
+     */
+    private function propertiesOf(ReflectionClass $class): array
+    {
+        $properties = [];
+
+        for ($current = $class; false !== $current; $current = $current->getParentClass()) {
+            foreach ($current->getProperties() as $property) {
+                $properties[$property->getName()] ??= $property;
+            }
+        }
+
+        return $properties;
+    }
+
+    /**
+     * @param ReflectionClass<object> $class
+     */
+    private function propertyOf(ReflectionClass $class, string $name): ReflectionProperty
+    {
+        $property = $this->propertiesOf($class)[$name] ?? null;
+        $this->assertInstanceOf(ReflectionProperty::class, $property);
+
+        return $property;
     }
 
     private function isPersonal(ReflectionProperty $property): bool

@@ -93,10 +93,11 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
             'alias' => new FieldMapping('ba.alias'),
             // Human bank search: one CONTAINS over the joined bank's name AND its short code, so a
             // single query box matches either. Both halves are in the folded form the normalizer gives the
-            // term — the name's lower-case ASCII twin, and the short code, already upper-case ASCII, lowered
-            // — so the match ignores case and accents ("credit" finds "Crédit Agricole"). The space separator
-            // keeps a term from spanning the two columns; shortName is non-null, so no COALESCE is needed.
-            // Exact bankId stays available for machine/deep-link callers.
+            // term — the name's folded twin, and the short code, stored upper-case ASCII, lowered — so the
+            // match ignores case and accents ("credit" finds "Crédit Agricole"). The space separator keeps a
+            // term without a space from spanning the two columns; one with a space can ("agricole aca").
+            // shortName is non-null, so no COALESCE is needed. Exact bankId stays available for
+            // machine/deep-link callers.
             'bank' => new FieldMapping(
                 "CONCAT(b.nameNormalized, ' ', LOWER(b.shortName))",
                 $this->normalizedText,

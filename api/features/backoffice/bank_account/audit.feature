@@ -104,9 +104,10 @@ Feature: Audit the access to a bank's accounts
     """
 
   # E2: a write of a BankAccount is captured as a crypto-shredded `change` row. Its personal-data fields
-  # (holderName, its folded twin holderNameNormalized, iban) travel encrypted under a per-subject key, so
-  # `jsonb_typeof` sees the sealed `{"__enc__": …}` marker (an object), never a plaintext string; non-PII
-  # (bic) stays in clear and the row references its encryption scope. The onFlush capture commits synchronously inside the write transaction.
+  # (holderName, its folded twin holderNameNormalized, iban, alias) travel encrypted under a per-subject
+  # key, so `jsonb_typeof` sees the sealed `{"__enc__": …}` marker (an object), never a plaintext string;
+  # non-PII (bic) stays in clear and the row references its encryption scope. The onFlush capture commits
+  # synchronously inside the write transaction.
   Scenario: Creating a bank account records a crypto-shredded BANK_ACCOUNT_CREATED change row
     Given I add "Content-Type" header equal to "application/json"
     And I add "Accept" header equal to "application/json"

@@ -48,8 +48,7 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
      *
      * Personal data like the name it folds: the change capture diffs every mapped field, so an unclassified
      * twin would land in `audit_log` in clear. `TEXT` because folding can lengthen a name ("ß" -> "ss"). The
-     * default is for writers that do not name the column — an image predating it, a raw-SQL seed — whose rows
-     * the filter does not match until an edit changes the holder.
+     * default exists for writers that do not name the column, such as an image predating it.
      */
     #[ORM\Column(type: Types::TEXT, options: ['default' => ''])]
     #[PersonalData]
@@ -248,6 +247,15 @@ final class BankAccount extends AggregateRoot implements AuditedEntity
     public function getHolderName(): string
     {
         return $this->holderName;
+    }
+
+    /**
+     * Read accessor for the accent-folded, lower-cased holder name the `holderName` filter matches. It is never
+     * mapped to a resource: the wire carries the name as typed.
+     */
+    public function getHolderNameNormalized(): string
+    {
+        return $this->holderNameNormalized;
     }
 
     public function getAlias(): ?string

@@ -127,17 +127,15 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
             // sealer stores a null unsealed, so leaving it unset is what let it go unasserted everywhere.
             $firstAlias = 'Nomina Ana';
             $secondAlias = 'Nomina Bruno';
-            $em->persist(
-                BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, 'CAIXESBBXXX', $firstAlias),
-            );
-            $em->persist(
-                BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, 'DEUTDEFFXXX', $secondAlias),
-            );
+            $ana = BankAccount::create($firstId, $bankId, $firstHolder, $firstIban, 'CAIXESBBXXX', $firstAlias);
+            $bruno = BankAccount::create($secondId, $bankId, $secondHolder, $secondIban, 'DEUTDEFFXXX', $secondAlias);
+            $em->persist($ana);
+            $em->persist($bruno);
             $em->flush(); // one flush, two mints
 
             $encryptor = $this->encryptor();
-            $firstPii = ['holderName' => $firstHolder, 'iban' => $firstIban, 'alias' => $firstAlias];
-            $secondPii = ['holderName' => $secondHolder, 'iban' => $secondIban, 'alias' => $secondAlias];
+            $firstPii = $this->storedPersonalData($ana);
+            $secondPii = $this->storedPersonalData($bruno);
             $first = $this->sealedPiiOf($connection, $firstId, $firstPii);
             $second = $this->sealedPiiOf($connection, $secondId, $secondPii);
 
@@ -181,14 +179,22 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
      * a leak: the plaintext search catches a value written in clear, and {@see sealedCiphertext} catches a
      * field that never reached the diff at all — which the search alone would report as success.
      *
-     * The caller passes all three `#[PersonalData]` properties of the aggregate, `alias` included. It is the
-     * one a null fixture hides — the sealer stores a null unsealed, so a test that leaves it unset asserts
-     * nothing about it in either direction, which is how it came to be covered nowhere in the suite.
+     * The caller passes all four `#[PersonalData]` properties of the aggregate, `alias` and the folded
+     * `holderNameNormalized` included. `alias` is the one a null fixture hides — the sealer stores a null
+     * unsealed, so a test that leaves it unset asserts nothing about it in either direction. The folded twin
+     * is the one a search for the holder's name misses: "ana ruiz" in clear does not contain "Ana Ruiz".
      *
-     * @param array{holderName: string, iban: string, alias: string} $personal the plaintexts the aggregate
+     * @param array{holderName: string, holderNameNormalized: string, iban: string, alias: string} $personal
+     *                                                                         the plaintexts the aggregate
      *                                                                         stored, keyed by field
      *
-     * @return array{auditLogId: string, holderName: string, iban: string, alias: string}
+     * @return array{
+     *     auditLogId: string,
+     *     holderName: string,
+     *     holderNameNormalized: string,
+     *     iban: string,
+     *     alias: string,
+     * }
      */
     private function sealedPiiOf(Connection $connection, string $accountId, array $personal): array
     {
@@ -216,8 +222,28 @@ final class BankAccountAuditCryptoShreddingFunctionalTest extends KernelTestCase
         return [
             'auditLogId' => $auditLogId,
             'holderName' => $this->sealedCiphertext($decoded, 'holderName'),
+            'holderNameNormalized' => $this->sealedCiphertext($decoded, 'holderNameNormalized'),
             'iban' => $this->sealedCiphertext($decoded, 'iban'),
             'alias' => $this->sealedCiphertext($decoded, 'alias'),
+        ];
+    }
+
+    /**
+     * The plaintexts the aggregate stored, keyed by `#[PersonalData]` field: read back from it rather than
+     * restated, so the folded twin is the value the aggregate computed.
+     *
+     * @return array{holderName: string, holderNameNormalized: string, iban: string, alias: string}
+     */
+    private function storedPersonalData(BankAccount $account): array
+    {
+        $alias = $account->getAlias();
+        $this->assertIsString($alias);
+
+        return [
+            'holderName' => $account->getHolderName(),
+            'holderNameNormalized' => $account->getHolderNameNormalized(),
+            'iban' => $account->getIban(),
+            'alias' => $alias,
         ];
     }
 

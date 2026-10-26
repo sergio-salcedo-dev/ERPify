@@ -36,12 +36,13 @@ search side (`NormalizedTextFieldNormalizer`).
 
 - **Uniqueness → the twin is `UNIQUE`, `COLLATE "C"`** (`bank.name_normalized`). A code whose canonical form is
   upper-case ASCII has no twin: it is stored canonical (`NormalizedText::toAsciiUpper()`, `bank.short_name`).
-- **A person's name is never unique** — two holders, customers or workers can share one. Its twin is plain
-  `TEXT DEFAULT ''` (folding can lengthen a name; the default keeps an older image's `INSERT` working) with a
-  GIN trigram index, because `contains` is `LIKE '%term%'` and no B-tree serves it (measured on 500k rows:
-  45 ms sequential, 3 ms with the index). Declare it as `#[ORM\Index]` under a name ending in `_trgm`, build it
-  in the migration as `USING gin (<col> gin_trgm_ops)` — DBAL models neither — and map the search field to
-  the twin with the normalizer. `bank_account.holder_name_normalized` is the worked example.
+- **A person's name is never unique** — two holders, customers or workers can share one. Its twin is plain `TEXT
+  DEFAULT ''` (folding can lengthen a name; the default keeps an older image's `INSERT` working) with a GIN
+  trigram index, because `contains` is `LIKE '%term%'` and no B-tree serves it (measured on 500k rows: 45 ms
+  sequential, 3 ms with the index; a term under three characters has no trigram and still scans). Declare it as
+  `#[ORM\Index]` under a name ending in `_trgm`, build it in the migration as `USING gin (<col> gin_trgm_ops)` —
+  DBAL models neither — and map the search field to the twin with the normalizer.
+  `bank_account.holder_name_normalized` is the worked example.
 - **The twin is classified like its field.** A twin of a `#[PersonalData]` field is `#[PersonalData]`: the
   change capture diffs every mapped column and seals only classified ones, so an unclassified twin writes
   the person's name to `audit_log` in clear.
@@ -49,7 +50,9 @@ search side (`NormalizedTextFieldNormalizer`).
   Greek untransliterated and is `STABLE`, so it reaches an index only through an `IMMUTABLE` wrapper that
   breaks silently when its rules file changes. A nondeterministic collation makes `UNIQUE` work on the
   display column, but `LIKE` over it uses no index and it cannot serve the byte-ordered keyset sort. Either
-  would also split the fold between PHP and SQL. `unaccent` is the right tool only for full-text search
+  would also split the fold between PHP and SQL. The price of folding in PHP is that a writer bypassing the
+  aggregate — an older image, a raw-SQL seed — leaves the twin at `''`, unmatched until the row's next edit
+  that is not a no-op. `unaccent` is the right tool only for full-text search
   (`tsvector`, chained before `spanish_stem`), which nothing here does yet.
 
 Gates: `NormalizedTwinPersonalDataGateTest` (every `*Normalized` column is classified like its field) and

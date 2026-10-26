@@ -19,13 +19,13 @@ use Erpify\Shared\Kernel\Domain\ValueObject\NormalizedText;
  * `addSql()` so the holders' names never appear in the migration's SQL output.
  *
  * The column keeps `DEFAULT ''`: an image predating it inserts without naming it, and `NOT NULL` with no
- * default would refuse that insert (`MigrationColumnDefaultGateTest`). The filter does not match such a row
- * until an edit changes its holder.
+ * default would refuse that insert (`MigrationColumnDefaultGateTest`).
  *
  * DBAL models neither the access method nor the operator class of an index, so the mapping declares the
  * index by name and columns only and `TrigramIndexSchemaFunctionalTest` pins what this migration builds.
  *
- * `down()` drops the index and the column, then the extension if nothing else uses it.
+ * `down()` drops the index and the column and leaves `pg_trgm` installed: `up()` may have found it already
+ * there, and dropping it fails outright once any other object depends on it.
  */
 final class Version20261026120000 extends AbstractMigration
 {
@@ -73,6 +73,5 @@ final class Version20261026120000 extends AbstractMigration
     {
         $this->addSql('DROP INDEX IF EXISTS idx_bank_account_holder_name_trgm');
         $this->addSql('ALTER TABLE bank_account DROP COLUMN IF EXISTS holder_name_normalized');
-        $this->addSql('DROP EXTENSION IF EXISTS pg_trgm RESTRICT');
     }
 }

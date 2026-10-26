@@ -21,6 +21,9 @@ final class BankAccountPersonalDataTest extends TestCase
     {
         $classifier = new ReflectionPersonalDataClassifier();
 
-        $this->assertSame(['alias', 'holderName', 'holderNameNormalized', 'iban'], $classifier->personalFieldsOf(BankAccount::class));
+        $this->assertSame(
+            ['alias', 'holderName', 'holderNameNormalized', 'iban'],
+            $classifier->personalFieldsOf(BankAccount::class),
+        );
     }
 }
