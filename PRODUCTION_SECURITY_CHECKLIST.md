@@ -2368,17 +2368,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       expires_at > now` and so answers null for all three causes. Closing it needs frequency alert rules on
       those issues plus a rate limit per issue, and — for the revoked-cookie case — a gate that tells revoked
       from expired and emits a deduplicated security event carrying no session id.
-      **Accepted 2026-10-26 (Sergio):** no customer, and the Sentry organisation is on the free plan, so no
-      alert rule and no per-issue rate limit is configured. The control in their place is **triage by hand**:
-      every issue is read, and none is resolved without a comment on it stating why it occurred and how it is
-      handled — the PR that fixed it, or why it is expected and what already answers it. That comment trail is
-      the data this entry's alert rules are to be designed from: which issues recur, at what volume, and which
-      of them ever meant an attack. Sentry ages events out after the plan's retention window, so each verdict
-      is also a row in the ledger of [`docs/runbooks/sentry-issue-triage.md`](docs/runbooks/sentry-issue-triage.md),
-      which holds the procedure. What it does not buy is detection while nobody is looking, and the quota
-      burst is unbounded: a guessing run can spend the month's events and hide every later issue until the
-      quota resets. Re-assess before the first customer, on leaving the free plan, or the first time the
-      quota runs out.
+      **Accepted 2026-10-26 (Sergio):** no customer, and the Sentry organisation is on the free plan, so no alert
+      rule and no per-issue rate limit is configured. The control in their place is **triage by hand**: every issue
+      is read, and none is resolved without a comment on it stating why it occurred and how it is handled — the PR
+      that fixed it, or why it is expected and what already answers it — swept at least weekly and before every
+      deploy, inside the retention window. That comment trail is the data this entry's alert rules are to be
+      designed from: which issues recur, at what volume, and which of them ever meant an attack. Sentry ages events
+      out after the plan's retention window, so each verdict is also a row in the ledger of
+      [`docs/runbooks/sentry-issue-triage.md`](docs/runbooks/sentry-issue-triage.md), which holds the procedure.
+      What it does not buy is detection while nobody is looking, and the quota burst is unbounded: a guessing run
+      can spend the month's events and hide every later issue until the quota resets. Each sweep reads the
+      organisation's dropped-event stats first, because nothing else would notice the quota running out. Re-assess
+      before the first customer, on leaving the free plan, or the first time a sweep finds the quota spent.
 
 ## 8. Deploy & verify
 
