@@ -69,6 +69,11 @@ ENV NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV}
 ARG NEXT_PUBLIC_SENTRY_DSN=
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 
+# Sentry `environment` override, public (a tag). Empty falls back to NEXT_PUBLIC_APP_ENV; the local
+# prod rehearsal sets `rehearsal` so its events never read as production's.
+ARG NEXT_PUBLIC_SENTRY_ENVIRONMENT=
+ENV NEXT_PUBLIC_SENTRY_ENVIRONMENT=${NEXT_PUBLIC_SENTRY_ENVIRONMENT}
+
 # Sentry source-map upload. The org and the project slug are not secrets, so
 # they are ordinary build args; the project defaults to the per-environment
 # slug next.config.ts derives (erpify-pwa-dev / erpify-pwa-prod).

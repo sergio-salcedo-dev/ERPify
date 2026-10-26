@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Monitoring\Infrastructure\Sentry;
 
+use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
+use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
+use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
+use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\Http\Infrastructure\UnknownPayloadMemberListener;
 use Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter;
@@ -15,6 +20,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use ReflectionClass;
 use RuntimeException;
 use Sentry\Event;
 use Sentry\EventHint;
@@ -34,9 +40,9 @@ use Symfony\Component\Validator\Exception\ValidationFailedException;
 use Throwable;
 
 /**
- * The client-error half of {@see SentryEventFilter}, held against the error contract: only a domain
- * `ClientError` on an HTTP request is dropped, the framework's own 4xx are reported, and nothing the
- * contract answers with a non-4xx status is ever hidden.
+ * The client-error half of {@see SentryEventFilter}, held against the error contract: the security
+ * signals and the framework's own 4xx are reported, and nothing the contract answers with a non-4xx
+ * status is ever hidden. What it drops is {@see SentryEventFilterDroppedOutcomeTest}'s.
  *
  * The coupling is the corpus itself — one throwable type per bridge the factory maps.
  *
@@ -47,11 +53,6 @@ use Throwable;
 #[CoversClass(SentryEventFilter::class)]
 final class SentryEventFilterClientErrorTest extends TestCase
 {
-    public function testDropsADomainClientErrorOnAnHttpRequest(): void
-    {
-        $this->assertNotInstanceOf(Event::class, $this->filter($this->httpEvent(), self::domainNotFound()));
-    }
-
     #[DataProvider('provideReportsFrameworkClientErrorOnAnHttpRequestCases')]
     public function testReportsFrameworkClientErrorOnAnHttpRequest(Throwable $throwable): void
     {
@@ -84,6 +85,71 @@ final class SentryEventFilterClientErrorTest extends TestCase
         yield 'validation failure (422)' => [new ValidationFailedException('value', new ConstraintViolationList())];
         yield 'unsupported media type (415)' => [new UnsupportedMediaTypeHttpException()];
         yield 'unknown payload member (422)' => [new ExtraAttributesException(['surplus'])];
+    }
+
+    #[DataProvider('provideReportsADomainSecuritySignalOnAnHttpRequestCases')]
+    public function testReportsADomainSecuritySignalOnAnHttpRequest(DomainException $exception): void
+    {
+        $event = $this->httpEvent();
+
+        $this->assertSame($event, $this->filter($event, $exception));
+    }
+
+    /**
+     * A failed proof, a lockout and a throttle answer 4xx and are still reported: their spike is the
+     * attack. Beside an expected-outcome marker the signal wins.
+     *
+     * @return iterable<string, array{DomainException}>
+     */
+    public static function provideReportsADomainSecuritySignalOnAnHttpRequestCases(): iterable
+    {
+        yield 'unauthenticated (401)' => [
+            new class ('wrong-current-password', 'no') extends DomainException implements Unauthenticated {
+            },
+        ];
+        yield 'forbidden (403)' => [
+            new class ('account-locked', 'locked') extends DomainException implements Forbidden {
+            },
+        ];
+        yield 'rate limited (429)' => [
+            new class ('rate-limited', 'slow down') extends DomainException implements RateLimited {
+            },
+        ];
+        yield 'forbidden beside not found' => [
+            new class ('hidden', 'no') extends DomainException implements NotFound, Forbidden {
+                public const string TYPE = 'hidden';
+            },
+        ];
+    }
+
+    /**
+     * A marker added to the error contract is classified here before it is dropped or kept by accident:
+     * every `ClientError` marker sits on exactly one of the filter's two lists.
+     */
+    public function testEveryClientErrorMarkerIsClassified(): void
+    {
+        $clientError = new ReflectionClass(ClientError::class);
+        $directory = \dirname((string) $clientError->getFileName());
+        $markers = [];
+
+        foreach (\glob($directory . '/*.php') ?: [] as $file) {
+            $class = 'Erpify\Shared\ErrorContract\Domain\Exception\\' . \basename($file, '.php');
+
+            if (\interface_exists($class) && ClientError::class !== $class && \is_a($class, ClientError::class, true)) {
+                $markers[] = $class;
+            }
+        }
+
+        $this->assertNotSame([], $markers);
+
+        foreach ($markers as $marker) {
+            $this->assertSame(
+                1,
+                (int) \in_array($marker, SentryEventFilter::EXPECTED_OUTCOME_MARKERS, true)
+                    + (int) \in_array($marker, SentryEventFilter::SIGNAL_MARKERS, true),
+                \sprintf("%s must sit on exactly one of the Sentry filter's marker lists.", $marker),
+            );
+        }
     }
 
     public function testKeepsADomainClientErrorRaisedOutsideAnHttpRequest(): void
@@ -151,6 +217,10 @@ final class SentryEventFilterClientErrorTest extends TestCase
             new class ('down', 'store down') extends DomainException implements ServiceUnavailable {
             },
         ];
+        yield from self::provideReportsADomainSecuritySignalOnAnHttpRequestCases();
+        yield 'session no longer active (401)' => [SessionNoLongerActive::forRequest()];
+        yield from SentryEventFilterDroppedOutcomeTest::provideDropsAnExpectedOutcomeOnAnHttpRequestCases();
+        yield from SentryEventFilterDroppedOutcomeTest::provideReportsARoutineOutcomeOnANonClientStatusCases();
         yield 'client marker beside service unavailable (503)' => [
             new class ('down', 'store down') extends DomainException implements ServiceUnavailable, NotFound {
                 public const string TYPE = 'store-down';

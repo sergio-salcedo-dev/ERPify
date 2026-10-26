@@ -21,10 +21,11 @@
 # The listener captures EVERYTHING, including expected 4xx domain outcomes (a 409
 # bank-in-use, a 422 validation error) — user/state errors, not actionable faults.
 # So `before_send` (SentryBeforeSend) DROPS, on an HTTP request, every DomainException
-# implementing the `ClientError` marker before transmission, then scrubs PII on what remains. 5xx
-# paths (a marker-less DomainException → unhandled-exception, or any non-domain
-# throwable) are not ClientError and still flow through, and so do the framework's own
-# 4xx (Security 401/403, validation 422) and a ClientError raised in the messenger worker.
+# carrying an expected-outcome marker (404/409/422/400) or the RoutineOutcome marker (an
+# expired session's 401), then scrubs PII on what remains. Everything else flows through:
+# 5xx paths, the domain security signals (Unauthenticated 401, Forbidden 403, RateLimited
+# 429), the framework's own 4xx (Security 401/403, validation 422) and anything raised in
+# the messenger worker. The full rule is SentryEventFilter's docblock.
 # See docs/api-error-contract.md.
 
 # Dev: errors + 100% performance tracing (local profiling — N+1, slow queries,

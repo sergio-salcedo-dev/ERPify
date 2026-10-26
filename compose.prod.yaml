@@ -99,6 +99,8 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?NEXT_PUBLIC_API_BASE_URL is required in prod}
         NEXT_PUBLIC_APP_ENV: ${NEXT_PUBLIC_APP_ENV:-prod}
         NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:?NEXT_PUBLIC_SENTRY_DSN is required in prod (erpify-pwa-prod DSN)}
+        # The same SENTRY_ENVIRONMENT the API services read, so one line tags both deployables.
+        NEXT_PUBLIC_SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
         # Not secrets — an org and a project slug. The token is NOT here on
         # purpose: a build arg is recorded in the image and `docker history`
         # prints it, so it rides the secret mount below instead.

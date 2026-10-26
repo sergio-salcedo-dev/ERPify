@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Session\Application;
 
 use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
-use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
+use Erpify\Iam\Session\Domain\Exception\SessionEvictedBeforeRevocation;
 use Erpify\Iam\Session\Domain\Repository\SessionRepository;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\Clock;
@@ -28,7 +28,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * has already been evicted revoke the one that evicted it, which turns "sign out my other devices" into a race
  * a stolen session wins by firing continuously. So the user's active set is locked first, in the order every
  * locker of it uses, and a caller whose row is no longer in it is refused with the gate's own 401 and revokes
- * nothing.
+ * nothing — through an exception of its own, because this refusal is rare where the gate's is routine.
  */
 final readonly class RevokeOtherSessions
 {
@@ -41,7 +41,7 @@ final readonly class RevokeOtherSessions
     }
 
     /**
-     * @throws SessionNoLongerActive when the session in hand was revoked before the lock was granted (401)
+     * @throws SessionEvictedBeforeRevocation when the session in hand was revoked before the lock was granted (401)
      */
     public function revoke(string $userId, SessionId $currentSessionId): void
     {
@@ -49,7 +49,7 @@ final readonly class RevokeOtherSessions
 
         $this->transactionManager->transactional(function () use ($userId, $currentSessionId): void {
             if (!$currentSessionId->isAmong($this->sessions->lockActiveForUser($userId))) {
-                throw SessionNoLongerActive::forRequest();
+                throw SessionEvictedBeforeRevocation::forRequest();
             }
 
             if (0 === $this->sessions->revokeOthersForUser($userId, $currentSessionId)) {

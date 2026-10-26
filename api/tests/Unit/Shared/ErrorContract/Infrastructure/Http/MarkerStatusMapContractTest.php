@@ -199,8 +199,8 @@ final class MarkerStatusMapContractTest extends TestCase
 
     /**
      * Couples the RFC 9457 marker→status table to observability. A marker is a
-     * {@see ClientError} — and so is suppressed from Sentry by
-     * {@see \Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter} — IF AND ONLY IF
+     * {@see ClientError} — the precondition for
+     * {@see \Erpify\Shared\Monitoring\Infrastructure\Sentry\SentryEventFilter} ever dropping it — IF AND ONLY IF
      * its mapped HTTP status is 4xx. This encodes the rule "4xx are expected client errors, 5xx
      * are server faults", not the weaker "every marker we have today is 4xx": the day a 5xx
      * marker joins the map it fails UNLESS that marker deliberately does NOT extend ClientError,

@@ -7,7 +7,7 @@ namespace Erpify\Tests\Unit\Iam\Session\Application;
 use Erpify\Iam\Session\Application\RevokeOtherSessions;
 use Erpify\Iam\Session\Domain\Entity\Session;
 use Erpify\Iam\Session\Domain\Event\OtherSessionsRevoked;
-use Erpify\Iam\Session\Domain\Exception\SessionNoLongerActive;
+use Erpify\Iam\Session\Domain\Exception\SessionEvictedBeforeRevocation;
 use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -102,7 +102,7 @@ final class RevokeOtherSessionsTest extends TestCase
                 SessionId::fromString(SessionMother::DEFAULT_ID),
             );
             $this->fail('Expected an evicted session to be refused.');
-        } catch (SessionNoLongerActive) {
+        } catch (SessionEvictedBeforeRevocation) {
             // 401 session-expired, the gate's own answer to a revoked session
         }
 

@@ -1,9 +1,10 @@
 # Sentry — filtering `domain_error` noise
 
-> **Status:** partly implemented. `SentryEventFilter` drops a domain `ClientError`
-> raised on an HTTP request (see [`api-error-contract.md`](../api-error-contract.md) →
-> "Client-error suppression in Sentry"); the framework's own 401/403/422 are still
-> reported, for the reasons under *The trade-off* below. The options and the
+> **Status:** partly implemented. `SentryEventFilter` drops a domain 404/409/422/400
+> and an expired session's 401 raised on an HTTP request (see
+> [`api-error-contract.md`](../api-error-contract.md) → "Client-error suppression in
+> Sentry"); the domain security signals (401/403/429) and the framework's own
+> 401/403/422 are still reported, for the reasons under *The trade-off* below. The options and the
 > sampling discussion are kept so the trade-off isn't re-derived from scratch.
 > Related: [`api-error-contract.md`](../api-error-contract.md) (the `exception_category`
 > taxonomy) and [`../_bmad-output/implementation-artifacts/deferred-work.md`](../../_bmad-output/implementation-artifacts/deferred-work.md).
