@@ -595,3 +595,29 @@ En ese momento, un cursor de un ámbito se podría reproducir sobre otro: es la 
 - Derivar la identidad de la consulta base del `QueryBuilder` DBAL, igual que hace `baseQueryIdentity()` con el DQL, e incluirla en `fingerprint()`.
 - Aceptar el 422 único sobre los cursores en vuelo del despliegue que lo introduzca, y anotarlo en el PR.
 - Añadir un test que reproduzca un cursor de un ámbito sobre otro y espere `InvalidCursor`.
+
+### DW-71: npm audit reportó 7 vulnerabilidades altas que no se reproducen en pwa/
+
+origin: sesión de mantenimiento, petición del usuario, 2026-10-26
+location: pwa/package-lock.json, pwa/node_modules
+reason: el usuario vio 7 altas en `npm audit`; sobre `main` en 3e1a856 el lockfile de pwa/ da 0, y no se sabe dónde se ejecutó el audit que dio 7.
+status: open
+severity: medium
+
+**Medido el 2026-10-26:**
+- `npm audit` en `pwa/` sobre 3e1a856: 0 vulnerabilidades en 858 dependencias. El endpoint de avisos responde: `lodash@4.17.20` devuelve su alta.
+- Las 687 versiones instaladas en `pwa/node_modules`, consultadas contra `/-/npm/v1/security/advisories/bulk`: 0 avisos.
+- Historia del lockfile: `8b7bbd4` (#1111) tenía 3 altas, `fe40884` (#1104) 4 altas y 1 moderada, `ce45691` 3 críticas, 9 altas y 8 moderadas; desde `1c8aca9` (#1112), 0. Ninguna revisión da 7.
+
+**Hipótesis, por orden:**
+1. El audit se lanzó en `tmp/sonar/`, un entorno desechable de `eslint-plugin-sonarjs` con su propio lockfile. Se borró en esta sesión y no se puede comprobar. Rehecho con las versiones de hoy da 0.
+2. La copia local de `pwa/package-lock.json` es anterior a #1112. Comprobar `git log -1 -- pwa/package-lock.json`.
+3. Son alertas de Dependabot en GitHub y no la salida de `npm audit`.
+
+**Para cerrarla:**
+- Volver a ejecutar `npm audit --json` en la máquina nueva, desde `pwa/` y después de `git pull`, y anotar la carpeta.
+- Si da 0, cerrar con `status: done` y la causa.
+- Si da altas, arreglarlas en un PR (`npm audit fix` sin `--force`, o un `overrides` justificado) y leer las versiones resueltas del lock antes de commitear.
+- Revisar también las alertas de Dependabot del repositorio.
+
+**Aparte:** el `pwa/node_modules` de esa sesión no coincidía con el lock. Sobraban `@google/genai` y `@protobufjs/*`, y `@hookform/resolvers` estaba en 5.9.1 frente a `^5.9.2`. Reinstalar con `npm ci` en el contenedor `pwa` antes de auditar.
