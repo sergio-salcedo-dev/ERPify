@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { LucideIcon, ChevronRight, ChevronDown } from "lucide-react";
+import { cn } from "@/components/cn";
 import { NavEntryLink } from "./NavEntryLink";
 
 interface SubItem<TAction extends string> {
@@ -81,14 +82,20 @@ function SidebarChevron({
   if (hasSubItems) {
     return (
       <ChevronDown
-        className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+        className={cn(
+          "sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform",
+          isOpen && "rotate-180",
+        )}
         aria-hidden
       />
     );
   }
   return (
     <ChevronRight
-      className={`sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform ${isActive ? "translate-x-0.5" : "opacity-0 group-hover:opacity-100"}`}
+      className={cn(
+        "sidebar-item__chevron w-3.5 h-3.5 shrink-0 transition-transform",
+        isActive ? "translate-x-0.5" : "opacity-0 group-hover:opacity-100",
+      )}
       aria-hidden
     />
   );
@@ -103,7 +110,10 @@ function SidebarItemContent({
 }: Readonly<{ icon: LucideIcon; name: string; isCompact: boolean; isPlanned?: boolean }>) {
   return (
     <div
-      className={`sidebar-item__content flex min-w-0 flex-1 items-center ${isCompact ? "justify-center" : "gap-3"}`}
+      className={cn(
+        "sidebar-item__content flex min-w-0 flex-1 items-center",
+        isCompact ? "justify-center" : "gap-3",
+      )}
     >
       <Icon className="sidebar-item__icon w-5 h-5 shrink-0" aria-hidden />
       {!isCompact && <span className="sidebar-item__name text-sm truncate">{name}</span>}
@@ -126,11 +136,12 @@ function SidebarSubItem<TAction extends string>({
       title={entryTitle(subItem.name, subItem.isPlanned)}
       isCurrent={subItem.isActive}
       testId={subItem.testId}
-      className={`sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all ${
+      className={cn(
+        "sidebar-item__sub-item w-full flex items-center gap-2.5 p-2 rounded-md text-xs font-medium transition-all",
         subItem.isActive
           ? "text-primary bg-primary/10"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground"
-      }`}
+          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+      )}
     >
       {SubIcon && <SubIcon className="w-3.5 h-3.5 shrink-0" aria-hidden />}
       <span className="truncate">{subItem.name}</span>
@@ -172,11 +183,13 @@ export function SidebarItem<TAction extends string = never>({
 
   const togglesSubItems = hasSubItems && !isCompact;
 
-  const className = `sidebar-item w-full flex items-center justify-between gap-2 p-2.5 rounded-md font-semibold transition-all group ${
+  const className = cn(
+    "sidebar-item w-full flex items-center justify-between gap-2 p-2.5 rounded-md font-semibold transition-all group",
     isActive
       ? "sidebar-item--active bg-primary/15 text-primary shadow-sm"
-      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-  } ${isCompact ? "justify-center" : ""}`;
+      : "text-muted-foreground hover:bg-accent hover:text-foreground",
+    isCompact && "justify-center",
+  );
   const content = (
     <>
       <SidebarItemContent icon={Icon} name={name} isCompact={isCompact} isPlanned={isPlanned} />
