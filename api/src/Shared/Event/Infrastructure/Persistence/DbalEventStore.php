@@ -26,7 +26,8 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * `metadata` the serializer's envelope metadata (empty today), and both are always written as a JSON object,
  * `{}` when empty — PHP encodes an empty array as `[]`, a JSON array in a column every reader treats as an
  * object. The coercion is top-level only, so a nested value keeps whatever shape it carries; it changes
- * nothing a reader of {@see stream()} sees, because both shapes decode to the same empty PHP array.
+ * nothing a reader of {@see stream()} sees for a nested value. On the way back in the top level is held to an
+ * object (an empty list from before the coercion aside): any other JSON root is refused as a corrupt row.
  *
  * `aggregate_version` is informative, not a concurrency control: it is `MAX+1` over the stream at insert
  * time with no serialisation guaranteed (most publishers hold no row lock on the aggregate they publish
@@ -122,8 +123,8 @@ final readonly class DbalEventStore implements EventStore
             $this->intField($row, 'aggregate_version'),
             $this->stringField($row, 'event_name'),
             $this->intField($row, 'event_version'),
-            $this->decode($row['payload'] ?? null),
-            $this->decode($row['metadata'] ?? null),
+            $this->decode('payload', $row['payload'] ?? null),
+            $this->decode('metadata', $row['metadata'] ?? null),
             $this->nullableStringField($row, 'tenant_id'),
             $this->stringField($row, 'occurred_on'),
             $this->stringField($row, 'recorded_on'),
@@ -173,18 +174,25 @@ final readonly class DbalEventStore implements EventStore
     }
 
     /**
+     * Both JSON columns are written as an object (see {@see encodeObject()}) and constrained in the database, so
+     * any other root is a corrupt row: a scalar or `null` would otherwise decode to an empty body the 18
+     * payload-less events never inspect, and a list to a map keyed `'0'`, `'1'`. The one exception is the empty
+     * list `[]`, which rows written before the writer's object coercion still hold and which ADR D4 accepts
+     * without a backfill. The root is read off the text because PHP's associative decode cannot tell `[]` from
+     * `{}`, and `jsonb` renders an object with no leading whitespace.
+     *
      * @return array<string, mixed>
      */
-    private function decode(mixed $json): array
+    private function decode(string $column, mixed $json): array
     {
         if (!\is_string($json)) {
-            return [];
+            throw CorruptEventStoreRow::nonObjectColumn($column);
         }
 
         $decoded = \json_decode($json, true, self::JSON_MAX_DEPTH, JSON_THROW_ON_ERROR);
 
-        if (!\is_array($decoded)) {
-            return [];
+        if (!\is_array($decoded) || ([] !== $decoded && !\str_starts_with(\ltrim($json), '{'))) {
+            throw CorruptEventStoreRow::nonObjectColumn($column);
         }
 
         $result = [];

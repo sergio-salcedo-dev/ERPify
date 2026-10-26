@@ -147,8 +147,11 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
   vacío se codificaría `[]`). La coerción es **solo de nivel superior** (`(object)`, como el escritor de
   `audit_log`): un valor anidado conserva la forma que traiga. Ningún lector la nota — `stream()` decodifica
   con `json_decode(…, true)`, donde `[]` y `{}` dan el mismo array vacío, y el anonimizador reescribe el texto
-  sin mirar la forma. Las columnas no declaran default — la migración las crea `NOT NULL` sin él — y la
-  garantía es del escritor, no del esquema. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
+  sin mirar la forma. Las columnas no declaran default — la migración las crea `NOT NULL` sin él. La
+  garantía es del escritor **y** del esquema: un `CHECK (jsonb_typeof(…) = 'object' OR … = '[]'::jsonb)` rechaza
+  cualquier otra raíz, y `stream()` trata como fila corrupta (`CorruptEventStoreRow`, un 500) un escalar, un
+  `null` o una lista no vacía en lugar de leerlos como cuerpo vacío — los 18 eventos sin payload no inspeccionan
+  el cuerpo y no lo habrían notado. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
   sin backfill**: reescribirlas sería otra mutación sancionada (D12) para corregir una forma que nada lee como
   array. Quien consulte cualquiera de las dos como objeto en SQL acota por `jsonb_typeof(…) = 'object'`, nunca
   asume la forma.

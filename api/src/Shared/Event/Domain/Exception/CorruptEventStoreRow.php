@@ -22,6 +22,15 @@ final class CorruptEventStoreRow extends DomainException
         );
     }
 
+    public static function nonObjectColumn(string $column): self
+    {
+        return new self(
+            type: 'corrupt-event-store-row',
+            title: \sprintf('The event_store column "%s" does not hold a JSON object.', $column),
+            context: ['column' => $column],
+        );
+    }
+
     public static function malformedPayloadMember(string $eventName, string $member, string $expected): self
     {
         return new self(
