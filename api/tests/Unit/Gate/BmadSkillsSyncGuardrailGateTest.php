@@ -82,10 +82,11 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
     }
 
     /**
-     * `bmad-loop init` installs bmad-loop-* skills into .claude/skills, and the BMad installer
-     * that writes the source neither creates nor knows them. Without the exemption they classify
-     * as unknown provenance, which aborts every sync on a checkout that uses bmad-loop — and
-     * `restore()` rm -rf's every inventoried name, so the replace path is where they die.
+     * `bmad-loop init` installs bmad-loop-* skills into .claude/skills, and `npx skills add` installs
+     * TEA 3's bmad-tea* there; the BMad installer that writes the source neither creates nor knows
+     * them. Without the exemption they classify as unknown provenance, which aborts every sync on a
+     * checkout holding them — and `restore()` rm -rf's every inventoried name, so the replace path
+     * is where they die.
      */
     #[Test]
     public function aForeignProductsNamespaceNeitherBlocksTheRunNorIsSweptByIt(): void
@@ -93,14 +94,20 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
         $this->givenACheckoutWhereTheInstallerOnceHad(null);
         $this->write('.claude/skills/bmad-alpha/SKILL.md', "stale, so the run reaches the replace path\n");
         $this->write('.claude/skills/bmad-loop-sweep/SKILL.md', "installed by bmad-loop, not by BMad\n");
+        $this->write('.claude/skills/bmad-tea/SKILL.md', "installed by npx skills add, not by BMad\n");
+        $this->write('.claude/skills/bmad-tea-trace/SKILL.md', "installed by npx skills add, not by BMad\n");
 
         $run = $this->sync();
 
         $this->assertSame(0, $run->getExitCode(), $this->explain($run));
-        $this->assertDirectoryExists(
-            $this->fixture . '/.claude/skills/bmad-loop-sweep',
-            "the replace path must leave another product's namespace alone",
-        );
+
+        foreach (['bmad-loop-sweep', 'bmad-tea', 'bmad-tea-trace'] as $foreign) {
+            $this->assertDirectoryExists(
+                $this->fixture . '/.claude/skills/' . $foreign,
+                "the replace path must leave another product's namespace alone",
+            );
+        }
+
         $this->assertSame(
             "alpha\n",
             \file_get_contents($this->fixture . '/.claude/skills/bmad-alpha/SKILL.md'),
@@ -125,6 +132,22 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
         $this->assertStringContainsString('bmad-retired', $run->getErrorOutput());
         $this->assertStringNotContainsString('bmad-loop-sweep', $run->getErrorOutput());
         $this->assertDirectoryExists($this->fixture . '/.claude/skills/bmad-loop-sweep');
+    }
+
+    /**
+     * `bmad-tea-*` carries its dash so the exemption cannot swallow TEA 1's
+     * `bmad-teach-me-testing`, which is installer output and stays the sync's to judge.
+     */
+    #[Test]
+    public function theTeaExemptionDoesNotReachTeaOnesInstallerOutput(): void
+    {
+        $this->givenACheckoutWhereTheInstallerOnceHad('bmad-teach-me-testing');
+        $this->write('.claude/skills/bmad-teach-me-testing/SKILL.md', "tea 1, absent from the source\n");
+
+        $run = $this->sync();
+
+        $this->assertSame(1, $run->getExitCode(), $this->explain($run));
+        $this->assertStringContainsString('bmad-teach-me-testing', $run->getErrorOutput());
     }
 
     #[Test]

@@ -11,8 +11,9 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
 /**
- * Executing gate over `scripts/seed-bmad-loop-skills.sh`, which `make worktree.create` calls to give a new
- * worktree the `bmad-loop-*` skills only the primary checkout's `.claude/skills` holds.
+ * Executing gate over `scripts/seed-foreign-skills.sh`, which `make worktree.create` calls to give a new
+ * worktree the foreign skills (`bmad-loop-*`, TEA 3's `bmad-tea*` and `bmod-tea`) only the primary checkout's
+ * `.claude/skills` holds.
  *
  * **Why it runs the script.** Its failure is silent where it matters: a worktree missing a skill answers
  * `Unknown command: /bmad-loop-sweep` and idles to its session timeout while `bmad-loop validate` reports
@@ -28,13 +29,13 @@ use Symfony\Component\Process\Process;
  * @internal
  */
 #[CoversNothing]
-final class BmadLoopSkillSeedGateTest extends TestCase
+final class ForeignSkillSeedGateTest extends TestCase
 {
     private string $fixture = '';
 
     protected function setUp(): void
     {
-        $fixture = \sys_get_temp_dir() . '/bmad-loop-seed-' . \bin2hex(\random_bytes(6));
+        $fixture = \sys_get_temp_dir() . '/foreign-skill-seed-' . \bin2hex(\random_bytes(6));
         \mkdir($fixture . '/main/.claude/skills', 0o755, true);
         \mkdir($fixture . '/worktree', 0o755, true);
         $this->fixture = $fixture;
@@ -66,6 +67,29 @@ final class BmadLoopSkillSeedGateTest extends TestCase
         );
     }
 
+    /**
+     * TEA 3 reads its knowledge base from the sibling `bmod-tea`, so a worktree that received the
+     * `bmad-tea*` skills without it would start every TEA workflow by asking to reinstall it.
+     * `bmad-teach-me-testing` is TEA 1's installer output and reaches a worktree through the
+     * `bmad-*` seed, so this one must not copy it.
+     */
+    #[Test]
+    public function teaThreeSkillsAndTheirKnowledgeBaseAreSeededButTeaOnesAreNot(): void
+    {
+        $this->write('main/.claude/skills/bmad-tea/SKILL.md', "tea agent\n");
+        $this->write('main/.claude/skills/bmad-tea-trace/SKILL.md', "tea trace\n");
+        $this->write('main/.claude/skills/bmod-tea/knowledge/tea-index.csv', "id,path\n");
+        $this->write('main/.claude/skills/bmad-teach-me-testing/SKILL.md', "tea 1, installer output\n");
+
+        $run = $this->seed();
+
+        $this->assertSame(0, $run->getExitCode(), $this->explain($run));
+        $this->assertSame("tea agent\n", $this->read('worktree/.claude/skills/bmad-tea/SKILL.md'));
+        $this->assertSame("tea trace\n", $this->read('worktree/.claude/skills/bmad-tea-trace/SKILL.md'));
+        $this->assertSame("id,path\n", $this->read('worktree/.claude/skills/bmod-tea/knowledge/tea-index.csv'));
+        $this->assertDirectoryDoesNotExist($this->fixture . '/worktree/.claude/skills/bmad-teach-me-testing');
+    }
+
     #[Test]
     public function aCopyThatFailsIsReportedAndExitsOneInsteadOfPrintingSuccess(): void
     {
@@ -80,9 +104,9 @@ final class BmadLoopSkillSeedGateTest extends TestCase
     }
 
     #[Test]
-    public function aPrimaryWithoutBmadLoopSkillsSeedsNothingAndSucceeds(): void
+    public function aPrimaryWithoutForeignSkillsSeedsNothingAndSucceeds(): void
     {
-        $this->write('main/.claude/skills/bmad-help/SKILL.md', "not a bmad-loop skill\n");
+        $this->write('main/.claude/skills/bmad-help/SKILL.md', "installer output, seeded from .agent/skills instead\n");
 
         $run = $this->seed();
 
@@ -96,7 +120,7 @@ final class BmadLoopSkillSeedGateTest extends TestCase
         $root = RepositoryRoot::path();
         $this->assertNotNull($root, 'The repository root is not reachable, so the script cannot be run.');
 
-        $script = $root . '/scripts/seed-bmad-loop-skills.sh';
+        $script = $root . '/scripts/seed-foreign-skills.sh';
         $this->assertFileExists($script);
 
         $run = new Process([$script, $this->fixture . '/main', $this->fixture . '/worktree']);
