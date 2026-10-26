@@ -229,9 +229,9 @@ final class AccessLogQueryContainmentGateTest extends TestCase
             // Fatal, and it stays fatal in the one run mode where it is inconvenient. `make php.unit
             // IN_CONTAINER=false` runs on the host, where this file lives inside a container volume and
             // `https://localhost` is a different stack — so this gate aborts that mode rather than reporting
-            // a green it did not earn. That cost is deliberate: every sibling gate in this tree fails rather than skips when
-            // its instrument is missing, because a check that quietly does nothing reports the same green
-            // as a real pass.
+            // a green it did not earn. That cost is deliberate: every sibling gate in this tree fails rather
+            // than skips when its instrument is missing, because a check that quietly does nothing reports the
+            // same green as a real pass.
             throw new RuntimeException(\sprintf(
                 'The access log is not readable at %s, so this gate can observe nothing. Inside the php '
                     . 'container the Caddyfile writes it there, on the `caddy_access_log` volume. If you are '
