@@ -70,9 +70,16 @@ final readonly class AuditTimelineKeysetSource implements KeysetSource
 
     /**
      * Strict binding of the cursor to its query: the fingerprint covers the table, the fixed sort column,
-     * the resolved direction, the effective limit and the requested filters. A follow-up request that
-     * changes any of them fails fingerprint validation (422), never silently mixing pages from two
-     * different queries. Every cursor in flight is signed under exactly these bytes.
+     * the resolved direction, the effective limit, the requested filters and the base query the repository
+     * authored. A follow-up request that changes any of them fails fingerprint validation (422), never
+     * silently mixing pages from two different queries.
+     *
+     * The base query enters as its SQL text, the DBAL twin of the DQL the ORM engine binds: its shape, never
+     * its bound values, so a scope written as `WHERE a.resource_type = :scope` binds the cursor to that scope
+     * while two values of `:scope` share a fingerprint, and an array parameter's length never shifts it. That
+     * is what stops a cursor minted on one audit listing being replayed on another whose scope lives in the
+     * base query rather than in the filters. The SQL is read before any filter or keyset predicate touches the
+     * query, because {@see fetch()} works on a clone.
      */
     #[Override]
     public function fingerprint(): string
@@ -89,6 +96,7 @@ final readonly class AuditTimelineKeysetSource implements KeysetSource
             'direction' => $this->direction->value,
             'limit' => $this->limit,
             'filters' => $filters,
+            'baseQuery' => $this->baseQuery->getSQL(),
         ], JSON_THROW_ON_ERROR));
     }
 

@@ -71,6 +71,19 @@ Feature: Resend a pending invitation from the console
       | lower case | 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70 |
       | upper case | 0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A70 |
 
+  # One administrator's share of the shared budget is spent first and on its own: a session over its share is
+  # refused, so one session — stolen, or retrying through a mail outage — cannot drain the person's budget alone.
+  Scenario: An administrator over their own share is refused, whatever is left of the shared budget
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    And the invitation-resend share of administrator "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66" is exhausted for invitee "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70/invitation/resend"
+    Then the response status code should be 429
+    And the JSON node "type" should be equal to "rate-limited"
+    And the header "Retry-After" should match "/^[1-9]\d*$/"
+    And there should be 0 events stored named "erpify.iam.invitation.resent"
+    And 0 notification emails were sent
+
   Scenario: The previously delivered link stops working the moment the invitation is resent
     Given I am logged in as an administrator
     When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a70/invitation/resend"
