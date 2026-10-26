@@ -61,19 +61,20 @@ final readonly class ExpectedClientError
             return $throwable instanceof ClientError;
         }
 
-        if ($this->chainHas($throwable, AuthenticationServiceException::class)) {
-            return false;
-        }
+        return !$this->chainHas($throwable, AuthenticationServiceException::class)
+            && ($this->isFrameworkClientBridge($throwable) || $this->isClientHttpException($throwable));
+    }
 
-        if (
-            $throwable instanceof ValidationFailedException
+    private function isFrameworkClientBridge(Throwable $throwable): bool
+    {
+        return $throwable instanceof ValidationFailedException
             || $throwable instanceof AccessDeniedException
             || $throwable instanceof AuthenticationException
-            || $this->chainHas($throwable, ExtraAttributesException::class)
-        ) {
-            return true;
-        }
+            || $this->chainHas($throwable, ExtraAttributesException::class);
+    }
 
+    private function isClientHttpException(Throwable $throwable): bool
+    {
         return $throwable instanceof HttpExceptionInterface
             && $throwable->getStatusCode() >= 400
             && $throwable->getStatusCode() < 500;
