@@ -163,6 +163,7 @@ tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
 tests/Unit/Gate/MonologExclusionDeclarationGateTest.php :: home
+tests/Unit/Gate/NormalizedTwinPersonalDataGateTest.php :: home
 tests/Unit/Gate/ObservabilityChannelGateTest.php :: home
 tests/Unit/Gate/OrmSortDirectionGateTest.php :: home
 tests/Unit/Gate/PersistentTransportPolicyGateTest.php :: home

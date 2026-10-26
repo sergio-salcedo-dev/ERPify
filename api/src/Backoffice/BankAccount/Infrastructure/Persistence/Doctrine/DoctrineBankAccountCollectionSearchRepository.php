@@ -15,6 +15,7 @@ use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\FieldMapping;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\PaginatorConfig;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SearchFieldMap;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\SortFieldMap;
@@ -45,6 +46,7 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
     public function __construct(
         private EntityManagerInterface $entityManager,
         private DoctrineSearchEngine $searchEngine,
+        private NormalizedTextFieldNormalizer $normalizedText,
     ) {
     }
 
@@ -80,7 +82,9 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
     private function searchFieldMap(): SearchFieldMap
     {
         return new SearchFieldMap([
-            'holderName' => new FieldMapping('ba.holderName'),
+            // Matched on the folded twin with the rule that wrote it, so "munoz" finds "Muñoz" and the GIN
+            // trigram index on that column serves the CONTAINS instead of a sequential scan.
+            'holderName' => new FieldMapping('ba.holderNameNormalized', $this->normalizedText),
             // iban is deliberately absent from the GET filters[] vocabulary: the value is classified
             // PII, and a query-string parameter can reach an access log or an intermediary cache keyed
             // on the URL regardless of any single deployment's redaction config. Exact lookup by IBAN
@@ -88,12 +92,14 @@ final readonly class DoctrineBankAccountCollectionSearchRepository implements Ba
             // See the IBAN wire contract in adding-endpoints.md and issue #426.
             'alias' => new FieldMapping('ba.alias'),
             // Human bank search: one CONTAINS over the joined bank's name AND its short code, so a
-            // single query box matches either. The applier wraps the CONCAT in LOWER(...) LIKE, so the
-            // match is case-insensitive; the space separator keeps a term from spanning the two columns.
-            // shortName is a non-null column, so no COALESCE is needed. Exact bankId stays available for
-            // machine/deep-link callers.
+            // single query box matches either. Both halves are in the folded form the normalizer gives the
+            // term — the name's lower-case ASCII twin, and the short code, already upper-case ASCII, lowered
+            // — so the match ignores case and accents ("credit" finds "Crédit Agricole"). The space separator
+            // keeps a term from spanning the two columns; shortName is non-null, so no COALESCE is needed.
+            // Exact bankId stays available for machine/deep-link callers.
             'bank' => new FieldMapping(
-                "CONCAT(b.name, ' ', b.shortName)",
+                "CONCAT(b.nameNormalized, ' ', LOWER(b.shortName))",
+                $this->normalizedText,
                 operators: [FilterOperator::Contains],
             ),
             // bankId is exact-only: a LIKE over a UUID column breaks at the SQL level.

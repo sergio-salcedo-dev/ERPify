@@ -45,7 +45,7 @@ Feature: Search the cross-bank account collection
     And the JSON node "pagination.links.prev" should be null
     And 2 request got executed only for doctrine connection "default"
 
-  # holderName has no normalizer, so CONTAINS matches via LOWER(...) LIKE LOWER(...) — case-insensitive.
+  # holderName matches on its folded twin with the rule that wrote it, so CONTAINS ignores case and accents.
   # "citi" (lower-case) narrows to Citigroup's three accounts, each carrying the same owning-bank identity.
   Scenario: A free-text holderName contains filter narrows the collection case-insensitively
     When I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=holderName&filters[0][operator]=contains&filters[0][value]=citi"
@@ -56,6 +56,36 @@ Feature: Search the cross-bank account collection
     And the JSON node "data[2].holderName" should be equal to "Citi Treasury"
     And the JSON node "data[2].bankName" should be equal to "Citigroup"
     And 2 request got executed only for doctrine connection "default"
+
+  # Neither the stored accents nor the term's case and accents decide a holderName or bank match: both
+  # filters read the folded twins. The account is created through the API so the aggregate writes its twin,
+  # as it does in production; its bank, Crédit Agricole, is a fixture whose name carries an accent.
+  Scenario: The holderName and bank contains filters ignore case and accents
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
+    When I send a POST request to "/backoffice/bank-accounts" with body:
+    """
+    {
+      "bankId": "11111111-1111-7000-8000-000000000016",
+      "holderName": "José Muñoz Ibáñez",
+      "iban": "GB82WEST12345698765432",
+      "currency": "EUR"
+    }
+    """
+    Then the response status code should be 201
+    And I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=holderName&filters[0][operator]=contains&filters[0][value]=munoz%20ibanez"
+    And the response status code should be 200
+    And the JSON node "data" should have 1 element
+    And the JSON node "data[0].holderName" should be equal to "José Muñoz Ibáñez"
+    And I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=holderName&filters[0][operator]=contains&filters[0][value]=MU%C3%91OZ"
+    And the response status code should be 200
+    And the JSON node "data" should have 1 element
+    And the JSON node "data[0].holderName" should be equal to "José Muñoz Ibáñez"
+    And I send a "GET" request to "/backoffice/bank-accounts?filters[0][field]=bank&filters[0][operator]=contains&filters[0][value]=credit%20agricole"
+    And the response status code should be 200
+    And the JSON node "data" should have 1 element
+    And the JSON node "data[0].bankName" should be equal to "Crédit Agricole"
+    And the JSON node "data[0].holderName" should be equal to "José Muñoz Ibáñez"
 
   # bankId is exact-only (eq/in, UUID-valued): it scopes the collection to a single bank's accounts
   # without a route constraint — the bank is a tunable filter here, not the route.

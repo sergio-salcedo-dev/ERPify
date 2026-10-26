@@ -21,6 +21,7 @@ use Erpify\Shared\Search\Domain\Page;
 use Erpify\Shared\Search\Domain\SearchCriteria;
 use Erpify\Shared\Search\Domain\SortDirection;
 use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSearchEngine;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\NormalizedTextFieldNormalizer;
 use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Override;
@@ -82,6 +83,7 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
         $this->repository = new DoctrineBankAccountCollectionSearchRepository(
             $entityManager,
             $searchEngine,
+            new NormalizedTextFieldNormalizer(),
         );
     }
 
@@ -212,7 +214,7 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
             $this->seedDataset();
 
             // A lower-case term matches the mixed-case bank name AND the upper-case short code through
-            // the single CONTAINS over CONCAT(name, ' ', shortName): "beta" hits "Beta Bank"/"BETA".
+            // the single CONTAINS over the folded name and code: "beta" hits "Beta Bank"/"BETA".
             $byBeta = $this->repository->search(new SearchCriteria(
                 limit: 10,
                 filters: Filters::fromList([Filter::contains('bank', 'beta')]),
@@ -227,6 +229,48 @@ final class DoctrineBankAccountCollectionSearchRepositoryTest extends KernelTest
                 sort: 'createdAt',
             ));
             $this->assertSame(['Account One', 'Account Three'], $this->holders($byAlpha));
+        });
+    }
+
+    /**
+     * The holder and bank filters match on the folded twins, so neither the stored accents nor the term's
+     * case and accents decide the match. A filter over the display columns would miss every one of these.
+     */
+    public function testHolderAndBankFiltersIgnoreCaseAndAccents(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->connection->executeStatement('TRUNCATE bank_account, bank RESTART IDENTITY CASCADE');
+
+            $bankId = Uuid::v7()->toRfc4122();
+            $this->entityManager->persist(Bank::create($bankId, 'Crédit Agricole', 'ACA'));
+            $this->entityManager->flush();
+            $this->persistAccount(
+                $bankId,
+                'José Muñoz Ibáñez',
+                'DE89370400440532013000',
+                new DateTimeImmutable('2026-01-01 10:00:00'),
+            );
+            $this->entityManager->flush();
+            $this->entityManager->clear();
+            FreezeSystemClockExtension::pin();
+
+            foreach (['munoz ibanez', 'MUÑOZ', 'JoSé'] as $term) {
+                $page = $this->repository->search(new SearchCriteria(
+                    limit: 10,
+                    filters: Filters::fromList([Filter::contains('holderName', $term)]),
+                    sort: 'createdAt',
+                ));
+                $this->assertSame(['José Muñoz Ibáñez'], $this->holders($page), $term);
+            }
+
+            foreach (['credit agricole', 'CRÉDIT', 'aca'] as $term) {
+                $page = $this->repository->search(new SearchCriteria(
+                    limit: 10,
+                    filters: Filters::fromList([Filter::contains('bank', $term)]),
+                    sort: 'createdAt',
+                ));
+                $this->assertSame(['José Muñoz Ibáñez'], $this->holders($page), $term);
+            }
         });
     }
 

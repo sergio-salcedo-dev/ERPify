@@ -27,6 +27,35 @@
 - Handle database errors gracefully
 - Use appropriate isolation levels for transactions
 
+## Case- and accent-insensitive text (names, trade names)
+
+A human-typed text that is matched or deduplicated ignoring case and accents is stored twice: as typed, for
+display, and folded by `NormalizedText` (`Shared/Kernel/Domain/ValueObject`) into a `<field>Normalized`
+twin that the queries read. The fold is ICU transliteration in PHP, one rule for the write side and the
+search side (`NormalizedTextFieldNormalizer`).
+
+- **Uniqueness → the twin is `UNIQUE`, `COLLATE "C"`** (`bank.name_normalized`). A code whose canonical form is
+  upper-case ASCII has no twin: it is stored canonical (`NormalizedText::toAsciiUpper()`, `bank.short_name`).
+- **A person's name is never unique** — two holders, customers or workers can share one. Its twin is plain
+  `TEXT DEFAULT ''` (folding can lengthen a name; the default keeps an older image's `INSERT` working) with a
+  GIN trigram index, because `contains` is `LIKE '%term%'` and no B-tree serves it (measured on 500k rows:
+  45 ms sequential, 3 ms with the index). Declare it as `#[ORM\Index]` under a name ending in `_trgm`, build it
+  in the migration as `USING gin (<col> gin_trgm_ops)` — DBAL models neither — and map the search field to
+  the twin with the normalizer. `bank_account.holder_name_normalized` is the worked example.
+- **The twin is classified like its field.** A twin of a `#[PersonalData]` field is `#[PersonalData]`: the
+  change capture diffs every mapped column and seals only classified ones, so an unclassified twin writes
+  the person's name to `audit_log` in clear.
+- **Not the `unaccent` extension, not a nondeterministic ICU collation.** `unaccent` leaves Cyrillic and
+  Greek untransliterated and is `STABLE`, so it reaches an index only through an `IMMUTABLE` wrapper that
+  breaks silently when its rules file changes. A nondeterministic collation makes `UNIQUE` work on the
+  display column, but `LIKE` over it uses no index and it cannot serve the byte-ordered keyset sort. Either
+  would also split the fold between PHP and SQL. `unaccent` is the right tool only for full-text search
+  (`tsvector`, chained before `spanish_stem`), which nothing here does yet.
+
+Gates: `NormalizedTwinPersonalDataGateTest` (every `*Normalized` column is classified like its field) and
+`TrigramIndexSchemaFunctionalTest` (every `*_trgm` index the mapping names is GIN `gin_trgm_ops` in the
+migrated database, and the reverse). Neither proves that a `contains` field reads an indexed twin.
+
 ## Deletion policy (hard delete by default)
 - **Hard delete (`DELETE`) is the default.** GDPR's right to erasure (Art. 17) must always be
   satisfiable: any row that may carry personal data (uploads, free text, contact details) must be
