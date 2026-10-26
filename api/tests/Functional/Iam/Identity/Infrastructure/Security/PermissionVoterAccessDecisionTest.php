@@ -29,14 +29,14 @@ use Symfony\Component\Uid\Uuid;
 final class PermissionVoterAccessDecisionTest extends WebTestCase
 {
     /**
-     * {@see PermissionVoter::supports()} claims every `<resource>.<action>` attribute by shape alone, which is
-     * sound only while the decision manager composes votes `affirmative`ly: under `unanimous` or `consensus`
-     * the voter's DENY on an attribute it claimed would weigh against another voter's GRANT in the same
-     * decision. Read off the decision the wired manager actually took, not off `security.yaml`, so a strategy
-     * set in any config file, environment block or `strategy_service` is seen. Declaring
-     * `access_decision_manager.strategy` as anything else reds the first assertion; a second voter claiming a
-     * permission attribute — the contention this voter's shape-only support assumes away — reds the second. A
-     * voter the manager merely consults and that abstains is not contention, so abstentions are left out.
+     * {@see PermissionVoter::supports()} claims every published permission, and the composition is read here as
+     * it is wired: the decision manager composes votes `affirmative`ly, and a permission attribute is answered
+     * by this voter alone. Under `unanimous` or `consensus` its DENY would weigh against another voter's GRANT
+     * on the same attribute. Read off the decision the wired manager actually took, not off `security.yaml`, so
+     * a strategy set in any config file, environment block or `strategy_service` is seen. Declaring
+     * `access_decision_manager.strategy` as anything else reds the first assertion; a second voter casting a
+     * vote on a permission attribute reds the second. A voter the manager merely consults and that abstains is
+     * not contention, so abstentions are left out.
      */
     public function testPermissionAttributesAreDecidedAffirmativelyWithThePermissionVoterAsTheirOnlyVoter(): void
     {
@@ -62,9 +62,8 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
         $this->assertSame(
             'affirmative',
             $accessDecision->strategy,
-            'The access decision manager no longer decides affirmatively. PermissionVoter::supports() claims '
-            . 'every <resource>.<action> attribute by shape, which is sound only under affirmative; change '
-            . 'the voter (a positive marker or a resource registry) before changing the strategy.',
+            'The access decision manager no longer decides affirmatively; re-weigh how PermissionVoter composes '
+            . 'with every other voter on a permission attribute before changing the strategy.',
         );
 
         $this->assertSame(
@@ -78,6 +77,42 @@ final class PermissionVoterAccessDecisionTest extends WebTestCase
             )),
             'A permission attribute must be answered by PermissionVoter alone; another voter now casts a vote on it, '
             . 'so the two contend over the same attribute.',
+        );
+    }
+
+    /**
+     * The attribute the shape-only support used to claim: dotted, published by nobody. The tier policy would
+     * grant it to an ADMIN (`ADMIN => ['*']`), so a voter claiming it by shape answers GRANT and, under
+     * `affirmative`, overrules any voter that owns the attribute and says no. Claimed only when published, it
+     * draws no vote at all and the manager denies it — fail-closed.
+     */
+    public function testADottedAttributeNoCatalogPublishesIsDeniedEvenToAnAdmin(): void
+    {
+        $client = self::createClient();
+
+        $admin = UserFixtureFactory::create(
+            Uuid::v7()->toRfc4122(),
+            'unpublished-admin@erpify.test',
+            'unpublished-admin-password',
+            [Role::ADMIN->value],
+        );
+        $client->loginUser(new SecurityUser($admin), 'main');
+
+        $authorizationChecker = self::getContainer()->get(AuthorizationCheckerInterface::class);
+        $this->assertInstanceOf(AuthorizationCheckerInterface::class, $authorizationChecker);
+
+        $accessDecision = new AccessDecision();
+        $this->assertFalse(
+            $authorizationChecker->isGranted('featureFlag.read', null, $accessDecision),
+            'An attribute no catalog publishes must not be granted, not even to an ADMIN.',
+        );
+        $this->assertSame(
+            [],
+            \array_values(\array_filter(
+                $accessDecision->votes,
+                static fn (Vote $vote): bool => VoterInterface::ACCESS_ABSTAIN !== $vote->result,
+            )),
+            'No voter may claim an attribute no catalog publishes.',
         );
     }
 
