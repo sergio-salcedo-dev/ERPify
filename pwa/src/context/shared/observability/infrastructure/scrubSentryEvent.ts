@@ -92,12 +92,13 @@ export function scrubSentrySpan(span: StreamedSpanJSON): StreamedSpanJSON {
  * judged whole.
  */
 function scrubSpanName(name: string): string {
-  const parts = /^(\S+\s+)(.*)$/s.exec(name);
-  if (parts === null) {
+  const wordEnd = name.search(/\s/);
+  if (wordEnd <= 0) {
     return scrubUrlLikeValue(name);
   }
 
-  const [, method, target] = parts;
+  const target = name.slice(wordEnd).trimStart();
+  const method = name.slice(0, name.length - target.length);
   const scrubbed = scrubUrlLikeValue(target);
 
   return scrubbed === target ? scrubUrlLikeValue(name) : `${method}${scrubbed}`;
