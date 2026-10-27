@@ -23,7 +23,7 @@ function dashboardHeading(page: Page) {
 }
 
 function skipRepetitions(testInfo: TestInfo): void {
-  test.skip(
+  testInfo.skip(
     testInfo.repeatEachIndex > 0,
     "each redemption spends a password proof of the 10 per 15 minutes, and a repetition's redemption would evict a sibling repetition's session",
   );

@@ -63,7 +63,7 @@ test.describe("BackOffice - Recovery readiness warning (real API)", () => {
   test("an administrator with no secret is warned on every route until they mint one", async ({
     page,
   }, testInfo) => {
-    test.skip(
+    testInfo.skip(
       testInfo.repeatEachIndex > 0 || testInfo.retry > 0,
       "revoke + mint (+ restore) spend up to 4 of the 10 password-proof attempts per 15 minutes; repeating or retrying would lock out the run",
     );
