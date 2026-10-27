@@ -6,60 +6,86 @@
   spec_checkpoint: true
   invoke_dev_with: >-
     Reuse EncryptionScopeId, Keystore and destroyScope(); do not change the string-oriented
-    encrypt/decrypt contract. Measure peak memory on a large input rather than asserting it.
+    encrypt/decrypt contract. Sealing under a destroyed scope must throw DekDestroyed: test
+    seal, destroy, seal again. Measure peak memory on a large input rather than asserting it.
 - id: "doc-2"
   title: Documents bounded context skeleton and storage port
   description: >-
     Create the context, the Document aggregate shell and its own stream-writing storage port
-    with a first adapter (CAP-1 groundwork). Blocked on the persistence-strategy and
-    host-context decisions.
+    with a first adapter (CAP-1 groundwork). Blocked on the persistence-strategy, aggregate
+    boundary, host-context and storage-backend decisions.
   spec_checkpoint: true
   invoke_dev_with: >-
     Stop and present the persistence-strategy decision (state-oriented vs event-sourced) to the
-    user before modelling. Do not reuse ImageStorage or any generic storage port.
+    user before modelling. Do not reuse ImageStorage or any generic storage port. Register every
+    person-id column (person-reference policy, attribute, detective source) and the
+    Document resource type in the same PR that adds it.
 - id: "doc-3"
   title: UploadEvidence ingest
   description: >-
     Accept an evidence upload through the Symfony 8.1 resolver and the transport-only
-    denormalizer, store it sealed and untransformed, and record digest and metadata (CAP-1).
+    denormalizer, store it sealed and untransformed via staging, and end in Received with
+    digest, metadata and the first custody record (CAP-1). Exposes no read route.
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
     No transport type or caller-supplied path past Infrastructure; add the scan and regression
-    test ADR invariant 6 asks for. Declare the voter and audit the read.
+    test ADR invariant 6 asks for. Staging promote, orphan reaper, idempotency key. Needs the
+    retention and legal-basis vocabulary decided. Put the misfiling question to the user.
 - id: "doc-4"
   title: Scan and readiness gate
   description: >-
-    Scan on ingest and refuse content outside the Ready state; fail closed while the scanner
-    is unavailable (CAP-2). Needs the scanner decision.
+    Scan after ingest through a leased, retried post-commit message, move to Ready,
+    Quarantined or ScanFailed, and fail closed while the scanner is unavailable (CAP-2).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Needs the scanner, scan-versus-seal and retry-cap decisions. Compare-and-set on every
+    transition. Add the stuck-document alarm. A schedule is dead until a worker consumes it.
 - id: "doc-5"
+  title: Audited read path
+  description: >-
+    Serve a Ready document through a route that declares its voter, refuses other states and
+    writes an audit row (CAP-9).
+  invoke_dev_with: >-
+    Mirror the hardening of ImageGetController (nosniff, locked-down CSP, no media type taken
+    on trust). The route is a conscious frontier decision: voter, not a public route.
+- id: "doc-6"
+  title: Custody trail listing and document metadata
+  description: >-
+    List the ordered states and metadata of a document, with free-text fields sealed or
+    forbidden so the surviving record names no person (CAP-6). Lands before erasure, which
+    depends on it.
+- id: "doc-7"
   title: Erasure by key destruction
   description: >-
-    Erase a document by destroyScope(), keeping digest and custody, with person-reference
-    ownership and audit classification registered (CAP-4).
+    Erase a document from any non-terminal state by destroyScope(), keeping digest and custody
+    (CAP-4); record the digest residual in the security checklist.
   done_checkpoint: true
   invoke_dev_with: >-
-    Owes a recorded adversarial pass. Register the person column, the audit resource type and
-    the PersonReferenceSource in the same PR; no person event on a persisted transport.
-- id: "doc-6"
+    Owes a recorded adversarial pass. Erasure must not wait on a scan. Subject erasure iterates
+    every version. No person event on a persisted transport.
+- id: "doc-8"
   title: Dependent derivatives through the images module
   description: >-
-    Materialise previews via the third images entry point with origin recorded, and delete them
-    after commit when the document is erased (CAP-5).
+    Create the missing origin on Image and the entry point other contexts use to materialise a
+    derivative, then delete derivatives on erasure (CAP-5). Touches Shared/Images, schema included.
+  spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
-    Owes a recorded adversarial pass. Removal goes through the outbox, never inside the
-    erasure transaction; verify cached variant URLs stop resolving.
-- id: "doc-7"
-  title: Custody trail and document metadata
-  description: >-
-    Make each state change auditable and listable in order, and carry the metadata the
-    ADR names (CAP-6).
-- id: "doc-8"
+    Owes a recorded adversarial pass. Inherit docs/adr/image-deletion-signal-transport.md and
+    its residuals; retries re-query by origin; late arrivals are deleted; add the orphan sweep
+    and the alarm. This is the ADR D4 rename trigger: record the decision on Images.
+- id: "doc-9"
   title: Document versioning
   description: >-
-    A new version is a new immutable original linked to its predecessor (CAP-7).
-- id: "doc-9"
+    A new version is a new immutable original linked to its predecessor, with erased nodes
+    kept as readable tombstones (CAP-7).
+  invoke_dev_with: >-
+    Touches erasure semantics, so it owes a recorded adversarial pass. Needs the aggregate
+    boundary decision.
+- id: "doc-10"
   title: OCR of scanned PDFs
   description: >-
-    Extract searchable text from scanned PDFs as a derivative (CAP-8).
+    Extract searchable text from Ready scanned PDFs as a derivative that dies with its
+    document (CAP-8).
