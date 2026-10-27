@@ -392,6 +392,8 @@ describe("scrubSentryEvent", () => {
     ["GET  /api/v1/audit?actorId=8f14e45f", "GET  /api/v1/audit?actorId=REDACTED"],
     ["GET\t/api/v1/audit?actorId=8f14e45f", "GET\t/api/v1/audit?actorId=REDACTED"],
     ["GET /api/v1/banks", "GET /api/v1/banks"],
+    ["/api/v1/audit?actorId=8f14e45f", "/api/v1/audit?actorId=REDACTED"],
+    ["GET", "GET"],
   ])("scrubs a query behind the method in span name %j", (name, expected) => {
     const span = {
       trace_id: "t",
