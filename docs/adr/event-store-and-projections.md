@@ -108,7 +108,10 @@ CREATE TABLE event_store (
     recorded_on       TIMESTAMPTZ  NOT NULL,                -- tiempo de SISTEMA; sin default: el escritor pone clock_timestamp()
     PRIMARY KEY (sequence),
     CONSTRAINT event_store_event_id_uniq UNIQUE (event_id),
-    CONSTRAINT event_store_stream_version_uniq UNIQUE (tenant_id, aggregate_id, aggregate_version)
+    CONSTRAINT event_store_stream_version_uniq UNIQUE (tenant_id, aggregate_id, aggregate_version),
+    -- añadidas por migración (D4): objeto, o la lista vacía de las filas viejas
+    CONSTRAINT event_store_payload_is_object  CHECK (jsonb_typeof(payload)  = 'object' OR payload  = '[]'::jsonb),
+    CONSTRAINT event_store_metadata_is_object CHECK (jsonb_typeof(metadata) = 'object' OR metadata = '[]'::jsonb)
 );
 CREATE INDEX event_store_aggregate_idx ON event_store (aggregate_type, aggregate_id, sequence);
 CREATE INDEX event_store_name_idx      ON event_store (event_name, sequence);
@@ -145,10 +148,15 @@ CREATE INDEX event_store_recorded_idx  ON event_store (recorded_on);
   antes: con él activo, una carrera abortaría la transacción de escritura.
 - **`payload`** y **`metadata`** se escriben siempre como **objeto** JSON (`{}` si están vacíos: un array PHP
   vacío se codificaría `[]`). La coerción es **solo de nivel superior** (`(object)`, como el escritor de
-  `audit_log`): un valor anidado conserva la forma que traiga. Ningún lector la nota — `stream()` decodifica
-  con `json_decode(…, true)`, donde `[]` y `{}` dan el mismo array vacío, y el anonimizador reescribe el texto
-  sin mirar la forma. Las columnas no declaran default — la migración las crea `NOT NULL` sin él — y la
-  garantía es del escritor, no del esquema. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
+  `audit_log`): un valor anidado conserva la forma que traiga. Ningún lector distingue `[]` de `{}` — `stream()`
+  decodifica con `json_decode(…, true)`, donde ambos dan el mismo array vacío, y el anonimizador reescribe el texto
+  sin mirar la forma. Las columnas no declaran default — la migración las crea `NOT NULL` sin él. La
+  garantía es del escritor **y** del esquema: un `CHECK (jsonb_typeof(…) = 'object' OR … = '[]'::jsonb)` rechaza
+  cualquier otra raíz, y `stream()` trata como fila corrupta (`CorruptEventStoreRow`, un 500) un escalar, un
+  `null` o una lista no vacía en lugar de leerlos como cuerpo vacío — los eventos sin payload no inspeccionan
+  el cuerpo y no lo habrían notado. Una fila así detiene el catch-up de su proyector y, como `catchUpAll()` no
+  aísla por proyector, el de los registrados después; el CHECK impide crearlas y una heredada se resuelve
+  reparando la fila. Las filas escritas antes de la coerción guardan `[]` y **se aceptan
   sin backfill**: reescribirlas sería otra mutación sancionada (D12) para corregir una forma que nada lee como
   array. Quien consulte cualquiera de las dos como objeto en SQL acota por `jsonb_typeof(…) = 'object'`, nunca
   asume la forma.
@@ -322,6 +330,17 @@ los proyectores no afectados (el coste dominante). Coste: pierde la auto-sanaci�
 con backlog (dejaría de ponerse al día con eventos ajenos), así que exigiría **conservar un catch-up completo
 periódico fuera del hot path** y medir contención real sobre `projection_checkpoint` antes de decidir. Con un solo
 proyector esa maquinaria es puro coste sin beneficio.
+
+**Trigger (l) — aislar el fallo por proyector.** `catchUpAll()` es un `foreach` sin `catch`: una fila que lanza
+detiene el catch-up de su proyector y el de los registrados después, y —sin enrutar el evento— aborta la escritura
+del que publica (D4, «falla ruidosamente»). Con **N = 1** no hay proyector posterior al que proteger y el `CHECK`
+de `event_store_*_is_object` impide crear la fila corrupta que lo disparaba, así que hoy aislar no cambia ningún
+resultado. Se reabre al **registrar el segundo `Projector`**, y entonces la decisión es real: capturar por
+proyector y seguir **con log de error y alarma** —sin ellos una proyección obsoleta nadie la ve— o mantener el
+fallo ruidoso. Dos costes a pesar antes de capturar: el fallo pasa de un 500 visible a lectura obsoleta
+silenciosa, y desde un caso de uso síncrono cada límite del runner es un savepoint dentro de la transacción del
+llamante, de modo que tragar la excepción confirmaría una escritura cuya proyección no se aplicó. Descartado hoy:
+añadir el `catch` ahora, por ser una abstracción para un solo llamante que además degrada el fallo ruidoso.
 
 ### D12 — `event_store` es append-only **con un conjunto cerrado de mutaciones sancionadas**: el borrado GDPR
 
