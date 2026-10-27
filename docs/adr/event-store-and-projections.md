@@ -331,6 +331,17 @@ con backlog (dejaría de ponerse al día con eventos ajenos), así que exigiría
 periódico fuera del hot path** y medir contención real sobre `projection_checkpoint` antes de decidir. Con un solo
 proyector esa maquinaria es puro coste sin beneficio.
 
+**Trigger (l) — aislar el fallo por proyector.** `catchUpAll()` es un `foreach` sin `catch`: una fila que lanza
+detiene el catch-up de su proyector y el de los registrados después, y —sin enrutar el evento— aborta la escritura
+del que publica (D4, «falla ruidosamente»). Con **N = 1** no hay proyector posterior al que proteger y el `CHECK`
+de `event_store_*_is_object` impide crear la fila corrupta que lo disparaba, así que hoy aislar no cambia ningún
+resultado. Se reabre al **registrar el segundo `Projector`**, y entonces la decisión es real: capturar por
+proyector y seguir **con log de error y alarma** —sin ellos una proyección obsoleta nadie la ve— o mantener el
+fallo ruidoso. Dos costes a pesar antes de capturar: el fallo pasa de un 500 visible a lectura obsoleta
+silenciosa, y desde un caso de uso síncrono cada límite del runner es un savepoint dentro de la transacción del
+llamante, de modo que tragar la excepción confirmaría una escritura cuya proyección no se aplicó. Descartado hoy:
+añadir el `catch` ahora, por ser una abstracción para un solo llamante que además degrada el fallo ruidoso.
+
 ### D12 — `event_store` es append-only **con un conjunto cerrado de mutaciones sancionadas**: el borrado GDPR
 
 `PersistDomainEventMiddleware` escribe **todo** evento despachado **antes** de que Messenger decida transporte,
