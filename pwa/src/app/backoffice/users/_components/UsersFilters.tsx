@@ -130,7 +130,7 @@ export function UsersFilters({
             placeholder="Search by email…"
             aria-label="Search users by email"
             title="Search users by email (press / to focus)"
-            className="users-filters__search-input min-h-7 pl-8 pointer-coarse:min-h-11"
+            className="users-filters__search-input min-h-7 pl-8 any-pointer-coarse:min-h-11"
             data-testid="users-filters__email"
           />
         </div>
@@ -143,7 +143,7 @@ export function UsersFilters({
           aria-controls={panelId}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="users-filters__toggle order-2 h-auto min-h-7 w-full sm:order-3 sm:w-auto pointer-coarse:min-h-11"
+          className="users-filters__toggle order-2 h-auto min-h-7 w-full sm:order-3 sm:w-auto any-pointer-coarse:min-h-11"
           data-testid="users-filters__toggle"
           data-icon="inline-start"
         >

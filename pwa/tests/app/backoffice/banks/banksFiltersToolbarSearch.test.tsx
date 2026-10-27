@@ -98,4 +98,12 @@ describe("BanksFilters — '/' shortcut", () => {
       dialog.remove();
     }
   });
+
+  it("grows its toolbar controls to a 44px touch target whenever a coarse pointer is present", () => {
+    renderFilters();
+
+    for (const id of ["banks-filters__name", "banks-filters__toggle"]) {
+      expect(screen.getByTestId(id)).toHaveClass("any-pointer-coarse:min-h-11");
+    }
+  });
 });
