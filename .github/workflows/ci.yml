@@ -35,7 +35,7 @@ jobs:
   # -------------------------
   api-build:
     name: API Build (Docker)
-    # Skipped on dependabot pull requests, and every job downstream with it (api-test,
+    # Skipped on dependabot pull requests, and every job downstream with it (api-test, api-lint,
     # api-behat, pwa-e2e, the report and sonar `need` this one). Those PRs are almost
     # never merged as opened: /deps-update re-resolves them into one batch PR, which
     # runs this workflow in full — measured over 30 days, 43 of 44 were closed unmerged
@@ -78,7 +78,7 @@ jobs:
   # API TEST (fast feedback)
   # -------------------------
   api-test:
-    name: API Tests (PHPUnit + Lint)
+    name: API Tests (PHPUnit)
     needs: api-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -112,16 +112,6 @@ jobs:
 
       - name: Health check
         run: curl -skSf https://localhost/api/v1/health
-
-      # Check-only sweep (fails on drift instead of auto-fixing) fanned out
-      # read-only. phpstan is the CPU-heavy target; the rest are light
-      # or I/O-bound (doctrine + error-contract hit the DB/console). -j4 deliberately
-      # oversubscribes the 2-core runner so the light targets fill the gaps while the
-      # analyzer runs — GitHub runners have ~7GB RAM, so 4 PHP processes fit easily.
-      # Revisit from the step timing if a run shows it's purely CPU-bound (then -j2/3).
-      # --output-sync keeps logs grouped per-tool. (phpcs gated via php.cs.dry-run.)
-      - name: PHP lint (check, parallel)
-        run: make -j4 --output-sync=target php.quality.dry-run
 
       # The gate that decides a merge: the uninstrumented suite under
       # PHPUNIT_MEMORY_LIMIT (make/config.mk, 512M) with PHPUnit's strictness
@@ -170,6 +160,69 @@ jobs:
         uses: symfonycorp/security-checker-action@258311ef7ac571f1310780ef3d79fc5abef642b5 # v5
         with:
           lock: ./api/composer.lock
+
+  # -------------------------
+  # API LINT (parallel)
+  # -------------------------
+  # Its own job rather than a step of api-test: the sweep (~3 min) and the two
+  # PHPUnit passes (~3 min) share nothing — php.unit prepares its own test
+  # database — and in series they would be the longest leg of the path to
+  # ci-status. Apart, the sweep finishes inside api-test's shadow.
+  api-lint:
+    name: API Lint (PHP quality)
+    needs: api-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/docker-setup
+
+      - name: Build images
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
+        with:
+          source: "."
+          pull: true
+          load: true
+          targets: php
+          files: |
+            compose.yaml
+            compose.dev.yaml
+          set: |
+            php.cache-from=type=gha,scope=php-${{ github.ref_name }}
+            php.cache-from=type=gha,scope=php-main
+
+      # php.lint.doctrine and php.lint.error-contract reach the database and the console.
+      - name: Start API stack (backend only — no PWA)
+        run: make docker.up.wait.no-build.api
+
+      - name: Health check
+        run: curl -skSf https://localhost/api/v1/health
+
+      # Check-only sweep (fails on drift instead of auto-fixing) fanned out
+      # read-only. phpstan is the CPU-heavy target; the rest are light
+      # or I/O-bound (doctrine + error-contract hit the DB/console). -j4 deliberately
+      # oversubscribes the 2-core runner so the light targets fill the gaps while the
+      # analyzer runs — GitHub runners have ~7GB RAM, so 4 PHP processes fit easily.
+      # Revisit from the step timing if a run shows it's purely CPU-bound (then -j2/3).
+      # --output-sync keeps logs grouped per-tool. (phpcs gated via php.cs.dry-run.)
+      - name: PHP lint (check, parallel)
+        run: make -j4 --output-sync=target php.quality.dry-run
+
+      - name: Debug
+        if: failure()
+        run: |
+          echo "=== ps ==="; docker compose ps
+          for svc in php database; do
+            echo "=== $svc state ==="; docker inspect "$(docker compose ps -aq "$svc")" --format '{{json .State}}' || true
+          done
+          echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
+          echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
 
   # -------------------------
   # API BEHAT (parallel)
@@ -333,9 +386,12 @@ jobs:
   # -------------------------
   # PWA E2E (sharded — depends on build)
   # -------------------------
+  # Needs api-build only: it builds its own images and installs its own
+  # dependencies, so nothing pwa-node produces reaches it. Waiting for pwa-node
+  # would put the two (~6 + ~5 min) in series on the path to ci-status.
   pwa-e2e:
     name: PWA (E2E) [shard ${{ matrix.shard }}/${{ strategy.job-total }}]
-    needs: [pwa-node, api-build]
+    needs: api-build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -669,7 +725,7 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [api-build, api-test, api-behat, static, pwa-node, pwa-e2e, pwa-burn-in, sonar]
+    needs: [api-build, api-test, api-lint, api-behat, static, pwa-node, pwa-e2e, pwa-burn-in, sonar]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -679,6 +735,7 @@ jobs:
         env:
           R_API_BUILD: ${{ needs.api-build.result }}
           R_API_TEST: ${{ needs.api-test.result }}
+          R_API_LINT: ${{ needs.api-lint.result }}
           R_API_BEHAT: ${{ needs.api-behat.result }}
           R_STATIC: ${{ needs.static.result }}
           R_PWA_NODE: ${{ needs.pwa-node.result }}
@@ -694,6 +751,7 @@ jobs:
             echo "|---|---|"
             echo "| API Build       | $R_API_BUILD |"
             echo "| API Tests       | $R_API_TEST |"
+            echo "| API Lint        | $R_API_LINT |"
             echo "| API Behat       | $R_API_BEHAT |"
             echo "| Static          | $R_STATIC |"
             echo "| PWA (Node)      | $R_PWA_NODE |"
@@ -717,7 +775,8 @@ jobs:
           fi
 
           status=0
-          for pair in "api-build:$R_API_BUILD" "api-test:$R_API_TEST" "api-behat:$R_API_BEHAT" \
+          for pair in "api-build:$R_API_BUILD" "api-test:$R_API_TEST" "api-lint:$R_API_LINT" \
+                      "api-behat:$R_API_BEHAT" \
                       "static:$R_STATIC" "pwa-node:$R_PWA_NODE" "pwa-e2e:$R_PWA_E2E"; do
             case "${pair#*:}" in
               success) ;;
