@@ -1261,16 +1261,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       Closed [#593](https://github.com/sergio-salcedo-dev/ERPify/issues/593).
 - [x] **`failOnDeprecation` was structurally blind in CI — fixed 2026-08-12.** A deprecated _class_
       triggers at file scope, so it fires once per process, while the container compiles. Any
-      `bin/console` call under `APP_ENV=test` compiles it first, and CI runs several inside
-      `php.quality.dry-run` **before** the suite (`ci.yml`: PHP lint precedes PHPUnit). `Kernel::getCacheDir()`
+      `bin/console` call under `APP_ENV=test` compiles it first, and CI then ran several inside
+      `php.quality.dry-run` **before** the suite (`ci.yml` ran PHP lint before PHPUnit). `Kernel::getCacheDir()`
       forked only for Behat, so console and PHPUnit shared `var/cache/test`: PHPUnit loaded the warm
       container, never autoloaded the class, and reported green over a real deprecation. The gate
       that justified the mercure pin had therefore never once fired in CI. PHPUnit now compiles into
       its own directory (`PHPUNIT_RUNNING`, set in `tools/phpunit/bootstrap.php` the same three ways
       Behat sets its own flag — `getenv()` sees neither `$_ENV` nor `$_SERVER` alone, which is why a
       first attempt via phpunit.xml's `<server>` silently did nothing). **Measured on one tree, one
-      version, the CI order:** shared cache → `Tests: 2698`, 0 deprecations, green; forked cache →
+      version, in that CI order:** shared cache → `Tests: 2698`, 0 deprecations, green; forked cache →
       `Tests: 2698`, `Deprecations: 1`, red.
+      **Superseded 2026-10-30 ([#1145](https://github.com/sergio-salcedo-dev/ERPify/pull/1145)):** the lint
+      sweep is its own CI job (`api-lint`), so PHP lint no longer precedes PHPUnit in `ci.yml`. The private
+      directory stays load-bearing all the same: `php.unit` depends on `db.test.prepare`, whose
+      `bin/console` calls boot the `test` container before the suite does.
 - [ ] **38 direct composer dependencies are behind, because dependabot's composer lane was aimed at
       a directory with no manifest.** `.github/dependabot.yaml` declared `directory: /` while the
       manifest is `api/composer.json`, so the weekly version-update lane produced **zero** PRs in
