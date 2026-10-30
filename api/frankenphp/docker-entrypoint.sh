@@ -103,6 +103,19 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		fi
 	fi
 
+	# `async` gets its after-commit guarantee from resolving to the Doctrine transport on the connection the
+	# use cases write through, and MESSENGER_TRANSPORT_DSN is a per-service deployment value that no file in
+	# the repository can pin. Asked of THIS process, once, here: every service running this entrypoint
+	# (php, messenger_worker, scheduler_worker) answers for the DSN it was started with, and so does a
+	# one-off `docker compose run … bin/console`. A refusal exits 1 like the database wait above, so the
+	# container exits, `restart: unless-stopped` retries it and `docker compose up --wait` fails. The cause
+	# is printed by the command itself, just above: a bad DSN and a kernel that cannot boot both end here.
+	if ! php bin/console event:transport:assert-transactional --no-interaction; then
+		echo '✗ refusing to boot: the "async" transport check failed (see above).'
+		echo '  "async" must resolve to the Doctrine transport on the application connection.'
+		exit 1
+	fi
+
 	echo 'PHP app ready!'
 fi
 

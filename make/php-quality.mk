@@ -185,14 +185,20 @@ php.lint.audit-evidence: ## Audit erasure-evidence action classification gate
 # `failed` are Doctrine tables no erasure path touches — `async` unbounded, `failed` swept at 30 days —
 # so a queued person aggregate id outlives the erasure the application confirmed to the subject.
 #
-# The gate is two classes and each is selected BY NAME, in its own run. A common prefix keeps both under
+# The gate is three classes and each is selected BY NAME, in its own run. A common prefix keeps all three under
 # this target but goes green on a strict subset: rename or delete one class and the other still matches, the
 # suite is non-empty, and the target reports success with half the boundary gone. One filter per class makes
 # a vanished class an empty suite, which `failOnEmptyTestSuite` turns into exit 1 — so the count is pinned by
 # construction rather than by a number somebody has to remember to update.
-php.lint.persistent-transport: ## Persistent-transport person-aggregate policy gate
+php.lint.persistent-transport: php.lint.prod-container ## Persistent-transport person-aggregate policy gate
 	@$(PHP_TEST) bin/phpunit --filter=PersistentTransportPolicyGateTest
 	@$(PHP_TEST) bin/phpunit --filter=PersistentTransportRoutingShapeGateTest
+	@$(PHP_TEST) bin/phpunit --filter=AsyncTransportBootAssertionGateTest
+	@out="$$($(PHP_PROD_CAPTURE) php bin/console event:transport:assert-transactional --no-interaction 2>&1)" || { \
+		printf '%s\n' "$$out" >&2; \
+		echo "✗ php.lint.persistent-transport: the production kernel does not resolve async to the Doctrine transport on the application connection" >&2; \
+		exit 1; \
+	}
 
 ## —— Person-reference erasure gate —————————————————————————————————————————
 

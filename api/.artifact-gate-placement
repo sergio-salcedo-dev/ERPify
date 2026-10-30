@@ -112,6 +112,7 @@
 # ---------------------------------------------------------------------------------------------------------
 
 tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
+tests/Unit/Gate/AsyncTransportBootAssertionGateTest.php :: home
 tests/Unit/Gate/ConfigReferenceGateReadsHeadGateTest.php :: home
 tests/Unit/Gate/ProdEnvCheckGateTest.php :: home
 tests/Unit/Gate/ProdEnvProjectGateTest.php :: home
