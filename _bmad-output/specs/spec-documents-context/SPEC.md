@@ -47,6 +47,10 @@ A mandate and a vision. The ERP targets construction, which produces technical d
 
 ## Constraints
 
+- **Decided (the user, 2026-10-30): state-oriented persistence plus a custody log.** `Document` is a snapshot row; every transition also appends a `document_custody` row in the same transaction. Event sourcing was rejected on measurement, not taste: the event store has no stream loading, and its `aggregate_version` is informative (`MAX+1`, with a `UNIQUE` spanning a `NULL` `tenant_id` that never fires), so it would first need aggregate loading, optimistic concurrency and a serialised append. `document_custody` is not `audit_log`: reads stay in `audit_log`, which has a retention prune; custody never expires.
+- **Custody guarantees.** Writes serialise on `SELECT … FOR UPDATE` of the document row before `seq` is computed; `UNIQUE (document_id, seq)` is the second defence, not a substitute; ordinary application credentials cannot update or delete custody rows, enforced by a gate in the style of `SanctionedLogMutationGateTest`; custody stays readable after the key is destroyed. Grants and triggers bind ordinary roles only, so custody is not claimed cryptographically immutable.
+- **Decided: a version is its own `Document` aggregate.** It carries its own bytes, digest, key scope, retention, scan lifecycle and custody. It links to its predecessor by an immutable id and to its series by a scalar series id; no series aggregate exists and a read projection lists versions. A consumer references the exact version it relied on.
+- **Decided: the first evidence adapter is the local filesystem behind the `Documents` port**, and the port declares no WORM guarantee an adapter cannot enforce. S3 with object-lock waits for a first consumer and a defined retention vocabulary; the port keeps the move reversible (ADR D6). **Before first real use** the stored bytes need an encrypted offsite backup, digest verification and a proven restore of originals and metadata: a database dump is not a backup of the evidence.
 - **Mechanisms the capabilities lean on.** Ingest is a dedicated `UploadEvidence` use case; sealing is a stream-oriented sibling of `EnvelopeEncryptor` over `EncryptionScopeId` (one scope per document); erasure is `destroyScope()`. The sibling must keep the existing guarantee that sealing under a destroyed scope throws `DekDestroyed` instead of minting a fresh key; a test seals, destroys, seals again and expects refusal.
 - The contract is chosen by the use case (`UploadEvidence` vs `UploadImage`), never by a heuristic over MIME or size. The upload category joins `docs/rules/cqrs-naming.md` with the first slice.
 - There is no promotion between contracts. A fungible image never becomes evidence; the supported path is re-supplying the original through `UploadEvidence`.
@@ -71,7 +75,7 @@ A mandate and a vision. The ERP targets construction, which produces technical d
 - No deduplication, shared blob identity, reference counting or GC (ADR invariant 3).
 - No transformation of an original, and no virus scanning, OCR or versioning inside the images module.
 - No migration of images into evidence; no best-effort original kept in the images module.
-- Storage technology is not decided here; it is an infrastructure adapter.
+- No S3, object-lock or other non-local backend, and no hash-chaining of custody, in the first slices.
 - Retention is recorded but not enforced: no schedule erases on expiry. Erasure is on request until a story says otherwise (it would need a schedule consumer on a single replica).
 
 ## Success signal
@@ -87,10 +91,10 @@ A first `Documents` story can start from this folder without reopening the fungi
 
 ## Open Questions
 
-- **Persistence strategy of the `Document` aggregate (the user's call).** State-oriented costs one table and a snapshot, with history only in `audit_log`; it is enough if the custody chain is a log, not the model. Event-sourced costs events, projections and versioning, and buys the custody chain and temporal reconstruction natively; the contract's "auditable sequence of states" makes it a candidate. The original byte is immutable either way. Decide before any modelling; criteria in `docs/adr/bank-bankaccount-modeling.md`.
-- **Aggregate boundary (also the user's call):** is a version (CAP-7) a new `Document` aggregate or an entity inside one? ADR D3 already speaks of "a new aggregate" for a contract change.
+- **Key resurrection on restore.** A restored PostgreSQL dump brings back the wrapped key of a scope destroyed since, and the tombstone reconciler lives in the same restored database. Candidate: a ledger of confirmed erasures outside PostgreSQL, written when the key is destroyed and holding scope ids only, plus a mandatory restore step that stops writers and readers, re-applies the ledger, verifies, and only then re-enables. Consulting it on every read is rejected as an availability dependency. Open: its authority and durability, and the change to `restore.prod`. Blocks doc-7.
+- **Actor pseudonymisation in `document_custody`.** The actor column is a person reference, so it needs an erasure owner and a `PersonReferenceSource` under `api/.person-reference-policy`, while the custody row survives the document's erasure. Blocks doc-2.
+- **Custody against a PostgreSQL administrator.** Hash-chaining or external anchoring stays the revisit trigger of `docs/adr/regulatory-audit-trail.md` (A.8.15), not a decision made here.
 - Which bounded context hosts `Documents` (new top-level or under `Backoffice`), and what is its first consumer? The ADR names bank-account evidence and progress certificates only as examples.
-- Storage backend for evidence: local filesystem vs S3-compatible or Dropbox. Reversible per ADR D6, but WORM / object-lock needs differ from images. No story covers a non-local backend yet.
 - Scanner: ClamAV container vs external service. The scanner needs plaintext, so the choice is to scan during ingest before sealing or to decrypt for the scan; it shapes doc-4.
 - Scan retry: who drives it, the attempt cap before `ScanFailed`, the lease expiry, and whether `Ready` is ever rescanned.
 - Retention and legal-basis vocabulary for a construction business (prescription and liability periods).
