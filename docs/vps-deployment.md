@@ -172,13 +172,17 @@ Recreate the stack so the database picks up the new address
 
 ## Backups
 
-`database_data` (PostgreSQL) holds every byte of **application** state, so one dump
-is a complete recovery point for the data. The stack's other volumes carry no
-application data: `caddy_data` holds Caddy's ACME account key and issued
+`database_data` (PostgreSQL) holds the **rows** of application state, and one dump is a complete recovery
+point for them. It is not every byte: the `image_storage` volume holds the canonical bytes of stored images
+(`compose.yaml`), and `backup-prod.sh` dumps Postgres only, so a restore returns rows whose bytes are missing,
+and leaves the bytes of a subject erased after the dump on disk. The upload surface is withdrawn, so the
+volume may be empty today; it is part of the backup scope the day images return, and of the Documents scope
+below. `caddy_data` holds Caddy's ACME account key and issued
 certificates, and `caddy_config` its autosave. Losing them costs a certificate
 re-issue on the next boot, not data — but on a real domain that re-issue counts
 against the Let's Encrypt duplicate-certificate rate limit, so snapshot
-`caddy_data` too before rebuilding a host.
+`caddy_data` too before rebuilding a host. `pg_dump` covers one database, not cluster roles: they are
+recreated from `POSTGRES_USER` by Compose, which a drill confirms rather than assumes.
 
 ### Taking a backup — `make backup.prod`
 
@@ -211,26 +215,80 @@ for the `tls internal` rehearsal;
 
 ```cron
 PATH=/usr/local/bin:/usr/bin:/bin
-15 3 * * * cd /opt/erpify && BACKUP_SYNC_CMD='rclone sync /var/backups/erpify remote:erpify-backups' make backup.prod >> /var/log/erpify-backup.log 2>&1 || logger -t erpify-backup FAILED
+15 3 * * * cd /opt/erpify && set -a && . /etc/erpify/backup.env && set +a && BACKUP_SYNC_CMD='restic backup "$(ls -1t /var/backups/erpify/db-*.dump | head -1)" --tag erpify' make backup.prod >> /var/log/erpify-backup.log 2>&1 && curl -fsS -m 10 --retry 3 "$HC_PING_URL" >/dev/null || logger -t erpify-backup "FAILED (backup, upload or ping)"
 ```
 
+`/etc/erpify/backup.env` is `chmod 600` and holds `RESTIC_REPOSITORY`, `RESTIC_PASSWORD_FILE`, the backend's
+credentials and `HC_PING_URL`. The ping URL is a capability secret — anyone holding it can send a green
+ping — so it lives there and never in the crontab or a process listing. Only the **newest** dump is sent
+offsite: a snapshot of the whole `BACKUP_DIR` would carry up to fourteen dumps and stretch the retention
+below by that much.
+
 cron runs with a stripped `PATH` — set it explicitly (or use absolute paths) so
-`make`/`docker`/`rclone` resolve, otherwise the job dies with
+`make`/`docker`/`restic` resolve, otherwise the job dies with
 `make: command not found` and only the `|| logger` fires with no detail. The log
 captures `ls -lh` output and tool errors (which may include remote names), so
 create it `umask 077` / `chmod 600 /var/log/erpify-backup.log`.
 
-A backup that fails silently is no backup — keep the `|| logger` (or wire a
-real alert) so failures surface.
+**The heartbeat is the alert, `logger` is only the local trace.** The ping fires only when the whole
+pipeline exited 0 — dump, read-back, **and** the offsite hook — because `backup-prod.sh` runs under
+`set -e` and a failing `BACKUP_SYNC_CMD` fails the run. Configure the check (Healthchecks.io or any
+dead-man's switch) to alert when the daily ping is **missing**, with a grace period longer than the
+backup-plus-upload time measured in gate 1 and re-checked as the database grows (there is no start ping,
+so a run that is merely long looks the same as one that never began). A dead cron, a full disk or a
+destroyed VPS leave no log anyone can read, and absence is the only signal they produce. A locally
+successful dump with a failed upload is not a disaster-recovery backup and must not ping.
+
+Three limits. **A check that has never been pinged never alerts**: send one ping by hand and confirm the
+check reads *up* before relying on it. **The ping proves cron ran and the hook exited 0**, not that the data
+is intact, and anyone with the URL can forge it. And the single `logger` message cannot tell a failed backup
+from a failed ping; read the log before concluding which. The offsite RPO is 24 hours **only on nights the
+ping arrived**: local retention runs before the upload, so a failed upload leaves the local copy fresh and
+the offsite one a day older, with the ping as the only signal.
 
 ### Offsite copy (required)
 
 A backup on the same disk as the data does not survive the failure modes that
-matter (disk loss, VPS compromise, fat-fingered `rm`). Sync `BACKUP_DIR` to an
-independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive.
-**Dumps contain business data (PII): encrypt the offsite copy** — use an
-`rclone` `crypt` remote, or switch the whole pipeline to `restic`/`borg`
-(encrypted + deduplicating).
+matter (disk loss, VPS compromise, fat-fingered `rm`). Ship `BACKUP_DIR` to an
+independent failure domain via `BACKUP_SYNC_CMD`. **Use a snapshot tool (`restic`, or `borg`), not a
+mirror.** `rclone sync` propagates a local deletion to the remote on the next run, so one bad `rm` or one
+compromised host erases the offsite copy too. A snapshot repository keeps history, **but only a backend that
+refuses deletes from the VPS makes that history un-rewritable** (first bullet). **Dumps contain business data
+(PII), so the repository is encrypted** — restic does so by default.
+
+`BACKUP_SYNC_CMD` has one contract: **exit 0 means the snapshot was committed to the offsite repository**.
+It does not mean the snapshot restores: that is proven by `restic check --read-data-subset=<n>%` from the
+admin host and by the drills, never by the nightly exit code. Keep provider details (backend, credentials,
+flags) inside the command, so the script never learns what sits behind it.
+
+- **Credentials — to be proven, not assumed.** Retention and verification run from a different host with a
+  separate administrative credential; the VPS holds one that cannot delete snapshots. "Cannot delete" is not
+  "put-only": `restic backup` reads the repository's config, index and snapshots, and takes and removes
+  its own lock files. `rest-server --append-only` is the setup restic documents for this and permits lock
+  removal; a bucket with object-lock or an IAM policy without delete can make that lock removal fail and
+  leave stale locks, and clearing them (`restic unlock`) needs the admin credential. **Do not add a
+  lifecycle rule that expires objects by age**: restic deduplicates, so it would delete packs newer
+  snapshots still reference and corrupt the repository, detected only at restore. Gate 2 must show, with the
+  VPS's credential and the exact backend, two consecutive successful `restic backup` runs, a successful
+  `restic check`, and a refused `restic forget`. `restic init` runs once, from the admin host. If the test
+  fails, use `rest-server` or keep the delete-capable credential off the VPS.
+- **The repository password is custodied outside the VPS** (password manager or printed copy). A
+  password that lives only on the host it protects makes a destroyed VPS an unrecoverable backup. The VPS
+  also holds a copy to run the backup, so a compromised VPS can decrypt the repository's whole history:
+  append-only protects against deletion, **not against disclosure**.
+- **Offsite retention is independent of the 14-day local one**, and it is **provisional**. Run from the admin
+  host, away from the 03:15 backup (prune takes an exclusive lock):
+  `restic forget --group-by tags --keep-daily 14 --keep-weekly 4 --keep-monthly 3 --prune`.
+  `--group-by tags` is required: each snapshot holds a dump with a different path, and the default grouping
+  by host and path would put every dump in its own group, so no snapshot would ever be forgotten. The counts
+  are snapshots, not calendar days, so missed nights stretch them. The ceiling is not an operational
+  question: an old snapshot holds the `dek_keystore` rows of subjects erased since, so **about three months**
+  is also how long a restore can undo an erasure (see *Disaster-recovery readiness*). Do not lengthen it
+  without the privacy decision recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+- **Run `restic check` periodically** (monthly, with a read-data subset). Pruning is a separate command from
+  backing up; neither verifies the other.
+- **To pull a dump back:** `restic restore latest --tag erpify --target <dir>` with the repository password,
+  then point `BACKUP_DIR` at `<dir>` for `make restore.prod`.
 
 The backup strategy assumes local storage is the primary retention layer.
 Offsite sync failures do not block local retention management — retention prunes
@@ -360,7 +418,8 @@ fails, the writers stay stopped — rerun step 2 yourself to bring them back.
 ### Restore drill (quarterly)
 
 A backup is only proven by a restore. Once a quarter, restore the latest dump
-into the `erpify.local` rehearsal — never the live host. On the workstation that
+into the `erpify.local` rehearsal — never the live host once customers exist (the one pre-customer
+exception is gate 1 below). On the workstation that
 runs it (`make deploy.local`, see `erpify-local-test-deployment.md`), copy the
 dump into a local `BACKUP_DIR`, run
 `BACKUP_DIR=<dir> STAMP=<stamp> make restore.prod` and confirm a record seeded
@@ -383,6 +442,74 @@ Run the whole loop on the `erpify.local` rehearsal (project `erpify-prodlocal`)
 
 Only after this loop passes is the backup/restore procedure trusted for real
 production.
+
+### Disaster-recovery readiness (go-live gates)
+
+The rehearsal loop above proves the **restore procedure**. It does not prove that the VPS is recoverable:
+the dump was too small to say anything about timing, the paths were scratch paths, nothing came back from
+offsite, and nobody noticed a silent cron. Three gates stand between the procedure and a recovery, to be
+ticked with their evidence before the first customer: gates 1 and 2 are boxes in
+`PRODUCTION_SECURITY_CHECKLIST.md` §8, gate 3 is the open §7 item about restores undoing erasures.
+
+1. **Drill on the real VPS**, with the production `BACKUP_DIR` and permissions, on a database of realistic
+   size. It is a destructive restore over the live database, acceptable **only before the first customer**;
+   afterwards the same drill runs on a scratch host. Record backup, upload, download-and-decrypt, restore and
+   application-recovery durations separately: they are the RTO, and none exists until this runs. Include the
+   production refusal (`ALLOW_PROD_RESTORE` and the typed phrase) and one authenticated login after the
+   restore.
+2. **Restore from the offsite repository alone**, on a host that has never seen the VPS, using only the
+   independently custodied repository password and the secrets backup below. A recovery that needs the
+   failed host is not a recovery. The code must be reachable without the VPS too: check out the git ref the
+   dump was taken under before restoring, because `restore-prod.sh` runs no migrations and a dump restored
+   onto a different schema version is not a recovery. On any host that is not the VPS: stop
+   `messenger_worker` and `scheduler_worker` (or point the mailer at mailpit) so nobody real is emailed from
+   restored data, use a neutral `SERVER_NAME` so Caddy does not request a certificate for the production
+   domain, and destroy the database afterwards — it holds the resurrected keys of gate 3.
+3. **Re-erase after restoring.** A restore returns the whole database to the dump's instant: the
+   `dek_keystore` row of a subject erased since comes back with its `wrapped_dek`, and so do their identity
+   and bank-account rows. `SubjectErasureReconciler` is an anti-join between destroyed keys and
+   `GDPR_SUBJECT_ERASED` evidence, both inside the restored database, so it sees a live row and reports
+   nothing; a green reconciler after a restore proves nothing. Until a ledger of destroyed scope ids
+   survives outside the database, the runbook is, in order:
+   - **Before overwriting**, if the old database is still readable, copy its `GDPR_SUBJECT_ERASED` audit rows
+     out. In a total loss nothing can be copied, and the list is **incomplete by construction**.
+   - Keep an operator log of confirmed erasures **off the VPS** (an opaque subject reference and a date,
+     never a name). It is the only source that survives a total loss, it is itself personal data about erased
+     people, and it is deleted when the last snapshot older than its entries has expired.
+   - `docker compose … stop scheduler_worker` before the restore: `restore-prod.sh` stops only `php` and
+     `messenger_worker`, and the scheduler would keep ticking, mailing locked identities, against restored data.
+   - `restore-prod.sh` **restarts `php` and `messenger_worker` itself**, on success and from its exit trap,
+     and has no hold option. The moment it returns, stop them again; the seconds between are a window in
+     which the API serves resurrected data, and that residual is recorded in §7.
+   - Re-run the erasure for every subject in the log with a one-off container
+     (`docker compose … run --rm php bin/console identity:gdpr:erase-subject <id>`, and
+     `bank-account:gdpr:erase-subject` / `audit:gdpr:erase` where they apply), then start the writers and
+     the scheduler.
+
+Declared objectives, to be accepted rather than assumed: **RPO 24 hours** on the nights the heartbeat
+arrived (nightly dump), RTO unknown until gate 1. A shorter RPO needs WAL archiving, whose base backup is a
+physical one — `pg_dump` cannot seed PITR. Introduce it when a formal RPO below a day is stated, when a
+ledger of time-sensitive financial movements goes live, or when a contract requires it, and not before: an
+untested WAL archive is not a recovery guarantee. The quarterly drill above stays after go-live, and is
+repeated after any change of repository, credential or major version of Postgres or restic: an RTO measured
+once goes stale as the database grows.
+
+**Secrets are part of the backup.** A dump without `AUDIT_KEK` cannot be decrypted where it matters, and
+the rest of `.env.prod.local` is needed to bring the stack back. Keep them in a secrets store of their own,
+reached by a different credential from the data backups', and re-save them on every change of
+`.env.prod.local`: a stale copy is the likely failure, and nothing alerts on it. There is one KEK and it is
+not rotated (re-wrap tooling is unshipped, checklist §1), so it is kept as long as any live data or retained
+dump exists; losing it makes every dump useless. Once rotation exists, a retired KEK is kept as long as the
+oldest dump it opens. Keeping the KEK beside an old dump makes any resurrected DEK decryptable, so the dump
+retention above is the only bound on that. Store the exact env string: `make prod.env.check` on the clean
+host refuses a wrong-length value.
+
+The future Documents module widens this: its encrypted blobs are not in the database dump (nor is
+`image_storage`, above), while the keys that open them are. Its backup scope is the blobs, the keystore and
+the destroyed-key ledger, restored together, and it does not go live before gate 3 has a durable ledger
+behind it. That constraint is prose in this file and in the checklist, enforced by nothing; the Documents
+boundary itself is decided in the
+[conservation contract](./adr/images-vs-documents-conservation-contract.md), so a Documents spec cites both.
 
 ---
 

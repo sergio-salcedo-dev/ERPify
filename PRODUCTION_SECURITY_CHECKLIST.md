@@ -2426,6 +2426,39 @@ mitigated state. Accepting one means recording who accepted it and against which
       can spend the month's events and hide every later issue until the quota resets. Each sweep reads the
       organisation's dropped-event stats first, because nothing else would notice the quota running out. Re-assess
       before the first customer, on leaving the free plan, or the first time a sweep finds the quota spent.
+- [ ] **A restore from an older backup resurrects keys destroyed since, and nothing detects it.** The
+      crypto-shredding keystore lives in the database being restored: `DbalKeystore::destroy()` sets
+      `destroyed_at` and nulls `wrapped_dek` on the row, and a dump taken before that instant carries the row
+      live. After the restore the subject's audit scope is readable again, while
+      `DbalSubjectErasureReconciler` — an anti-join of destroyed keys against `GDPR_SUBJECT_ERASED` evidence,
+      both restored together — has nothing to report. The erasure the application confirmed to the subject is
+      undone with every gate green. It is not only the key: the same restore brings back the subject's identity
+      and bank-account rows. The bound is the offsite retention window — **about three months** with the
+      provisional tiers (daily 14, weekly 4, monthly 3; one dump per snapshot, counted in snapshots rather
+      than calendar days) — which is why those tiers are **not lengthened without a privacy decision**.
+      **Open — owner: Sergio; accept it in writing (who, when, against which customer) or close it before the
+      first customer.** The only mitigation today is the operator procedure in `docs/vps-deployment.md`
+      § Disaster-recovery readiness, gate 3, which depends on a person remembering and has three residuals:
+      `restore-prod.sh` restarts `php` and `messenger_worker` itself and has no hold option, so the API serves
+      resurrected data for the seconds before the operator stops them again (a `RESTORE_HOLD` option on the
+      script would close that window and is a decision, not yet made); in a total loss the pre-restore audit
+      rows cannot be copied out, so the list of erasures to repeat is **incomplete by construction** and rests
+      on an off-VPS operator log that is itself personal data about erased people; and the reconciler stays
+      green throughout. **Closing it needs a ledger of destroyed scope ids that survives outside the restore
+      boundary** (append-only, replicated offsite with the backups, opaque ids only — first check that no
+      scope id is derived from a person id) and a post-restore step that re-destroys every id in it.
+      The future Documents module multiplies the exposure: its per-document keys live in the same table and
+      its blobs are in no database dump, so it does not go live before this has a durable ledger — a rule
+      only this register states, with no gate behind it.
+      KEK rotation is not an available bound (re-wrap tooling is unshipped, § 1), and keeping the KEK beside an
+      old dump makes a resurrected DEK decryptable, so the dump's retention is the only dial.
+- [ ] **The offsite repository's append-only protects against deletion, not disclosure.** The VPS must hold
+      the restic password and a credential that can read the repository to run a backup, so whoever
+      compromises it can decrypt the whole offsite history of dumps, personal data included. That history is
+      as long as the retention above. Closing it means a design where the VPS can write but not read the
+      history (a per-run key, or a push-only relay), which is not designed; accepting it is a decision to
+      record. Untested alongside it: whether the upload-only credential permits `restic backup` at all (it
+      must take and remove lock files) — gate 2 below is the test.
 
 ## 8. Deploy & verify
 
@@ -2434,3 +2467,24 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
+- [ ] **Disaster-recovery gate 1: a restore drill ran on the real VPS, before the first customer.** The
+      local rehearsal proved the procedure on a dump too small for any timing; it proved nothing about the
+      VPS. It is a destructive restore over the live database, so afterwards the drill moves to a scratch
+      host. Evidence to record: backup, upload, download-and-decrypt, restore and application-recovery
+      durations (the RTO), the production refusal (`ALLOW_PROD_RESTORE` + typed phrase), and one
+      authenticated login afterwards. Procedure: `docs/vps-deployment.md` § Disaster-recovery readiness.
+      Gate 3 of that section is the §7 item above, not a box here.
+- [ ] **Disaster-recovery gate 2: a restore from the offsite repository alone succeeded** on a host that
+      never held the VPS's disk, using only the independently custodied restic password and the secrets
+      backup, with the git ref the dump was taken under. The same run proves the credential: with the VPS's
+      exact credential and backend, two consecutive `restic backup` runs succeed, `restic check` passes and
+      `restic forget` is refused. If the backup fails on lock removal, switch to `rest-server --append-only`
+      or keep the delete-capable credential off the VPS. The drill host mails nobody and is wiped afterwards.
+- [ ] **Backup failure is noticed from outside the VPS.** The cron line pings a dead-man's switch only
+      after dump, read-back and offsite upload all exited 0, the check alerts on a missing ping, a first
+      manual ping turned it *up*, and its grace period exceeds the duration measured in gate 1. Sentry's free
+      plan has no alerting, so nothing else would say a night was skipped.
+- [ ] **`AUDIT_KEK` and `.env.prod.local` are backed up** to a secrets store reached by a credential
+      different from the data backups', re-saved on every change. The one KEK is kept as long as any live
+      data or retained dump exists (losing it makes the dumps useless); a retired KEK, once rotation exists,
+      is kept as long as the oldest dump it opens.
