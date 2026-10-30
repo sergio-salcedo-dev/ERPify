@@ -211,26 +211,53 @@ for the `tls internal` rehearsal;
 
 ```cron
 PATH=/usr/local/bin:/usr/bin:/bin
-15 3 * * * cd /opt/erpify && BACKUP_SYNC_CMD='rclone sync /var/backups/erpify remote:erpify-backups' make backup.prod >> /var/log/erpify-backup.log 2>&1 || logger -t erpify-backup FAILED
+15 3 * * * cd /opt/erpify && BACKUP_SYNC_CMD='restic backup /var/backups/erpify --tag erpify' make backup.prod >> /var/log/erpify-backup.log 2>&1 && curl -fsS -m 10 --retry 3 "https://hc-ping.com/<check-uuid>" >/dev/null || logger -t erpify-backup FAILED
 ```
 
+`restic` reads its repository and password from `RESTIC_REPOSITORY` and `RESTIC_PASSWORD_FILE`
+(plus the backend's own credentials), exported in the crontab or a `chmod 600` file it sources.
+
 cron runs with a stripped `PATH` — set it explicitly (or use absolute paths) so
-`make`/`docker`/`rclone` resolve, otherwise the job dies with
+`make`/`docker`/`restic` resolve, otherwise the job dies with
 `make: command not found` and only the `|| logger` fires with no detail. The log
 captures `ls -lh` output and tool errors (which may include remote names), so
 create it `umask 077` / `chmod 600 /var/log/erpify-backup.log`.
 
-A backup that fails silently is no backup — keep the `|| logger` (or wire a
-real alert) so failures surface.
+**The heartbeat is the alert, `logger` is only the local trace.** The ping fires only when the whole
+pipeline exited 0 — dump, read-back, **and** the offsite hook — because `backup-prod.sh` runs under
+`set -e` and a failing `BACKUP_SYNC_CMD` fails the run. Configure the check (Healthchecks.io or any
+dead-man's switch) to alert when the daily ping is **missing**, with a grace period of a few hours:
+a dead cron, a full disk or a destroyed VPS leave no log anyone can read, and absence is the only
+signal they produce. A locally successful dump with a failed upload is not a disaster-recovery
+backup and must not ping.
 
 ### Offsite copy (required)
 
 A backup on the same disk as the data does not survive the failure modes that
-matter (disk loss, VPS compromise, fat-fingered `rm`). Sync `BACKUP_DIR` to an
-independent location via `BACKUP_SYNC_CMD` — e.g. `rclone sync` to S3/B2/Drive.
-**Dumps contain business data (PII): encrypt the offsite copy** — use an
-`rclone` `crypt` remote, or switch the whole pipeline to `restic`/`borg`
-(encrypted + deduplicating).
+matter (disk loss, VPS compromise, fat-fingered `rm`). Ship `BACKUP_DIR` to an
+independent failure domain via `BACKUP_SYNC_CMD`. **Use a snapshot tool (`restic`, or `borg`), not a
+mirror.** `rclone sync` propagates a local deletion to the remote on the next run, so one bad `rm` or one
+compromised host erases the offsite copy too; a snapshot repository keeps history that a later run
+cannot rewrite. **Dumps contain business data (PII), so the repository is encrypted** — restic does so
+by default.
+
+`BACKUP_SYNC_CMD` has one contract: **exit 0 means the offsite copy is independently recoverable**, not
+that a command was launched. Keep it to that, and keep provider details (backend, credentials, flags)
+inside the command, so the script never learns what sits behind it.
+
+- **Credentials.** The VPS holds an upload-only credential. Retention (`restic forget --prune`) and
+  `restic check` run from a different host with a separate administrative credential. Append-only is a
+  property of the backend, not of restic: use a bucket with object-lock plus a lifecycle rule, or
+  `rest-server --append-only`. A generic `rclone` backend gives no such guarantee.
+- **The repository password is custodied outside the VPS** (password manager or printed copy). A
+  password that lives only on the host it protects makes a destroyed VPS an unrecoverable backup.
+- **Offsite retention is independent of the 14-day local one**, and it is **provisional**:
+  daily 14 days, weekly 4, monthly 3. The ceiling is not an operational question — an old snapshot
+  holds the `dek_keystore` rows of subjects erased since, so it is also the window in which an erasure
+  can be undone by a restore (see *Disaster-recovery readiness*). Do not lengthen it without the privacy
+  decision recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+- **Run `restic check` periodically** (monthly is enough at this size). Pruning is a separate command from
+  backing up; neither verifies the other.
 
 The backup strategy assumes local storage is the primary retention layer.
 Offsite sync failures do not block local retention management — retention prunes
@@ -383,6 +410,45 @@ Run the whole loop on the `erpify.local` rehearsal (project `erpify-prodlocal`)
 
 Only after this loop passes is the backup/restore procedure trusted for real
 production.
+
+### Disaster-recovery readiness (go-live gates)
+
+The rehearsal loop above proves the **restore procedure**. It does not prove that the VPS is recoverable:
+the dump was tiny, the paths were scratch paths, nothing came back from offsite, and nobody noticed a
+silent cron. Three gates stand between the procedure and a recovery, and each is a box in
+`PRODUCTION_SECURITY_CHECKLIST.md` §8, to be ticked with its evidence before the first customer.
+
+1. **Drill on the real VPS**, with the production `BACKUP_DIR` and permissions, on a database of realistic
+   size. Record backup, upload, download-and-decrypt, restore and application-recovery durations
+   separately: they are the RTO, and none exists until this runs. Include the production refusal
+   (`ALLOW_PROD_RESTORE` and the typed phrase) and one authenticated login after the restore.
+2. **Restore from the offsite repository alone**, on a host that has never seen the VPS, using only the
+   independently custodied repository password and the secrets backup below. A recovery that needs the
+   failed host is not a recovery.
+3. **Re-erase after restoring.** A restore returns the keystore to the dump's instant. A subject erased
+   after that instant gets their `dek_keystore` row back with its `wrapped_dek`, and their data is
+   readable again. `SubjectErasureReconciler` is an anti-join between destroyed keys and
+   `GDPR_SUBJECT_ERASED` evidence, both inside the restored database, so it sees a live row and reports nothing.
+   Until a ledger of destroyed scope ids survives outside the database, the restore runbook is: keep
+   the application stopped, list the erasures confirmed to subjects since the recovery point from
+   their own record (support tickets, the audit export taken before the restore), re-run the erasure use
+   case for each, and only then start the writers.
+
+Declared objectives, to be accepted rather than assumed: **RPO 24 hours** (nightly dump), RTO unknown until
+gate 1. A shorter RPO needs WAL archiving, whose base backup is a physical one — `pg_dump` cannot seed
+PITR. Introduce it when a formal RPO below a day is stated, when a ledger of time-sensitive financial
+movements goes live, or when a contract requires it, and not before: an untested WAL archive is not a
+recovery guarantee.
+
+**Secrets are part of the backup.** A dump without `AUDIT_KEK` cannot be decrypted where it matters, and
+the rest of `.env.prod.local` is needed to bring the stack back. Keep them in a secrets store of their own,
+reached by a different credential from the data backups' and retained on its own schedule. Storing the KEK
+beside an old dump makes any resurrected DEK decryptable, so the dump's retention remains the bound; rotating
+the KEK is not available as a mitigation yet (re-wrap tooling is unshipped, see the checklist §1).
+
+The future Documents module widens this: its encrypted blobs are not in the database dump, while the
+keys that open them are. Its backup scope is the blobs, the keystore and the destroyed-key ledger, restored
+together, and it does not go live before gate 3 has a durable ledger behind it.
 
 ---
 

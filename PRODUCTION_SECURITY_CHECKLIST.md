@@ -2422,6 +2422,24 @@ mitigated state. Accepting one means recording who accepted it and against which
       can spend the month's events and hide every later issue until the quota resets. Each sweep reads the
       organisation's dropped-event stats first, because nothing else would notice the quota running out. Re-assess
       before the first customer, on leaving the free plan, or the first time a sweep finds the quota spent.
+- [ ] **A restore from an older backup resurrects keys destroyed since, and nothing detects it.** The
+      crypto-shredding keystore lives in the database being restored: `DbalKeystore::destroy()` sets
+      `destroyed_at` and nulls `wrapped_dek` on the row, and a dump taken before that instant carries the row
+      live. After the restore the subject's audit scope is readable again, while
+      `DbalSubjectErasureReconciler` — an anti-join of destroyed keys against `GDPR_SUBJECT_ERASED` evidence,
+      both restored together — has nothing to report. The erasure the application confirmed to the subject is
+      undone with every gate green. The bound is the offsite retention window, which is why that window is
+      provisional (daily 14 days, weekly 4, monthly 3) and **not lengthened without a privacy decision**; it
+      is owned by whoever decides what an erased subject is promised. The only mitigation today is the
+      operator procedure in `docs/vps-deployment.md` § Disaster-recovery readiness, gate 3 (stay stopped,
+      re-erase from each confirmed erasure's own record, then start the writers), which depends on a person
+      remembering. **Closing it needs a ledger of destroyed scope ids that survives outside the restore
+      boundary** (append-only, replicated offsite with the backups, opaque ids only — first check that no
+      scope id is derived from a person id) and a post-restore step that re-destroys every id in it.
+      The future Documents module multiplies the exposure: its per-document keys live in the same table and
+      its blobs are in no database dump, so it does not go live before this has a durable ledger.
+      KEK rotation is not an available bound (re-wrap tooling is unshipped, § 1), and keeping the KEK beside an
+      old dump makes a resurrected DEK decryptable, so the dump's retention is the only dial.
 
 ## 8. Deploy & verify
 
@@ -2430,3 +2448,16 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
+- [ ] **Disaster-recovery gate 1: a restore drill ran on the real VPS.** The local rehearsal proved the
+      procedure on a ~39 KB dump, scratch paths and raw-SQL seeding; it proved nothing about the VPS.
+      Evidence to record: backup, upload, download-and-decrypt, restore and application-recovery
+      durations (the RTO), the production refusal (`ALLOW_PROD_RESTORE` + typed phrase), and one
+      authenticated login afterwards. Procedure: `docs/vps-deployment.md` § Disaster-recovery readiness.
+- [ ] **Disaster-recovery gate 2: a restore from the offsite repository alone succeeded** on a host that
+      never held the VPS's disk, using only the independently custodied restic password and the secrets
+      backup. The upload credential on the VPS cannot delete snapshots (object-lock or append-only).
+- [ ] **Backup failure is noticed from outside the VPS.** The cron line pings a dead-man's switch only
+      after dump, read-back and offsite upload all exited 0, and the check alerts on a missing ping.
+      Sentry's free plan has no alerting, so nothing else would say a night was skipped.
+- [ ] **`AUDIT_KEK` and `.env.prod.local` are backed up** to a secrets store reached by a credential
+      different from the data backups', with the KEK's retention not exceeding the dumps'.
