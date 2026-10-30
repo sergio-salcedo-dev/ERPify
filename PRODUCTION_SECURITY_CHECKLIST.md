@@ -1271,6 +1271,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       first attempt via phpunit.xml's `<server>` silently did nothing). **Measured on one tree, one
       version, the CI order:** shared cache → `Tests: 2698`, 0 deprecations, green; forked cache →
       `Tests: 2698`, `Deprecations: 1`, red.
+      **Superseded by [#1145](https://github.com/sergio-salcedo-dev/ERPify/pull/1145):** the lint sweep
+      is its own CI job (`api-lint`), so PHP lint no longer precedes PHPUnit in `ci.yml`. The private
+      directory stays load-bearing all the same: `php.unit` depends on `db.test.prepare`, whose
+      `bin/console` calls boot the `test` container before the suite does.
 - [ ] **38 direct composer dependencies are behind, because dependabot's composer lane was aimed at
       a directory with no manifest.** `.github/dependabot.yaml` declared `directory: /` while the
       manifest is `api/composer.json`, so the weekly version-update lane produced **zero** PRs in
