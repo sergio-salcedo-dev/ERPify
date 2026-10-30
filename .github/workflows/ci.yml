@@ -164,10 +164,13 @@ jobs:
   # -------------------------
   # API LINT (parallel)
   # -------------------------
-  # Its own job rather than a step of api-test: the sweep (~3 min) and the two
-  # PHPUnit passes (~3 min) share nothing — php.unit prepares its own test
-  # database — and in series they would be the longest leg of the path to
-  # ci-status. Apart, the sweep finishes inside api-test's shadow.
+  # Its own job rather than a step of api-test: the sweep and the two PHPUnit
+  # passes take about 3 minutes each (medians of the last 22 runs on main: 181 s
+  # and 56 + 138 s) and neither's verdict depends on the other — php.unit
+  # prepares its own test database — so in series they were the longest leg of
+  # the path to ci-status. Apart, the sweep finishes inside api-test's shadow.
+  # The two run independently: a red sweep does not stop the PHPUnit passes,
+  # nor the other way round.
   api-lint:
     name: API Lint (PHP quality)
     needs: api-build
@@ -197,7 +200,8 @@ jobs:
             php.cache-from=type=gha,scope=php-${{ github.ref_name }}
             php.cache-from=type=gha,scope=php-main
 
-      # php.lint.doctrine and php.lint.error-contract reach the database and the console.
+      # Every php.* target execs into the running php container, and the gates that
+      # read docs/ or the repo root do it through that service's read-only bind mounts.
       - name: Start API stack (backend only — no PWA)
         run: make docker.up.wait.no-build.api
 
@@ -206,7 +210,7 @@ jobs:
 
       # Check-only sweep (fails on drift instead of auto-fixing) fanned out
       # read-only. phpstan is the CPU-heavy target; the rest are light
-      # or I/O-bound (doctrine + error-contract hit the DB/console). -j4 deliberately
+      # or I/O-bound (kernel boots for yaml and doctrine, file reads for the gates). -j4 deliberately
       # oversubscribes the 2-core runner so the light targets fill the gaps while the
       # analyzer runs — GitHub runners have ~7GB RAM, so 4 PHP processes fit easily.
       # Revisit from the step timing if a run shows it's purely CPU-bound (then -j2/3).
@@ -218,11 +222,12 @@ jobs:
         if: failure()
         run: |
           echo "=== ps ==="; docker compose ps
-          for svc in php database; do
+          for svc in php database messenger_worker; do
             echo "=== $svc state ==="; docker inspect "$(docker compose ps -aq "$svc")" --format '{{json .State}}' || true
           done
           echo "=== php (last 50 lines) ==="; docker compose logs --tail=50 php || true
           echo "=== database (last 50 lines) ==="; docker compose logs --tail=50 database || true
+          echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
   # API BEHAT (parallel)
@@ -387,8 +392,11 @@ jobs:
   # PWA E2E (sharded — depends on build)
   # -------------------------
   # Needs api-build only: it builds its own images and installs its own
-  # dependencies, so nothing pwa-node produces reaches it. Waiting for pwa-node
-  # would put the two (~6 + ~5 min) in series on the path to ci-status.
+  # dependencies, so no artifact pwa-node produces reaches it. Waiting for
+  # pwa-node would put the two (about 6 + 5 minutes, medians of the last 22 runs
+  # on main) in series on the path to ci-status. The two run independently: E2E
+  # starts whether pwa-node is red or not, and after a PWA lockfile change both
+  # shards install from a cold npm cache that pwa-node has not saved yet.
   pwa-e2e:
     name: PWA (E2E) [shard ${{ matrix.shard }}/${{ strategy.job-total }}]
     needs: api-build
