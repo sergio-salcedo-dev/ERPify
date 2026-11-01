@@ -63,7 +63,7 @@
         "symfony/mercure": "^0.9",
         "symfony/mercure-bundle": "^0.6.1",
         "symfony/messenger": "^8.1.9",
-        "symfony/mime": "^8.1.7",
+        "symfony/mime": "^8.1.10",
         "symfony/monolog-bundle": "^4.1.0",
         "symfony/password-hasher": "^8.1.0",
         "symfony/polyfill-php86": "^1.43",

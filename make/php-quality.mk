@@ -644,8 +644,9 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #      `php.md` and `php.cs.dry-run` — the two members whose input sets reach `api/config/` — and the
 #      file is excluded in `api/tools/phpmd/phpmd.xml` as well, because a prerequisite list is an
 #      enumeration and the exclusion is a mechanism.
-# php.lint.doctrine + php.lint.error-contract still need the running stack
-# (DB + console), which CI already has up from `docker.up.wait.no-build.api`.
+# Every php.* target execs into the running php container, which CI already has up from
+# `docker.up.wait.no-build.api`; php.lint.yaml and php.lint.doctrine boot the kernel there and the
+# error-contract gate reads docs/ through that service's read-only bind mount.
 #
 # phpcs IS gated here via php.cs.dry-run: its line-length backlog was cleaned up
 # (all lines ≤120), so plain `phpcs` now FAILS on any new >120 (warning) / >160
