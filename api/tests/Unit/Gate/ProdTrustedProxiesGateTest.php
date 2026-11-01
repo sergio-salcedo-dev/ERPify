@@ -112,7 +112,8 @@ final class ProdTrustedProxiesGateTest extends TestCase
 
         // `reference.php` documents every option, this one included, and configures nothing.
         $configuration = Finder::create()->files()->in($this->apiRoot() . '/config')
-            ->name(['*.yaml', '*.yml', '*.php'])->notName('reference.php');
+            ->name(['*.yaml', '*.yml', '*.php'])->notName('reference.php')
+        ;
 
         foreach ($configuration as $file) {
             if (1 === \preg_match('/trusted_?proxies[\'"]?\s*(?::|=>|\()/i', $file->getContents())) {
@@ -121,7 +122,8 @@ final class ProdTrustedProxiesGateTest extends TestCase
         }
 
         $code = Finder::create()->files()->in([$this->apiRoot() . '/src', $this->apiRoot() . '/public'])
-            ->name('*.php');
+            ->name('*.php')
+        ;
 
         foreach ($code as $file) {
             if (\str_contains($file->getContents(), 'setTrustedProxies(')) {
@@ -147,7 +149,7 @@ final class ProdTrustedProxiesGateTest extends TestCase
     private function resolvedWhenUnset(mixed $value): string
     {
         $this->assertIsScalar($value, \sprintf(
-            '%s carries no value, so the container receives it unset and falls back to the image\'s dumped `.env`. '
+            "%s carries no value, so the container receives it unset and falls back to the image's dumped `.env`. "
                 . 'Spell the empty default explicitly: ${%s:-}.',
             self::VARIABLE,
             self::VARIABLE,
@@ -217,9 +219,8 @@ final class ProdTrustedProxiesGateTest extends TestCase
         $map = [];
 
         foreach ($environment as $entry) {
-            $entry = \is_scalar($entry) ? (string) $entry : '';
-            [$key, $value] = \array_pad(\explode('=', $entry, 2), 2, null);
-            $map[$key] = $value;
+            $parts = \explode('=', \is_scalar($entry) ? (string) $entry : '', 2);
+            $map[$parts[0]] = $parts[1] ?? null;
         }
 
         return $map;

@@ -140,7 +140,7 @@ final class RequestBodyBoundGateTest extends TestCase
         ]);
 
         $response = \curl_exec($handle);
-        $status = (int) \curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        $status = \curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
 
         // A server that answers before reading the whole body closes the connection under the upload, which
         // curl reports as a send failure AFTER it has the status line — so a status wins over the error.
