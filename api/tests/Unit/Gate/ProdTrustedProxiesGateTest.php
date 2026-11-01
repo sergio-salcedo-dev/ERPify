@@ -6,7 +6,6 @@ namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Tests\Support\RepositoryRoot;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Finder\Finder;
@@ -23,14 +22,17 @@ use Symfony\Component\Yaml\Yaml;
  * Four directions, each a way the value comes back wider:
  *   - `compose.prod.yaml` declares it on `php`, resolving EMPTY when the environment does not set it — an
  *     absent declaration inherits the development ranges from `compose.yaml`;
- *   - no other overlay of the prod stack declares a value that resolves non-empty;
- *   - the env template ships no active line for it, so a copied template cannot widen it;
- *   - no file under `config/packages` sets `trusted_proxies` itself, which would bypass the variable.
+ *   - no other root compose overlay (`compose*.y[a]ml` beside the base, dev and prod files — the rehearsal
+ *     overlay today) declares a value that resolves non-empty, found by glob so a new overlay is read by default;
+ *   - the env template ships no active line for it, in either spelling Compose and `prod-env.sh` accept;
+ *   - nothing sets the proxies itself: no `trusted_proxies` key in any YAML or PHP file under `config/`, and no
+ *     `Request::setTrustedProxies()` under `src/`, `public/` or `config/`, either of which bypasses the variable.
  *
  * **What a green does NOT prove.** It reads the files, never the deploy: a value set in `.env.prod.local`, on a
  * command line or in a service started outside these files is invisible here, and so is a load balancer that
  * a deployment names correctly or wrongly. It never judges a non-empty value an operator chooses on purpose —
- * that is the opt-in, and review is the only control on it.
+ * that is the opt-in, and review is the only control on it. Its config and source scans are text matches, so a
+ * key or call reached through a constant, a string built at runtime or an alias is invisible to them.
  *
  * @internal
  */
@@ -63,36 +65,35 @@ final class ProdTrustedProxiesGateTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('provideProdStackOverlayCases')]
-    public function noOtherProdOverlayWidensIt(string $overlay): void
+    public function noOtherOverlayWidensIt(): void
     {
-        foreach ($this->environmentsIn($overlay) as $service => $environment) {
-            if (!\array_key_exists(self::VARIABLE, $environment)) {
-                continue;
+        $overlays = $this->otherOverlays();
+
+        // The rehearsal overlay exists today, so an empty sweep means the glob or the root broke, not that the
+        // tree holds nothing to read.
+        $this->assertContains('compose.rehearsal.yaml', $overlays, 'The overlay sweep found no overlay at all.');
+
+        foreach ($overlays as $overlay) {
+            foreach ($this->environmentsIn($overlay) as $service => $environment) {
+                if (!\array_key_exists(self::VARIABLE, $environment)) {
+                    continue;
+                }
+
+                $this->assertSame('', $this->resolvedWhenUnset($environment[self::VARIABLE]), \sprintf(
+                    '%s sets %s on `%s` to a value that resolves non-empty, overriding the empty prod default.',
+                    $overlay,
+                    self::VARIABLE,
+                    $service,
+                ));
             }
-
-            $this->assertSame('', $this->resolvedWhenUnset($environment[self::VARIABLE]), \sprintf(
-                '%s sets %s on `%s` to a value that resolves non-empty, overriding the empty prod default.',
-                $overlay,
-                self::VARIABLE,
-                $service,
-            ));
         }
-    }
-
-    /**
-     * @return iterable<string, array{string}>
-     */
-    public static function provideProdStackOverlayCases(): iterable
-    {
-        yield 'the local rehearsal overlay' => ['compose.rehearsal.yaml'];
     }
 
     #[Test]
     public function theTemplateShipsNoActiveValue(): void
     {
         $active = \preg_grep(
-            '/^\s*' . self::VARIABLE . '\s*=/',
+            '/^\s*(?:export\s+)?' . self::VARIABLE . '\s*[=:]/',
             \explode("\n", $this->read(self::TEMPLATE)),
         );
 
@@ -105,19 +106,32 @@ final class ProdTrustedProxiesGateTest extends TestCase
     }
 
     #[Test]
-    public function noPackageConfigurationSetsTheTrustedProxiesItself(): void
+    public function nothingSetsTheTrustedProxiesItself(): void
     {
         $offenders = [];
 
-        foreach (Finder::create()->files()->in($this->apiRoot() . '/config/packages')->name('*.yaml') as $file) {
-            if (1 === \preg_match('/^\s*trusted_proxies\s*:/m', $file->getContents())) {
+        // `reference.php` documents every option, this one included, and configures nothing.
+        $configuration = Finder::create()->files()->in($this->apiRoot() . '/config')
+            ->name(['*.yaml', '*.yml', '*.php'])->notName('reference.php');
+
+        foreach ($configuration as $file) {
+            if (1 === \preg_match('/trusted_?proxies[\'"]?\s*(?::|=>|\()/i', $file->getContents())) {
+                $offenders[] = 'config/' . $file->getRelativePathname();
+            }
+        }
+
+        $code = Finder::create()->files()->in([$this->apiRoot() . '/src', $this->apiRoot() . '/public'])
+            ->name('*.php');
+
+        foreach ($code as $file) {
+            if (\str_contains($file->getContents(), 'setTrustedProxies(')) {
                 $offenders[] = $file->getRelativePathname();
             }
         }
 
         $this->assertSame([], $offenders, \sprintf(
-            'These files set `framework.trusted_proxies` directly, which bypasses %s and the empty prod default '
-                . 'this gate pins: %s',
+            'These files set the trusted proxies themselves, which bypasses %s and the empty prod default this '
+                . 'gate pins: %s',
             self::VARIABLE,
             \implode(', ', $offenders),
         ));
@@ -126,23 +140,27 @@ final class ProdTrustedProxiesGateTest extends TestCase
     /**
      * What Compose interpolates when the deployment's environment does not set the variable: a literal is
      * itself, `${VAR:-default}` and `${VAR-default}` are their default. Any other spelling is refused rather
-     * than guessed, because a reading this gate cannot make is a value it cannot vouch for.
+     * than guessed, because a reading this gate cannot make is a value it cannot vouch for — and so is a bare
+     * key, which Compose leaves UNSET in the container rather than empty, handing the value to whatever the
+     * image's dumped `.env` holds.
      */
     private function resolvedWhenUnset(mixed $value): string
     {
-        $this->assertTrue(
-            null === $value || \is_scalar($value),
-            \sprintf('%s is not a scalar, so this gate cannot read what it resolves to.', self::VARIABLE),
-        );
+        $this->assertIsScalar($value, \sprintf(
+            '%s carries no value, so the container receives it unset and falls back to the image\'s dumped `.env`. '
+                . 'Spell the empty default explicitly: ${%s:-}.',
+            self::VARIABLE,
+            self::VARIABLE,
+        ));
 
-        $value = null === $value ? '' : (string) $value;
+        $value = (string) $value;
 
         if (!\str_contains($value, '$')) {
             return $value;
         }
 
         if (1 !== \preg_match('/^\$\{' . self::VARIABLE . ':?-([^}]*)\}$/', $value, $match)) {
-            self::fail(\sprintf(
+            $this->fail(\sprintf(
                 '%s is spelled "%s", which this gate cannot resolve. Use a literal or ${%s:-<default>}.',
                 self::VARIABLE,
                 $value,
@@ -207,7 +225,28 @@ final class ProdTrustedProxiesGateTest extends TestCase
         return $map;
     }
 
-    private function read(string $relativePath): string
+    /**
+     * Every root compose file except the three whose roles are fixed: the base trusts the development ranges
+     * on purpose, dev never ships, and the prod overlay is pinned by its own test.
+     *
+     * @return list<string>
+     */
+    private function otherOverlays(): array
+    {
+        $overlays = [];
+
+        $files = Finder::create()->files()->in($this->root())->depth(0)->name(['compose*.yaml', 'compose*.yml']);
+
+        foreach ($files as $file) {
+            $overlays[] = $file->getFilename();
+        }
+
+        \sort($overlays);
+
+        return \array_values(\array_diff($overlays, ['compose.yaml', 'compose.dev.yaml', self::PROD_OVERLAY]));
+    }
+
+    private function root(): string
     {
         $root = RepositoryRoot::path();
         $this->assertNotNull(
@@ -216,7 +255,12 @@ final class ProdTrustedProxiesGateTest extends TestCase
                 . 'in compose.dev.yaml.',
         );
 
-        $contents = \file_get_contents($root . '/' . $relativePath);
+        return $root;
+    }
+
+    private function read(string $relativePath): string
+    {
+        $contents = \file_get_contents($this->root() . '/' . $relativePath);
         $this->assertIsString($contents, \sprintf('Cannot read "%s" at the repository root.', $relativePath));
 
         return $contents;

@@ -16,19 +16,20 @@ use RuntimeException;
  *
  * The oracle is the anonymous login route, because it is the one an attacker reaches without a session and
  * because it reads the body whole: `json_login` decodes it, so a complete body — however large its password —
- * answers the uniform 401, while a truncated one is not JSON and answers 400 (or Caddy refuses it with 413
- * before PHP sees it). A 401 past the bound is therefore the regression: the whole body arrived.
+ * answers the uniform 401, while a truncated one is not JSON and answers 400 `invalid-input` (or Caddy refuses
+ * it with 413 before PHP sees it). A 401 past the bound is therefore the regression: the whole body arrived.
  *
- * Both spellings are probed because the bound once keyed on an `/api*` path and Symfony routes on
- * REQUEST_URI, so `/index.php/api/…` reached the same route with no bound at all.
+ * Both spellings are probed because Symfony routes on REQUEST_URI: a bound keyed on an `/api*` spelling would
+ * leave `/index.php/api/…` reaching the same route with no bound at all.
  *
  * It sends real requests through Caddy rather than through the kernel, because the subject is a Caddy
  * directive and the kernel never runs it.
  *
  * **What a green does NOT prove.** It says nothing about a route that streams its body, about a body sent to
  * the PWA or the hub (both routed before the bound), or about a deployment whose
- * `{$CADDY_SERVER_EXTRA_DIRECTIVES}` or `{$CADDY_EXTRA_CONFIG}` adds its own `request_body`. It proves the
- * bound sits between 0.9 MB and 2 MB, not where exactly.
+ * `{$CADDY_SERVER_EXTRA_DIRECTIVES}` or `{$CADDY_EXTRA_CONFIG}` adds its own `request_body`. It observes the
+ * development Caddy, not the prod image. It proves the bound sits between 0.9 MB and 2 MB, not where exactly,
+ * and a guard added later that reads the whole body and answers 400 `invalid-input` would pass for the bound.
  *
  * @internal
  */
@@ -46,7 +47,7 @@ final class RequestBodyBoundGateTest extends TestCase
     #[DataProvider('provideLoginSpellingCases')]
     public function aBodyUnderTheBoundReachesTheLoginWhole(string $path): void
     {
-        $status = $this->postLogin($path, self::UNDER_BOUND_PASSWORD_BYTES);
+        [$status] = $this->postLogin($path, self::UNDER_BOUND_PASSWORD_BYTES);
 
         // The control the bounded case leans on: without it, a 400 below could be any refusal rather than a
         // truncation, and the gate would pass over a route that never read the body at all.
@@ -63,7 +64,7 @@ final class RequestBodyBoundGateTest extends TestCase
     #[DataProvider('provideLoginSpellingCases')]
     public function aBodyOverTheBoundNeverReachesTheLoginWhole(string $path): void
     {
-        $status = $this->postLogin($path, self::OVER_BOUND_PASSWORD_BYTES);
+        [$status, $body] = $this->postLogin($path, self::OVER_BOUND_PASSWORD_BYTES);
 
         $this->assertNotSame(self::CREDENTIALS_REFUSED, $status, \sprintf(
             'A %d-byte login body to %s reached Symfony whole: an anonymous caller can make a worker read as '
@@ -79,6 +80,15 @@ final class RequestBodyBoundGateTest extends TestCase
             $path,
             $status,
         ));
+
+        if (400 === $status) {
+            // Any 400 would otherwise read as truncation; only the malformed-JSON refusal is one.
+            $this->assertStringContainsString('"invalid-input"', $body, \sprintf(
+                'The over-bound login to %s answered 400 for a reason other than a truncated body: %s',
+                $path,
+                $body,
+            ));
+        }
     }
 
     /**
@@ -91,7 +101,10 @@ final class RequestBodyBoundGateTest extends TestCase
         yield 'the same route through the front controller' => ['/index.php/api/v1/backoffice/login'];
     }
 
-    private function postLogin(string $path, int $passwordBytes): int
+    /**
+     * @return array{int, string}
+     */
+    private function postLogin(string $path, int $passwordBytes): array
     {
         $handle = \curl_init('https://localhost' . $path);
 
@@ -99,7 +112,8 @@ final class RequestBodyBoundGateTest extends TestCase
             throw new RuntimeException('Could not initialise the probe.');
         }
 
-        // A fresh address per probe, so the per-address login throttle can never be what answers.
+        // A fresh address per probe keeps the per-address throttle out of the answer. The per-IP one is shared
+        // with every probe of this stack, but a run spends two of its attempts against a budget of tens.
         $body = \sprintf(
             '{"email":"body-bound-%s@erpify.test","password":"%s"}',
             \bin2hex(\random_bytes(8)),
@@ -134,6 +148,6 @@ final class RequestBodyBoundGateTest extends TestCase
             throw new RuntimeException(\sprintf('The probe could not reach Caddy: %s', \curl_error($handle)));
         }
 
-        return $status;
+        return [$status, \is_string($response) ? $response : ''];
     }
 }
