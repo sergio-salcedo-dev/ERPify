@@ -12,12 +12,15 @@
   title: Documents bounded context skeleton and storage port
   description: >-
     Create the context, the Document aggregate shell and its own stream-writing storage port
-    with a first adapter (CAP-1 groundwork). Blocked on the persistence-strategy, aggregate
-    boundary, host-context and storage-backend decisions.
+    with a first filesystem adapter (CAP-1 groundwork): the document snapshot table and the
+    append-only document_custody table. Blocked on the host-context decision and on the actor
+    pseudonymisation question.
   spec_checkpoint: true
   invoke_dev_with: >-
-    Stop and present the persistence-strategy decision (state-oriented vs event-sourced) to the
-    user before modelling. Do not reuse ImageStorage or any generic storage port. Register every
+    State-oriented Document plus document_custody, one transaction, SELECT ... FOR UPDATE before
+    seq, UNIQUE (document_id, seq), and a gate refusing update/delete of custody rows; each
+    version is its own aggregate. The port declares no WORM guarantee. Do not reuse
+    ImageStorage or any generic storage port. Register every
     person-id column (person-reference policy, attribute, detective source) and the
     Document resource type in the same PR that adds it.
 - id: "doc-3"
@@ -63,7 +66,8 @@
     (CAP-4); record the digest residual in the security checklist.
   done_checkpoint: true
   invoke_dev_with: >-
-    Owes a recorded adversarial pass. Erasure must not wait on a scan. Subject erasure iterates
+    Owes a recorded adversarial pass. Needs the key-resurrection-on-restore question answered
+    (external erasure ledger and restore step). Erasure must not wait on a scan. Subject erasure iterates
     every version. No person event on a persisted transport.
 - id: "doc-8"
   title: Dependent derivatives through the images module
@@ -82,8 +86,8 @@
     A new version is a new immutable original linked to its predecessor, with erased nodes
     kept as readable tombstones (CAP-7).
   invoke_dev_with: >-
-    Touches erasure semantics, so it owes a recorded adversarial pass. Needs the aggregate
-    boundary decision.
+    Touches erasure semantics, so it owes a recorded adversarial pass. Each version is its own aggregate
+    (decided); the series is a scalar id plus a read projection.
 - id: "doc-10"
   title: OCR of scanned PDFs
   description: >-

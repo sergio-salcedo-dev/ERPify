@@ -1,6 +1,6 @@
 # Evidence lifecycle
 
-Logical states of a document and who may act in each. They are not table columns: how they persist depends on the open persistence decision. Names are working names for the first story to confirm; the invariants are not.
+Logical states of a document and who may act in each. They are not table columns: they persist as the `Document` snapshot, with each transition appended to `document_custody` (see `SPEC.md`). Names are working names for the first story to confirm; the invariants are not.
 
 ```mermaid
 stateDiagram-v2
