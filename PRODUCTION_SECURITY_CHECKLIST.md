@@ -2281,19 +2281,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       a hairpin, a NAT. That is the key of `login_throttling` (both its limiters), `anonymous_api` and every
       other IP-scoped budget, and the `ip` the audit trail and the session registry record. `compose.prod.yaml`
       now sets `SYMFONY_TRUSTED_PROXIES` empty; a deployment with a real load balancer names that address
-      alone (`.env.prod.example`). **Residuals:** nothing gates the value, so a deployment can widen it again
-      from its env file; and an IPv6 client still reaches PHP as the bridge gateway when the `frontend` network
-      has no IPv6, so all such clients share one limiter bucket — an over-limit and a denial of service between
-      them, no longer a bypass. Enabling IPv6 on that network, or `userland-proxy: false` on the daemon, is a
-      host decision this repository cannot pin.
+      alone (`.env.prod.example`). `ProdTrustedProxiesGateTest` holds the files to that: the prod overlay
+      declares it with an empty default, no other prod overlay widens it, the template ships no active line and
+      no package configuration sets `trusted_proxies` itself. **Residuals:** the gate reads files, never the
+      deploy, so a deployment can still widen it from its own env file; and an IPv6 client still reaches PHP as
+      the bridge gateway when the `frontend` network has no IPv6, so all such clients share one limiter bucket —
+      an over-limit and a denial of service between them, no longer a bypass. Enabling IPv6 on that network, or
+      `userland-proxy: false` on the daemon, is a host decision this repository cannot pin.
 
 - [x] **A request body reaching PHP is bounded at 1MB, closed 2026-10-23.** Symfony reads a JSON body whole,
       so an anonymous POST to the login route could cost a worker as much memory as the client cared to send.
       `request_body` in `api/frankenphp/Caddyfile` now caps every request the front controller serves, keyed on
       the rewritten `index.php` rather than on an `/api*` spelling, because `/index.php/api/…` reaches the same
-      routes. **Residuals:** no gate reads the directive, so deleting it leaves every check green; a client past
-      the bound sees its request fail rather than a guaranteed 413; and the first upload route needs its own
-      bound (`erpify.images.max_input_bytes` is 20 MB).
+      routes. `RequestBodyBoundGateTest` observes it through the running Caddy, on both spellings: a body under
+      the bound reaches the login whole (401), one over it never does. **Residuals:** the gate pins the bound
+      between 0.9 MB and 2 MB, not where exactly; a client past the bound sees its request fail rather than a
+      guaranteed 413; and the first upload route needs its own bound (`erpify.images.max_input_bytes` is 20 MB).
 
 - [ ] **The persisted lockout confirms a correct password while it is in force.** `UserChecker::checkPostAuth`
       reads the lock AFTER the firewall has verified the password, so a locked account answers a wrong password

@@ -117,6 +117,7 @@ tests/Unit/Gate/ProdEnvCheckGateTest.php :: home
 tests/Unit/Gate/ProdEnvProjectGateTest.php :: home
 tests/Unit/Gate/ProdEnvReadingGateTest.php :: home
 tests/Unit/Gate/ProdEnvTemplateGateTest.php :: home
+tests/Unit/Gate/ProdTrustedProxiesGateTest.php :: home
 tests/Unit/Gate/SentryReleaseWiringGateTest.php :: home
 tests/Unit/Gate/TestDatabaseGuardGateTest.php :: home
 tests/Unit/Gate/AcceptedRiskTagRulesGateTest.php :: home
