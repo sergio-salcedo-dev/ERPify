@@ -21,7 +21,8 @@ use Symfony\Component\Security\Http\Event\CheckPassportEvent;
  * the {@see PreIdentityTimingFloor}'s full verification in the user provider. Refusing here, ahead of
  * `UserCheckerListener` (256) — the first listener that resolves the user — takes the provider out of the path
  * for both, and ahead of it only after `LoginThrottlingListener` (2080), so the refusal still counts against the
- * throttle like any other failed attempt.
+ * throttle like any other failed attempt — the budget is spent on `LoginFailureEvent`, which every failure
+ * reaches ({@see UniformLoginFailureListener}).
  */
 #[AsEventListener(event: CheckPassportEvent::class, priority: self::PRIORITY)]
 final readonly class OverlongPasswordTimingListener

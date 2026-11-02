@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
+use Symfony\Component\Security\Core\Exception\DisabledException;
 
 /**
- * Thrown post-authentication for a `DEACTIVATED` identity: the credential proved, admission refused.
+ * Thrown before verification for a `DEACTIVATED` identity, so its password is never checked.
  *
- * Extends `CustomUserMessageAccountStatusException` (like {@see SuspendedAccountException}) so it is not
- * re-wrapped into a `BadCredentialsException` and reaches the failure handler intact, which translates it
- * into the generic 403 `forbidden` — a retired identity has no actionable next step, unlike a reversible
- * suspension. Still an `AccountStatusException`, so no session is minted.
+ * A plain `AccountStatusException` (via `DisabledException`), like {@see SuspendedAccountException}: the
+ * authenticator re-wraps it into the uniform pre-identity 401.
  */
-final class DeactivatedAccountException extends CustomUserMessageAccountStatusException
+final class DeactivatedAccountException extends DisabledException
 {
 }

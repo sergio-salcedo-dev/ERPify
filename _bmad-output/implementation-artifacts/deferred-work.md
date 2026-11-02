@@ -645,10 +645,11 @@ severity: medium
 origin: auditoría de seguridad de #1091, 2026-10-23
 location: api/src/Iam/Identity/Infrastructure/Security/UserChecker.php (checkPostAuth), api/src/Iam/Identity/Domain/Entity/User.php (recordFailedAttempt), docs/adr/identity-invitation-lifecycle.md (D12)
 reason: el bloqueo se lee después de verificar la contraseña, así que una cuenta bloqueada responde 401 a la incorrecta y 403 `account-locked` a la correcta, y no cuenta fallos mientras dura. Retrasa 15 minutos el uso de una contraseña adivinada sin limitar los intentos. El arreglo choca con D12 y la decisión es del product owner.
-status: open
+status: done 2026-11-02
 severity: high
+resolution: opción B, extendida a `SUSPENDED` y `DEACTIVATED` (decisión del product owner, 2026-11-02, consultada con el arquitecto). Las tres se rechazan antes de verificar la contraseña con el 401 uniforme detrás de `PreIdentityTimingFloor`: los estados en `UserChecker::checkPreAuth`, el bloqueo en `LockedIdentityLoginRefusalListener` (no en `checkPreAuth`, porque `Security::login()` también lo ejecuta y el canje del secreto de recuperación inicia sesión antes de levantar el bloqueo). D4, D7, D10 y D12 de `identity-invitation-lifecycle.md` reescritos; `account-locked` y `AccountLocked` retirados; la PWA pierde el muro "bloqueada" y el mensaje genérico nombra las tres salidas. PR #1167 (rama `fix/iam-login-status-pre-auth-m68h`). La clave de `login_throttling` queda como entrada propia en §7 (*The login throttle keys on the address as typed*), sin medir.
 
-**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*The persisted lockout confirms a correct password while it is in force*).
+**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*The persisted lockout confirmed a correct password, and so did the suspended and deactivated walls*, cerrada).
 
 **Orden: es la primera de DW-73…DW-78.** Es la más grave; las demás no dependen de ella y pueden ir después en cualquier orden.
 

@@ -17,12 +17,6 @@ describe("AccessWall", () => {
       signInName: "Sign in",
     },
     {
-      variant: AccessWallVariant.LOCKED,
-      status: "Locked",
-      testId: "access-wall--locked",
-      signInName: "Sign in",
-    },
-    {
       variant: AccessWallVariant.INVALID_LINK,
       status: "Invalid link",
       testId: "access-wall--invalid-link",
@@ -54,36 +48,6 @@ describe("AccessWall", () => {
       expect(screen.getByTestId(testId)).toBeInTheDocument();
     },
   );
-
-  it("renders all three recovery actions on the locked wall (neutral, three-action stack)", () => {
-    render(<AccessWall variant={AccessWallVariant.LOCKED} />);
-
-    const redeem = screen.getByRole("link", { name: "Use your recovery secret" });
-    expect(redeem).toHaveAttribute("href", "/recovery");
-    expect(redeem).toHaveAttribute("data-testid", "access-wall__redeem-recovery-secret--locked");
-
-    const recover = screen.getByRole("link", { name: "Recover access" });
-    expect(recover).toHaveAttribute("href", "/forgot-password");
-    expect(recover).toHaveAttribute("data-testid", "access-wall__recover--locked");
-
-    const signIn = screen.getByRole("link", { name: "Sign in" });
-    expect(signIn).toHaveAttribute("href", "/login");
-    expect(signIn).toHaveAttribute("data-testid", "access-wall__sign-in--locked");
-  });
-
-  /**
-   * On this wall `/recovery` is the first action, the filled primary CTA. The order is the argument the wall makes: a password reset is keyed by the
-   * same email address the lockout is, so whoever holds the account locked drains that budget
-   * too, while a recovery secret is keyed by nothing the attacker knows. Demote it and the
-   * screen leads with the two edges the attack already closes.
-   */
-  it("leads the locked wall with the recovery secret, ahead of the reset and the retry", () => {
-    render(<AccessWall variant={AccessWallVariant.LOCKED} />);
-
-    const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
-
-    expect(hrefs).toEqual(["/recovery", "/forgot-password", "/login"]);
-  });
 
   it("renders the invalid-link wall with a two-action stack", () => {
     render(<AccessWall variant={AccessWallVariant.INVALID_LINK} />);

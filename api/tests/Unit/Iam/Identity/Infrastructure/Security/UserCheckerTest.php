@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use DateTimeImmutable;
+use Closure;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\InvitedAccountException;
-use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\RevokedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
@@ -18,19 +17,20 @@ use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Security\Core\Exception\AccountStatusException;
+use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
- * One test per admission arm, and the arms are the contract: which lifecycle states are walled, on which side
- * of credential verification, and which of them pay the timing floor. The method count and the object coupling
- * both track the size of that table — every exception in it is referenced by name on purpose — so they are
- * allowed above the default thresholds rather than dissolved into helpers that would hide which arm is asserted.
- *
- * @SuppressWarnings("PHPMD.TooManyPublicMethods")
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * The admission contract: every non-`ACTIVE` status is refused BEFORE the password is verified, pays the timing
+ * floor, and raises a plain account-status exception the authenticator collapses into the uniform 401. Only an
+ * `ACTIVE` identity reaches a password check, and nothing is left for after it.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(UserChecker::class)]
 final class UserCheckerTest extends TestCase
@@ -43,158 +43,107 @@ final class UserCheckerTest extends TestCase
         SystemClock::set(FixedClock::at(self::NOW));
     }
 
-    public function testPreAuthRejectsAnInvitedIdentityBeforeAnyPasswordCheck(): void
-    {
-        $this->expectException(InvitedAccountException::class);
-
-        $this->checker()->checkPreAuth(new SecurityUser(UserMother::invited()));
-    }
-
-    public function testPreAuthWallsARevokedIdentityAndPaysTheTimingFloorForIt(): void
-    {
-        // A withdrawn invitation is as credential-less as a pending one: letting it fall through to the
-        // post-authentication arms would admit it on the strength of a password it never had, and answering it
-        // faster than a wrong password would report the outcome of somebody else's revocation decision to
-        // whoever holds the address.
+    /**
+     * @param Closure(): User                      $identity
+     * @param class-string<AccountStatusException> $wall
+     */
+    #[DataProvider('provideEveryNonActiveStatusIsWalledBeforeVerificationAndPaysTheFloorCases')]
+    public function testEveryNonActiveStatusIsWalledBeforeVerificationAndPaysTheFloor(
+        Closure $identity,
+        string $wall,
+    ): void {
         $floor = new CountingPreIdentityTimingFloor();
-        $checker = new UserChecker(new FixedClock(new DateTimeImmutable(self::NOW)), $floor);
-
-        $this->expectException(RevokedAccountException::class);
 
         try {
-            $checker->checkPreAuth(new SecurityUser(UserMother::revoked()));
-        } finally {
-            $this->assertSame(1, $floor->invocations);
+            (new UserChecker($floor))->checkPreAuth(new SecurityUser($identity()));
+            $this->fail('The identity was admitted to a password check.');
+        } catch (AccountStatusException $accountStatusException) {
+            $this->assertInstanceOf($wall, $accountStatusException);
+            // A custom-message status exception survives the authenticator's re-wrap and reaches the wire as
+            // something other than the uniform 401, so a wall raising one would answer differently from a wrong
+            // password and confirm the guess.
+            $this->assertNotInstanceOf(CustomUserMessageAccountStatusException::class, $accountStatusException);
         }
+
+        $this->assertSame(1, $floor->invocations);
     }
 
-    public function testPreAuthPaysTheTimingFloorOnlyWhenRejectingAnInvitedIdentity(): void
+    /**
+     * @return iterable<string, array{Closure(): User, class-string<AccountStatusException>}>
+     */
+    public static function provideEveryNonActiveStatusIsWalledBeforeVerificationAndPaysTheFloorCases(): iterable
     {
-        // An INVITED identity has no credential, so no password verification would otherwise run — without
-        // the floor this rejection answers faster than a wrong-password failure and leaks the state. An
-        // admitted identity pays nothing here: its real credential check follows.
-        $floor = new CountingPreIdentityTimingFloor();
-        $checker = new UserChecker(new FixedClock(new DateTimeImmutable(self::NOW)), $floor);
+        yield 'invited' => [static fn (): User => UserMother::invited(), InvitedAccountException::class];
 
-        $checker->checkPreAuth(new SecurityUser(UserMother::create()));
+        yield 'revoked' => [static fn (): User => UserMother::revoked(), RevokedAccountException::class];
+
+        yield 'suspended' => [
+            static function (): User {
+                $user = UserMother::create();
+                $user->suspend();
+
+                return $user;
+            },
+            SuspendedAccountException::class,
+        ];
+
+        yield 'deactivated' => [
+            static function (): User {
+                $user = UserMother::create();
+                $user->deactivate();
+
+                return $user;
+            },
+            DeactivatedAccountException::class,
+        ];
+    }
+
+    public function testAnActiveIdentityReachesItsPasswordCheckWithoutPayingTheFloor(): void
+    {
+        $floor = new CountingPreIdentityTimingFloor();
+
+        (new UserChecker($floor))->checkPreAuth(new SecurityUser(UserMother::create()));
+
         $this->assertSame(0, $floor->invocations);
+    }
 
-        $this->expectException(InvitedAccountException::class);
+    public function testALockedActiveIdentityIsLeftToTheLockListener(): void
+    {
+        // The lock is refused by `LockedIdentityLoginRefusalListener`, which `Security::login()` does not run.
+        // Refusing it here would lock out the recovery-secret redemption, which signs in before it lifts the lock.
+        $floor = new CountingPreIdentityTimingFloor();
+        $user = UserMother::create();
 
-        try {
-            $checker->checkPreAuth(new SecurityUser(UserMother::invited()));
-        } finally {
-            $this->assertSame(1, $floor->invocations);
+        for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
+            $user->recordFailedAttempt(SystemClock::now());
         }
+
+        $this->assertTrue($user->isLockedAt(SystemClock::now()));
+
+        (new UserChecker($floor))->checkPreAuth(new SecurityUser($user));
+
+        $this->assertSame(0, $floor->invocations);
     }
 
-    public function testPreAuthAdmitsAnActiveIdentity(): void
+    public function testPostAuthAdmitsWhateverReachedIt(): void
     {
         $this->expectNotToPerformAssertions();
 
-        $this->checker()->checkPreAuth(new SecurityUser(UserMother::create()));
-    }
+        $suspended = UserMother::create();
+        $suspended->suspend();
 
-    public function testPostAuthRaisesTheSuspendedWall(): void
-    {
-        $this->expectException(SuspendedAccountException::class);
-
-        $this->checker()->checkPostAuth(new SecurityUser($this->suspended()));
-    }
-
-    public function testPostAuthRaisesTheDeactivatedWall(): void
-    {
-        $this->expectException(DeactivatedAccountException::class);
-
-        $this->checker()->checkPostAuth(new SecurityUser($this->deactivated()));
-    }
-
-    public function testPostAuthRaisesTheLockedWallForALockedActiveIdentity(): void
-    {
-        $now = new DateTimeImmutable(self::NOW);
-
-        $this->expectException(LockedAccountException::class);
-
-        $this->checker($now)->checkPostAuth(new SecurityUser($this->lockedActiveUser($now)));
-    }
-
-    public function testPostAuthAdmitsAnActiveIdentityWhoseLockHasLapsed(): void
-    {
-        $this->expectNotToPerformAssertions();
-
-        $lockedAt = new DateTimeImmutable(self::NOW);
-        $user = $this->lockedActiveUser($lockedAt);
-
-        $this->checker($lockedAt->modify('+16 minutes'))->checkPostAuth(new SecurityUser($user));
-    }
-
-    public function testPostAuthRaisesTheSuspendedWallEvenForALockedIdentity(): void
-    {
-        // Precedence: the lifecycle wall wins over the transient lockout, so `SUSPENDED + locked` never
-        // surfaces as `locked` — the state arm runs before the lock arm.
-        $now = new DateTimeImmutable(self::NOW);
-        $user = $this->lockedActiveUser($now);
-        $user->suspend();
-
-        $this->expectException(SuspendedAccountException::class);
-
-        $this->checker($now)->checkPostAuth(new SecurityUser($user));
-    }
-
-    public function testPostAuthAdmitsAnActiveIdentity(): void
-    {
-        $this->expectNotToPerformAssertions();
-
-        $this->checker()->checkPostAuth(new SecurityUser(UserMother::create()));
+        (new UserChecker(new CountingPreIdentityTimingFloor()))->checkPostAuth(new SecurityUser($suspended));
     }
 
     public function testIgnoresAUserItDoesNotOwn(): void
     {
-        $this->expectNotToPerformAssertions();
-
-        $checker = $this->checker();
+        $floor = new CountingPreIdentityTimingFloor();
+        $checker = new UserChecker($floor);
         $foreign = $this->createStub(UserInterface::class);
 
         $checker->checkPreAuth($foreign);
         $checker->checkPostAuth($foreign);
-    }
 
-    /**
-     * Installs the checker's instant as the ambient clock too, so a test that moves time past a lock moves it
-     * for everything that reads "now" — build the identity first, then ask for the later checker.
-     */
-    private function checker(?DateTimeImmutable $now = null): UserChecker
-    {
-        $clock = new FixedClock($now ?? new DateTimeImmutable(self::NOW));
-        SystemClock::set($clock);
-
-        return new UserChecker($clock, new CountingPreIdentityTimingFloor());
-    }
-
-    private function suspended(): User
-    {
-        $user = UserMother::create();
-        $user->suspend();
-
-        return $user;
-    }
-
-    private function deactivated(): User
-    {
-        $user = UserMother::create();
-        $user->deactivate();
-
-        return $user;
-    }
-
-    private function lockedActiveUser(DateTimeImmutable $now): User
-    {
-        $user = UserMother::create();
-
-        for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
-            $user->recordFailedAttempt($now);
-        }
-
-        return $user;
+        $this->assertSame(0, $floor->invocations);
     }
 }

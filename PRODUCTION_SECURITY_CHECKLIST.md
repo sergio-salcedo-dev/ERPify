@@ -583,12 +583,13 @@ you change anything here.
       on it, so "every other device is out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
       mail both point at _Active sessions_ instead of asserting it. The login is likewise contained (a failure
       logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
-      can no longer succeed). `Security::login()` re-enters only `checkPreAuth`, so it does **not** re-run the
-      SUSPENDED/DEACTIVATED/locked walls on its own; `ReauthenticateDevice` — shared with the reset and
+      can no longer succeed). `Security::login()` re-enters `checkPreAuth`, which walls SUSPENDED/DEACTIVATED
+      only as a raw security exception, and never the lockout, which `LockedIdentityLoginRefusalListener` applies
+      on the passport event that path does not dispatch; `ReauthenticateDevice` — shared with the reset and
       invitation-accept flows, which had the identical window — re-reads the aggregate and applies
-      `ensureActive()` before minting, so an admin action landing between the commit and the mint no longer
-      leaves a fresh session for a walled identity. It restores **two** of those three arms: `ensureActive()`
-      matches on `IdentityStatus`, and the lockout arm is deliberately not re-applied because the two flows
+      `ensureActive()` before minting, so an admin action landing between the commit and the mint leaves no fresh
+      session for a walled identity and is answered with the domain 403. The lockout arm is deliberately not
+      re-applied: `ensureActive()` matches on `IdentityStatus`, and the two flows
       that could meet one clear it inside their own transaction and the third consumes a token that already
       proves control of the mailbox. **All three flows contain that refusal identically**
       (`ReauthenticateDeviceBestEffort`): each reaches the re-login after its own transaction committed, so
@@ -755,14 +756,15 @@ you change anything here.
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 - [ ] **Persisted per-identity lockout (`identity_user.failed_attempts` / `locked_until`):** a second line
       behind the ephemeral per-IP+email `login_throttling` (built-in, `max_attempts: 5`). After **10** consecutive
-      failed attempts against a **resolved** identity it is locked for **15 minutes** (`checkPostAuth` refuses even
-      a proven login → **403 `account-locked`**, minting no session); a successful login or a lapsed window clears
-      it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
-      nothing** — the pre-identity 401 stays indistinguishable, and a wrong password on a locked account still
-      returns the uniform 401 (an anonymous caller never sees `locked`). It **bounds the rate** at which a run spraying
-      one account from many IPs can land a session, but **not the number of guesses**: a locked account still
-      verifies every password, counts none of the failures, and answers the correct one with that 403 — open in §7,
-      *The persisted lockout confirms a correct password while it is in force*. The lock is orthogonal to
+      failed attempts against a **resolved** identity it is locked for **15 minutes**, refused BEFORE the password
+      is verified (`LockedIdentityLoginRefusalListener`) with the uniform **401 `unauthenticated`** behind the
+      timing floor, minting no session; a reset, a recovery-secret redemption, a change of password, an administrator's unlock or
+      a lapsed window clears it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
+      nothing** — the pre-identity 401 stays indistinguishable, and a locked account answers the right and the
+      wrong password alike. Once the lock has committed no password is verified, so the guessing is bounded in
+      number as well as in rate (closed in §7, *The persisted lockout confirmed a correct password*) — up to the
+      guesses already in flight when it commits, which the per-IP throttle and concurrency bound; a locked attempt
+      counts nothing and does not extend the window. The lock is orthogonal to
       `IdentityStatus` (a locked identity stays `ACTIVE`); the lock trip emits a PII-free `UserLocked` domain event.
       A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
       uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
@@ -1331,7 +1333,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       ships in the PWA as _Active sessions_. The owner's route to a live session is untouched: the credential
       still works, a stolen session feeds no failed attempts into the lockout (`LoginAttemptRegistrar` is
       reached only from the login failure handler, never from the password-change path), and the persisted
-      lock is enforced at `UserChecker::checkPostAuth` alone, never by `SessionAdmissionGate`. So the sequence
+      lock is enforced at login alone (`LockedIdentityLoginRefusalListener`), never by `SessionAdmissionGate`. So the sequence
       is **sign in → `GET /sessions` (the intruder's row is listed, with its device label) → `revoke-others`**,
       and the delayed rotation is then hygiene against an adversary who no longer holds anything.
       **The attacker holds the same weapon and the race still resolves for the owner:** either party can fire
@@ -1454,13 +1456,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       so what survives is an account that has not signed in since the cost changed: its stored hash verifies at
       its own cost while an unknown address pays one verification at the configured one (the floor's dummy is
       minted by the configured hasher), so a wrong password against it answers faster than an unknown address
-      when that cost was lower, and slower when it was higher.
+      when that cost was lower, and slower when it was higher. The same stale hash separates an `ACTIVE`
+      account from a walled one: a `SUSPENDED`, `DEACTIVATED` or locked identity is refused before verification
+      and pays the floor's dummy at the configured cost, while an `ACTIVE` unlocked one pays its own stored hash
+      — so under the same condition the latency also reports status and lock state, not only existence.
       **(3) The over-long password.** `NativePasswordHasher::verify()` returns false without hashing for a
       password over `PasswordHasherInterface::MAX_PASSWORD_LENGTH` (4096) bytes, and nothing in the firewall
       bounded it first — measured on the dev stack, one request: a known address answered ~18 ms, an unknown
       one ~320 ms. `OverlongPasswordTimingListener` refuses such a password on `CheckPassportEvent` ahead of
       the first listener that resolves the user, paying the floor once, so both answer ~320 ms (measured) and
-      the refusal still counts against the login throttle (`OverlongPasswordTimingListenerTest`).
+      the refusal still counts against the login throttle, which every login failure spends
+      (`LoginThrottleSpendFunctionalTest`).
 - [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
       An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
       the attempt that trips the lock, and on that same attempt the lockout projection's own transaction —
@@ -2301,20 +2307,69 @@ mitigated state. Accepting one means recording who accepted it and against which
       past it sees its request fail rather than a guaranteed 413; and the first upload route needs its own
       bound (`erpify.images.max_input_bytes` is 20 MB).
 
-- [ ] **The persisted lockout confirms a correct password while it is in force.** `UserChecker::checkPostAuth`
-      reads the lock AFTER the firewall has verified the password, so a locked account answers a wrong password
-      with the uniform 401 and the right one with **403 `account-locked`**, and `User::recordFailedAttempt`
-      counts nothing while the lock stands. The lock therefore delays the USE of a guessed password by fifteen
-      minutes without bounding the guessing: the only ceiling left during it is `login_throttling`, per IP and
-      raw username. The specific 403 is the decision of `identity-invitation-lifecycle.md` D12 ("post-identity,
-      a response may be specific"), and what this entry disputes is its premise — a caller probing a locked
-      account has not demonstrated an identity, it is in the middle of guessing one. **The fix** is to read the
-      lock in `checkPreAuth`, before verification, and answer it with the uniform 401 behind the timing floor;
-      the owner already learns of the lock through `NotifyLockedIdentities`. It costs the legitimate owner the
-      specific "locked" message at the door, and it needs D12 re-decided by its owner, which is why it is
-      recorded rather than changed in the pull request that found it. Related and unmeasured: the throttle's key
-      is the username as typed, lower-cased, while `Email` also strips edge whitespace and zero-width characters
-      and normalises to NFC, so spellings resolving to one identity may each get their own bucket.
+- [x] **The persisted lockout confirmed a correct password, and so did the suspended and deactivated walls,
+      closed 2026-11-02.** Each was read AFTER the firewall verified the password, so the right password was the
+      one answer that differed (a 403) while nothing counted the guesses: a locked identity records no failure
+      and a walled one is never locked. All three are now refused before verification with the uniform 401 behind
+      the `PreIdentityTimingFloor` — `SUSPENDED`/`DEACTIVATED` in `UserChecker::checkPreAuth`, the lock in
+      `LockedIdentityLoginRefusalListener` on `CheckPassportEvent`, because `Security::login()` runs
+      `checkPreAuth` too and the recovery-secret redemption signs in before it lifts the lock. D12 of
+      `identity-invitation-lifecycle.md` was re-decided to match: on login a password proves no identity a
+      refusal may reveal. Pinned by `login.feature` (correct password on each state → 401, no cookie, the lock
+      neither counted nor extended), `LoginPreIdentityOpacityFunctionalTest` (byte-identical body and
+      `Content-Type` across every pre-identity case) and the unit tests of both classes, which pin the timing
+      floor structurally (wall-clock assertions are banned here). **Residuals:** a status write
+      landing between verification and the session mint still answers `account-suspended` /
+      `account-deactivated`, a race on an administrator's write that `DbalSessionSubjectLock` grades rather than
+      leaks; a walled or locked member typing the right password sees a stranger's message — a locked one learns
+      why from the lockout notice and can reset, a walled one only from the administrator or by redeeming a
+      recovery secret, since the reset flow mints no token for a non-`ACTIVE` identity; the lock is read from the
+      snapshot the request resolved, so guesses already in flight when the tenth failure commits are still
+      verified, and a correct one among them signs in and clears the lock (not new: the post-verification read had the same
+      window, and re-reading at the mint would refuse the redemption, which signs in before it lifts the lock);
+      and the floor equalises the dominant term (one unit of password hashing) but not the failure write: a
+      wrong password on an unlocked `ACTIVE` account also updates its row, which a refusal does not — the same
+      residual every pre-identity 401 here already carries.
+
+- [x] **The login throttle was declared and never spent, closed 2026-11-02.** `login_throttling` peeks its budget
+      on `CheckPassportEvent` and spends it on `LoginFailureEvent`, which `AuthenticatorManager` dispatches only
+      after the failure handler returns — and `ProblemDetailsAuthenticationFailureHandler` threw, to reach the
+      RFC 9457 pipeline on `kernel.exception`. So no failure ever spent a token: neither the 5-per-minute bucket
+      per address+IP nor the 25-per-minute one per IP bounded anything, the handler's throttled branch was
+      unreachable, nothing rate-bounded one source tripping any account's lock, and every document citing the
+      throttle as a bound was citing an inert control, with the 401 uniform and every test green. The handler
+      now records the attempt and RETURNS a placeholder response, the event is dispatched, and
+      `UniformLoginFailureListener`, its last listener, throws the same uniform 401 — so the failure still reaches
+      `kernel.exception`, and with it the error tracker's own listener, which a response built in the handler
+      would have bypassed. The listener acts only on a failure that handler answered (a request marker), so an
+      authenticator added later keeps its own failure response. Pinned by `LoginThrottleSpendFunctionalTest`,
+      which peeks the firewall's real budget from a listener between the throttle and the thrower, asserts one
+      token spent, and asserts the thrower is the last listener actually registered, and by
+      `UniformLoginFailureListenerTest`.
+      **Residuals:** a person who mistypes five times within a minute is refused for up to a minute even with the
+      right password, with the uniform message and no hint, since a distinguishable "too many attempts" is the
+      oracle D10 forbids; a shared address (NAT, an office) answers every login with the 401 for up to a minute
+      after 25 failures from it; the throttle **attenuates the lockout denial of service, it does not prevent
+      it** — the per-address bucket is a fixed window anchored on its first hit, so five failures at the end of
+      one window and five at the start of the next are the ten that lock an account within seconds, re-armable
+      every fifteen minutes, and the per-IP bucket lets one source lock a few accounts a minute (the persisted
+      lock carries no source dimension by decision, `administrative-recovery-channel.md`); the key is the full
+      client IP, so an IPv6 client rotating inside its own /64 gets fresh buckets; the budget lives in
+      `cache.rate_limiter` (the app pool, a filesystem under `var/cache` in prod), so it is shared by one
+      container's workers, split across replicas and lost on a cache clear or a deploy, and without
+      `symfony/lock` concurrent requests may over- or under-count by a few, as `rate_limiter.yaml` records for
+      the other limiters; and a throttled
+      attempt answers fast — it pays no floor, being refused before the identity is resolved — which reports the
+      bucket's state for the address as typed and IP, the same for an address that exists and one that does not,
+      so it is no existence oracle.
+
+- [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
+      username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to
+      NFC, so spellings resolving to one identity may each get their own bucket. Unmeasured; the persisted lockout
+      above keys on the resolved row and is unaffected. Live since the throttle is spent (*The login throttle was
+      declared and never spent*): each spelling is a fresh per-address budget, so the per-IP bucket (25 a minute)
+      is the throttle's only bound on one identity from one source — the persisted lockout, keyed on the resolved
+      row, still stops the guessing at ten.
 
 - [ ] **`/forgot-password` latency separates an active account from every other address.**
       `RequestPasswordReset::request()` pays the `PreIdentityTimingFloor` first on every branch, then returns for
@@ -2405,7 +2460,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       stand-up (a label or a state file) and refusing a run that resolves a different one.
 
 - [ ] **The domain security signals reach Sentry, nothing alerts on them, and it is accepted.**
-      `SentryEventFilter` reports the domain `Unauthenticated` (401), `Forbidden` (403, `AccountLocked` among
+      `SentryEventFilter` reports the domain `Unauthenticated` (401), `Forbidden` (403, `AccountSuspended` among
       them) and `RateLimited` (429) raised on an HTTP request, together with the framework's own 401/403/422,
       so a guessing run or a lockout wave arrives as events (`docs/api-error-contract.md` → "Client-error
       suppression in Sentry").

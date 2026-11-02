@@ -81,7 +81,10 @@ Feature: Log in through the session firewall
     And the header "Content-Type" should contain "application/problem+json"
     And the JSON node "type" should be equal to "invalid-input"
 
-  Scenario: A suspended identity with correct credentials is walled by a specific 403, minting no session
+  # A non-ACTIVE identity is refused before its password is verified, so the correct password answers exactly
+  # like a wrong one: a specific answer to the right password would confirm a guess, and a non-ACTIVE identity
+  # counts no failed attempt to bound the guessing.
+  Scenario: A suspended identity with correct credentials gets the uniform 401, minting no session
     When I send a POST request to "/backoffice/login" with body:
     """
     {
@@ -89,12 +92,13 @@ Feature: Log in through the session firewall
       "password": "sam-password"
     }
     """
-    Then the response status code should be 403
+    Then the response status code should be 401
     And the header "Content-Type" should contain "application/problem+json"
-    And the JSON node "type" should be equal to "account-suspended"
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the JSON node "title" should be equal to "Invalid credentials."
     And the header "Set-Cookie" should not exist
 
-  Scenario: A deactivated identity with correct credentials is walled by a specific 403, minting no session
+  Scenario: A deactivated identity with correct credentials gets the uniform 401, minting no session
     When I send a POST request to "/backoffice/login" with body:
     """
     {
@@ -102,9 +106,10 @@ Feature: Log in through the session firewall
       "password": "dan-password"
     }
     """
-    Then the response status code should be 403
+    Then the response status code should be 401
     And the header "Content-Type" should contain "application/problem+json"
-    And the JSON node "type" should be equal to "account-deactivated"
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the JSON node "title" should be equal to "Invalid credentials."
     And the header "Set-Cookie" should not exist
 
   Scenario: An invited identity that has not set a password is indistinguishable from an unknown email
@@ -120,7 +125,10 @@ Feature: Log in through the session firewall
     And the JSON node "title" should be equal to "Invalid credentials."
     And the header "Set-Cookie" should not exist
 
-  Scenario: A locked identity with correct credentials is walled by a specific 403, minting no session
+  # The right password answers like a wrong one and the lock goes on standing: an answer that differed would
+  # confirm a guess instead of stopping it. The wire cannot show that no password was verified (the domain
+  # counts nothing while the lock stands either way); LockedIdentityLoginRefusalListenerTest pins that order.
+  Scenario: A locked identity with correct credentials gets the uniform 401 and stays locked
     When I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'leo@erpify.test'"
     And I send a POST request to "/backoffice/login" with body:
     """
@@ -129,10 +137,13 @@ Feature: Log in through the session firewall
       "password": "leo-password"
     }
     """
-    Then the response status code should be 403
+    Then the response status code should be 401
     And the header "Content-Type" should contain "application/problem+json"
-    And the JSON node "type" should be equal to "account-locked"
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the JSON node "title" should be equal to "Invalid credentials."
     And the header "Set-Cookie" should not exist
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'leo@erpify.test' AND failed_attempts = 10 AND locked_until = '2099-01-01 00:00:00'"
+    And there should have 1 records in SQL result
 
   Scenario: A wrong password on a locked account stays the uniform 401, never revealing the lock to an anonymous caller
     When I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'leo@erpify.test'"
@@ -148,7 +159,7 @@ Feature: Log in through the session firewall
     And the JSON node "title" should be equal to "Invalid credentials."
     And the header "Set-Cookie" should not exist
 
-  Scenario: A suspended identity that also tripped the lockout sees the suspended wall, not the locked one
+  Scenario: A suspended identity that also tripped the lockout gets the uniform 401
     When I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'sam@erpify.test'"
     And I send a POST request to "/backoffice/login" with body:
     """
@@ -157,8 +168,10 @@ Feature: Log in through the session firewall
       "password": "sam-password"
     }
     """
-    Then the response status code should be 403
-    And the JSON node "type" should be equal to "account-suspended"
+    Then the response status code should be 401
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "unauthenticated"
+    And the JSON node "title" should be equal to "Invalid credentials."
     And the header "Set-Cookie" should not exist
 
   Scenario: A successful login after a lapsed lock is admitted and clears the counter

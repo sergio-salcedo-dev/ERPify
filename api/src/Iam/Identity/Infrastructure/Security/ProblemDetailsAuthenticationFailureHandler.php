@@ -6,9 +6,6 @@ namespace Erpify\Iam\Identity\Infrastructure\Security;
 
 use Doctrine\DBAL\Exception as DbalException;
 use Erpify\Iam\Identity\Application\LoginAttemptRegistrar;
-use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
-use Erpify\Iam\Identity\Domain\Exception\AccountLocked;
-use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Override;
@@ -16,58 +13,49 @@ use Symfony\Component\HttpFoundation\Exception\RequestExceptionInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Core\Exception\TooManyLoginAttemptsAuthenticationException;
 use Symfony\Component\Security\Http\Authentication\AuthenticationFailureHandlerInterface;
 
 /**
  * Handles a login failure: it records the failed attempt against the target identity (feeding the persisted
- * lockout) and routes the response through the shared RFC 9457 pipeline instead of Symfony's default handler,
- * which would emit its own `{"error": ...}` body on `kernel.request` and bypass the error contract. Throwing
- * lets the exception reach `kernel.exception`, where the pipeline builds the Problem Details — reusing
- * correlation-id minting, the tiered log line, body cap and redaction with zero duplication.
+ * lockout) and RETURNS a provisional response, which nothing ever sends.
  *
- * The failed-attempt increment lives HERE, not in a `LoginFailureEvent` listener: the authenticator calls this
- * handler (`AuthenticatorManager::handleAuthenticationFailure`) and only dispatches `LoginFailureEvent`
- * afterwards, so a handler that throws — as this one always does — preempts that event; the handler is the sole
- * hook that runs on every failure. The record is by EMAIL (the submitted identifier): an unknown one writes no
- * row and raises no event while paying the same round trips as a known one, and a malformed one is a no-op —
- * keeping a pre-identity failure indistinguishable; the domain
- * caps the counter and, once locked, no-ops further attempts, so no unbounded growth. A throttled attempt
+ * Returning is what lets `AuthenticatorManager::handleAuthenticationFailure()` go on to dispatch
+ * `LoginFailureEvent`: it calls this handler first and dispatches the event only once the handler has returned,
+ * so a handler that throws silences every listener of that event — `login_throttling` among them, which only
+ * peeks its budget before the credentials are checked and spends it on that event, so a throwing handler leaves
+ * the throttle declared and inert. The uniform answer is thrown afterwards by
+ * {@see UniformLoginFailureListener}, the last listener of the event, so it still reaches `kernel.exception` and
+ * the shared RFC 9457 pipeline — correlation id, tiered log line, error tracking, body cap and redaction — rather
+ * than Symfony's own `{"error": ...}` body or a second pipeline built here.
+ *
+ * The failed-attempt increment lives HERE rather than in a listener because the handler is the one hook the
+ * authenticator calls on every failure before anything else can stop the chain. The record is by EMAIL (the
+ * submitted identifier): an unknown one writes no row and raises no event while paying the same round trips as
+ * a known one, and a malformed one is a no-op — keeping a pre-identity failure indistinguishable; the domain
+ * caps the counter and, once locked, no-ops further attempts, so no unbounded growth. An admission refusal is
+ * recorded like any other failure although no password was checked: that it counts nothing rests on
+ * `User::recordFailedAttempt()` doing nothing for a non-`ACTIVE` or locked identity, while the transaction and
+ * the row lock are still taken so the refusal pays the same round trips. A throttled attempt
  * ({@see TooManyLoginAttemptsAuthenticationException}) is NOT recorded: it never reached a credential check, so
  * counting it would let a single IP drive the persistent per-identity lock that the per-IP throttle exists to
  * stop short of.
- *
- * The response is graded by how far the login got, which is exactly the exception type the checker raised:
- *
- * - A POST-identity admission failure (`SUSPENDED` / `DEACTIVATED` / locked — the credential proved, then the
- *   identity was refused) graduates OUT of the uniform 401 into a 403 `Forbidden` `DomainException`. None of
- *   the walls carries an `AccessDeniedException` in its chain, so `UnauthenticatedAccessListener` (which would
- *   rewrite that to a 401) leaves them alone.
- * - Every PRE-identity failure — a wrong password, an unknown email, and the `INVITED` case the authenticator
- *   already re-wrapped into a `BadCredentialsException` — collapses to a single neutral 401. The message is
- *   normalised to one constant string so those failures stay indistinguishable on the wire; the real cause
- *   survives as `previous` for the dev-only debug extension.
- *
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects") — the single auth-failure→RFC 9457 translation boundary, so
- * it references both the checker-exception family (suspended/deactivated/locked/throttled) and their
- * problem-detail counterparts by design; the coupling is the mapping, not incidental.
  */
 final readonly class ProblemDetailsAuthenticationFailureHandler implements AuthenticationFailureHandlerInterface
 {
-    private const string GENERIC_FAILURE_MESSAGE = 'Invalid credentials.';
+    /**
+     * Marks a request whose failure this handler answered, so {@see UniformLoginFailureListener} replaces only
+     * this handler's placeholder and leaves any other authenticator's failure response alone.
+     */
+    public const string UNIFORM_FAILURE_ATTRIBUTE = '_erpify_uniform_login_failure';
 
     public function __construct(private LoginAttemptRegistrar $loginAttempts)
     {
     }
 
     /**
-     * @throws AccountSuspended                         a SUSPENDED identity's proven login (403 specific)
-     * @throws AccountDeactivated                       a DEACTIVATED identity's proven login (403 generic)
-     * @throws AccountLocked                            a locked identity's proven login (403 specific)
-     * @throws CustomUserMessageAuthenticationException any pre-identity failure (uniform 401)
-     *
-     * @return never
+     * The returned response is a placeholder for the authenticator's contract: {@see UniformLoginFailureListener}
+     * replaces it with the uniform 401 by throwing before the authenticator can hand it to the kernel.
      */
     #[Override]
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
@@ -76,19 +64,9 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
             $this->recordFailureBestEffort($request);
         }
 
-        if ($exception instanceof SuspendedAccountException) {
-            throw new AccountSuspended();
-        }
+        $request->attributes->set(self::UNIFORM_FAILURE_ATTRIBUTE, true);
 
-        if ($exception instanceof DeactivatedAccountException) {
-            throw new AccountDeactivated();
-        }
-
-        if ($exception instanceof LockedAccountException) {
-            throw new AccountLocked();
-        }
-
-        throw new CustomUserMessageAuthenticationException(self::GENERIC_FAILURE_MESSAGE, previous: $exception);
+        return new Response(status: Response::HTTP_UNAUTHORIZED);
     }
 
     /**
@@ -97,7 +75,7 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
      * reach the store, but only an existing identity locks a row and writes, so only it can meet a deadlock, a lock
      * timeout or a referential fault — which the transaction manager translates into {@see TransientTransactionFailure}
      * (503) and {@see ReferentialIntegrityViolation} (409). Those are absorbed with a {@see DbalException}, and the
-     * response stays whatever the admission outcome graded it. The lost increment is tolerable during a database
+     * response stays the uniform 401. The lost increment is tolerable during a database
      * incident (the per-IP throttle still caps the flood); this differs from the success path's retryable-503 remap
      * because the failure path has nothing downstream that needs the shared unit of work, so it can swallow and stay
      * neutral.

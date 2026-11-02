@@ -122,9 +122,10 @@ final readonly class SecurityUser implements UserInterface, PasswordAuthenticate
     }
 
     /**
-     * Whether the wrapped identity's lockout is still in force at `$now` — the second signal the admission
-     * {@see UserChecker} reads (alongside {@see status()}), orthogonal to the lifecycle state, so it can wall a
-     * locked-but-`ACTIVE` identity without the domain ever implementing a Symfony contract.
+     * Whether the wrapped identity's lockout is still in force at `$now` — the signal
+     * {@see LockedIdentityLoginRefusalListener} reads beside the {@see status()} {@see UserChecker} reads,
+     * orthogonal to the lifecycle state, so it can wall a locked-but-`ACTIVE` identity without the domain ever
+     * implementing a Symfony contract.
      */
     public function isLockedAt(DateTimeImmutable $now): bool
     {

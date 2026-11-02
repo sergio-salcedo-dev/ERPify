@@ -4,19 +4,16 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
+use Symfony\Component\Security\Core\Exception\LockedException;
 
 /**
- * Thrown post-authentication for an identity whose lockout is still in force: the credential proved, admission
- * refused until the lock lapses.
+ * Thrown before verification for an identity whose lockout is in force, so no password is checked while it
+ * stands ({@see LockedIdentityLoginRefusalListener}).
  *
- * Extends `CustomUserMessageAccountStatusException` so the authenticator does NOT re-wrap it into a
- * `BadCredentialsException` (that re-wrap is reserved for pre-identity failures) — it reaches the failure
- * handler intact, which translates it into the specific 403 `account-locked`. A plain `AccountStatusException`
- * or Symfony's own `LockedException` would collapse to the uniform 401 under `expose_security_errors: None`,
- * exposing the lock to no one and defeating the actionable wall. Still an `AccountStatusException`, so the
- * firewall aborts authentication and mints no session at all.
+ * A plain `AccountStatusException` (via `LockedException`): the authenticator re-wraps it into the uniform
+ * pre-identity 401, so the lock is not disclosed to the caller and never confirms a guess. The owner learns of it
+ * from the lockout notice mail.
  */
-final class LockedAccountException extends CustomUserMessageAccountStatusException
+final class LockedAccountException extends LockedException
 {
 }

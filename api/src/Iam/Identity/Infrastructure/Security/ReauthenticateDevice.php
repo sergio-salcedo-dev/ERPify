@@ -14,19 +14,21 @@ use Symfony\Bundle\SecurityBundle\Security;
  * Signs the calling device back in after its credential was replaced, having first re-read the aggregate and
  * confirmed the identity may still be admitted.
  *
- * `Security::login()` runs only half of the admission wall. It calls `checkPreAuth` explicitly, so the
- * `INVITED` wall fires; the other three — SUSPENDED, DEACTIVATED and the lockout — live in `checkPostAuth`,
- * which is driven by an authentication event that the programmatic path never dispatches. What does fire is
- * the session-minting listener, so without this the window between a credential change and its re-login can
+ * `Security::login()` runs `checkPreAuth` explicitly, so every status wall fires on this path too, but as a raw
+ * security exception rather than the domain wall these callers owe: each of them has proven identity by a
+ * second factor, so a walled identity is told `account-suspended` / `account-deactivated` rather than handed an
+ * unmapped refusal. `ensureActive()` runs first on the same aggregate the security adapter is built from, which
+ * is why `checkPreAuth` can never refuse what it admitted. It also re-reads the row: what does fire on this path
+ * is the session-minting listener, so without it the window between a credential change and its re-login could
  * mint an `ACTIVE` session for an identity an administrator has just suspended — and `SessionAdmissionGate`
  * cannot catch it, because it reads the session row and never the identity's status.
  *
- * `ensureActive()` restores **two** of those three arms. It matches on `IdentityStatus` alone, so a live
- * lockout is not re-applied here, and that is deliberate rather than an omission: every caller that can meet
- * one relieves it around this call (re-proving the current secret, or consuming a single-use link, is
- * stronger evidence than the lock summarises), and the ones that cannot consume a token already proving
- * control of the mailbox. Adding the lockout arm would refuse identities those flows just relieved — the
- * redemption most sharply, since it clears the lockout AFTER this call rather than before.
+ * The lockout is not re-applied here, and that is deliberate: it is refused by
+ * {@see LockedIdentityLoginRefusalListener} on the passport event this programmatic path never dispatches, and
+ * every caller that can meet one relieves it around this call (re-proving the current secret, or consuming a
+ * single-use link, is stronger evidence than the lock summarises), while the ones that cannot consume a token
+ * already proving control of the mailbox. Applying it here would refuse identities those flows just relieved —
+ * the redemption most sharply, since it clears the lockout AFTER this call rather than before.
  *
  * The window is not uniform across callers, and the difference is worth naming. Three of them — change
  * password, complete reset, accept invitation — revoke sessions and then send a security notice on an

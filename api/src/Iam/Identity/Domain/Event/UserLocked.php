@@ -12,10 +12,9 @@ use Override;
 /**
  * Records that an identity was temporarily locked after too many failed password attempts. The subject is the
  * aggregate id (the locked user), so the payload carries only the expiry instant — PII-free, the same
- * discipline {@see \Erpify\Iam\Session\Domain\Event\SessionStarted} follows. Named `UserLocked` (not
- * `AccountLocked`) so the domain fact never collides with the RFC 9457 wall
- * {@see \Erpify\Iam\Identity\Domain\Exception\AccountLocked}. Emitted where the lock trips because a domain
- * fact is always recorded at its source; the audit consumer is a separate subscriber, wired independently.
+ * discipline {@see \Erpify\Iam\Session\Domain\Event\SessionStarted} follows. Emitted where the lock trips
+ * because a domain fact is always recorded at its source; the audit consumer is a separate subscriber, wired
+ * independently.
  */
 final class UserLocked extends DomainEvent
 {
