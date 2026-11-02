@@ -27,13 +27,19 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
      */
     public function testReturnsSoTheAuthenticatorGoesOnToDispatchTheFailureEvent(): void
     {
+        $request = $this->loginRequest(UserMother::DEFAULT_EMAIL);
+
         $response = $this->handler(new InMemoryUserRepository())->onAuthenticationFailure(
-            $this->loginRequest(UserMother::DEFAULT_EMAIL),
+            $request,
             new BadCredentialsException('The presented password is invalid.'),
         );
 
         $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
         $this->assertSame('', $response->getContent());
+        // The marker is what lets the event's last listener replace this placeholder with the uniform 401.
+        $this->assertTrue(
+            $request->attributes->get(ProblemDetailsAuthenticationFailureHandler::UNIFORM_FAILURE_ATTRIBUTE),
+        );
     }
 
     public function testRecordsTheFailedAttemptAgainstTheSubmittedIdentity(): void

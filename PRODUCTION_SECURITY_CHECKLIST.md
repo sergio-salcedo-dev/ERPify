@@ -2336,20 +2336,29 @@ mitigated state. Accepting one means recording who accepted it and against which
       after the failure handler returns — and `ProblemDetailsAuthenticationFailureHandler` threw, to reach the
       RFC 9457 pipeline on `kernel.exception`. So no failure ever spent a token: neither the 5-per-minute bucket
       per address+IP nor the 25-per-minute one per IP bounded anything, the handler's throttled branch was
-      unreachable, one source could trip and re-arm any account's lock at will, and every document citing the
+      unreachable, nothing rate-bounded one source tripping any account's lock, and every document citing the
       throttle as a bound was citing an inert control, with the 401 uniform and every test green. The handler
       now records the attempt and RETURNS a placeholder response, the event is dispatched, and
       `UniformLoginFailureListener`, its last listener, throws the same uniform 401 — so the failure still reaches
       `kernel.exception`, and with it the error tracker's own listener, which a response built in the handler
-      would have bypassed. Pinned by `LoginThrottleSpendFunctionalTest`, which peeks the firewall's real budget
-      from a listener between the throttle and the thrower and asserts one token spent, and by
-      `UniformLoginFailureListenerTest`, which keeps the thrower below every framework listener of the event.
+      would have bypassed. The listener acts only on a failure that handler answered (a request marker), so an
+      authenticator added later keeps its own failure response. Pinned by `LoginThrottleSpendFunctionalTest`,
+      which peeks the firewall's real budget from a listener between the throttle and the thrower, asserts one
+      token spent, and asserts the thrower is the last listener actually registered, and by
+      `UniformLoginFailureListenerTest`.
       **Residuals:** a person who mistypes five times within a minute is refused for up to a minute even with the
       right password, with the uniform message and no hint, since a distinguishable "too many attempts" is the
       oracle D10 forbids; a shared address (NAT, an office) answers every login with the 401 for up to a minute
-      after 25 failures from it; the budget lives in `cache.rate_limiter` (the app pool), so it is per process
-      store and does not survive a cache clear or a deploy, and without `symfony/lock` concurrent requests may
-      over- or under-count by a few, as `rate_limiter.yaml` records for the other limiters; and a throttled
+      after 25 failures from it; the throttle **attenuates the lockout denial of service, it does not prevent
+      it** — the per-address bucket is a fixed window anchored on its first hit, so five failures at the end of
+      one window and five at the start of the next are the ten that lock an account within seconds, re-armable
+      every fifteen minutes, and the per-IP bucket lets one source lock a few accounts a minute (the persisted
+      lock carries no source dimension by decision, `administrative-recovery-channel.md`); the key is the full
+      client IP, so an IPv6 client rotating inside its own /64 gets fresh buckets; the budget lives in
+      `cache.rate_limiter` (the app pool, a filesystem under `var/cache` in prod), so it is shared by one
+      container's workers, split across replicas and lost on a cache clear or a deploy, and without
+      `symfony/lock` concurrent requests may over- or under-count by a few, as `rate_limiter.yaml` records for
+      the other limiters; and a throttled
       attempt answers fast — it pays no floor, being refused before the identity is resolved — which reports the
       bucket's state for the address as typed and IP, the same for an address that exists and one that does not,
       so it is no existence oracle.
@@ -2357,7 +2366,10 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
       username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to
       NFC, so spellings resolving to one identity may each get their own bucket. Unmeasured; the persisted lockout
-      above keys on the resolved row and is unaffected.
+      above keys on the resolved row and is unaffected. Live since the throttle is spent (*The login throttle was
+      declared and never spent*): each spelling is a fresh per-address budget, so the per-IP bucket (25 a minute)
+      is the throttle's only bound on one identity from one source — the persisted lockout, keyed on the resolved
+      row, still stops the guessing at ten.
 
 - [ ] **`/forgot-password` latency separates an active account from every other address.**
       `RequestPasswordReset::request()` pays the `PreIdentityTimingFloor` first on every branch, then returns for

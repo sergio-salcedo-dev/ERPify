@@ -65,6 +65,7 @@ final class LoginThrottleSpendFunctionalTest extends WebTestCase
         $limiter = $this->loginLimiter($dispatcher);
         $this->assertGreaterThan(self::SPY_PRIORITY, $this->throttlePriority($dispatcher));
         $this->assertLessThan(self::SPY_PRIORITY, UniformLoginFailureListener::PRIORITY);
+        $this->assertTheUniformAnswerIsTheLastListener($dispatcher);
 
         $budgets = new class {
             /** @var list<array{remaining: int, limit: int}> */
@@ -104,8 +105,21 @@ final class LoginThrottleSpendFunctionalTest extends WebTestCase
         $this->assertSame(UniformLoginFailureListener::GENERIC_FAILURE_MESSAGE, $body['title'] ?? null);
 
         $this->assertCount(1, $budgets->seen, 'LoginFailureEvent never reached a listener below the throttle.');
-        $spent = $budgets->seen[0] ?? self::fail('LoginFailureEvent never reached a listener below the throttle.');
+        $spent = $budgets->seen[0];
         $this->assertSame($spent['limit'] - 1, $spent['remaining']);
+    }
+
+    /**
+     * Read off what is registered — bundles included — rather than off the framework's declared priorities: a
+     * listener below the one that throws never runs.
+     */
+    private function assertTheUniformAnswerIsTheLastListener(EventDispatcherInterface $dispatcher): void
+    {
+        $listeners = $dispatcher->getListeners(LoginFailureEvent::class);
+        $last = \end($listeners);
+
+        $this->assertIsArray($last, 'The last LoginFailureEvent listener is not an object method.');
+        $this->assertInstanceOf(UniformLoginFailureListener::class, $last[0] ?? null);
     }
 
     private function loginLimiter(EventDispatcherInterface $dispatcher): PeekableRequestRateLimiterInterface

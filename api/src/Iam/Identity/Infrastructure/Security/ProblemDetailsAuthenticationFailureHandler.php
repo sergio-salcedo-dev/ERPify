@@ -43,6 +43,12 @@ use Symfony\Component\Security\Http\Authentication\AuthenticationFailureHandlerI
  */
 final readonly class ProblemDetailsAuthenticationFailureHandler implements AuthenticationFailureHandlerInterface
 {
+    /**
+     * Marks a request whose failure this handler answered, so {@see UniformLoginFailureListener} replaces only
+     * this handler's placeholder and leaves any other authenticator's failure response alone.
+     */
+    public const string UNIFORM_FAILURE_ATTRIBUTE = '_erpify_uniform_login_failure';
+
     public function __construct(private LoginAttemptRegistrar $loginAttempts)
     {
     }
@@ -57,6 +63,8 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
         if (!$exception instanceof TooManyLoginAttemptsAuthenticationException) {
             $this->recordFailureBestEffort($request);
         }
+
+        $request->attributes->set(self::UNIFORM_FAILURE_ATTRIBUTE, true);
 
         return new Response(status: Response::HTTP_UNAUTHORIZED);
     }

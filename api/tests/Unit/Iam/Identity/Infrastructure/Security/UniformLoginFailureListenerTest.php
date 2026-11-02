@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
 use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
+use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
 use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\UniformLoginFailureListener;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -89,21 +90,44 @@ final class UniformLoginFailureListenerTest extends TestCase
         );
     }
 
+    /**
+     * The event is dispatched for every authenticator of every firewall; one whose failure the login handler did
+     * not answer keeps its own response — a bearer token's challenge, or a fall-through.
+     */
+    public function testLeavesAFailureTheLoginHandlerDidNotAnswerToItsOwnAuthenticator(): void
+    {
+        $answer = new Response(status: Response::HTTP_UNAUTHORIZED, headers: ['WWW-Authenticate' => 'Bearer']);
+        $event = $this->event(new BadCredentialsException('expired token'), Request::create('/api'), $answer);
+
+        (new UniformLoginFailureListener())($event);
+
+        $this->assertSame($answer, $event->getResponse());
+    }
+
     private function failureOf(AuthenticationException $exception): Throwable
     {
-        $event = new LoginFailureEvent(
-            $exception,
-            $this->createStub(AuthenticatorInterface::class),
-            Request::create('/login', Request::METHOD_POST),
-            new Response(status: Response::HTTP_UNAUTHORIZED),
-            'main',
-        );
+        $request = Request::create('/login', Request::METHOD_POST);
+        $request->attributes->set(ProblemDetailsAuthenticationFailureHandler::UNIFORM_FAILURE_ATTRIBUTE, true);
+        $event = $this->event($exception, $request, new Response(status: Response::HTTP_UNAUTHORIZED));
 
         try {
             (new UniformLoginFailureListener())($event);
         } catch (Throwable $throwable) {
             return $throwable;
         }
+
+        self::fail('A failure the login handler answered was not turned into the uniform 401.');
+    }
+
+    private function event(AuthenticationException $exception, Request $request, Response $response): LoginFailureEvent
+    {
+        return new LoginFailureEvent(
+            $exception,
+            $this->createStub(AuthenticatorInterface::class),
+            $request,
+            $response,
+            'main',
+        );
     }
 
     /**
