@@ -94,7 +94,9 @@ describe("LoginForm — access outcomes", () => {
     signIn();
 
     const error = await screen.findByTestId("login-form__error");
-    expect(error).toHaveTextContent("Invalid email or password.");
+    expect(error).toHaveTextContent(
+      "Invalid email or password. If you are sure they are correct, check your email, use a recovery secret or contact your administrator.",
+    );
     expect(error).toHaveAttribute("role", "alert");
     expect(push).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();
@@ -121,17 +123,6 @@ describe("LoginForm — access outcomes", () => {
     expect(await screen.findByTestId("access-wall--deactivated")).toBeInTheDocument();
     expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
-  });
-
-  it("renders the locked access wall in place of the form", async () => {
-    outcome = { kind: LoginOutcomeKind.LOCKED };
-    render(<LoginForm />);
-    signIn();
-
-    expect(await screen.findByTestId("access-wall--locked")).toBeInTheDocument();
-    expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
-    expect(login).not.toHaveBeenCalled();
   });
 
   it("surfaces the neutral retryable error when the server fails to finalise the session (503)", async () => {

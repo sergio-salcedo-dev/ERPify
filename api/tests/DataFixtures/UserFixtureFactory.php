@@ -25,7 +25,7 @@ use Erpify\Shared\Access\Domain\Role;
  *
  * `$status` seeds the lifecycle state: `INVITED` and `REVOKED` are built credential-less (the seed hash is
  * unused), the second by withdrawing the first; `SUSPENDED` / `DEACTIVATED` are built as an active identity
- * then transitioned, so their credential still authenticates before the post-identity wall rejects them.
+ * then transitioned, so they hold a credential that the admission wall refuses before verifying it.
  */
 final class UserFixtureFactory
 {

@@ -4,21 +4,14 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
-use Erpify\Iam\Identity\Domain\Exception\AccountLocked;
-use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
-use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
-use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
-use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Security\Core\Exception\AuthenticationException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Core\Exception\TooManyLoginAttemptsAuthenticationException;
-use Throwable;
 
 /**
  * @internal
@@ -28,67 +21,36 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
 {
     use BuildsFailureHandler;
 
-    public function testNormalisesTheFailureToOneMessageAndKeepsTheRealCauseAsPrevious(): void
+    /**
+     * Throwing here would preempt `LoginFailureEvent`, which the authenticator dispatches only once this handler
+     * has returned — and with it the throttle, which spends its budget on that event. The handler must return.
+     */
+    public function testReturnsSoTheAuthenticatorGoesOnToDispatchTheFailureEvent(): void
     {
-        // Symfony's own message ("The presented password is invalid.") would reveal the email exists; the
-        // handler must re-throw one constant message the 401 arm surfaces verbatim, while the real cause
-        // survives as `previous` so the dev/test debug extension can still show what actually failed.
-        $cause = new BadCredentialsException('The presented password is invalid.');
-        $caught = null;
+        $request = $this->loginRequest(UserMother::DEFAULT_EMAIL);
 
-        try {
-            $this->handler(new InMemoryUserRepository())->onAuthenticationFailure($this->loginRequest(''), $cause);
-        } catch (Throwable $throwable) {
-            $caught = $throwable;
-        }
+        $response = $this->handler(new InMemoryUserRepository())->onAuthenticationFailure(
+            $request,
+            new BadCredentialsException('The presented password is invalid.'),
+        );
 
-        $this->assertInstanceOf(AuthenticationException::class, $caught);
-        $this->assertSame('Invalid credentials.', $caught->getMessage());
-        $this->assertSame($cause, $caught->getPrevious());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame('', $response->getContent());
+        // The marker is what lets the event's last listener replace this placeholder with the uniform 401.
+        $this->assertTrue(
+            $request->attributes->get(ProblemDetailsAuthenticationFailureHandler::UNIFORM_FAILURE_ATTRIBUTE),
+        );
     }
 
-    public function testGraduatesASuspendedAccountFailureToTheSpecificForbiddenWall(): void
-    {
-        // A post-identity SUSPENDED failure leaves the uniform 401 for a specific 403 account-suspended.
-        $this->expectException(AccountSuspended::class);
-
-        $this->handler(new InMemoryUserRepository())
-            ->onAuthenticationFailure($this->loginRequest(''), new SuspendedAccountException())
-        ;
-    }
-
-    public function testGraduatesADeactivatedAccountFailureToTheGenericForbiddenWall(): void
-    {
-        $this->expectException(AccountDeactivated::class);
-
-        $this->handler(new InMemoryUserRepository())
-            ->onAuthenticationFailure($this->loginRequest(''), new DeactivatedAccountException())
-        ;
-    }
-
-    public function testGraduatesALockedAccountFailureToTheSpecificForbiddenWall(): void
-    {
-        // A post-identity locked failure leaves the uniform 401 for a specific 403 account-locked.
-        $this->expectException(AccountLocked::class);
-
-        $this->handler(new InMemoryUserRepository())
-            ->onAuthenticationFailure($this->loginRequest(''), new LockedAccountException())
-        ;
-    }
-
-    public function testRecordsTheFailedAttemptAgainstTheSubmittedIdentityBeforeReporting(): void
+    public function testRecordsTheFailedAttemptAgainstTheSubmittedIdentity(): void
     {
         $user = UserMother::create();
         $repository = new InMemoryUserRepository($user);
 
-        try {
-            $this->handler($repository)->onAuthenticationFailure(
-                $this->loginRequest(UserMother::DEFAULT_EMAIL),
-                new BadCredentialsException('wrong'),
-            );
-        } catch (AuthenticationException) {
-            // the uniform 401 is asserted elsewhere; here we only care that the attempt was recorded
-        }
+        $this->handler($repository)->onAuthenticationFailure(
+            $this->loginRequest(UserMother::DEFAULT_EMAIL),
+            new BadCredentialsException('wrong'),
+        );
 
         $this->assertSame([$user], $repository->saved);
     }
@@ -100,35 +62,24 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
         $user = UserMother::create();
         $repository = new InMemoryUserRepository($user);
 
-        try {
-            $this->handler($repository)->onAuthenticationFailure(
-                $this->loginRequest(UserMother::DEFAULT_EMAIL),
-                new TooManyLoginAttemptsAuthenticationException(),
-            );
-        } catch (AuthenticationException) {
-            // the uniform 401 is asserted elsewhere; here we only care that nothing was recorded
-        }
+        $this->handler($repository)->onAuthenticationFailure(
+            $this->loginRequest(UserMother::DEFAULT_EMAIL),
+            new TooManyLoginAttemptsAuthenticationException(),
+        );
 
         $this->assertSame([], $repository->saved);
     }
 
     public function testAbsorbsAStoreFaultWhileRecordingSoTheUniform401IsNotLeakedAsA500(): void
     {
-        // A store fault while persisting the failed attempt must be swallowed: the response stays the uniform
-        // 401 for a resolved email exactly as for an unknown one — never a leaked DBALException (→ 500) that
-        // would both regress the neutral failure path and distinguish a real account on the wire.
-        $caught = null;
+        // A store fault while persisting the failed attempt must be swallowed: a resolved email must end exactly
+        // as an unknown one does — never a leaked DBALException (→ 500) that would both regress the neutral
+        // failure path and distinguish a real account on the wire.
+        $response = $this->handlerFailingToPersist()->onAuthenticationFailure(
+            $this->loginRequest(UserMother::DEFAULT_EMAIL),
+            new BadCredentialsException('wrong'),
+        );
 
-        try {
-            $this->handlerFailingToPersist()->onAuthenticationFailure(
-                $this->loginRequest(UserMother::DEFAULT_EMAIL),
-                new BadCredentialsException('wrong'),
-            );
-        } catch (Throwable $throwable) {
-            $caught = $throwable;
-        }
-
-        $this->assertInstanceOf(AuthenticationException::class, $caught);
-        $this->assertSame('Invalid credentials.', $caught->getMessage());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), (string) $response->getContent());
     }
 }

@@ -12,8 +12,8 @@ that it has **one** — and that administrator is the victim of
 
 The persisted lockout is keyed by **email address** (10 consecutive failures → `PT15M`,
 `api/src/Iam/Identity/Domain/Entity/User.php:64,66`), deliberately carrying no source dimension so a
-distributed run the per-IP throttle misses cannot open a session while it holds — though it still verifies
-guesses during the lock (`PRODUCTION_SECURITY_CHECKLIST.md` §7). That same
+distributed run the per-IP throttle misses cannot open a session while it holds, and verifies no guess while
+it does (`identity-invitation-lifecycle.md` D4, D7). That same
 property lets anyone who merely knows an administrator's address hold it closed: a lapsed lock zeroes
 the counter (`User.php:283-289`), so a sustained blackout costs 40 login attempts plus 5 recovery
 requests per hour. The binding limiter is `login_throttling` (5 per minute per address+IP,
@@ -22,7 +22,7 @@ attacker's cost is a small multiple of one source's allowance, and the only prer
 address, which is not a secret.
 
 While the lock holds, the state has **two** exits, not three. A successful login cannot be one:
-`UserChecker::checkPostAuth` throws before authentication succeeds (`UserChecker.php:74-76`), so
+`LockedIdentityLoginRefusalListener` refuses it before the password is even verified, so
 `ClearLockoutOnLoginSuccess` → `LoginAttemptRegistrar.php:78` is post-expiry cleanup, never an escape.
 What remains is a completed reset (`CompletePasswordReset.php:106`) and a password change from a live
 session (`ChangeMyPassword.php:113`) — and the owner here is signed out by definition. No status

@@ -111,7 +111,7 @@ describe("ApiResetPasswordRepository.reset", () => {
 
   it.each([
     ["a generic 403 forbidden (origin/CSRF rejection)", HttpStatus.FORBIDDEN, "forbidden"],
-    ["a 403 that is neither suspended nor deactivated", HttpStatus.FORBIDDEN, "account-locked"],
+    ["a 403 that is neither suspended nor deactivated", HttpStatus.FORBIDDEN, "some-other-wall"],
     ["a 401", HttpStatus.UNAUTHORIZED, "unauthenticated"],
     ["a 500", HttpStatus.INTERNAL_SERVER_ERROR, "server-error"],
   ])("re-throws %s — it is not a reset outcome", async (_label, status, type) => {

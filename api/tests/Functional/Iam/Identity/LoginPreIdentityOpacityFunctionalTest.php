@@ -9,11 +9,14 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Domain\Entity\User;
 use Erpify\Iam\Identity\Domain\HashedPassword;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
+use Erpify\Iam\Identity\Infrastructure\Security\LockedIdentityLoginRefusalListener;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
+use Erpify\Iam\Identity\Infrastructure\Security\UniformLoginFailureListener;
 use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ComparesOpaqueRefusals;
 use Erpify\Tests\Functional\ResolvesContainerServices;
@@ -25,14 +28,16 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The three pre-identity login failures — a wrong password, an email no identity carries, and an `INVITED`
- * identity that never set a credential — must be ONE answer on the wire, because the whole point of the
- * uniform 401 is that a caller cannot tell which of them happened.
+ * The pre-identity login failures — a wrong password, an email no identity carries, an `INVITED` identity that
+ * never set a credential, and the CORRECT password of a `SUSPENDED`, a `DEACTIVATED` or a locked identity — must
+ * be ONE answer on the wire, because the whole point of the uniform 401 is that a caller cannot tell which of them
+ * happened. The last three are why the walls run before verification: answered apart, the right password is the
+ * one response that differs, and those identities count no failed attempt to bound the guessing.
  *
- * Each of the three is already asserted apart, on the members someone thought to name (`status`, `type`,
+ * Each of them is already asserted apart, on the members someone thought to name (`status`, `type`,
  * `title`). Nothing compared the three answers to EACH OTHER, so a member outside that list — a `detail`, an
  * extension, a differing header, a reordered payload — could diverge with every one of those assertions still
- * green. This drives all three through the real firewall against real Postgres and compares the whole BODY
+ * green. This drives all of them through the real firewall against real Postgres and compares the whole BODY
  * plus `Content-Type` as one value, which is narrower than "whole responses" and the difference is worth
  * naming: every other response header is outside the comparison. That is not hypothetical here — merely
  * touching the session adds `Set-Cookie`, `Cache-Control` and `Expires`, as `SessionAdmissionGate::refuse()`
@@ -46,13 +51,15 @@ use Symfony\Component\HttpFoundation\Response;
  * opposite of its own contract; every other member, and the order they are spelled in, is compared as a
  * whole.
  *
- * Three identities' worth of setup against the real graph is inherent to driving the firewall end to end.
+ * Five identities' worth of setup against the real graph is inherent to driving the firewall end to end.
  *
  * @internal
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
+#[CoversClass(LockedIdentityLoginRefusalListener::class)]
 #[CoversClass(ProblemDetailsAuthenticationFailureHandler::class)]
+#[CoversClass(UniformLoginFailureListener::class)]
 #[CoversClass(UserChecker::class)]
 #[CoversClass(UserProvider::class)]
 final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
@@ -74,6 +81,12 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 
     private const string INVITED_CASE = 'an INVITED identity that never set a credential';
 
+    private const string SUSPENDED_CASE = 'the correct password of a SUSPENDED identity';
+
+    private const string DEACTIVATED_CASE = 'the correct password of a DEACTIVATED identity';
+
+    private const string LOCKED_CASE = 'the correct password of a locked identity';
+
     private KernelBrowser $client;
 
     private Connection $connection;
@@ -85,12 +98,18 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
 
     private string $invitedEmail = '';
 
+    private string $suspendedEmail = '';
+
+    private string $deactivatedEmail = '';
+
+    private string $lockedEmail = '';
+
     #[Override]
     protected function setUp(): void
     {
         $this->client = self::createClient();
-        // Persistent kernel so the cached connection and container stay valid across the three requests one
-        // test makes; the cookie jar is cleared per request so each login is a clean anonymous call.
+        // Persistent kernel so the cached connection and container stay valid across every request one test
+        // makes; the cookie jar is cleared per request so each login is a clean anonymous call.
         $this->client->disableReboot();
 
         $this->connection = $this->service(EntityManagerInterface::class)->getConnection();
@@ -107,24 +126,50 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
         $users->save(User::register($activeId, $this->activeEmail, HashedPassword::fromHash($hash), Role::VIEWER));
         $users->save(User::invite($invitedId, $this->invitedEmail, Role::VIEWER));
 
-        $this->seededUserIds = [$activeId, $invitedId];
+        $suspendedId = Uuid::generate();
+        $this->suspendedEmail = \sprintf('opacity-suspended-%s@erpify.test', \str_replace('-', '', $suspendedId));
+        $suspended = User::register($suspendedId, $this->suspendedEmail, HashedPassword::fromHash($hash), Role::VIEWER);
+        $suspended->suspend();
+
+        $users->save($suspended);
+
+        $deactivatedId = Uuid::generate();
+        $this->deactivatedEmail = \sprintf('opacity-deactivated-%s@erpify.test', \str_replace('-', '', $deactivatedId));
+        $deactivated = User::register(
+            $deactivatedId,
+            $this->deactivatedEmail,
+            HashedPassword::fromHash($hash),
+            Role::VIEWER,
+        );
+        $deactivated->deactivate();
+
+        $users->save($deactivated);
+
+        $lockedId = Uuid::generate();
+        $this->lockedEmail = \sprintf('opacity-locked-%s@erpify.test', \str_replace('-', '', $lockedId));
+        $locked = User::register($lockedId, $this->lockedEmail, HashedPassword::fromHash($hash), Role::VIEWER);
+
+        for ($attempt = 0; $attempt < User::MAX_FAILED_ATTEMPTS; ++$attempt) {
+            $locked->recordFailedAttempt(SystemClock::now());
+        }
+
+        $users->save($locked);
+
+        $this->seededUserIds = [$activeId, $invitedId, $suspendedId, $deactivatedId, $lockedId];
     }
 
     protected function tearDown(): void
     {
         // Scoped to the rows this test minted rather than a truncate: the suite runs against a shared
         // database, so removing anything else would be destroying another test's fixture.
-        if ([] !== $this->seededUserIds) {
-            $this->connection->executeStatement(
-                'DELETE FROM identity_user WHERE id IN (?, ?)',
-                $this->seededUserIds,
-            );
+        foreach ($this->seededUserIds as $seededUserId) {
+            $this->connection->executeStatement('DELETE FROM identity_user WHERE id = ?', [$seededUserId]);
         }
 
         parent::tearDown();
     }
 
-    public function testTheThreePreIdentityFailuresAnswerOneIndistinguishableResponse(): void
+    public function testEveryPreIdentityFailureAnswersOneIndistinguishableResponse(): void
     {
         $answers = [];
         $perOccurrence = [];
@@ -151,6 +196,9 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
         $this->assertArrayHasKey(self::WRONG_PASSWORD_CASE, $answers);
         $this->assertArrayHasKey(self::UNKNOWN_EMAIL_CASE, $answers);
         $this->assertArrayHasKey(self::INVITED_CASE, $answers);
+        $this->assertArrayHasKey(self::SUSPENDED_CASE, $answers);
+        $this->assertArrayHasKey(self::DEACTIVATED_CASE, $answers);
+        $this->assertArrayHasKey(self::LOCKED_CASE, $answers);
 
         $reference = $answers[self::WRONG_PASSWORD_CASE];
 
@@ -167,6 +215,9 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
         yield self::WRONG_PASSWORD_CASE => [$this->activeEmail, self::WRONG_PASSWORD];
         yield self::UNKNOWN_EMAIL_CASE => ['nobody-' . Uuid::generate() . '@erpify.test', self::WRONG_PASSWORD];
         yield self::INVITED_CASE => [$this->invitedEmail, self::REGISTERED_PASSWORD];
+        yield self::SUSPENDED_CASE => [$this->suspendedEmail, self::REGISTERED_PASSWORD];
+        yield self::DEACTIVATED_CASE => [$this->deactivatedEmail, self::REGISTERED_PASSWORD];
+        yield self::LOCKED_CASE => [$this->lockedEmail, self::REGISTERED_PASSWORD];
     }
 
     private function post(string $email, string $password): void

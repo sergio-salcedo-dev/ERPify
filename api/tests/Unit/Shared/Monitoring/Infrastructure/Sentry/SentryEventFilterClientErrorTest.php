@@ -108,7 +108,7 @@ final class SentryEventFilterClientErrorTest extends TestCase
             },
         ];
         yield 'forbidden (403)' => [
-            new class ('account-locked', 'locked') extends DomainException implements Forbidden {
+            new class ('some-other-wall', 'walled') extends DomainException implements Forbidden {
             },
         ];
         yield 'rate limited (429)' => [

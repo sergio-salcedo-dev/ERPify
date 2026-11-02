@@ -35,7 +35,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  * The credential is nullable until the identity activates: an `INVITED` identity is provisioned (with its
  * membership) before its owner ever sets a password, so `password_hash` is null until {@see activate()}.
  * Only an `ACTIVE` identity is admitted to a session; the {@see suspend()} / {@see deactivate()} walls are
- * enforced post-authentication so a rejected login mints no session at all, never one that is then revoked.
+ * enforced before authentication completes, so a rejected login mints no session at all, never one that is then
+ * revoked.
  *
  * Deliberately does NOT implement {@see \Erpify\Shared\Audit\Domain\AuditedEntity}: the write-capture
  * listener records a field-level diff only for entities that opt into that marker, so staying out keeps
@@ -187,9 +188,11 @@ final class User extends AggregateRoot
      * behalf, and the next caller will pick differently.
      *
      * **Only call this where the caller has already proven control of the identity** — a valid single-use
-     * token, or verified credentials. The refusal is deliberately specific (`SUSPENDED` and `DEACTIVATED`
-     * answer differently), so on a pre-identity surface it would confirm an account exists and leak its
-     * status. Where that matters, the uniform path is silence, not a graduated wall.
+     * token, a recovery secret, or an authenticated session. A verified password alone is not such proof on
+     * login, where every non-`ACTIVE` identity is refused before verification with the uniform 401. The
+     * refusal is deliberately specific (`SUSPENDED` and `DEACTIVATED` answer differently), so on a
+     * pre-identity surface it would confirm an account exists and leak its status. Where that matters, the
+     * uniform path is silence, not a graduated wall.
      *
      * @throws AccountSuspended   the reversible wall — the identity may return
      * @throws AccountDeactivated the terminal wall, and the answer for an identity that never activated
@@ -312,7 +315,7 @@ final class User extends AggregateRoot
      * Registers a failed password attempt. Only an `ACTIVE` identity accrues a lockout: the machine is about
      * password attempts, and a non-`ACTIVE` identity either has no password to attempt (`INVITED`) or is already
      * walled by its lifecycle status (`SUSPENDED`/`DEACTIVATED`) — counting it would seal a lock and emit a
-     * spurious {@see UserLocked} on an identity that can never present the "temporarily locked" wall. A no-op
+     * spurious {@see UserLocked} on an identity its status already refuses. A no-op
      * while already locked — the attempt is refused before the password is even checked, so it neither grows the
      * counter unboundedly nor re-emits {@see UserLocked} on every hit within the window. On crossing
      * {@see MAX_FAILED_ATTEMPTS} it seals the lockout for {@see LOCK_DURATION} and records the fact once. `$now`

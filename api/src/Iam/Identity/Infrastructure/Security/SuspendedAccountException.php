@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Infrastructure\Security;
 
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
+use Symfony\Component\Security\Core\Exception\DisabledException;
 
 /**
- * Thrown post-authentication for a `SUSPENDED` identity: the credential proved, admission refused.
+ * Thrown before verification for a `SUSPENDED` identity, so its password is never checked.
  *
- * Extends `CustomUserMessageAccountStatusException` so the authenticator does NOT re-wrap it into a
- * `BadCredentialsException` (that re-wrap is reserved for pre-identity failures) — it reaches the failure
- * handler intact, which translates it into the specific 403 `account-suspended`. Still an
- * `AccountStatusException`, so the firewall aborts authentication and mints no session at all.
+ * A plain `AccountStatusException` (via `DisabledException`), like {@see InvitedAccountException}: with
+ * `expose_security_errors: None` the authenticator re-wraps it into a `BadCredentialsException`, so the refusal
+ * is the uniform pre-identity 401 and never tells a guesser the password was right.
  */
-final class SuspendedAccountException extends CustomUserMessageAccountStatusException
+final class SuspendedAccountException extends DisabledException
 {
 }

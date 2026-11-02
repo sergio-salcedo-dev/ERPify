@@ -12,8 +12,8 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
  * active `ADMIN`s — the last active administrator can be neither suspended, deactivated nor erased.
  *
  * A {@see Conflict} (409): the request is well-formed and authorized but collides with a state invariant,
- * like `BankInUseException`. Distinct from {@see AccountSuspended} (403, the login wall): this is the guard
- * on the write, not the response to a walled login.
+ * like `BankInUseException`. Distinct from {@see AccountSuspended} (403, the post-identity wall): this is
+ * the guard on the write, not the response to a walled identity.
  *
  * Erasure does not raise it. An identity carrying `ADMIN` is refused earlier and more specifically by
  * {@see AdministratorErasureRequiresDemotion}, and the last active administrator necessarily carries the role,
