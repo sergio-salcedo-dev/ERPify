@@ -105,4 +105,12 @@ describe("AuditFilterBar", () => {
       "Filters, 1 active",
     );
   });
+
+  it("grows its toolbar controls to a 44px touch target whenever a coarse pointer is present", () => {
+    renderBar();
+
+    expect(screen.getByTestId("audit-filter-bar__toggle")).toHaveClass(
+      "any-pointer-coarse:min-h-11",
+    );
+  });
 });

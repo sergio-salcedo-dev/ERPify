@@ -122,4 +122,12 @@ describe("BankAccountsFilters — sort controls", () => {
 
     expect(screen.getByTestId("bank-accounts-filters__sort-direction")).toBeDisabled();
   });
+
+  it("grows its toolbar controls to a 44px touch target whenever a coarse pointer is present", () => {
+    renderFilters();
+
+    for (const id of ["bank-accounts-filters__holder", "bank-accounts-filters__toggle"]) {
+      expect(screen.getByTestId(id)).toHaveClass("any-pointer-coarse:min-h-11");
+    }
+  });
 });

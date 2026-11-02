@@ -193,7 +193,7 @@ export function AuditFilterBar({
           aria-controls={panelId}
           aria-label={toggleLabel}
           title={toggleLabel}
-          className="audit-filter-bar__toggle"
+          className="audit-filter-bar__toggle any-pointer-coarse:min-h-11"
           data-testid="audit-filter-bar__toggle"
         >
           <SlidersHorizontal className="size-3.5" aria-hidden="true" />

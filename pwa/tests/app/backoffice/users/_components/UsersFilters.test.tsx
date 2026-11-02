@@ -245,4 +245,12 @@ describe("UsersFilters — panel", () => {
     renderFilters({ leading: <span data-testid="users-filters-test__leading">view</span> });
     expect(screen.getByTestId("users-filters-test__leading")).toBeInTheDocument();
   });
+
+  it("grows its toolbar controls to a 44px touch target whenever a coarse pointer is present", () => {
+    renderFilters();
+
+    for (const id of ["users-filters__email", "users-filters__toggle"]) {
+      expect(screen.getByTestId(id)).toHaveClass("any-pointer-coarse:min-h-11");
+    }
+  });
 });

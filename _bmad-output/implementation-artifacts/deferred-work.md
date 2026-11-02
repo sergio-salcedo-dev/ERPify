@@ -621,3 +621,21 @@ severity: medium
 - Revisar también las alertas de Dependabot del repositorio.
 
 **Aparte:** el `pwa/node_modules` de esa sesión no coincidía con el lock. Sobraban `@google/genai` y `@protobufjs/*`, y `@hookform/resolvers` estaba en 5.9.1 frente a `^5.9.2`. Reinstalar con `npm ci` en el contenedor `pwa` antes de auditar.
+
+### DW-72: Controles del back-office por debajo de 44 px en táctil tras #1141
+
+origin: revisión de tres capas de #1141, 2026-10-27
+location: pwa/src/components/ui, pwa/src/components/erpify, pwa/src/app/backoffice, pwa/src/context/backoffice/audit
+reason: #1141 lleva a 44 px (`any-pointer-coarse:`) la paginación keyset y los controles principales de las barras de filtros. El resto no se toca, porque arreglarlo en las variantes de `Button` o de `Input` afecta a todos los formularios y pide decisión de diseño.
+status: open
+severity: medium
+
+**Inventario medido el 2026-10-27 (alto en táctil, sin cambios respecto a escritorio):**
+- **16 px, por debajo incluso del mínimo de 24 px de WCAG 2.2 (2.5.8):** el botón de quitar de los chips de filtro activo (`size-4`) en `BanksActiveFilters.tsx` y `BankAccountsActiveFilters.tsx`. Primero hay que comprobar si se acoge a la excepción de espaciado de 2.5.8. Si no se acoge, es lo primero que hay que arreglar.
+- **28 px (`Button` `size="sm"` / `icon-sm`):** las acciones de fila (`UserRowActions`, `BankRowActions`), `ListDisplayToggles` (`DensityToggle`, `ResourceColumnPicker`), `ResourceViewToggle`, "Clear all" en los paneles de filtros, y en `AuditFilterBar` `audit-filter-bar__correlation-clear` y `audit-filter-bar__reset`.
+- **32 px:** el `Input` compartido (`h-8`) fuera de los buscadores de lista.
+- **36 px:** los `<select>` de los paneles de filtros y de los controles de estado (`h-9`), en `UsersFilters`, `BanksFilters`, `BankAccountsFilters`, `AuditFilterBar`, `UserStatusControl`, `UserEraseControl`, `BankAccountStatusControl` y `BankAccountForm`.
+
+**Para cerrarla:**
+- Decidir si el tamaño táctil va en las variantes (`button-variants.ts`, `input.tsx`) o control a control. En las variantes llega a todo con un solo cambio, pero cambia la densidad de cada formulario en dispositivos con pantalla táctil.
+- Medir en Playwright con un perfil de dispositivo táctil, no solo por clase: jsdom no evalúa media queries.

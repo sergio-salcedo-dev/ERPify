@@ -29,7 +29,7 @@ interface KeysetPaginationProps<T extends number> {
 }
 
 /**
- * Cursor-only keyset pagination control shared by every server-driven list (banks, bank accounts,
+ * Cursor-only keyset pagination control shared by every server-driven list (banks, bank accounts, users,
  * audit). The prev/next pair is ALWAYS rendered and `disabled` when its envelope link is null, never
  * hidden — the documented D-A11y exception to the hide-when-no-target rule, governed by the keyset ADR.
  * There is no page number: keyset navigation is purely directional. Surfaces differ only in their
@@ -58,7 +58,7 @@ export function KeysetPagination<T extends number>({
       >
         <span className={`${testId}__page-size-label`}>{labels.pageSize}</span>
         <select
-          className={`${testId}__page-size-select border-border bg-background text-foreground focus-visible:ring-ring h-7 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none`}
+          className={`${testId}__page-size-select border-border bg-background text-foreground focus-visible:ring-ring h-7 rounded-md border px-2 text-xs focus-visible:ring-2 focus-visible:outline-none any-pointer-coarse:h-11`}
           value={pageSize}
           onChange={(event) => {
             // Only propagate a value that is one of the offered options, so a synthetic or
@@ -85,7 +85,7 @@ export function KeysetPagination<T extends number>({
           type="button"
           variant="outline"
           size="sm"
-          className={`${testId}__prev`}
+          className={`${testId}__prev any-pointer-coarse:h-11 any-pointer-coarse:min-w-11`}
           onClick={onPrev}
           disabled={!hasPrev}
           aria-label={labels.prev.label}
@@ -100,7 +100,7 @@ export function KeysetPagination<T extends number>({
           type="button"
           variant="outline"
           size="sm"
-          className={`${testId}__next`}
+          className={`${testId}__next any-pointer-coarse:h-11 any-pointer-coarse:min-w-11`}
           onClick={onNext}
           disabled={!hasNext}
           aria-label={labels.next.label}

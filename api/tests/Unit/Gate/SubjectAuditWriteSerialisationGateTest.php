@@ -67,7 +67,7 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
     public function everySubjectAuditWriteIsSerialisedWithTheSubjectsRow(): void
     {
         $found = [];
-        $sites = 0;
+        $sites = [];
 
         foreach (ApiSourceFiles::phpFiles(ApiSourceFiles::root()) as $file) {
             $path = $file->getPathname();
@@ -77,7 +77,7 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
             }
 
             foreach ($this->mechanismsOf((string) \file_get_contents($path)) as $mechanism) {
-                ++$sites;
+                $sites[] = $mechanism;
                 $found[\basename($path)][] = $mechanism;
             }
         }
@@ -88,7 +88,7 @@ final class SubjectAuditWriteSerialisationGateTest extends TestCase
         );
         \ksort($flattened);
 
-        $this->assertSame(self::SITES, $sites, 'the sweep no longer matches the subject writes it was built over');
+        $this->assertCount(self::SITES, $sites, 'the sweep no longer matches the subject writes it was built over');
         $this->assertSame(
             self::POPULATION,
             $flattened,
