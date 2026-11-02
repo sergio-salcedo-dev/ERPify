@@ -36,8 +36,8 @@ search side (`NormalizedTextFieldNormalizer`).
 
 - **Uniqueness → the twin is `UNIQUE`, `COLLATE "C"`** (`bank.name_normalized`). A code whose canonical form is
   upper-case ASCII has no twin: it is stored canonical (`NormalizedText::toAsciiUpper()`, `bank.short_name`).
-- **A person's name is never unique** — two holders, customers or workers can share one. Its twin is plain `TEXT
-  DEFAULT ''` (folding can lengthen a name; the default keeps an older image's `INSERT` working) with a GIN
+- **A person's name is never unique** — two holders, customers or workers can share one. Its twin is plain
+  `TEXT DEFAULT ''` (folding can lengthen a name; the default keeps an older image's `INSERT` working) with a GIN
   trigram index, because `contains` is `LIKE '%term%'` and no B-tree serves it (measured on 500k rows: 45 ms
   sequential, 3 ms with the index; a term under three characters has no trigram and still scans). Declare it as
   `#[ORM\Index]` under a name ending in `_trgm`, build it in the migration as `USING gin (<col> gin_trgm_ops)` —
@@ -46,6 +46,12 @@ search side (`NormalizedTextFieldNormalizer`).
 - **The twin is classified like its field.** A twin of a `#[PersonalData]` field is `#[PersonalData]`: the
   change capture diffs every mapped column and seals only classified ones, so an unclassified twin writes
   the person's name to `audit_log` in clear.
+- **Every twin grows the audit change diff, and that diff is bounded.** An update seals the old and the new
+  value of each changed field, twin included, and `AuditLogEntry::MAX_METADATA_BYTES` (16 KiB) refuses the
+  whole write past it. A 255-character field with its twin adds about 1.4 KB, so an aggregate with several
+  folded fields checks its worst-case update against the bound. Folding expands too: `ﷺ` (U+FDFA) folds to
+  19 characters, so 255 of them in `bank_account.holder_name` plus an alias change exceed it. Such an input
+  fails its write, which persists nothing, rather than being bounded at the field: no real name approaches it.
 - **Not the `unaccent` extension, not a nondeterministic ICU collation.** `unaccent` leaves Cyrillic and
   Greek untransliterated and is `STABLE`, so it reaches an index only through an `IMMUTABLE` wrapper that
   breaks silently when its rules file changes. A nondeterministic collation makes `UNIQUE` work on the
