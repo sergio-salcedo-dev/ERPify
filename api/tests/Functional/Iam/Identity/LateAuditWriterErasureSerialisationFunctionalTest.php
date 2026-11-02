@@ -142,6 +142,7 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
             ['id' => $this->subjectId],
         );
         $outside->close();
+
         $this->outside = null;
         parent::tearDown();
     }

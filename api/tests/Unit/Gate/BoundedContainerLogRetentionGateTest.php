@@ -122,7 +122,7 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
                 $logging,
                 \sprintf(
                     'Service "%s" resolves to no bounded log retention in "%s". Docker\'s default json-file '
-                    . 'driver keeps every line for ever, so this service\'s stderr — where Monolog\'s prod '
+                    . "driver keeps every line for ever, so this service's stderr — where Monolog's prod "
                     . 'handler flushes its buffer — becomes an unbounded sink with no owner. An explicit '
                     . '`logging: ~` reaches here as null: that is an overlay UNSETTING the inherited bound, '
                     . 'not inheriting it.',

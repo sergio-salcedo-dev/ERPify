@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures;
 
-use Override;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use UnexpectedValueException;
@@ -15,7 +14,7 @@ use UnexpectedValueException;
  * endpoints. Wired exclusively when `APP_ENV=test` via `api/config/services_test.yaml`;
  * production code is NOT touched.
  *
- * The subscriber listens on `kernel.controller`. When the request matches one of the
+ * The listener runs on `kernel.controller`. When the request matches one of the
  * two health paths AND carries the `_force_failure` query parameter, it throws a plain
  * {@see UnexpectedValueException} BEFORE the controller runs. The exception escapes back into
  * Symfony's kernel, where {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder}
@@ -27,7 +26,7 @@ use UnexpectedValueException;
  *
  * @internal
  */
-final class ForceHealthFailureSubscriber implements EventSubscriberInterface
+final class ForceHealthFailureListener
 {
     /**
      * The two paths advertised by the routing layer (see `api/config/routes.yaml`):
@@ -45,17 +44,9 @@ final class ForceHealthFailureSubscriber implements EventSubscriberInterface
 
     public const string FAILURE_MESSAGE = 'Health probe failure injected for conformance test.';
 
-    /**
-     * @return array<string, array<int, string|int>>
-     */
-    #[Override]
-    public static function getSubscribedEvents(): array
-    {
-        // Priority 0 — anywhere on `kernel.controller` is fine; the listener pipeline
-        // is exception-only so the throw simply unwinds back through HttpKernel.
-        return [KernelEvents::CONTROLLER => ['onController', 0]];
-    }
-
+    // Priority 0 — anywhere on `kernel.controller` is fine; the listener pipeline
+    // is exception-only so the throw simply unwinds back through HttpKernel.
+    #[AsEventListener(event: KernelEvents::CONTROLLER, priority: 0)]
     public function onController(ControllerEvent $event): void
     {
         $request = $event->getRequest();

@@ -17,8 +17,8 @@ use Symfony\Component\HttpFoundation\Response;
  * Proves the RFC 9457 Problem Details contract applies retroactively to the
  * two `/health` endpoints whose authors predate the contract. NO production
  * source was modified; the failure path is forced by a test-only event
- * subscriber wired in `api/config/services_test.yaml`
- * (see {@see EventListener\Fixtures\ForceHealthFailureSubscriber}).
+ * listener wired in `api/config/services_test.yaml`
+ * (see {@see \Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureListener}).
  *
  * The two endpoints under test are wired by attribute routing in
  * `api/config/routes.yaml`:
@@ -26,8 +26,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   - Frontoffice → `GET /api/v1/health`
  *
  * What the suite pins:
- *   1. Failure path — adding `?_force_failure=1` causes the test subscriber to throw a
- *      plain `RuntimeException` BEFORE the controller runs. The listener pipeline maps
+ *   1. Failure path — adding `?_force_failure=1` causes the test listener to throw a
+ *      `UnexpectedValueException` BEFORE the controller runs. The listener pipeline maps
  *      it to the same default-deny `unhandled-exception` 500 already pinned for any
  *      unrecognised throwable. Body validates against the RFC 9457 schema
  *      (`tests/Fixtures/Problem/rfc-9457.schema.json`) and carries the
@@ -152,8 +152,8 @@ final class HealthEndpointsContractTest extends WebTestCase
             ),
         );
 
-        // Default-deny on unrecognised throwables — the test-only subscriber
-        // throws a plain RuntimeException, which lands on the terminal `unhandled-exception`
+        // Default-deny on unrecognised throwables — the test-only listener
+        // throws an UnexpectedValueException, which lands on the terminal `unhandled-exception`
         // / 500 branch.
         $this->assertSame('unhandled-exception', $body['type'] ?? null);
         $this->assertSame(500, $body['status'] ?? null);
@@ -189,7 +189,7 @@ final class HealthEndpointsContractTest extends WebTestCase
         $this->assertIsArray($decoded);
 
         // Regression pin: the pre-contract happy-path body shape MUST be unchanged after
-        // wiring the test-only failure subscriber. The `JsonResponder` wraps the
+        // wiring the test-only failure listener. The `JsonResponder` wraps the
         // controller's `Result::ok([...])` payload under a top-level `data` envelope —
         // exactly what callers depend on today. `datetime` is the only volatile field;
         // pin its shape as an ISO 8601 ATOM string (e.g. `2026-05-08T12:34:56+00:00`).

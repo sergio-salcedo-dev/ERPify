@@ -1292,6 +1292,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       customer deployment:** land the catch-up as one consolidated batch (`/deps-update`, which
       re-resolves the ranges in a single install and reads every claimed version back out of the
       lock) and re-run `composer audit`.
+- [ ] **`npm audit` reports 25 advisories in `pwa/` (2 low, 23 moderate), and none has a fix inside
+      its consumers' ranges.** Measured 2026-11-02 with npm 12.0.1; they reduce to three roots, the
+      rest being the cascade npm lists per dependent. **`minimatch` <11.0.1** (DoS via glob-pattern
+      amplification): 3.1.5 under `eslint-plugin-react`/`eslint-plugin-jsx-a11y`, 10.2.6 under
+      `eslint`, `typescript-eslint`, `ts-morph` and `glob` — every one matches patterns this repo
+      writes, never a caller's. **`glob` 13.0.6** (AbortSignal cancellation bypass) under
+      `@sentry/bundler-plugins`, which pins `^13.0.6`; it is the one path `npm audit --omit=dev`
+      still reports, and it is build-time only — `@sentry/nextjs` imports it from its `config/`
+      loaders and nowhere in its runtime. **`deepmerge` 4.3.1** (prototype poisoning) under the
+      `shadcn` CLI, where no fixed release exists. The fixes are majors (`minimatch` 11, `glob` 14,
+      first published 2026-10-27) no consumer has adopted; npm's own `audit fix --force` would
+      **downgrade** the plugins, and an `overrides` entry forcing `minimatch` 11 breaks
+      `eslint-plugin-react`, which calls the 3.x default export where 11 exports `{ minimatch }`. The high (`systeminformation` <5.33.16, Windows command
+      injection, under `shadcn` → `@dotenvx/dotenvx`) was closed in #1166 by a lock-only move to
+      5.33.16. **Before a customer deployment:** re-run `npm audit --omit=dev`; the build-time
+      `glob` path closes when `@sentry/bundler-plugins` takes `glob` ≥14.0.2.
 - [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order.** `SendInvitation`
       and `ResendInvitation` commit the token rotation and then mail the link synchronously, outside the
       transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent resends of one person are

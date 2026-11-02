@@ -65,8 +65,19 @@ updates:
     # 2.2.8 moving ALONE (#738) dies in php.rector.dry-run with
     # MissingPrivatePropertyException on PHPStan\Parser\RichParser::$container,
     # which rector 2.5.7 reads via PrivatesAccessor; the co-moved pair (#739)
-    # does not fatal at all. Grouping is what makes the fix land in the same
-    # commit as the break. Full mechanism: /deps-update step 3B.
+    # does not fatal at all. Full mechanism: /deps-update step 3B.
+    #
+    # A group puts the members in one PR; it does not pick coherent versions.
+    # Cooldown is applied per member, and the lock can move past the title:
+    # #1153 was titled phpstan 2.3.2 and locked 2.3.4, without rector, whose
+    # matching 2.8.3 was still inside the cooldown. That pair breaks through a
+    # second channel: rector's preload.php require_once's its own bundled,
+    # UNPREFIXED phpstan/phpdoc-parser before the project's vendor/autoload.php
+    # is registered, so a phpstan phar built against a different phpdoc-parser
+    # mixes classes from both — measured to fatal in the newer-phpstan
+    # direction (CallableTypeNode handed a FullyQualifiedNameNode, phpstan 2.3.4
+    # over rector 2.7.0). Moving api/vendor's phpdoc-parser changes nothing —
+    # measured on #1166 — because that copy is not the one loaded.
     #
     # Membership is what breaks together: rector/rector on that measurement, the
     # phpstan-* extensions and extension-installer because they exist only to

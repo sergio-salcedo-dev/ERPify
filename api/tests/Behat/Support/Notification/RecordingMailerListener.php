@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Behat\Support\Notification;
 
-use Override;
-use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Mailer\Event\MessageEvent;
 use Symfony\Component\Mime\Email;
 
@@ -19,17 +18,9 @@ use Symfony\Component\Mime\Email;
  * non-queued (real send) event counts each notification once. Only `Email` messages are kept, so
  * non-notification framework mail does not inflate the notification count.
  */
-final class RecordingMailerSubscriber implements EventSubscriberInterface
+final class RecordingMailerListener
 {
-    /**
-     * @return array<class-string, string>
-     */
-    #[Override]
-    public static function getSubscribedEvents(): array
-    {
-        return [MessageEvent::class => 'onMessage'];
-    }
-
+    #[AsEventListener(event: MessageEvent::class)]
     public function onMessage(MessageEvent $messageEvent): void
     {
         if ($messageEvent->isQueued()) {

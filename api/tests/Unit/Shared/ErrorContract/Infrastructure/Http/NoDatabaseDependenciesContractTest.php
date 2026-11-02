@@ -112,7 +112,7 @@ final class NoDatabaseDependenciesContractTest extends TestCase
     ): void {
         $type = $parameter->getType();
 
-        if (null === $type) {
+        if (!$type instanceof ReflectionType) {
             // An untyped constructor argument is itself a separate code-quality smell, but it
             // cannot resolve to a banned Doctrine type via the autowirer either way.
             return;

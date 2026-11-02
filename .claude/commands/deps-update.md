@@ -147,9 +147,35 @@ parser through a public constructor. **The practice is not over:** at 2.6.1
 the pair as inseparable from here on rather than reading one repaired reach as the end of
 the risk.
 
-**A group in `.github/dependabot.yaml` is the durable fix**, exactly as for
-`codeql-action`. The composer lane declares no `groups:` today, so the pair re-splits every
-week it moves.
+**A group is necessary and not sufficient.** The composer lane groups the pair
+(`phpstan-rector` in `.github/dependabot.yaml`), which puts them in one PR — but cooldown is
+applied **per member**, and a composer PR's lock can move **past its own title**: #1153 was
+titled `phpstan/phpstan` 2.3.1 → **2.3.2** (the cooldown-eligible target, coherent with rector
+2.7.0) and locked **2.3.4**, without rector, whose matching 2.8.3 was still in cooldown. Read
+the lock, not the title, in both directions: what it moved beyond the title is also inside
+the cooldown, and the batch must say so.
+
+**A second channel: the bundled phpdoc-parser (#1166).** `rector/rector` is a built
+distribution whose `preload.php` `require_once`s its own **unprefixed**
+`vendor/phpstan/phpdoc-parser` before the project's `vendor/autoload.php` is registered (91
+files at 2.7.0). phpstan's phar is built against an exact phpdoc-parser, so when phpstan's is
+newer than rector's the two mix and every file fails with a `TypeError` — measured: phpstan
+2.3.4 (built on 2.4.0) over rector 2.7.0 (ships 2.3.6) gave `CallableTypeNode::__construct()` a `FullyQualifiedNameNode`, a class
+2.3.x lacks. **Moving `api/vendor`'s `phpstan/phpdoc-parser` does nothing** — that copy is not
+the one loaded, and an attempt to fix it there left the red byte-identical. Check this before
+running anything, and co-move rector whenever phpstan's pin **differs** from rector's bundle.
+Only the newer-phpstan direction is measured; the reverse (a rector bundling a newer
+phpdoc-parser than phpstan was built on — e.g. rector 2.8.2 with 2.3.11 over phpstan 2.3.3 on
+2.3.8, a pair Composer admits) loads the same mix and gets the 3B A/B rather than a guess:
+
+```bash
+ps=2.3.4; rc=2.7.0   # the versions the batch would lock
+curl -s "https://raw.githubusercontent.com/phpstan/phpstan-src/$ps/composer.json" \
+  | grep '"phpstan/phpdoc-parser"'
+curl -s "https://raw.githubusercontent.com/rectorphp/rector/$rc/vendor/composer/installed.json" \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);d=d.get('packages',d)
+print([p['version'] for p in d if p['name']=='phpstan/phpdoc-parser'])"
+```
 
 ### 3C — Not a split: a fixer bump that ships new rules
 

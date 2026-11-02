@@ -8,9 +8,9 @@ use Symfony\Component\Mime\Email;
 
 /**
  * Process-static collector for notification emails captured off Symfony Mailer's `MessageEvent`
- * by {@see RecordingMailerSubscriber}. Read by {@see \Erpify\Tests\Behat\Context\NotificationContext};
+ * by {@see RecordingMailerListener}. Read by {@see \Erpify\Tests\Behat\Context\NotificationContext};
  * cleared `@BeforeScenario`. Static so the context reads the captured emails directly, regardless of
- * which container instance Symfony Mailer resolves the subscriber from.
+ * which container instance Symfony Mailer resolves the listener from.
  */
 final class RecordedEmails
 {

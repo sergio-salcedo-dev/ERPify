@@ -65,7 +65,7 @@ final class SeededProjectionRebuildGateTest extends TestCase
             self::REPLAY,
         ));
         $this->assertGreaterThan($load, $replay, \sprintf(
-            '`%s` must run AFTER `%s` — replaying first rebuilds from the previous run\'s log, and the load\'s '
+            "`%s` must run AFTER `%s` — replaying first rebuilds from the previous run's log, and the load's "
             . 'purge then truncates the read model it just rebuilt.',
             self::REPLAY,
             self::LOAD,
