@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
 use Rector\Doctrine\Orm37\Rector\MethodCall\DoctrineQueryBuilderSortDirectionRector;
-use Rector\Naming\Rector\Assign\RenameVariableToMatchMethodCallReturnTypeRector;
-use Rector\Naming\Rector\Class_\RenamePropertyToMatchTypeRector;
-use Rector\Naming\Rector\ClassMethod\RenameParamToMatchTypeRector;
-use Rector\Naming\Rector\ClassMethod\RenameVariableToMatchNewTypeRector;
 use Rector\Php83\Rector\Class_\ReadOnlyAnonymousClassRector;
 use Rector\Php84\Rector\MethodCall\NewMethodCallWithoutParenthesesRector;
 use Rector\PHPUnit\CodeQuality\Rector\Class_\AddSeeTestAnnotationRector;
@@ -31,9 +27,6 @@ return RectorConfig::configure()
         typeDeclarations: true,
         typeDeclarationDocblocks: true,
         privatization: true,
-        naming: true,
-        instanceOf: true,
-        earlyReturn: true,
         rectorPreset: true,
         phpunitCodeQuality: true,
         doctrineCodeQuality: true,
@@ -85,7 +78,6 @@ return RectorConfig::configure()
         ],
         // Do not simplify (new Class())->method()
         NewMethodCallWithoutParenthesesRector::class,
-        RenameParamToMatchTypeRector::class,
         // PDepend (bundled by phpmd 2.15) cannot parse `new readonly class` —
         // keep the explicit `readonly` on the inner property in the affected
         // files instead, so `make php.md` does not abort on a parser error.
@@ -93,7 +85,6 @@ return RectorConfig::configure()
             __DIR__ . '/../../tests/Unit/Shared/ErrorContract/Infrastructure/Http/EventListener/ExceptionResponderTest.php',
             __DIR__ . '/../../tests/Unit/Gate/AuditActionOperationAgreementRulesGateTest.php',
         ],
-        RenamePropertyToMatchTypeRector::class,
         // Non-convergent against php-cs-fixer's `fully_qualified_strict_types`, which is on: Rector adds
         // `@see \Fully\Qualified\SubjectTest`, the fixer shortens it — it may, because subject and test
         // share a namespace — and the next run no longer recognises the short form and appends another.
@@ -105,7 +96,5 @@ return RectorConfig::configure()
         // resolves. Adopt a one-segment test namespace and the rule would fire across `src` with this
         // blanket skip silently suppressing it.
         AddSeeTestAnnotationRector::class,
-        RenameVariableToMatchMethodCallReturnTypeRector::class,
-        RenameVariableToMatchNewTypeRector::class,
     ])
 ;
