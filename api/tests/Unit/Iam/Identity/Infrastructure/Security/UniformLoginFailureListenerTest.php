@@ -110,6 +110,7 @@ final class UniformLoginFailureListenerTest extends TestCase
     {
         $request = Request::create('/login', Request::METHOD_POST);
         $request->attributes->set(ProblemDetailsAuthenticationFailureHandler::UNIFORM_FAILURE_ATTRIBUTE, true);
+
         $event = $this->event($exception, $request, new Response(status: Response::HTTP_UNAUTHORIZED));
 
         try {

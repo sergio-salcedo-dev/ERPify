@@ -119,7 +119,7 @@ final class LoginThrottleSpendFunctionalTest extends WebTestCase
         $last = \end($listeners);
 
         $this->assertIsArray($last, 'The last LoginFailureEvent listener is not an object method.');
-        $this->assertInstanceOf(UniformLoginFailureListener::class, $last[0] ?? null);
+        $this->assertInstanceOf(UniformLoginFailureListener::class, $last[0]);
     }
 
     private function loginLimiter(EventDispatcherInterface $dispatcher): PeekableRequestRateLimiterInterface
