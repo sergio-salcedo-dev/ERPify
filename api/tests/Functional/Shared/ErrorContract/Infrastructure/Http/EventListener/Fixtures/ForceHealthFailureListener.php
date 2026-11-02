@@ -14,7 +14,7 @@ use UnexpectedValueException;
  * endpoints. Wired exclusively when `APP_ENV=test` via `api/config/services_test.yaml`;
  * production code is NOT touched.
  *
- * The subscriber listens on `kernel.controller`. When the request matches one of the
+ * The listener runs on `kernel.controller`. When the request matches one of the
  * two health paths AND carries the `_force_failure` query parameter, it throws a plain
  * {@see UnexpectedValueException} BEFORE the controller runs. The exception escapes back into
  * Symfony's kernel, where {@see \Erpify\Shared\ErrorContract\Infrastructure\Http\EventListener\ExceptionResponder}
@@ -26,7 +26,7 @@ use UnexpectedValueException;
  *
  * @internal
  */
-final class ForceHealthFailureSubscriber
+final class ForceHealthFailureListener
 {
     /**
      * The two paths advertised by the routing layer (see `api/config/routes.yaml`):

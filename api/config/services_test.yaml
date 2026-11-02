@@ -30,19 +30,19 @@ services:
     # Loaded only when APP_ENV=test.
     Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\:
         resource: '../tests/Functional/Shared/ErrorContract/Infrastructure/Http/EventListener/Fixtures/'
-        exclude: '../tests/Functional/Shared/ErrorContract/Infrastructure/Http/EventListener/Fixtures/ForceHealthFailureSubscriber.php'
+        exclude: '../tests/Functional/Shared/ErrorContract/Infrastructure/Http/EventListener/Fixtures/ForceHealthFailureListener.php'
         tags: ['controller.service_arguments']
 
     # test-only controller that leaves a transaction open, behind the `test_leak_transaction` route.
     Erpify\Tests\Functional\Shared\Persistence\Fixtures\LeakTransactionController:
         tags: ['controller.service_arguments']
 
-    # test-only kernel.controller subscriber that throws on the two `/health`
+    # test-only kernel.controller listener that throws on the two `/health`
     # endpoints when `?_force_failure=1` is present. Lets the integration + Behat tests
     # prove the RFC 9457 contract applies retroactively without modifying the
     # production HealthController classes.
     # Registered by its #[AsEventListener] through `autoconfigure`.
-    Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureSubscriber: ~
+    Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureListener: ~
 
     # BufferingLogger captures structured log records emitted by ExceptionResponder
     # in the test environment. Public so functional tests can pull it from the container via
@@ -80,10 +80,10 @@ services:
         alias: Erpify\Tests\Behat\Support\Mercure\RecordingHub
         public: true
 
-    # Recording mailer subscriber: captures every Email handed to Symfony Mailer (null transport in
+    # Recording mailer listener: captures every Email handed to Symfony Mailer (null transport in
     # test) so NotificationContext can assert the notification effect of a consumed bank event.
     # Registered by its #[AsEventListener] through `autoconfigure`.
-    Erpify\Tests\Behat\Support\Notification\RecordingMailerSubscriber: ~
+    Erpify\Tests\Behat\Support\Notification\RecordingMailerListener: ~
 
     # The audit write seam has no production consumer yet (the first auditing caller arrives later), so
     # its autoconfigured private alias would be pruned at compile time and the branching functional test

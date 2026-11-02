@@ -18,7 +18,7 @@ use Symfony\Component\Mime\Email;
  * non-queued (real send) event counts each notification once. Only `Email` messages are kept, so
  * non-notification framework mail does not inflate the notification count.
  */
-final class RecordingMailerSubscriber
+final class RecordingMailerListener
 {
     #[AsEventListener(event: MessageEvent::class)]
     public function onMessage(MessageEvent $messageEvent): void
