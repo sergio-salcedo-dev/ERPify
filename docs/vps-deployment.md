@@ -30,8 +30,9 @@ On a VPS with a real domain:
      `tls internal` to automatic **ACME** — a publicly-trusted cert, so clients
      import **no** CA.
    - For real outbound mail, set a real `MAILER_DSN=` (the default `null://null`
-     silently discards mail) and `MAILER_FROM`. `DEFAULT_NOTIFICATION_EMAIL` (where
-     bank-change notices go) is **required**: `compose.prod.yaml` aborts without it.
+     silently discards mail). `MAILER_SECURITY_FROM` (a monitored, replyable
+     mailbox) and `DEFAULT_NOTIFICATION_EMAIL` (where bank-change notices go) are
+     **required**: `compose.prod.yaml` aborts without either.
    - Leave `SYMFONY_TRUSTED_PROXIES` unset: FrankenPHP is the edge, so Symfony
      trusts no hop. Set it only to the address of a load balancer you put in front.
    - **Sentry is required in prod:** set `SENTRY_DSN=` (from the Sentry MCP) and
@@ -52,6 +53,28 @@ On a VPS with a real domain:
    [`deployment-guide.md`](deployment-guide.md) § Deploy process / § Rollback.
 5. **Verify:** `https://your.domain/api/v1/health` returns `200` with a valid
    public cert; `docker compose … ps` shows every service healthy.
+
+### Promotion risks — review before and on VPS day
+
+The laptop rehearsal cannot exercise these, because each one depends on the VPS itself: its hardware, its
+provider, its public reachability, or a value only a public file carries. Each is a reason a promotion that
+was green on `erpify.local` fails on the box. Tracked in #1148; tick each one there when it is settled.
+
+| Risk | Why it bites | Check |
+|---|---|---|
+| **The prod image has never been built by CI** | No workflow builds `frankenphp_prod`, and CI bakes `compose.yaml` + `compose.dev.yaml` only. A `composer install --no-dev` or `next build` failure therefore surfaces at the first image build on a host. | Build it on the laptop with `make deploy.local` from the exact commit you will deploy, before touching the VPS. |
+| **CPU architecture** | `api/Dockerfile` pins `dunglas/frankenphp` by digest. An arm64 VPS can only use it if that digest is a multi-arch index or an arm64 manifest. | `docker buildx imagetools inspect dunglas/frankenphp@<digest>` lists the VPS platform. |
+| **Build memory** | `next build` and `composer install` run inside the image build, outside the runtime `*_MEM_LIMIT` knobs. A 1–2 GB VPS can OOM-kill the build. Peak build memory has not been measured here. | Measure the peak on the laptop. Then build on the VPS only if it has headroom; otherwise build elsewhere and ship the image, or size the box for it. |
+| **`tls internal` → ACME** | Clearing `CADDY_SERVER_EXTRA_DIRECTIVES` changes the certificate source **and** the compose project (`erpify-prodlocal` → the checkout's own). ACME needs inbound 80/443 on first boot. Losing the `caddy_data` volume forces re-issuance, which Let's Encrypt rate-limits. | DNS resolves before the first `up`. 80/443 are reachable from outside. `caddy_data` is never removed. Never promote the laptop in place. |
+| **`SENTRY_ENVIRONMENT`** | The rehearsal **requires** `SENTRY_ENVIRONMENT=rehearsal`, and `make prod.env.check` **refuses** a public file that sets it. A file copied from the laptop fails the check. | Start from `.env.prod.example`, not from the laptop's file. Every secret is freshly generated. `AUDIT_KEK` and the env file are backed up under *Disaster-recovery readiness*. |
+| **Outbound SMTP** | Many VPS providers block outbound 25, and some block 587. The relay then times out within `MAILER_SMTP_TIMEOUT` (default 3 s per socket operation). Password resets and lockout notices fail while everything else stays green. | From the VPS, `nc -vz <relay> <port>` succeeds before the deploy. After the deploy, send one forgot-password mail end to end. |
+| **Mercure on a real domain** | `SERVER_NAME` expands to `<domain>, php:80`, so Caddy runs two servers sharing one named hub. Subscribers authorise through the `mercureAuthorization` cookie on the public origin. `tls internal` and ACME differ in the certificate but not in that wiring, which is why the rehearsal is a good predictor yet not a proof. The hub also runs in compatibility mode (`PRODUCTION_SECURITY_CHECKLIST.md` §7). | Open two tabs on Banks, edit in one, and watch the other update. A publish without a token gets `401`. |
+| **Resource limits** | The `*_MEM_LIMIT` defaults in `compose.prod.yaml` add up to 3.25 GiB: php 1g, pwa 512m, database 1g, worker 512m per replica, scheduler 256m. They are ceilings, not reservations, so a smaller box overcommits silently and OOM-kills under load. | Measure real usage with `docker stats` during an e2e run on the laptop, then set the knobs to the VPS size. |
+| **Reboot and restart** | Nothing gates that the stack survives a host reboot. The scheduler's checkpoint lives in Postgres (`cache.scheduler_checkpoint`), so a recreated container must keep its daily ticks rather than re-anchor them. | Reboot the VPS once before go-live. Then confirm every service is healthy and `scheduler_worker` logs its next tick on schedule. |
+| **Container log rotation** | Rotation is declared per service as literals (`make php.lint.log-retention`), but it binds only if the daemon honours the `json-file` options. | `docker inspect <container> --format '{{.HostConfig.LogConfig}}'` shows `max-size`/`max-file` on the VPS. |
+
+The migration-before-image window (step 4), the network exposure rules (step 1) and the backup, offsite and
+restore gates (*Backups* below) are already stated where they apply, and are not repeated here.
 
 ---
 
