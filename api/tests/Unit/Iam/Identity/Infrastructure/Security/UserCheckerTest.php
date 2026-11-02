@@ -58,8 +58,8 @@ final class UserCheckerTest extends TestCase
         } catch (AccountStatusException $refusal) {
             $this->assertInstanceOf($wall, $refusal);
             // A custom-message status exception survives the authenticator's re-wrap and reaches the wire as
-            // something other than the uniform 401 — which is what made the old post-authentication walls an
-            // oracle on the password.
+            // something other than the uniform 401, so a wall raising one would answer differently from a wrong
+            // password and confirm the guess.
             $this->assertNotInstanceOf(CustomUserMessageAccountStatusException::class, $refusal);
         }
 

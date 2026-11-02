@@ -56,8 +56,9 @@ session gate. The `/api` boundary has one definition, `ApiRequestMatcher::PATH_P
 - **Constant-time floor, on the IDENTITY-KEYED surfaces:** a rejection keyed by something the caller claims
   about an account — an email address at login or at forgot — pays one unit of password-hashing work through
   the shared `PreIdentityTimingFloor` port before answering, so response latency never correlates with whether
-  an account exists or what state it is in. The port is reached from four places: `UserProvider`, `UserChecker`
-  and `OverlongPasswordTimingListener` (login) and `RequestPasswordReset` (forgot). New identity-keyed branches
+  an account exists or what state it is in. The port is reached at login from `UserProvider`, `UserChecker`,
+  `LockedIdentityLoginRefusalListener` and `OverlongPasswordTimingListener`, and at forgot from
+  `RequestPasswordReset` and its controller. New identity-keyed branches
   (future magic-link, MFA, …) must pay the same floor. The proof is always a STRUCTURAL test (the work is
   invoked on every branch) — wall-clock timing assertions are banned as flaky.
 - **Equal cost is only as true as the work each branch reaches, so check what the known branch SKIPS.** A known

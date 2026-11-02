@@ -18,11 +18,12 @@ use Symfony\Component\Security\Http\Event\CheckPassportEvent;
  * so the guessing goes on unbounded and the correct password is the one answer that differs.
  *
  * It runs after `UserCheckerListener` (256), which resolves the identity and refuses the non-`ACTIVE` statuses,
- * and before `CheckCredentialsListener` (0), which verifies the password. It acts only on a passport carrying
- * unresolved {@see PasswordCredentials}: the device re-authentications that follow a reset, a change of password
- * and a recovery-secret redemption log in through `Security::login()` with no password to verify, and the
- * redemption signs in BEFORE it clears the lock it exists to lift — refusing the lock in `checkPreAuth`, which
- * `Security::login()` does run, would lock out the one identity that flow is for.
+ * and before `CheckCredentialsListener` (0), which verifies the password. The device re-authentications that
+ * follow a reset, a change of password and a recovery-secret redemption log in through `Security::login()`,
+ * which dispatches no passport event, so they never reach this listener — and the redemption signs in BEFORE it
+ * clears the lock it exists to lift, which is why the lock is not refused in `checkPreAuth`, which
+ * `Security::login()` does run. It acts only on a passport carrying unresolved {@see PasswordCredentials}, so an
+ * authenticator added later that proves identity by other means is left to decide the lock for itself.
  */
 #[AsEventListener(event: CheckPassportEvent::class, priority: self::PRIORITY)]
 final readonly class LockedIdentityLoginRefusalListener

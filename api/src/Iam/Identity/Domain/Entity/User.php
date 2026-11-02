@@ -35,7 +35,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  * The credential is nullable until the identity activates: an `INVITED` identity is provisioned (with its
  * membership) before its owner ever sets a password, so `password_hash` is null until {@see activate()}.
  * Only an `ACTIVE` identity is admitted to a session; the {@see suspend()} / {@see deactivate()} walls are
- * enforced post-authentication so a rejected login mints no session at all, never one that is then revoked.
+ * enforced before authentication completes, so a rejected login mints no session at all, never one that is then
+ * revoked.
  *
  * Deliberately does NOT implement {@see \Erpify\Shared\Audit\Domain\AuditedEntity}: the write-capture
  * listener records a field-level diff only for entities that opt into that marker, so staying out keeps
@@ -312,7 +313,7 @@ final class User extends AggregateRoot
      * Registers a failed password attempt. Only an `ACTIVE` identity accrues a lockout: the machine is about
      * password attempts, and a non-`ACTIVE` identity either has no password to attempt (`INVITED`) or is already
      * walled by its lifecycle status (`SUSPENDED`/`DEACTIVATED`) — counting it would seal a lock and emit a
-     * spurious {@see UserLocked} on an identity that can never present the "temporarily locked" wall. A no-op
+     * spurious {@see UserLocked} on an identity its status already refuses. A no-op
      * while already locked — the attempt is refused before the password is even checked, so it neither grows the
      * counter unboundedly nor re-emits {@see UserLocked} on every hit within the window. On crossing
      * {@see MAX_FAILED_ATTEMPTS} it seals the lockout for {@see LOCK_DURATION} and records the fact once. `$now`

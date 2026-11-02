@@ -15,6 +15,7 @@ use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Http\Authenticator\AuthenticatorInterface;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Credentials\PasswordCredentials;
@@ -69,22 +70,62 @@ final class LockedIdentityLoginRefusalListenerTest extends TestCase
         $this->assertSame(0, $floor->invocations);
     }
 
-    public function testLeavesAnIdentityWhoseLockHasLapsedToItsPasswordCheck(): void
+    public function testLeavesAnIdentityWhoseLockEndsAtThisInstantToItsPasswordCheck(): void
     {
+        // The window is half-open: at the instant `lockedUntil` names, the lock no longer stands, which is also
+        // the instant `User::recordFailedAttempt()` starts counting afresh.
         $floor = new CountingPreIdentityTimingFloor();
         $user = $this->lockedUser();
 
-        $later = '2026-07-11T12:16:00+00:00';
-        SystemClock::set(FixedClock::at($later));
-        $this->listener($floor, $later)($this->passwordEvent($user));
+        $expiry = '2026-07-11T12:15:00+00:00';
+        SystemClock::set(FixedClock::at($expiry));
+        $this->listener($floor, $expiry)($this->passwordEvent($user));
+
+        $this->assertSame(0, $floor->invocations);
+    }
+
+    public function testRefusesALockedIdentityUpToTheLastInstantOfItsWindow(): void
+    {
+        $this->expectException(LockedAccountException::class);
+
+        $user = $this->lockedUser();
+
+        $lastInstant = '2026-07-11T12:14:59+00:00';
+        SystemClock::set(FixedClock::at($lastInstant));
+        $this->listener(new CountingPreIdentityTimingFloor(), $lastInstant)($this->passwordEvent($user));
+    }
+
+    public function testLeavesAPasswordAlreadyVerifiedToItsCaller(): void
+    {
+        $floor = new CountingPreIdentityTimingFloor();
+        $event = $this->passwordEvent($this->lockedUser());
+        $credentials = $event->getPassport()->getBadge(PasswordCredentials::class);
+        $this->assertInstanceOf(PasswordCredentials::class, $credentials);
+        $credentials->markResolved();
+
+        $this->listener($floor)($event);
+
+        $this->assertSame(0, $floor->invocations);
+    }
+
+    public function testIgnoresAUserItDoesNotOwn(): void
+    {
+        $floor = new CountingPreIdentityTimingFloor();
+        $passport = new Passport(
+            new UserBadge('alice@erpify.test', static fn (): InMemoryUser => new InMemoryUser('alice', null)),
+            new PasswordCredentials('a-guess'),
+        );
+
+        $this->listener($floor)(new CheckPassportEvent($this->createStub(AuthenticatorInterface::class), $passport));
 
         $this->assertSame(0, $floor->invocations);
     }
 
     public function testLeavesALoginWithoutAPasswordToItsCaller(): void
     {
-        // The shape `Security::login()` takes after a reset, a change of password and a recovery-secret
-        // redemption: no password to verify, so nothing to protect, and refusing it would lock out the redemption.
+        // A passport that verifies no password guesses nothing, so the lock has nothing to protect there. The
+        // programmatic re-logins never reach the listener at all (`Security::login()` dispatches no passport
+        // event); this pins the scope for an authenticator that would.
         $floor = new CountingPreIdentityTimingFloor();
         $user = $this->lockedUser();
         $passport = new SelfValidatingPassport(

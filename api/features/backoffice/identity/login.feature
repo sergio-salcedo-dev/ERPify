@@ -126,7 +126,7 @@ Feature: Log in through the session firewall
     And the header "Set-Cookie" should not exist
 
   # The lock is refused before the password is verified, so the right password answers like a wrong one and the
-  # lock goes on standing: answering it differently is what made the lock confirm a guess instead of stopping it.
+  # lock goes on standing: an answer that differed would confirm a guess instead of stopping it.
   Scenario: A locked identity with correct credentials gets the uniform 401 and stays locked
     When I execute the SQL query "UPDATE identity_user SET failed_attempts = 10, locked_until = '2099-01-01 00:00:00' WHERE email = 'leo@erpify.test'"
     And I send a POST request to "/backoffice/login" with body:

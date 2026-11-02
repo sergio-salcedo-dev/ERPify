@@ -162,7 +162,7 @@ Feature: Server-side session registry and admission gate
     Then the response status code should be 401
     And the JSON node "type" should be equal to "session-expired"
 
-  # The failed-attempt lockout is weighed on the login path alone (UserChecker::checkPostAuth); the gate reads
+  # The failed-attempt lockout is weighed on the login path alone (LockedIdentityLoginRefusalListener); the gate reads
   # session status and expiry and nothing else. So a caller already inside keeps their session for its full TTL
   # while the same identity is barred from signing in again. This is pinned because it is the property that
   # bounds the lockout's blast radius: were the gate ever taught to read the lock, whoever can trip it from

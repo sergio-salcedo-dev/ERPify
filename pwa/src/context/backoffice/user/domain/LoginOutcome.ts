@@ -31,7 +31,8 @@ export type LoginOutcomeKind = (typeof LoginOutcomeKind)[keyof typeof LoginOutco
  * The typed result of a sign-in attempt, mapped from the HTTP response by the
  * adapter so the UI never inspects a status code. Neutrality is preserved:
  * `invalid-credentials` collapses wrong-password, unknown-email, invited, and a
- * suspended, deactivated or locked identity into one indistinguishable outcome. `request-failed` is a transient server error
+ * suspended, deactivated or locked identity into one indistinguishable outcome.
+ * `request-failed` is a transient server error
  * (e.g. a 503 while finalising the session) the user can retry — kept distinct
  * from `invalid-credentials` so a correct sign-in is never mislabelled as a
  * credentials problem.

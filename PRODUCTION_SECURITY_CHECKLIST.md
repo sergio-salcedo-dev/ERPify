@@ -583,12 +583,13 @@ you change anything here.
       on it, so "every other device is out" is an intention, not a guarantee the response proves — which is why the UI copy and the notification
       mail both point at _Active sessions_ instead of asserting it. The login is likewise contained (a failure
       logs `critical` and still answers 204: the credential is already gone, so a 5xx would invite a retry that
-      can no longer succeed). `Security::login()` re-enters only `checkPreAuth`, so it does **not** re-run the
-      SUSPENDED/DEACTIVATED/locked walls on its own; `ReauthenticateDevice` — shared with the reset and
+      can no longer succeed). `Security::login()` re-enters `checkPreAuth`, which walls SUSPENDED/DEACTIVATED
+      only as a raw security exception, and never the lockout, which `LockedIdentityLoginRefusalListener` applies
+      on the passport event that path does not dispatch; `ReauthenticateDevice` — shared with the reset and
       invitation-accept flows, which had the identical window — re-reads the aggregate and applies
-      `ensureActive()` before minting, so an admin action landing between the commit and the mint no longer
-      leaves a fresh session for a walled identity. It restores **two** of those three arms: `ensureActive()`
-      matches on `IdentityStatus`, and the lockout arm is deliberately not re-applied because the two flows
+      `ensureActive()` before minting, so an admin action landing between the commit and the mint leaves no fresh
+      session for a walled identity and is answered with the domain 403. The lockout arm is deliberately not
+      re-applied: `ensureActive()` matches on `IdentityStatus`, and the two flows
       that could meet one clear it inside their own transaction and the third consumes a token that already
       proves control of the mailbox. **All three flows contain that refusal identically**
       (`ReauthenticateDeviceBestEffort`): each reaches the re-login after its own transaction committed, so
@@ -757,11 +758,13 @@ you change anything here.
       behind the ephemeral per-IP+email `login_throttling` (built-in, `max_attempts: 5`). After **10** consecutive
       failed attempts against a **resolved** identity it is locked for **15 minutes**, refused BEFORE the password
       is verified (`LockedIdentityLoginRefusalListener`) with the uniform **401 `unauthenticated`** behind the
-      timing floor, minting no session; a reset, a recovery-secret redemption or a lapsed window clears it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
+      timing floor, minting no session; a reset, a recovery-secret redemption, a change of password, an administrator's unlock or
+      a lapsed window clears it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
       nothing** — the pre-identity 401 stays indistinguishable, and a locked account answers the right and the
-      wrong password alike. While the lock stands no password is verified, so the guessing it bounds is bounded in
-      number as well as in rate (closed in §7, *The persisted lockout confirmed a correct password*); a locked
-      attempt counts nothing and does not extend the window. The lock is orthogonal to
+      wrong password alike. Once the lock has committed no password is verified, so the guessing is bounded in
+      number as well as in rate (closed in §7, *The persisted lockout confirmed a correct password*) — up to the
+      guesses already in flight when it commits, which the per-IP throttle and concurrency bound; a locked attempt
+      counts nothing and does not extend the window. The lock is orthogonal to
       `IdentityStatus` (a locked identity stays `ACTIVE`); the lock trip emits a PII-free `UserLocked` domain event.
       A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
       uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
@@ -1330,7 +1333,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       ships in the PWA as _Active sessions_. The owner's route to a live session is untouched: the credential
       still works, a stolen session feeds no failed attempts into the lockout (`LoginAttemptRegistrar` is
       reached only from the login failure handler, never from the password-change path), and the persisted
-      lock is enforced at `UserChecker::checkPostAuth` alone, never by `SessionAdmissionGate`. So the sequence
+      lock is enforced at login alone (`LockedIdentityLoginRefusalListener`), never by `SessionAdmissionGate`. So the sequence
       is **sign in → `GET /sessions` (the intruder's row is listed, with its device label) → `revoke-others`**,
       and the delayed rotation is then hygiene against an adversary who no longer holds anything.
       **The attacker holds the same weapon and the race still resolves for the owner:** either party can fire
@@ -2309,14 +2312,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       `checkPreAuth` too and the recovery-secret redemption signs in before it lifts the lock. D12 of
       `identity-invitation-lifecycle.md` was re-decided to match: on login a password proves no identity a
       refusal may reveal. Pinned by `login.feature` (correct password on each state → 401, no cookie, the lock
-      neither counted nor extended), `LoginPreIdentityOpacityFunctionalTest` (byte-identical bodies and timing
-      floor across every pre-identity case) and the unit tests of both classes. **Residuals:** a status write
+      neither counted nor extended), `LoginPreIdentityOpacityFunctionalTest` (byte-identical body and
+      `Content-Type` across every pre-identity case) and the unit tests of both classes, which pin the timing
+      floor structurally (wall-clock assertions are banned here). **Residuals:** a status write
       landing between verification and the session mint still answers `account-suspended` /
       `account-deactivated`, a race on an administrator's write that `DbalSessionSubjectLock` grades rather than
       leaks; a walled or locked member typing the right password sees a stranger's message and learns why only
-      from the administrator, the lockout notice or the reset flow; and the timing floor equalises the refusal
-      against an unknown address, not against a wrong password on an `ACTIVE` account, which pays the KDF — the
-      same property every pre-identity 401 here already has.
+      from the administrator, the lockout notice or the reset flow; the lock is read from the snapshot the
+      request resolved, so guesses already in flight when the tenth failure commits are still verified, and a
+      correct one among them signs in and clears the lock (not new: the post-verification read had the same
+      window, and re-reading at the mint would refuse the redemption, which signs in before it lifts the lock);
+      and the floor equalises the dominant term (one unit of password hashing) but not the failure write: a
+      wrong password on an unlocked `ACTIVE` account also updates its row, which a refusal does not — the same
+      residual every pre-identity 401 here already carries.
 
 - [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
       username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to

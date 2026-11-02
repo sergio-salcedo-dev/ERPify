@@ -7,10 +7,9 @@ import { E2E_USER_EMAIL, E2E_USER_PASSWORD } from "../constants";
  * `/api/v1/backoffice/login`, then the client routes the RFC 9457 outcome. A fresh, unauthenticated
  * context so the form is reachable without the setup session.
  *
- * The suspended / deactivated access walls are NOT driven here: putting a user into SUSPENDED /
- * DEACTIVATED needs the member-management trigger deferred to the follow-up slice, so no live tooling can
- * create one. Those walls are covered by the API Behat admission suite and the PWA unit tests
- * (loginForm / AccessWall / ApiLoginRepository).
+ * A suspended, deactivated or locked identity answers this same neutral error (API Behat `login.feature`).
+ * The suspended / deactivated walls a login can still meet — a status write racing the session mint — are
+ * covered by the PWA unit tests (loginForm / AccessWall / ApiLoginRepository).
  */
 test.use({ storageState: { cookies: [], origins: [] } });
 

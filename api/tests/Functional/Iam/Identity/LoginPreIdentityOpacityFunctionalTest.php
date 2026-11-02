@@ -106,8 +106,8 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
     protected function setUp(): void
     {
         $this->client = self::createClient();
-        // Persistent kernel so the cached connection and container stay valid across the three requests one
-        // test makes; the cookie jar is cleared per request so each login is a clean anonymous call.
+        // Persistent kernel so the cached connection and container stay valid across every request one test
+        // makes; the cookie jar is cleared per request so each login is a clean anonymous call.
         $this->client->disableReboot();
 
         $this->connection = $this->service(EntityManagerInterface::class)->getConnection();

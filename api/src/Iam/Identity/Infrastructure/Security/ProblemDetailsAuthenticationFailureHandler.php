@@ -70,7 +70,7 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
      * reach the store, but only an existing identity locks a row and writes, so only it can meet a deadlock, a lock
      * timeout or a referential fault — which the transaction manager translates into {@see TransientTransactionFailure}
      * (503) and {@see ReferentialIntegrityViolation} (409). Those are absorbed with a {@see DbalException}, and the
-     * response stays whatever the admission outcome graded it. The lost increment is tolerable during a database
+     * response stays the uniform 401. The lost increment is tolerable during a database
      * incident (the per-IP throttle still caps the flood); this differs from the success path's retryable-503 remap
      * because the failure path has nothing downstream that needs the shared unit of work, so it can swallow and stay
      * neutral.

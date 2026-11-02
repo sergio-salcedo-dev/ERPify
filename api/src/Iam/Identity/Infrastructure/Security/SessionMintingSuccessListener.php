@@ -19,8 +19,8 @@ use Throwable;
 
 /**
  * Mints the server-side session once an identity is admitted. It listens on {@see LoginSuccessEvent} — which
- * the firewall dispatches only after the user checker's post-auth admission — so the session is minted
- * strictly post-admission, never for a rejected identity. This is the cross-sub-module orchestrator: it reads
+ * the firewall dispatches only after admission and credential verification have both passed — so the session is
+ * minted strictly post-admission, never for a rejected identity. This is the cross-sub-module orchestrator: it reads
  * the admission-time `organizationId` from the user's membership (the authoritative user↔org link) and hands
  * primitives to
  * {@see StartSession}, so the session subsystem stays unaware of `SecurityUser` and of `Organization`.
@@ -40,10 +40,11 @@ use Throwable;
  *   minting takes outside the session repository, so it is translated here, where the session's vocabulary is;
  * - an identity with no membership is {@see SessionAdmissionUnresolvable} (500), a data gap no retry fixes;
  * - an identity suspended or deactivated while the login was in flight is refused by the mint itself, under the
- *   identity's row lock, and answered with the wall the firewall would have shown had the write landed first —
- *   403 `account-suspended` / `account-deactivated`, the same exceptions the authentication failure handler
- *   raises; one erased in that window keeps the mint's own uniform 401. The reason comes from the locked read,
- *   so nothing is re-read here. The re-authentication flows (accept, reset, redeem, change password) reach this
+ *   identity's row lock, and answered 403 `account-suspended` / `account-deactivated`. The firewall answers the
+ *   same status with the uniform 401 when the write lands first, so this window is the one login path where a
+ *   correct password draws a different answer — a race on an administrator's write, accepted as a residual
+ *   rather than an oracle anyone can drive; one erased in that window keeps the mint's own uniform 401. The
+ *   reason comes from the locked read, so nothing is re-read here. The re-authentication flows (accept, reset, redeem, change password) reach this
  *   listener too, so they answer the same way;
  * - anything else — the session store's own 503, a broken membership invariant, a programming error —
  *   propagates as it was raised: relabelling the last two as an outage would invite a retry that cannot

@@ -94,7 +94,9 @@ describe("LoginForm — access outcomes", () => {
     signIn();
 
     const error = await screen.findByTestId("login-form__error");
-    expect(error).toHaveTextContent("Invalid email or password.");
+    expect(error).toHaveTextContent(
+      "Invalid email or password. If you are sure they are correct, check your email, use a recovery secret or contact your administrator.",
+    );
     expect(error).toHaveAttribute("role", "alert");
     expect(push).not.toHaveBeenCalled();
     expect(login).not.toHaveBeenCalled();

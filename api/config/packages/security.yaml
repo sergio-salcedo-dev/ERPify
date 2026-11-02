@@ -1,4 +1,9 @@
 security:
+    # Every authentication failure, an account-status refusal included, is re-wrapped into the one neutral
+    # `BadCredentialsException`. The uniform pre-identity 401 depends on it, so it is pinned rather than
+    # inherited from a framework default that a release could move.
+    expose_security_errors: none
+
     # Verification resolves the algorithm from each stored hash, so a CLI-minted hash and the firewall
     # check always agree. The CLI's PasswordHasher adapter selects this same hasher by SecurityUser::class.
     password_hashers:
