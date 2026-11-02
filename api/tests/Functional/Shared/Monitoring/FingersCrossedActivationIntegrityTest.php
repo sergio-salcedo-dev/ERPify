@@ -208,7 +208,7 @@ final class FingersCrossedActivationIntegrityTest extends KernelTestCase
             $sink->getRecords(),
             \sprintf(
                 'a %d stayed out of the sink with no request in the stack, so the deployed strategy no longer '
-                . 'needs one and this file\'s scope statement is now wrong — most likely a dependency upgrade '
+                . "needs one and this file's scope statement is now wrong — most likely a dependency upgrade "
                 . 'closing the hole, which is an improvement to record rather than a regression to revert',
                 $codes[0],
             ),

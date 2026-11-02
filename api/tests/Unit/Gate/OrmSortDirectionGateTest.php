@@ -79,7 +79,7 @@ final class OrmSortDirectionGateTest extends TestCase
 
                 $offences[] = \sprintf(
                     '%s:%d passes `%s` to %s(); doctrine/orm 3.7 deprecates the string and 4 removes it. '
-                    . 'Pass PHP\'s SortDirection — `NativeSortDirection::Ascending`, or '
+                    . "Pass PHP's SortDirection — `NativeSortDirection::Ascending`, or "
                     . 'DoctrineSortDirection::from() when you hold the domain enum.',
                     $relative,
                     $call['line'],

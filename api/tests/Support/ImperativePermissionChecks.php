@@ -89,7 +89,7 @@ final class ImperativePermissionChecks
 
         if (1 !== \preg_match($declaration, $code, $literal) || !isset($literal[1])) {
             throw new RuntimeException(\sprintf(
-                '%s checks a permission as `%s`, but no `const %s = \'…\'` is declared in that file, so the '
+                "%s checks a permission as `%s`, but no `const %s = '…'` is declared in that file, so the "
                 . 'sweep cannot tell which permission it means. Declare the constant beside the call, or pass '
                 . 'the literal.',
                 $file,

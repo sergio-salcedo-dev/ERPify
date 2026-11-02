@@ -104,7 +104,7 @@ final class PrivacyContext extends AbstractContext
         self::assertSame([], $leaked, \sprintf(
             'A person this database still knows has their identifier inside `audit_log.metadata`: %s. No '
             . 'mutation policy on that table enters the JSON — the prune deletes whole rows, and both '
-            . 'anonymisers rewrite columns — so the id would outlive that person\'s erasure however carefully '
+            . "anonymisers rewrite columns — so the id would outlive that person's erasure however carefully "
             . 'the erasure were written. Put the identifier on the resource axis, where the anonymiser reaches '
             . 'it, or keep it out of the entry altogether.',
             \json_encode($leaked, JSON_THROW_ON_ERROR),

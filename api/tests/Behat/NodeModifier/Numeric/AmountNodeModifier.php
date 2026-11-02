@@ -52,7 +52,7 @@ class AmountNodeModifier extends AbstractNodeModifier
     }
 
     /**
-     * @phpstan-return numeric-string|null
+     * @return numeric-string|null
      */
     private function toNumericString(mixed $value): ?string
     {

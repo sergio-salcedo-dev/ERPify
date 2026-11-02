@@ -41,9 +41,8 @@ services:
     # endpoints when `?_force_failure=1` is present. Lets the integration + Behat tests
     # prove the RFC 9457 contract applies retroactively without modifying the
     # production HealthController classes.
-    Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureSubscriber:
-        tags:
-            - { name: kernel.event_subscriber }
+    # Registered by its #[AsEventListener] through `autoconfigure`.
+    Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureSubscriber: ~
 
     # BufferingLogger captures structured log records emitted by ExceptionResponder
     # in the test environment. Public so functional tests can pull it from the container via
@@ -83,9 +82,8 @@ services:
 
     # Recording mailer subscriber: captures every Email handed to Symfony Mailer (null transport in
     # test) so NotificationContext can assert the notification effect of a consumed bank event.
-    Erpify\Tests\Behat\Support\Notification\RecordingMailerSubscriber:
-        tags:
-            - { name: kernel.event_subscriber }
+    # Registered by its #[AsEventListener] through `autoconfigure`.
+    Erpify\Tests\Behat\Support\Notification\RecordingMailerSubscriber: ~
 
     # The audit write seam has no production consumer yet (the first auditing caller arrives later), so
     # its autoconfigured private alias would be pruned at compile time and the branching functional test
