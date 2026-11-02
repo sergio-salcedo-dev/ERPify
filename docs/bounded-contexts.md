@@ -19,7 +19,7 @@
 2. **Referencias cross-context por ID, no por FK (por defecto).** Una referencia
    a otro contexto de negocio es un **UUID v7** sin FK física; la integridad la
    dan eventos/políticas/ACL, no la DB. Una FK hacia shared kernel/identidad
-   (`user`, `company_id`/tenant) sí está permitida. Lo prohibido no es la
+   (`user`, `organization_id`/tenant) sí está permitida. Lo prohibido no es la
    herramienta (FK/import), es el **conocimiento del dominio ajeno** — ver los
    tres niveles abajo.
 3. **Sin cross-repository queries.** Un contexto nunca consulta el repositorio de
@@ -106,7 +106,7 @@ clasifica, no se prohíbe en bloque:
 
 | Upstream → Downstream                                 | Tipo                                  | Integración                                                  |
 |-------------------------------------------------------|---------------------------------------|--------------------------------------------------------------|
-| Organization → todos                                  | Customer/Supplier                     | tenant id + `UserInvited`/`CompanyRegistered`                |
+| Organization → todos                                  | Customer/Supplier                     | tenant id + `UserInvited`/`OrganizationProvisioned`          |
 | Commercial → Projects, Finance, Commissions           | Customer/Supplier (ACL en downstream) | `OpportunityWon`                                             |
 | TenderManagement → Projects, Budgeting                | Customer/Supplier                     | `TenderRegistered`, `TenderAwarded`                          |
 | CommercialProposal → Projects, Finance                | Customer/Supplier                     | `ProposalAccepted`                                           |
@@ -141,7 +141,7 @@ Dos caras del mismo núcleo compartido:
   (`StoredDomainEvent`), `ProblemDetails`, criteria de búsqueda/paginación,
   `NormalizedText`, validación, mailer. Hoy ya vive en `api/src/Shared`.
 - **Platform (kernel de negocio referenciable por todos)** — identidad y
-  plataforma: `User`, `Tenant`/`company_id`, `Role`, `Permission`, `FeatureFlag`.
+  plataforma: `User`, tenant (`Organization`/`organization_id`), `Role`, `Permission`, `FeatureFlag`.
   Es el **único** núcleo que cualquier contexto puede referenciar, y hacia el que
   una **FK / `ManyToOne` está permitida** (Level 3). Su CRUD/gestión vive en sus
   módulos del roadmap (Organization para users/roles, Feature Flags), pero como
@@ -166,20 +166,34 @@ Dos caras del mismo núcleo compartido:
 
 ### Organization (`erpify.backoffice.organization.*`)
 
-- **Responsabilidad:** la **frontera multi-tenant**. Empresas, usuarios, equipos
-  y la pertenencia usuario↔empresa. Upstream de todos.
-- **Agregados/entidades:** ⬢ `Company` · ⬢ `User` · `Team` · `Membership`
-  (user↔company↔role) · `Invitation`.
-- **Value objects:** `CompanyName` (NormalizedText), `Email`, `TaxId` (NIF/CIF),
-  `Locale` (es/en), `Role` (enum), `PermissionSet`.
-- **Invariantes:** email único por empresa; una empresa tiene ≥1 owner; no se
-  puede borrar el último owner; `company_id` obligatorio en todo agregado
-  tenant-owned del resto de contextos.
-- **Emite:** `company.registered`, `company.archived`, `user.invited`,
-  `user.activated`, `user.role-changed`, `team.created`, `member.added`,
-  `member.removed`.
+- **Responsabilidad:** la **frontera multi-tenant**. El tenant es la
+  `Organization` (la UI puede mostrarla como «Empresa»); una *empresa* con la
+  que se trabaja —cliente, proveedor, subcontrata— es una `Party` del Platform,
+  nunca una `Organization`. Un término, un concepto: `Company` no nombra el
+  tenant. Upstream de todos.
+- **Implementado** ([`adr/identity-invitation-lifecycle.md`](adr/identity-invitation-lifecycle.md)
+  D1–D2): ⬢ `Organization` (solo `name`; una por instalación, `organization:provision`)
+  · `Membership(userId, organizationId)` — pertenencia sin roles, `user_id` único.
+  La identidad (`User`), la invitación y la sesión viven en `Iam/` (`Identity`,
+  `Invitation`, `Session`); el rol es `identity_user.roles` (`Shared/Access` `Role`),
+  no de la membership.
+- **Invariantes implementados:** ≥1 administrador activo bajo degradar,
+  desactivar o suspender (`LastActiveAdministratorProtected`); email único en la
+  instalación; un usuario pertenece a exactamente una organización.
+- **Diseño pendiente** (ADR de tenancy, aún no escrito): `Team`; value objects
+  `OrganizationName` (NormalizedText), `TaxId` (NIF/CIF), `Locale` (es/en),
+  `PermissionSet`; email único por organización y ≥1 owner, cuando haya varias
+  organizaciones y autoridad org-scoped
+  ([`adr/authorization-model-boundaries.md`](adr/authorization-model-boundaries.md));
+  `organization_id` obligatorio en todo agregado tenant-owned del resto de
+  contextos — hoy solo lo llevan `membership`, `iam_invitation` e `iam_session`.
+- **Emite (diseño):** `organization.provisioned`, `organization.archived`,
+  `user.invited`, `user.activated`, `user.role-changed`, `team.created`,
+  `member.added`, `member.removed`. Ninguno existe en `Organization/`; los
+  eventos de identidad que ya se emiten salen de `Iam/Identity`
+  ([`architecture/event-catalog.md`](architecture/event-catalog.md)).
 - **Consume:** — (raíz; solo Shared).
-- **Read models:** directorio de usuarios por empresa.
+- **Read models:** directorio de usuarios por organización.
 - **Necesidad:** gestionar usuarios/equipos, invitar y asignar roles, perfil y
   preferencias. *(roadmap 1.1)*
 
@@ -210,7 +224,7 @@ Dos caras del mismo núcleo compartido:
   `opportunity.stage-changed`, `opportunity.won`, `opportunity.lost`,
   `activity.logged`, `interaction.logged`, `campaign.launched`,
   `campaign.lead-attributed`.
-- **Consume:** `organization.company.registered` (provisión de tenant),
+- **Consume:** `organization.provisioned` (provisión de tenant),
   `organization.user.invited` (propietario comercial), `party.registered`.
 - **Read models:** pipeline board, embudo por fase, próximas actividades, ROI por
   campaña, ficha 360° del cliente (interacciones).
@@ -506,7 +520,7 @@ Dos caras del mismo núcleo compartido:
 - **Value objects:** `FlagKey`, `TargetingRule`, `RolloutPercentage`.
 - **Invariantes:** evaluación determinista por (tenant, usuario, flag).
 - **Emite:** `feature-flag.toggled`, `rollout.advanced`.
-- **Consume:** `organization.company.registered` (defaults por tenant).
+- **Consume:** `organization.provisioned` (defaults por tenant).
 - **Necesidad:** activar/desactivar funciones por empresa sin desplegar, probar con
   un grupo antes que todos. *(roadmap 3.3)*
 
@@ -582,7 +596,7 @@ Dos caras del mismo núcleo compartido:
 - **Invariantes:** habilitar/deshabilitar por tenant no rompe el core; los hooks se
   enganchan a eventos, no al `Domain/` ajeno.
 - **Emite:** `module.enabled`, `module.disabled`.
-- **Consume:** `feature-flags.*`, `organization.company.registered`.
+- **Consume:** `feature-flags.*`, `organization.provisioned`.
 - **Necesidad:** añadir/quitar módulos según la empresa, pagar por lo que se usa.
   *(roadmap 5.2)*
 
@@ -595,14 +609,14 @@ lista los campos clave (IDs siempre UUID v7); el resto es interno al emisor.
 
 | Evento                                     | Emite             | Payload (clave)                                    | Consumidores                                        |
 |--------------------------------------------|-------------------|----------------------------------------------------|-----------------------------------------------------|
-| `organization.company.registered`          | Organization      | companyId, name, locale                            | todos (provisión tenant)                            |
-| `organization.user.invited`                | Organization      | userId, companyId, role                            | Commercial, Projects, Notifications                 |
+| `organization.provisioned`                 | Organization      | organizationId, name, locale                       | todos (provisión tenant)                            |
+| `organization.user.invited`                | Organization      | userId, organizationId, role                       | Commercial, Projects, Notifications                 |
 | `party.registered`                         | Party (kernel)    | partyId, legalName, taxId, kinds[]                 | Commercial, Procurement, Workforce, Finance         |
-| `commercial.opportunity.won`               | Commercial        | opportunityId, partyId, amount, companyId          | CommercialProposal, Projects, Finance, Commissions  |
-| `commercial.campaign.launched`             | Commercial        | campaignId, channel, companyId                     | Reporting, Notifications                            |
+| `commercial.opportunity.won`               | Commercial        | opportunityId, partyId, amount, organizationId     | CommercialProposal, Projects, Finance, Commissions  |
+| `commercial.campaign.launched`             | Commercial        | campaignId, channel, organizationId                | Reporting, Notifications                            |
 | `tender.awarded`                           | TenderManagement  | tenderId, partyId, studyId, proposalId             | Projects, Budgeting, Notifications                  |
 | `proposal.accepted`                        | CommercialProposal| proposalId, opportunityId/tenderId, budgetId, total| Projects, Finance                                   |
-| `projects.project.created`                 | Projects          | projectId, partyId, companyId                      | Budgeting, Procurement, Workforce, Resources, SiteOps, DMS |
+| `projects.project.created`                 | Projects          | projectId, partyId, organizationId                 | Budgeting, Procurement, Workforce, Resources, SiteOps, DMS |
 | `projects.task.completed`                  | Projects          | taskId, projectId                                  | Workforce, Reporting                                |
 | `budgeting.budget.approved`                | Budgeting         | budgetId, projectId, total                         | Procurement, Finance, CommercialProposal            |
 | `site-operations.certification.approved`   | SiteOperations    | certificationId, projectId, period, amount         | Finance, Reporting                                  |

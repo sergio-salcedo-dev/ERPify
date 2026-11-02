@@ -65,8 +65,10 @@ paginación/orden/filtros componibles, dispatcher de eventos de dominio,
 pipeline async (Messenger), correlation-id, Sentry (front + back), tabla de
 auditoría `domain_event`, CI (quality + tests) y entornos Compose.
 
-Lo grande que **falta** y condiciona todo: **autenticación / RBAC / multi-tenant**
-(no hay `company_id` ni login todavía) — es trabajo fundacional de la Fase 0.4.
+Lo grande que **falta** y condiciona todo: el **multi-tenant operativo**. La
+autenticación y el RBAC ya existen (`Iam/`) y el tenant está modelado
+(`Organization`), pero ninguna tabla de negocio lleva `organization_id` todavía —
+es trabajo fundacional de la Fase 0.4.
 
 ## Fases
 
@@ -138,7 +140,7 @@ entre contextos. Acopla los módulos y degenera en el monolito espagueti.
   contexto se obtienen por su Application service o por un read model alimentado
   por eventos.
 
-> Encaja con el plan multi-tenant (`company_id`) de
+> Encaja con el plan multi-tenant (`organization_id`) de
 > [`saas-production-roadmap.md`](saas-production-roadmap.md) (Fase H): el
 > aislamiento por tenant es ortogonal al aislamiento por contexto; ambos se
 > aplican a nivel de query, no por disciplina de cada repositorio.
