@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security;
 
-use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
-use Erpify\Iam\Identity\Domain\Exception\AccountLocked;
-use Erpify\Iam\Identity\Domain\Exception\AccountSuspended;
 use Erpify\Iam\Identity\Infrastructure\Security\DeactivatedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\LockedAccountException;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
@@ -14,6 +11,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\SuspendedAccountException;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
@@ -47,33 +45,36 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
         $this->assertSame($cause, $caught->getPrevious());
     }
 
-    public function testGraduatesASuspendedAccountFailureToTheSpecificForbiddenWall(): void
+    /**
+     * Every admission refusal is raised before the password is verified, so answering one differently from a wrong
+     * password would tell a guesser the password was right. The authenticator already re-wraps these into a
+     * `BadCredentialsException`; the handler holds the line even for one that reaches it unwrapped.
+     */
+    #[DataProvider('provideAnAdmissionRefusalIsTheUniformUnauthorisedAnswerCases')]
+    public function testAnAdmissionRefusalIsTheUniformUnauthorisedAnswer(AuthenticationException $refusal): void
     {
-        // A post-identity SUSPENDED failure leaves the uniform 401 for a specific 403 account-suspended.
-        $this->expectException(AccountSuspended::class);
+        $caught = null;
 
-        $this->handler(new InMemoryUserRepository())
-            ->onAuthenticationFailure($this->loginRequest(''), new SuspendedAccountException())
-        ;
+        try {
+            $this->handler(new InMemoryUserRepository())->onAuthenticationFailure($this->loginRequest(''), $refusal);
+        } catch (Throwable $throwable) {
+            $caught = $throwable;
+        }
+
+        $this->assertInstanceOf(AuthenticationException::class, $caught);
+        $this->assertSame('Invalid credentials.', $caught->getMessage());
     }
 
-    public function testGraduatesADeactivatedAccountFailureToTheGenericForbiddenWall(): void
+    /**
+     * @return iterable<string, array{AuthenticationException}>
+     */
+    public static function provideAnAdmissionRefusalIsTheUniformUnauthorisedAnswerCases(): iterable
     {
-        $this->expectException(AccountDeactivated::class);
+        yield 'suspended' => [new SuspendedAccountException()];
 
-        $this->handler(new InMemoryUserRepository())
-            ->onAuthenticationFailure($this->loginRequest(''), new DeactivatedAccountException())
-        ;
-    }
+        yield 'deactivated' => [new DeactivatedAccountException()];
 
-    public function testGraduatesALockedAccountFailureToTheSpecificForbiddenWall(): void
-    {
-        // A post-identity locked failure leaves the uniform 401 for a specific 403 account-locked.
-        $this->expectException(AccountLocked::class);
-
-        $this->handler(new InMemoryUserRepository())
-            ->onAuthenticationFailure($this->loginRequest(''), new LockedAccountException())
-        ;
+        yield 'locked' => [new LockedAccountException()];
     }
 
     public function testRecordsTheFailedAttemptAgainstTheSubmittedIdentityBeforeReporting(): void

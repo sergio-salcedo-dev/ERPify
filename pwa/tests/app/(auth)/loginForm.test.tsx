@@ -123,17 +123,6 @@ describe("LoginForm — access outcomes", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("renders the locked access wall in place of the form", async () => {
-    outcome = { kind: LoginOutcomeKind.LOCKED };
-    render(<LoginForm />);
-    signIn();
-
-    expect(await screen.findByTestId("access-wall--locked")).toBeInTheDocument();
-    expect(screen.queryByTestId("login-form")).not.toBeInTheDocument();
-    expect(push).not.toHaveBeenCalled();
-    expect(login).not.toHaveBeenCalled();
-  });
-
   it("surfaces the neutral retryable error when the server fails to finalise the session (503)", async () => {
     outcome = { kind: LoginOutcomeKind.REQUEST_FAILED };
     render(<LoginForm />);

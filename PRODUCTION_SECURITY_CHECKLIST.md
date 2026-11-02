@@ -755,14 +755,13 @@ you change anything here.
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 - [ ] **Persisted per-identity lockout (`identity_user.failed_attempts` / `locked_until`):** a second line
       behind the ephemeral per-IP+email `login_throttling` (built-in, `max_attempts: 5`). After **10** consecutive
-      failed attempts against a **resolved** identity it is locked for **15 minutes** (`checkPostAuth` refuses even
-      a proven login → **403 `account-locked`**, minting no session); a successful login or a lapsed window clears
-      it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
-      nothing** — the pre-identity 401 stays indistinguishable, and a wrong password on a locked account still
-      returns the uniform 401 (an anonymous caller never sees `locked`). It **bounds the rate** at which a run spraying
-      one account from many IPs can land a session, but **not the number of guesses**: a locked account still
-      verifies every password, counts none of the failures, and answers the correct one with that 403 — open in §7,
-      *The persisted lockout confirms a correct password while it is in force*. The lock is orthogonal to
+      failed attempts against a **resolved** identity it is locked for **15 minutes**, refused BEFORE the password
+      is verified (`LockedIdentityLoginRefusalListener`) with the uniform **401 `unauthenticated`** behind the
+      timing floor, minting no session; a reset, a recovery-secret redemption or a lapsed window clears it. The counter increments only for an email that resolves to a row, so an **unknown email writes and emits
+      nothing** — the pre-identity 401 stays indistinguishable, and a locked account answers the right and the
+      wrong password alike. While the lock stands no password is verified, so the guessing it bounds is bounded in
+      number as well as in rate (closed in §7, *The persisted lockout confirmed a correct password*); a locked
+      attempt counts nothing and does not extend the window. The lock is orthogonal to
       `IdentityStatus` (a locked identity stays `ACTIVE`); the lock trip emits a PII-free `UserLocked` domain event.
       A store fault while **recording** a failed attempt is absorbed best-effort, so the failure path stays the
       uniform 401 — never a leaked **500** nor a resolved-vs-unknown status-code oracle (the increment is lost,
@@ -2301,20 +2300,28 @@ mitigated state. Accepting one means recording who accepted it and against which
       past it sees its request fail rather than a guaranteed 413; and the first upload route needs its own
       bound (`erpify.images.max_input_bytes` is 20 MB).
 
-- [ ] **The persisted lockout confirms a correct password while it is in force.** `UserChecker::checkPostAuth`
-      reads the lock AFTER the firewall has verified the password, so a locked account answers a wrong password
-      with the uniform 401 and the right one with **403 `account-locked`**, and `User::recordFailedAttempt`
-      counts nothing while the lock stands. The lock therefore delays the USE of a guessed password by fifteen
-      minutes without bounding the guessing: the only ceiling left during it is `login_throttling`, per IP and
-      raw username. The specific 403 is the decision of `identity-invitation-lifecycle.md` D12 ("post-identity,
-      a response may be specific"), and what this entry disputes is its premise — a caller probing a locked
-      account has not demonstrated an identity, it is in the middle of guessing one. **The fix** is to read the
-      lock in `checkPreAuth`, before verification, and answer it with the uniform 401 behind the timing floor;
-      the owner already learns of the lock through `NotifyLockedIdentities`. It costs the legitimate owner the
-      specific "locked" message at the door, and it needs D12 re-decided by its owner, which is why it is
-      recorded rather than changed in the pull request that found it. Related and unmeasured: the throttle's key
-      is the username as typed, lower-cased, while `Email` also strips edge whitespace and zero-width characters
-      and normalises to NFC, so spellings resolving to one identity may each get their own bucket.
+- [x] **The persisted lockout confirmed a correct password, and so did the suspended and deactivated walls,
+      closed 2026-11-02.** Each was read AFTER the firewall verified the password, so the right password was the
+      one answer that differed (a 403) while nothing counted the guesses: a locked identity records no failure
+      and a walled one is never locked. All three are now refused before verification with the uniform 401 behind
+      the `PreIdentityTimingFloor` — `SUSPENDED`/`DEACTIVATED` in `UserChecker::checkPreAuth`, the lock in
+      `LockedIdentityLoginRefusalListener` on `CheckPassportEvent`, because `Security::login()` runs
+      `checkPreAuth` too and the recovery-secret redemption signs in before it lifts the lock. D12 of
+      `identity-invitation-lifecycle.md` was re-decided to match: on login a password proves no identity a
+      refusal may reveal. Pinned by `login.feature` (correct password on each state → 401, no cookie, the lock
+      neither counted nor extended), `LoginPreIdentityOpacityFunctionalTest` (byte-identical bodies and timing
+      floor across every pre-identity case) and the unit tests of both classes. **Residuals:** a status write
+      landing between verification and the session mint still answers `account-suspended` /
+      `account-deactivated`, a race on an administrator's write that `DbalSessionSubjectLock` grades rather than
+      leaks; a walled or locked member typing the right password sees a stranger's message and learns why only
+      from the administrator, the lockout notice or the reset flow; and the timing floor equalises the refusal
+      against an unknown address, not against a wrong password on an `ACTIVE` account, which pays the KDF — the
+      same property every pre-identity 401 here already has.
+
+- [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
+      username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to
+      NFC, so spellings resolving to one identity may each get their own bucket. Unmeasured; the persisted lockout
+      above keys on the resolved row and is unaffected.
 
 - [ ] **`/forgot-password` latency separates an active account from every other address.**
       `RequestPasswordReset::request()` pays the `PreIdentityTimingFloor` first on every branch, then returns for
@@ -2405,7 +2412,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       stand-up (a label or a state file) and refusing a run that resolves a different one.
 
 - [ ] **The domain security signals reach Sentry, nothing alerts on them, and it is accepted.**
-      `SentryEventFilter` reports the domain `Unauthenticated` (401), `Forbidden` (403, `AccountLocked` among
+      `SentryEventFilter` reports the domain `Unauthenticated` (401), `Forbidden` (403, `AccountSuspended` among
       them) and `RateLimited` (429) raised on an HTTP request, together with the framework's own 401/403/422,
       so a guessing run or a lockout wave arrives as events (`docs/api-error-contract.md` → "Client-error
       suppression in Sentry").

@@ -100,8 +100,8 @@ Erpify\Iam\Identity\Domain\Entity\User:
                 - '<seedPasswordHash("nora-password")>'
                 - []
     user_leo:
-        # ACTIVE, seeded locked per scenario. A correct password within the window is walled 403 account-locked;
-        # a wrong password stays the uniform 401.
+        # ACTIVE, seeded locked per scenario. Within the window a correct password and a wrong one both get the
+        # uniform 401: the lock is refused before the password is verified.
         __factory:
             'Erpify\Tests\DataFixtures\UserFixtureFactory::createWithPasswordHash':
                 - '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a64'

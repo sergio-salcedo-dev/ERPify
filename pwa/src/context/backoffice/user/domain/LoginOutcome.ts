@@ -1,13 +1,14 @@
 /**
  * The `ProblemDetails.type` discriminators the login adapter routes on. Several
  * 403 responses share the status but mean different things — the type, never the
- * status alone, decides the outcome: `account-suspended`, `account-locked` and
- * `account-deactivated` each map to their access wall, while a generic `forbidden`
- * 403 (an origin or CSRF rejection) is not a login outcome and is rethrown.
+ * status alone, decides the outcome: `account-suspended` and `account-deactivated`
+ * each map to their access wall, while a generic `forbidden` 403 (an origin or CSRF
+ * rejection) is not a login outcome and is rethrown. The API refuses a suspended,
+ * deactivated or locked identity with the uniform 401 before checking its password;
+ * the two walls remain for a suspension that lands while a sign-in is in flight.
  */
 export const LoginProblemType = {
   ACCOUNT_SUSPENDED: "account-suspended",
-  ACCOUNT_LOCKED: "account-locked",
   ACCOUNT_DEACTIVATED: "account-deactivated",
   FORBIDDEN: "forbidden",
 } as const;
@@ -22,7 +23,6 @@ export const LoginOutcomeKind = {
   INVALID_CREDENTIALS: "invalid-credentials",
   SUSPENDED: "suspended",
   DEACTIVATED: "deactivated",
-  LOCKED: "locked",
   REQUEST_FAILED: "request-failed",
 } as const;
 export type LoginOutcomeKind = (typeof LoginOutcomeKind)[keyof typeof LoginOutcomeKind];
@@ -30,8 +30,8 @@ export type LoginOutcomeKind = (typeof LoginOutcomeKind)[keyof typeof LoginOutco
 /**
  * The typed result of a sign-in attempt, mapped from the HTTP response by the
  * adapter so the UI never inspects a status code. Neutrality is preserved:
- * `invalid-credentials` collapses wrong-password, unknown-email and invited into
- * one indistinguishable outcome. `request-failed` is a transient server error
+ * `invalid-credentials` collapses wrong-password, unknown-email, invited, and a
+ * suspended, deactivated or locked identity into one indistinguishable outcome. `request-failed` is a transient server error
  * (e.g. a 503 while finalising the session) the user can retry — kept distinct
  * from `invalid-credentials` so a correct sign-in is never mislabelled as a
  * credentials problem.
@@ -41,5 +41,4 @@ export type LoginOutcome =
   | { kind: typeof LoginOutcomeKind.INVALID_CREDENTIALS }
   | { kind: typeof LoginOutcomeKind.SUSPENDED }
   | { kind: typeof LoginOutcomeKind.DEACTIVATED }
-  | { kind: typeof LoginOutcomeKind.LOCKED }
   | { kind: typeof LoginOutcomeKind.REQUEST_FAILED };

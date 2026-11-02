@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { CircleSlash, Link2Off, LockKeyhole, PauseCircle, type LucideIcon } from "lucide-react";
+import { CircleSlash, Link2Off, PauseCircle, type LucideIcon } from "lucide-react";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -11,7 +11,6 @@ import { cn } from "@/components/cn";
 export const AccessWallVariant = {
   SUSPENDED: "suspended",
   DEACTIVATED: "deactivated",
-  LOCKED: "locked",
   INVALID_LINK: "invalid-link",
   INVALID_RESET_LINK: "invalid-reset-link",
 } as const;
@@ -45,25 +44,6 @@ const SIGN_IN_ACTION: AccessWallAction = {
   href: Routes.LOGIN,
   label: "Sign in",
   title: "Return to the sign-in page",
-};
-
-const RECOVER_ACTION: AccessWallAction = {
-  testId: "recover",
-  href: Routes.FORGOT_PASSWORD,
-  label: "Recover access",
-  title: "Recover access to your account",
-};
-
-// Offered on the LOCKED wall beside the reset, and the ordering matters: a password reset is keyed by
-// the same email address the lockout is, so whoever can hold the account locked can drain that budget
-// too. A recovery secret is keyed by nothing the attacker knows. Without this action the only two
-// edges this screen offers are the two the attack already closes, and the channel built for exactly
-// this moment is one the locked user has to go back to the sign-in page to find.
-const REDEEM_RECOVERY_SECRET_ACTION: AccessWallAction = {
-  testId: "redeem-recovery-secret",
-  href: Routes.RECOVERY,
-  label: "Use your recovery secret",
-  title: "Sign in with the recovery secret you saved",
 };
 
 // No self-service "request invitation" route exists in this single-tenant,
@@ -103,16 +83,6 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
       "This account is no longer active. Please contact your administrator if you need access restored.",
     actions: [SIGN_IN_ACTION],
   },
-  [AccessWallVariant.LOCKED]: {
-    icon: LockKeyhole,
-    status: "Locked",
-    title: "Access temporarily locked",
-    description:
-      "Access to this account is temporarily locked. If you saved a recovery secret, use it to get back in " +
-      "now — a password reset is locked by the same thing that locked this account. Otherwise recover your " +
-      "access or try signing in again in a few minutes.",
-    actions: [REDEEM_RECOVERY_SECRET_ACTION, RECOVER_ACTION, SIGN_IN_ACTION],
-  },
   [AccessWallVariant.INVALID_LINK]: {
     icon: Link2Off,
     status: "Invalid link",
@@ -149,14 +119,14 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
 };
 
 /**
- * Card-content shown in place of the sign-in form when the API answers 403 for a
- * suspended, deactivated, or locked account. It renders INSIDE the centered
+ * Card-content shown in place of a form when the API answers 403 for a suspended or
+ * deactivated account on a path the person has proved themselves on, or when a link
+ * is no longer valid. It renders INSIDE the centered
  * `AuthLayout` card (not the full-screen `ErrorScreen`), so it carries no
  * header/logo of its own. The badge/icon tone is deliberately neutral
  * (`bg-muted`), never a danger tone — a wall reports account state, not an
  * error. Each variant declares its own action stack: the first action is the
- * filled primary CTA, any others render as secondary (outline) — the `locked`
- * wall pairs "Recover access" with "Sign in".
+ * filled primary CTA, any others render as secondary (outline).
  */
 export function AccessWall({ variant }: Readonly<{ variant: AccessWallVariant }>) {
   const headingRef = useRef<HTMLHeadingElement>(null);

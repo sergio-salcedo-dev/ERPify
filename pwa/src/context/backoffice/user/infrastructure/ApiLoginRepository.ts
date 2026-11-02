@@ -22,7 +22,6 @@ function isServerFailure(status: number): boolean {
  *
  *  - 204 → authenticated (httpOnly cookie set server-side).
  *  - 403 + type `account-suspended` → suspended.
- *  - 403 + type `account-locked` → locked.
  *  - 403 + type `account-deactivated` → deactivated.
  *  - 403 + type `forbidden` → rethrow: a generic origin/CSRF rejection is not a
  *    login outcome, so the form surfaces it as a generic retryable error rather
@@ -31,7 +30,8 @@ function isServerFailure(status: number): boolean {
  *  - any 5xx → request-failed (the server, or a gateway in front of it, failed;
  *    never a credentials problem — a 500 can follow an accepted password).
  *  - 401 / any other 4xx → invalid-credentials (kept indistinguishable for
- *    neutrality — wrong password, unknown email and invited all collapse).
+ *    neutrality — wrong password, unknown email, invited, and a suspended,
+ *    deactivated or locked identity all collapse).
  *
  * Routing is on `problem.type`, never the status alone: several 403s carry
  * different meaning. A generic `forbidden` 403 and a non-HTTP failure
@@ -61,9 +61,6 @@ export class ApiLoginRepository implements LoginRepository {
     if (problem.status === HttpStatus.FORBIDDEN) {
       if (problem.type === LoginProblemType.ACCOUNT_SUSPENDED) {
         return { kind: LoginOutcomeKind.SUSPENDED };
-      }
-      if (problem.type === LoginProblemType.ACCOUNT_LOCKED) {
-        return { kind: LoginOutcomeKind.LOCKED };
       }
       if (problem.type === LoginProblemType.ACCOUNT_DEACTIVATED) {
         return { kind: LoginOutcomeKind.DEACTIVATED };

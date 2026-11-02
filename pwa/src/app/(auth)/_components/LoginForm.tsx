@@ -73,10 +73,6 @@ export function LoginForm() {
       setWall(AccessWallVariant.DEACTIVATED);
       return;
     }
-    if (outcome.kind === LoginOutcomeKind.LOCKED) {
-      setWall(AccessWallVariant.LOCKED);
-      return;
-    }
     if (outcome.kind === LoginOutcomeKind.REQUEST_FAILED) {
       // The credentials were accepted but the server hit a transient fault finalising the
       // session (e.g. a 503); surface the neutral retryable error, not "invalid credentials".
@@ -95,7 +91,8 @@ export function LoginForm() {
       <h1 className="text-foreground text-xl font-semibold">Sign in</h1>
       {credentialsError ? (
         <p role="alert" className="text-danger-strong text-sm" data-testid="login-form__error">
-          Invalid email or password.
+          Invalid email or password. If you are sure they are correct, check your email, use a
+          recovery secret or contact your administrator.
         </p>
       ) : null}
       {requestFailed ? (

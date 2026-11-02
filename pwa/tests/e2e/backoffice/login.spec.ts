@@ -24,7 +24,9 @@ test.describe("Backoffice login (real API)", () => {
     await page.getByTestId("login-form__password").fill("definitely-not-the-password");
     await page.getByTestId("login-form__submit").click();
 
-    await expect(page.getByTestId("login-form__error")).toHaveText("Invalid email or password.");
+    await expect(page.getByTestId("login-form__error")).toHaveText(
+      "Invalid email or password. If you are sure they are correct, check your email, use a recovery secret or contact your administrator.",
+    );
     await expect(page).toHaveURL(/\/login/);
   });
 
