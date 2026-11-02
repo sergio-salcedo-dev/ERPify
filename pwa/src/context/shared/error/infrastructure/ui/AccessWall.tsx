@@ -120,8 +120,9 @@ const COPY: Record<AccessWallVariant, AccessWallCopy> = {
 
 /**
  * Card-content shown in place of a form when the API answers 403 for a suspended or
- * deactivated account on a path the person has proved themselves on, or when a link
- * is no longer valid. It renders INSIDE the centered
+ * deactivated account on a path the person has proved themselves on (a reset or
+ * invitation link, a recovery secret), on a login whose status changed between the
+ * password check and the session mint, or when a link is no longer valid. It renders INSIDE the centered
  * `AuthLayout` card (not the full-screen `ErrorScreen`), so it carries no
  * header/logo of its own. The badge/icon tone is deliberately neutral
  * (`bg-muted`), never a danger tone — a wall reports account state, not an

@@ -32,9 +32,10 @@ security:
                 failure_handler: Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
             # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
             # leaked credential list cannot be sprayed. The 401 body does not distinguish which accounts exist.
-            # Nor does the shape of the work behind it: an unknown address pays one verification of this hasher
-            # (the UserProvider's timing floor) where a known one pays one of its stored hash — the same cost
-            # for as long as that hash was minted under this configuration — and the failure recorder takes the
+            # Nor does the shape of the work behind it: an unknown address, a walled status and a lockout in force
+            # each pay one verification of this hasher (the timing floor) where an admitted one pays one of its
+            # stored hash — the same cost for as long as that hash was minted under this configuration, and
+            # otherwise a leak of existence, status and lock state alike — and the failure recorder takes the
             # same transaction and locked read either way; a password too long for the hasher to verify is
             # refused before the identity is resolved, at the price of one floor. What still differs is the
             # counter's UPDATE, a row's hydration and a wait on that row's lock for an existing identity —

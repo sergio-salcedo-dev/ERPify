@@ -30,7 +30,10 @@ use Symfony\Component\Security\Http\Authentication\AuthenticationFailureHandlerI
  * hook that runs on every failure. The record is by EMAIL (the submitted identifier): an unknown one writes no
  * row and raises no event while paying the same round trips as a known one, and a malformed one is a no-op —
  * keeping a pre-identity failure indistinguishable; the domain
- * caps the counter and, once locked, no-ops further attempts, so no unbounded growth. A throttled attempt
+ * caps the counter and, once locked, no-ops further attempts, so no unbounded growth. An admission refusal is
+ * recorded like any other failure although no password was checked: that it counts nothing rests on
+ * `User::recordFailedAttempt()` doing nothing for a non-`ACTIVE` or locked identity, while the transaction and
+ * the row lock are still taken so the refusal pays the same round trips. A throttled attempt
  * ({@see TooManyLoginAttemptsAuthenticationException}) is NOT recorded: it never reached a credential check, so
  * counting it would let a single IP drive the persistent per-identity lock that the per-IP throttle exists to
  * stop short of.

@@ -8,8 +8,10 @@ use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 
 /**
- * The login admission wall for a `SUSPENDED` identity: a SPECIFIC 403 that carries a real next step (contact
- * an administrator to restore access).
+ * The post-identity admission wall for a `SUSPENDED` identity: a SPECIFIC 403 that carries a real next step
+ * (contact an administrator to restore access). Only a presenter who proved control of the identity meets it —
+ * a valid reset or invitation token, a recovery secret, a live session — or a login whose status changed
+ * between verification and the session mint; a password alone is refused earlier with the uniform 401.
  *
  * Overrides `type()` to the specific `account-suspended` while the {@see Forbidden} marker keeps the 403
  * status — the same marker-plus-`type()` pattern the `InvalidSearchCriteria` family uses. Carries no

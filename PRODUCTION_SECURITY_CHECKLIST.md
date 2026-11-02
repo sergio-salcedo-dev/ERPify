@@ -1456,7 +1456,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       so what survives is an account that has not signed in since the cost changed: its stored hash verifies at
       its own cost while an unknown address pays one verification at the configured one (the floor's dummy is
       minted by the configured hasher), so a wrong password against it answers faster than an unknown address
-      when that cost was lower, and slower when it was higher.
+      when that cost was lower, and slower when it was higher. The same stale hash separates an `ACTIVE`
+      account from a walled one: a `SUSPENDED`, `DEACTIVATED` or locked identity is refused before verification
+      and pays the floor's dummy at the configured cost, while an `ACTIVE` unlocked one pays its own stored hash
+      — so under the same condition the latency also reports status and lock state, not only existence.
       **(3) The over-long password.** `NativePasswordHasher::verify()` returns false without hashing for a
       password over `PasswordHasherInterface::MAX_PASSWORD_LENGTH` (4096) bytes, and nothing in the firewall
       bounded it first — measured on the dev stack, one request: a known address answered ~18 ms, an unknown

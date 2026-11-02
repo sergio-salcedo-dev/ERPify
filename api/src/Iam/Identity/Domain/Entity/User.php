@@ -188,9 +188,11 @@ final class User extends AggregateRoot
      * behalf, and the next caller will pick differently.
      *
      * **Only call this where the caller has already proven control of the identity** — a valid single-use
-     * token, or verified credentials. The refusal is deliberately specific (`SUSPENDED` and `DEACTIVATED`
-     * answer differently), so on a pre-identity surface it would confirm an account exists and leak its
-     * status. Where that matters, the uniform path is silence, not a graduated wall.
+     * token, a recovery secret, or an authenticated session. A verified password alone is not such proof on
+     * login, where every non-`ACTIVE` identity is refused before verification with the uniform 401. The
+     * refusal is deliberately specific (`SUSPENDED` and `DEACTIVATED` answer differently), so on a
+     * pre-identity surface it would confirm an account exists and leak its status. Where that matters, the
+     * uniform path is silence, not a graduated wall.
      *
      * @throws AccountSuspended   the reversible wall — the identity may return
      * @throws AccountDeactivated the terminal wall, and the answer for an identity that never activated
