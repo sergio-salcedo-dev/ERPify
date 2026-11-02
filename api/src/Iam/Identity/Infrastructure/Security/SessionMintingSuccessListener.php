@@ -44,8 +44,8 @@ use Throwable;
  *   same status with the uniform 401 when the write lands first, so this window is the one login path where a
  *   correct password draws a different answer — a race on an administrator's write, accepted as a residual
  *   rather than an oracle anyone can drive; one erased in that window keeps the mint's own uniform 401. The
- *   reason comes from the locked read, so nothing is re-read here. The re-authentication flows (accept, reset, redeem, change password) reach this
- *   listener too, so they answer the same way;
+ *   reason comes from the locked read, so nothing is re-read here. The re-authentication flows (accept, reset,
+ *   redeem, change password) reach this listener too, so they answer the same way;
  * - anything else — the session store's own 503, a broken membership invariant, a programming error —
  *   propagates as it was raised: relabelling the last two as an outage would invite a retry that cannot
  *   succeed.
