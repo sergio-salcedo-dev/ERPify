@@ -243,7 +243,10 @@ standing service.
 The prod overlay is **byte-identical** to the LAN box; only `.env.prod.local`
 and host setup differ. The full promotion runbook (host prep, firewall, DNS,
 ACME, deploy, verify) and remote DB access live in
-[`vps-deployment.md`](./vps-deployment.md).
+[`vps-deployment.md`](./vps-deployment.md). That page also has a table of
+*promotion risks*: what a green rehearsal here cannot prove about the VPS
+(architecture, build memory, ACME, outbound SMTP, reboot). Measure the
+laptop-side half of it while this stack is up.
 
 ## Troubleshooting
 
