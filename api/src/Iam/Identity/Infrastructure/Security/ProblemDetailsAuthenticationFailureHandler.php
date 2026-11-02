@@ -13,23 +13,26 @@ use Symfony\Component\HttpFoundation\Exception\RequestExceptionInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Core\Exception\TooManyLoginAttemptsAuthenticationException;
 use Symfony\Component\Security\Http\Authentication\AuthenticationFailureHandlerInterface;
 
 /**
  * Handles a login failure: it records the failed attempt against the target identity (feeding the persisted
- * lockout) and routes the response through the shared RFC 9457 pipeline instead of Symfony's default handler,
- * which would emit its own `{"error": ...}` body on `kernel.request` and bypass the error contract. Throwing
- * lets the exception reach `kernel.exception`, where the pipeline builds the Problem Details — reusing
- * correlation-id minting, the tiered log line, body cap and redaction with zero duplication.
+ * lockout) and RETURNS a provisional response, which nothing ever sends.
  *
- * The failed-attempt increment lives HERE, not in a `LoginFailureEvent` listener: the authenticator calls this
- * handler (`AuthenticatorManager::handleAuthenticationFailure`) and only dispatches `LoginFailureEvent`
- * afterwards, so a handler that throws — as this one always does — preempts that event; the handler is the sole
- * hook that runs on every failure. The record is by EMAIL (the submitted identifier): an unknown one writes no
- * row and raises no event while paying the same round trips as a known one, and a malformed one is a no-op —
- * keeping a pre-identity failure indistinguishable; the domain
+ * Returning is what lets `AuthenticatorManager::handleAuthenticationFailure()` go on to dispatch
+ * `LoginFailureEvent`: it calls this handler first and dispatches the event only once the handler has returned,
+ * so a handler that throws silences every listener of that event — `login_throttling` among them, which only
+ * peeks its budget before the credentials are checked and spends it on that event, so a throwing handler leaves
+ * the throttle declared and inert. The uniform answer is thrown afterwards by
+ * {@see UniformLoginFailureListener}, the last listener of the event, so it still reaches `kernel.exception` and
+ * the shared RFC 9457 pipeline — correlation id, tiered log line, error tracking, body cap and redaction — rather
+ * than Symfony's own `{"error": ...}` body or a second pipeline built here.
+ *
+ * The failed-attempt increment lives HERE rather than in a listener because the handler is the one hook the
+ * authenticator calls on every failure before anything else can stop the chain. The record is by EMAIL (the
+ * submitted identifier): an unknown one writes no row and raises no event while paying the same round trips as
+ * a known one, and a malformed one is a no-op — keeping a pre-identity failure indistinguishable; the domain
  * caps the counter and, once locked, no-ops further attempts, so no unbounded growth. An admission refusal is
  * recorded like any other failure although no password was checked: that it counts nothing rests on
  * `User::recordFailedAttempt()` doing nothing for a non-`ACTIVE` or locked identity, while the transaction and
@@ -37,25 +40,16 @@ use Symfony\Component\Security\Http\Authentication\AuthenticationFailureHandlerI
  * ({@see TooManyLoginAttemptsAuthenticationException}) is NOT recorded: it never reached a credential check, so
  * counting it would let a single IP drive the persistent per-identity lock that the per-IP throttle exists to
  * stop short of.
- *
- * Every failure collapses to a single neutral 401: a wrong password, an unknown email, and every admission
- * refusal — `INVITED`, `REVOKED`, `SUSPENDED`, `DEACTIVATED` and a lockout in force — which the walls raise
- * before the password is verified and the authenticator has already re-wrapped into a
- * `BadCredentialsException`. The message is normalised to one constant string so those failures stay
- * indistinguishable on the wire; the real cause survives as `previous` for the dev-only debug extension.
  */
 final readonly class ProblemDetailsAuthenticationFailureHandler implements AuthenticationFailureHandlerInterface
 {
-    private const string GENERIC_FAILURE_MESSAGE = 'Invalid credentials.';
-
     public function __construct(private LoginAttemptRegistrar $loginAttempts)
     {
     }
 
     /**
-     * @throws CustomUserMessageAuthenticationException every login failure (uniform 401)
-     *
-     * @return never
+     * The returned response is a placeholder for the authenticator's contract: {@see UniformLoginFailureListener}
+     * replaces it with the uniform 401 by throwing before the authenticator can hand it to the kernel.
      */
     #[Override]
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
@@ -64,7 +58,7 @@ final readonly class ProblemDetailsAuthenticationFailureHandler implements Authe
             $this->recordFailureBestEffort($request);
         }
 
-        throw new CustomUserMessageAuthenticationException(self::GENERIC_FAILURE_MESSAGE, previous: $exception);
+        return new Response(status: Response::HTTP_UNAUTHORIZED);
     }
 
     /**

@@ -1465,7 +1465,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       bounded it first — measured on the dev stack, one request: a known address answered ~18 ms, an unknown
       one ~320 ms. `OverlongPasswordTimingListener` refuses such a password on `CheckPassportEvent` ahead of
       the first listener that resolves the user, paying the floor once, so both answer ~320 ms (measured) and
-      the refusal still counts against the login throttle (`OverlongPasswordTimingListenerTest`).
+      the refusal still counts against the login throttle, which every login failure spends
+      (`LoginThrottleSpendFunctionalTest`).
 - [ ] **What a failed login for an existing identity still pays that an unknown address does not is UNMEASURED.**
       An `ACTIVE` identity below the threshold pays the counter's UPDATE (plus its `event_store`/outbox rows on
       the attempt that trips the lock, and on that same attempt the lockout projection's own transaction —
@@ -2320,14 +2321,38 @@ mitigated state. Accepting one means recording who accepted it and against which
       floor structurally (wall-clock assertions are banned here). **Residuals:** a status write
       landing between verification and the session mint still answers `account-suspended` /
       `account-deactivated`, a race on an administrator's write that `DbalSessionSubjectLock` grades rather than
-      leaks; a walled or locked member typing the right password sees a stranger's message and learns why only
-      from the administrator, the lockout notice or the reset flow; the lock is read from the snapshot the
-      request resolved, so guesses already in flight when the tenth failure commits are still verified, and a
-      correct one among them signs in and clears the lock (not new: the post-verification read had the same
+      leaks; a walled or locked member typing the right password sees a stranger's message — a locked one learns
+      why from the lockout notice and can reset, a walled one only from the administrator or by redeeming a
+      recovery secret, since the reset flow mints no token for a non-`ACTIVE` identity; the lock is read from the
+      snapshot the request resolved, so guesses already in flight when the tenth failure commits are still
+      verified, and a correct one among them signs in and clears the lock (not new: the post-verification read had the same
       window, and re-reading at the mint would refuse the redemption, which signs in before it lifts the lock);
       and the floor equalises the dominant term (one unit of password hashing) but not the failure write: a
       wrong password on an unlocked `ACTIVE` account also updates its row, which a refusal does not — the same
       residual every pre-identity 401 here already carries.
+
+- [x] **The login throttle was declared and never spent, closed 2026-11-02.** `login_throttling` peeks its budget
+      on `CheckPassportEvent` and spends it on `LoginFailureEvent`, which `AuthenticatorManager` dispatches only
+      after the failure handler returns — and `ProblemDetailsAuthenticationFailureHandler` threw, to reach the
+      RFC 9457 pipeline on `kernel.exception`. So no failure ever spent a token: neither the 5-per-minute bucket
+      per address+IP nor the 25-per-minute one per IP bounded anything, the handler's throttled branch was
+      unreachable, one source could trip and re-arm any account's lock at will, and every document citing the
+      throttle as a bound was citing an inert control, with the 401 uniform and every test green. The handler
+      now records the attempt and RETURNS a placeholder response, the event is dispatched, and
+      `UniformLoginFailureListener`, its last listener, throws the same uniform 401 — so the failure still reaches
+      `kernel.exception`, and with it the error tracker's own listener, which a response built in the handler
+      would have bypassed. Pinned by `LoginThrottleSpendFunctionalTest`, which peeks the firewall's real budget
+      from a listener between the throttle and the thrower and asserts one token spent, and by
+      `UniformLoginFailureListenerTest`, which keeps the thrower below every framework listener of the event.
+      **Residuals:** a person who mistypes five times within a minute is refused for up to a minute even with the
+      right password, with the uniform message and no hint, since a distinguishable "too many attempts" is the
+      oracle D10 forbids; a shared address (NAT, an office) answers every login with the 401 for up to a minute
+      after 25 failures from it; the budget lives in `cache.rate_limiter` (the app pool), so it is per process
+      store and does not survive a cache clear or a deploy, and without `symfony/lock` concurrent requests may
+      over- or under-count by a few, as `rate_limiter.yaml` records for the other limiters; and a throttled
+      attempt answers fast — it pays no floor, being refused before the identity is resolved — which reports the
+      bucket's state for the address as typed and IP, the same for an address that exists and one that does not,
+      so it is no existence oracle.
 
 - [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
       username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to

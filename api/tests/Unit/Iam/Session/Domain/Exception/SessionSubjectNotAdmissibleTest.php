@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Iam\Session\Domain\Exception;
 
-use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
+use Erpify\Iam\Identity\Infrastructure\Security\UniformLoginFailureListener;
 use Erpify\Iam\Session\Domain\Exception\SessionSubjectNotAdmissible;
 use Erpify\Iam\Session\Domain\SubjectAdmission;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
@@ -13,7 +13,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionClassConstant;
 
 /**
  * @internal
@@ -35,13 +34,7 @@ final class SessionSubjectNotAdmissibleTest extends TestCase
             (new ReflectionClass(SessionSubjectNotAdmissible::class))->implementsInterface(Unauthenticated::class),
         );
         $this->assertSame('unauthenticated', $refusal->type());
-        $this->assertSame(
-            (new ReflectionClassConstant(
-                ProblemDetailsAuthenticationFailureHandler::class,
-                'GENERIC_FAILURE_MESSAGE',
-            ))->getValue(),
-            $refusal->title(),
-        );
+        $this->assertSame(UniformLoginFailureListener::GENERIC_FAILURE_MESSAGE, $refusal->title());
         $this->assertSame([], $refusal->context(), 'the identity is a person, so nothing about it travels');
     }
 

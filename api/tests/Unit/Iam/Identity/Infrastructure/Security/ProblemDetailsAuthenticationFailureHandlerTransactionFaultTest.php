@@ -12,13 +12,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\Security\Core\Exception\AuthenticationException;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Throwable;
 
 /**
  * The faults the transaction manager translates out of a failed unit of work are faults only an EXISTING identity
- * can meet — it alone locks a row and writes — so each must end in the same uniform 401 an unknown address gets.
+ * can meet — it alone locks a row and writes — so each must be absorbed exactly as an unknown address's failure is.
  *
  * @internal
  */
@@ -33,19 +33,12 @@ final class ProblemDetailsAuthenticationFailureHandlerTransactionFaultTest exten
     ): void {
         // Only an address that exists locks a row and writes, so only it can meet these; answering them as a
         // 503 or 409 would name the account on the wire while an unknown address gets the 401.
-        $caught = null;
+        $response = $this->handlerWhoseTransactionFails($fault)->onAuthenticationFailure(
+            $this->loginRequest(UserMother::DEFAULT_EMAIL),
+            new BadCredentialsException('wrong'),
+        );
 
-        try {
-            $this->handlerWhoseTransactionFails($fault)->onAuthenticationFailure(
-                $this->loginRequest(UserMother::DEFAULT_EMAIL),
-                new BadCredentialsException('wrong'),
-            );
-        } catch (Throwable $throwable) {
-            $caught = $throwable;
-        }
-
-        $this->assertInstanceOf(AuthenticationException::class, $caught);
-        $this->assertSame('Invalid credentials.', $caught->getMessage());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
     }
 
     /**

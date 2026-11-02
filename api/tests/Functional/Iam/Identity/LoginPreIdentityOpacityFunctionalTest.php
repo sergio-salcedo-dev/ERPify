@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Security\LockedIdentityLoginRefusalListener;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler;
+use Erpify\Iam\Identity\Infrastructure\Security\UniformLoginFailureListener;
 use Erpify\Iam\Identity\Infrastructure\Security\UserChecker;
 use Erpify\Iam\Identity\Infrastructure\Security\UserProvider;
 use Erpify\Shared\Access\Domain\Role;
@@ -58,6 +59,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 #[CoversClass(LockedIdentityLoginRefusalListener::class)]
 #[CoversClass(ProblemDetailsAuthenticationFailureHandler::class)]
+#[CoversClass(UniformLoginFailureListener::class)]
 #[CoversClass(UserChecker::class)]
 #[CoversClass(UserProvider::class)]
 final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase

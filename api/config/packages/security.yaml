@@ -31,7 +31,10 @@ security:
                 password_path: password
                 failure_handler: Erpify\Iam\Identity\Infrastructure\Security\ProblemDetailsAuthenticationFailureHandler
             # Throttle the only auth surface: repeated failures per (client IP + email) are rate-limited so a
-            # leaked credential list cannot be sprayed. The 401 body does not distinguish which accounts exist.
+            # leaked credential list cannot be sprayed. The budget is spent on LoginFailureEvent, which is
+            # dispatched only once the failure handler returns, so the handler returns and the uniform 401 is
+            # thrown by that event's last listener (UniformLoginFailureListener); a throwing handler leaves this
+            # declared and inert. The 401 body does not distinguish which accounts exist.
             # Nor does the shape of the work behind it: an unknown address, a walled status and a lockout in force
             # each pay one verification of this hasher (the timing floor) where an admitted one pays one of its
             # stored hash — the same cost for as long as that hash was minted under this configuration, and
