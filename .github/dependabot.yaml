@@ -72,9 +72,10 @@ updates:
     # #1153 was titled phpstan 2.3.2 and locked 2.3.4, without rector, whose
     # matching 2.8.3 was still inside the cooldown. That pair breaks through a
     # second channel: rector's preload.php require_once's its own bundled,
-    # UNPREFIXED phpstan/phpdoc-parser before any autoloader runs, so a phpstan
-    # phar built against a newer phpdoc-parser mixes classes from both and
-    # fatals (CallableTypeNode handed a FullyQualifiedNameNode, phpstan 2.3.4
+    # UNPREFIXED phpstan/phpdoc-parser before the project's vendor/autoload.php
+    # is registered, so a phpstan phar built against a different phpdoc-parser
+    # mixes classes from both — measured to fatal in the newer-phpstan
+    # direction (CallableTypeNode handed a FullyQualifiedNameNode, phpstan 2.3.4
     # over rector 2.7.0). Moving api/vendor's phpdoc-parser changes nothing —
     # measured on #1166 — because that copy is not the one loaded.
     #

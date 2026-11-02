@@ -5,8 +5,8 @@ Feature: Health endpoints conform to the RFC 9457 contract retroactively
     Details responses on failure WITHOUT any change to their controller source.
 
   # the two HealthController classes throw nothing of their own; a test-only
-  # `kernel.controller` subscriber wired in `api/config/services_test.yaml` injects a
-  # RuntimeException when `?_force_failure=1` is present on either health path. The
+  # `kernel.controller` listener wired in `api/config/services_test.yaml` injects an
+  # UnexpectedValueException when `?_force_failure=1` is present on either health path. The
   # listener pipeline then maps that uncaught throwable to the default-deny
   # `unhandled-exception` / 500 branch.
 

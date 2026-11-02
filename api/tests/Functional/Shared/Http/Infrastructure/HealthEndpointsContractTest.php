@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
  * two `/health` endpoints whose authors predate the contract. NO production
  * source was modified; the failure path is forced by a test-only event
  * listener wired in `api/config/services_test.yaml`
- * (see {@see EventListener\Fixtures\ForceHealthFailureListener}).
+ * (see {@see \Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ForceHealthFailureListener}).
  *
  * The two endpoints under test are wired by attribute routing in
  * `api/config/routes.yaml`:
@@ -27,7 +27,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * What the suite pins:
  *   1. Failure path — adding `?_force_failure=1` causes the test listener to throw a
- *      plain `RuntimeException` BEFORE the controller runs. The listener pipeline maps
+ *      `UnexpectedValueException` BEFORE the controller runs. The listener pipeline maps
  *      it to the same default-deny `unhandled-exception` 500 already pinned for any
  *      unrecognised throwable. Body validates against the RFC 9457 schema
  *      (`tests/Fixtures/Problem/rfc-9457.schema.json`) and carries the
@@ -153,7 +153,7 @@ final class HealthEndpointsContractTest extends WebTestCase
         );
 
         // Default-deny on unrecognised throwables — the test-only listener
-        // throws a plain RuntimeException, which lands on the terminal `unhandled-exception`
+        // throws an UnexpectedValueException, which lands on the terminal `unhandled-exception`
         // / 500 branch.
         $this->assertSame('unhandled-exception', $body['type'] ?? null);
         $this->assertSame(500, $body['status'] ?? null);
