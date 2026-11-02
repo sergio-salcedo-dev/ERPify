@@ -34,7 +34,7 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
             new BadCredentialsException('The presented password is invalid.'),
         );
 
-        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), (string) $response->getContent());
         $this->assertSame('', $response->getContent());
         // The marker is what lets the event's last listener replace this placeholder with the uniform 401.
         $this->assertTrue(
@@ -80,6 +80,6 @@ final class ProblemDetailsAuthenticationFailureHandlerTest extends TestCase
             new BadCredentialsException('wrong'),
         );
 
-        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), (string) $response->getContent());
     }
 }

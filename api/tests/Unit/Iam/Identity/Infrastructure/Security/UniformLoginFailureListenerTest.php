@@ -26,6 +26,8 @@ use Throwable;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(UniformLoginFailureListener::class)]
 final class UniformLoginFailureListenerTest extends TestCase
@@ -116,7 +118,7 @@ final class UniformLoginFailureListenerTest extends TestCase
             return $throwable;
         }
 
-        self::fail('A failure the login handler answered was not turned into the uniform 401.');
+        $this->fail('A failure the login handler answered was not turned into the uniform 401.');
     }
 
     private function event(AuthenticationException $exception, Request $request, Response $response): LoginFailureEvent

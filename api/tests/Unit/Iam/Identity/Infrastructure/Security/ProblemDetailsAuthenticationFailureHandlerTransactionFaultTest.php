@@ -38,7 +38,7 @@ final class ProblemDetailsAuthenticationFailureHandlerTransactionFaultTest exten
             new BadCredentialsException('wrong'),
         );
 
-        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode());
+        $this->assertSame(Response::HTTP_UNAUTHORIZED, $response->getStatusCode(), (string) $response->getContent());
     }
 
     /**

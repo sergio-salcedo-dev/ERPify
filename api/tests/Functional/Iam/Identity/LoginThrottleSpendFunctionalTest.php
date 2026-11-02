@@ -150,6 +150,6 @@ final class LoginThrottleSpendFunctionalTest extends WebTestCase
             }
         }
 
-        self::fail('login_throttling is not listening to LoginFailureEvent on the main firewall.');
+        $this->fail('login_throttling is not listening to LoginFailureEvent on the main firewall.');
     }
 }
