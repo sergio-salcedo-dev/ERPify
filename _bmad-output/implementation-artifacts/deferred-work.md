@@ -639,3 +639,101 @@ severity: medium
 **Para cerrarla:**
 - Decidir si el tamaño táctil va en las variantes (`button-variants.ts`, `input.tsx`) o control a control. En las variantes llega a todo con un solo cambio, pero cambia la densidad de cada formulario en dispositivos con pantalla táctil.
 - Medir en Playwright con un perfil de dispositivo táctil, no solo por clase: jsdom no evalúa media queries.
+
+### DW-73: El bloqueo de cuenta confirma la contraseña correcta mientras está en vigor
+
+origin: auditoría de seguridad de #1091, 2026-10-23
+location: api/src/Iam/Identity/Infrastructure/Security/UserChecker.php (checkPostAuth), api/src/Iam/Identity/Domain/Entity/User.php (recordFailedAttempt), docs/adr/identity-invitation-lifecycle.md (D12)
+reason: el bloqueo se lee después de verificar la contraseña, así que una cuenta bloqueada responde 401 a la incorrecta y 403 `account-locked` a la correcta, y no cuenta fallos mientras dura. Retrasa 15 minutos el uso de una contraseña adivinada sin limitar los intentos. El arreglo choca con D12 y la decisión es del product owner.
+status: open
+severity: high
+
+**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*The persisted lockout confirms a correct password while it is in force*).
+
+**Orden: es la primera de DW-73…DW-78.** Es la más grave; las demás no dependen de ella y pueden ir después en cualquier orden.
+
+**Decisión pendiente del product owner (D12, anotada el 2026-11-02):** qué responde el login a una cuenta bloqueada.
+- **A — mantener D12 tal cual:** se verifica la contraseña y, si es correcta, 403 `account-locked`. Es lo que hay hoy y es el defecto: durante el bloqueo se puede seguir adivinando sin límite propio, y la respuesta delata el acierto.
+- **B — recomendada: comprobar el bloqueo antes de verificar y responder el 401 uniforme**, pagando `PreIdentityTimingFloor`. Durante el bloqueo no se verifica ninguna contraseña, así que no hay oráculo. Tampoco abre enumeración, porque una cuenta inexistente también recibe 401 con el mismo coste. Precio: el usuario legítimo deja de ver "cuenta bloqueada" en la puerta. Se cubre con el correo de `NotifyLockedIdentities`, que ya se envía, y con un texto genérico en el formulario ("si no puedes entrar, revisa tu correo o restablece la contraseña"). El reset ya limpia el bloqueo (D9).
+- **Descartada — 403 `account-locked` sin verificar la contraseña:** es un oráculo de enumeración anónimo. Diez fallos bloquean solo una cuenta que existe, así que el 403 posterior confirma que existe.
+- **Descartada — seguir verificando pero contar los fallos durante el bloqueo:** alarga el bloqueo, pero el 403 sigue delatando la contraseña correcta.
+- **Pregunta aparte, mismo patrón:** `SUSPENDED` también responde 403 `account-suspended` solo con la contraseña correcta, y `recordFailedAttempt` no cuenta fallos en cuentas no `ACTIVE`. No hay transición de vuelta a `ACTIVE`, así que la contraseña no sirve para entrar aquí, pero sí confirma una contraseña que la persona puede reutilizar en otros sitios. Decidir si se trata igual o si se mantiene el mensaje porque indica a quién acudir.
+
+**Para cerrarla:**
+- **Decisión previa:** revisar D12 con las opciones de arriba. Su premisa es que, una vez probada la identidad, el 403 específico ayuda. Quien sondea una cuenta bloqueada no ha probado nada, la está adivinando.
+- **Arreglo propuesto:** comprobar `isLockedAt()` en `checkPreAuth`, antes de verificar, y responder el 401 uniforme detrás de `PreIdentityTimingFloor`. El dueño ya se entera por el correo de `NotifyLockedIdentities`. Coste: el usuario legítimo pierde el mensaje "cuenta bloqueada" en la puerta.
+- **Tests:** un escenario Behat en `login.feature` donde una cuenta bloqueada con la contraseña correcta reciba 401 `unauthorized`, no 403. Revisar los escenarios que hoy esperan `account-locked` tras credenciales correctas.
+- **Relacionado, sin medir:** la clave de `login_throttling` es el usuario tal como se escribió, en minúsculas, mientras que `Email` también quita espacios de los extremos y caracteres de anchura cero y normaliza a NFC. Varias grafías de la misma identidad pueden tener cada una su propio contador. Medirlo y, si se confirma, canonicalizar la clave igual que `Email`.
+
+### DW-74: La latencia de `/forgot-password` distingue una cuenta activa de cualquier otra dirección
+
+origin: auditoría de seguridad de #1091, 2026-10-23
+location: api/src/Iam/Identity/Application/RequestPasswordReset.php
+reason: el suelo de tiempo se suma a todas las ramas en vez de rellenarlas hasta un plazo fijo. La rama `ACTIVE` paga además una transacción con `FOR UPDATE` y un envío SMTP síncrono antes del 202. Contradice D10 ("identical observable work").
+status: open
+severity: medium
+
+**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*`/forgot-password` latency separates an active account from every other address*).
+
+**Para cerrarla:**
+- **Medir primero:** la diferencia contra un relay SMTP real, con muestras pareadas de una dirección activa y otra desconocida, como la medición que llevó la proyección del throttle a `kernel.terminate`.
+- **Arreglo preferido:** responder primero y emitir el token y enviar el correo en `kernel.terminate`, igual que ya hace la proyección de auditoría del throttle de recuperación. Ojo con que el token en claro no puede pasar por ningún transporte persistido: por eso `SendEmailMessage` no está enrutado.
+- **Alternativa:** rellenar todas las ramas hasta un plazo fijo. Es más simple, pero el plazo tiene que cubrir el peor caso del SMTP (`MAILER_SMTP_TIMEOUT` por cada ida y vuelta).
+- **Al cerrar:** corregir D10 y el texto de §6 que remite a esta entrada.
+
+### DW-75: La CSP de producción admite scripts inline
+
+origin: auditoría de seguridad de #1091, 2026-10-23
+location: pwa/next.config.ts (headers), pwa/src/proxy.ts, pwa/CLAUDE.md
+reason: `script-src 'self' 'unsafe-inline'` sin nonce y `img-src https:`. Hoy no hay ningún sumidero de XSS en `pwa/src`, pero la CSP no aporta nada como segunda línea y deja `img-src` como canal de exfiltración.
+status: open
+severity: medium
+
+**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*Production CSP admits inline script*).
+
+**Para cerrarla:**
+- Generar un nonce por petición en `pwa/src/proxy.ts`, pasarlo por cabecera a Next y emitir `script-src 'self' 'nonce-…' 'strict-dynamic'`. Hace falta ampliar el matcher del proxy a las páginas y que estas se rendericen de forma dinámica, lo que cambia el cacheo estático.
+- Estrechar `img-src` a los orígenes que la app usa de verdad.
+- Ampliar `pwa/tests/next-config-headers.test.ts` para que falle si vuelve `'unsafe-inline'` en `script-src` de producción.
+- Medir el impacto en rendimiento antes de mergear, porque perder el render estático tiene coste.
+
+### DW-76: La cookie de suscripción de Mercure sobrevive al cierre de sesión y a la suspensión
+
+origin: auditoría de seguridad de #1091, 2026-10-23
+location: api/src/Backoffice/Bank/Infrastructure/Controller/BankRealtimeAuthorizeController.php, api/src/Backoffice/BankAccount/Infrastructure/Controller/BankAccountRealtimeAuthorizeController.php, api/src/Iam/Session (revocación)
+reason: los dos controladores fijan `mercureAuthorization`, un JWT cuya vida no está fijada en la configuración, y nada en `api/src` la borra. Cerrar sesión, revocar sesiones, suspender o desactivar la dejan válida, y el hub no comprueba revocaciones. Solo expone ids de bancos y cuentas, sin IBAN ni titular.
+status: open
+severity: low
+
+**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*The Mercure subscriber cookie outlives the session that obtained it*).
+
+**Para cerrarla:**
+- Llamar a `Authorization::createClearCookie()` en la respuesta de cierre de sesión (`revoke-current`).
+- **Medir primero:** el `exp` del JWT que emite `createCookie`. `mercure.default_cookie_lifetime` no está fijado y por defecto toma `framework.session.cookie_lifetime`; §7 dice "una hora", y eso no está verificado.
+- Fijar `default_cookie_lifetime` en minutos y que el PWA vuelva a autorizar al reconectar.
+- **Aparte, funcional:** las dos rutas escriben la misma cookie, así que autorizar un canal sobrescribe los permisos del otro. Comprobarlo al tocarlas.
+
+### DW-77: Comprobar si el túnel de Sentry reenvía a proyectos de terceros
+
+origin: auditoría de seguridad de #1091, 2026-10-23
+location: pwa/next.config.ts (`tunnelRoute: "/monitoring"`), pwa/src/proxy.ts
+reason: sin verificar. El túnel de `@sentry/nextjs` toma la organización y el proyecto de los parámetros `o`/`p` de la petición. Si no los contrasta con el DSN configurado, cualquiera puede usar el origen de ERPify como relay gratuito hacia sus propios proyectos de Sentry. Hoy solo lo acota el límite de 60 peticiones por minuto e IP.
+status: open
+severity: low
+
+**Para cerrarla:**
+- **Verificar primero:** leer en `pwa/node_modules/@sentry/nextjs` cómo resuelve el destino el rewrite del túnel en la versión instalada, y probar contra el stack un POST a `/monitoring?o=<otra-org>&p=<otro-proyecto>`.
+- **Si reenvía:** rechazar en `proxy.ts` cualquier `/monitoring` cuyos `o`/`p` no coincidan con `NEXT_PUBLIC_SENTRY_DSN`, con un test en `pwa/tests/`.
+- **Si no reenvía:** cerrar con `status: done` y la evidencia.
+
+### DW-78: El arranque del contenedor `php` en CI falla de forma intermitente al descargar dependencias
+
+origin: CI de #1091, 2026-10-23
+location: api/frankenphp/docker-entrypoint.sh (composer install), .github/workflows/ci.yml, make/docker.mk (docker.up.wait.no-build)
+reason: dos jobs distintos (API Behat en 2d635b1 y PWA E2E shard 1 en 9de680f) murieron sin ejecutar ningún test porque `composer install` del entrypoint no terminó de descargar paquetes (`library::Connection refused`) y el contenedor nunca quedó sano. La sesión no podía relanzar jobs (403) y hubo que pedírselo al usuario.
+status: open
+severity: low
+
+**Para cerrarla:**
+- **Volver a medir:** desde #1145 el job de E2E arranca a partir del build. Comprobar en las ejecuciones recientes de `main` si el fallo se repite.
+- **Si se repite:** que la imagen de CI ya traiga `vendor/` (una capa de build con `composer install`) o restaurarlo desde caché, para que el entrypoint no descargue nada en tiempo de arranque. Como mínimo, reintentar `composer install` con backoff dentro del entrypoint.
