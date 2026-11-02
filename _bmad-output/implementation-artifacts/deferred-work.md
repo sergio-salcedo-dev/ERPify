@@ -650,8 +650,17 @@ severity: high
 
 **Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*The persisted lockout confirms a correct password while it is in force*).
 
+**Orden: es la primera de DW-73…DW-78.** Es la más grave; las demás no dependen de ella y pueden ir después en cualquier orden.
+
+**Decisión pendiente del product owner (D12, anotada el 2026-11-02):** qué responde el login a una cuenta bloqueada.
+- **A — mantener D12 tal cual:** se verifica la contraseña y, si es correcta, 403 `account-locked`. Es lo que hay hoy y es el defecto: durante el bloqueo se puede seguir adivinando sin límite propio, y la respuesta delata el acierto.
+- **B — recomendada: comprobar el bloqueo antes de verificar y responder el 401 uniforme**, pagando `PreIdentityTimingFloor`. Durante el bloqueo no se verifica ninguna contraseña, así que no hay oráculo. Tampoco abre enumeración, porque una cuenta inexistente también recibe 401 con el mismo coste. Precio: el usuario legítimo deja de ver "cuenta bloqueada" en la puerta. Se cubre con el correo de `NotifyLockedIdentities`, que ya se envía, y con un texto genérico en el formulario ("si no puedes entrar, revisa tu correo o restablece la contraseña"). El reset ya limpia el bloqueo (D9).
+- **Descartada — 403 `account-locked` sin verificar la contraseña:** es un oráculo de enumeración anónimo. Diez fallos bloquean solo una cuenta que existe, así que el 403 posterior confirma que existe.
+- **Descartada — seguir verificando pero contar los fallos durante el bloqueo:** alarga el bloqueo, pero el 403 sigue delatando la contraseña correcta.
+- **Pregunta aparte, mismo patrón:** `SUSPENDED` también responde 403 `account-suspended` solo con la contraseña correcta, y `recordFailedAttempt` no cuenta fallos en cuentas no `ACTIVE`. No hay transición de vuelta a `ACTIVE`, así que la contraseña no sirve para entrar aquí, pero sí confirma una contraseña que la persona puede reutilizar en otros sitios. Decidir si se trata igual o si se mantiene el mensaje porque indica a quién acudir.
+
 **Para cerrarla:**
-- **Decisión previa:** revisar D12. Su premisa es que, una vez probada la identidad, el 403 específico ayuda. Quien sondea una cuenta bloqueada no ha probado nada, la está adivinando.
+- **Decisión previa:** revisar D12 con las opciones de arriba. Su premisa es que, una vez probada la identidad, el 403 específico ayuda. Quien sondea una cuenta bloqueada no ha probado nada, la está adivinando.
 - **Arreglo propuesto:** comprobar `isLockedAt()` en `checkPreAuth`, antes de verificar, y responder el 401 uniforme detrás de `PreIdentityTimingFloor`. El dueño ya se entera por el correo de `NotifyLockedIdentities`. Coste: el usuario legítimo pierde el mensaje "cuenta bloqueada" en la puerta.
 - **Tests:** un escenario Behat en `login.feature` donde una cuenta bloqueada con la contraseña correcta reciba 401 `unauthorized`, no 403. Revisar los escenarios que hoy esperan `account-locked` tras credenciales correctas.
 - **Relacionado, sin medir:** la clave de `login_throttling` es el usuario tal como se escribió, en minúsculas, mientras que `Email` también quita espacios de los extremos y caracteres de anchura cero y normaliza a NFC. Varias grafías de la misma identidad pueden tener cada una su propio contador. Medirlo y, si se confirma, canonicalizar la clave igual que `Email`.
