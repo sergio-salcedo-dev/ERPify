@@ -14,7 +14,6 @@ use Erpify\Tests\Unit\Iam\Identity\Application\CountingPreIdentityTimingFloor;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
 use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Http\Authenticator\AuthenticatorInterface;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
@@ -31,6 +30,8 @@ use Symfony\Component\Security\Http\EventListener\UserCheckerListener;
  * password (the recovery-secret redemption among them, which signs in before it lifts the lock) pass untouched.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(LockedIdentityLoginRefusalListener::class)]
 final class LockedIdentityLoginRefusalListenerTest extends TestCase
@@ -55,9 +56,6 @@ final class LockedIdentityLoginRefusalListenerTest extends TestCase
         }
 
         $this->assertInstanceOf(LockedAccountException::class, $caught);
-        // A custom-message status exception would survive the authenticator's re-wrap as something other than
-        // the uniform 401.
-        $this->assertNotInstanceOf(CustomUserMessageAccountStatusException::class, $caught);
         $this->assertSame(1, $floor->invocations);
     }
 

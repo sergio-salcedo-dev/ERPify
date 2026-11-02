@@ -128,6 +128,7 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
         $this->suspendedEmail = \sprintf('opacity-suspended-%s@erpify.test', \str_replace('-', '', $suspendedId));
         $suspended = User::register($suspendedId, $this->suspendedEmail, HashedPassword::fromHash($hash), Role::VIEWER);
         $suspended->suspend();
+
         $users->save($suspended);
 
         $deactivatedId = Uuid::generate();
@@ -139,6 +140,7 @@ final class LoginPreIdentityOpacityFunctionalTest extends WebTestCase
             Role::VIEWER,
         );
         $deactivated->deactivate();
+
         $users->save($deactivated);
 
         $lockedId = Uuid::generate();

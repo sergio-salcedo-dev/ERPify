@@ -29,6 +29,8 @@ use Symfony\Component\Security\Core\User\UserInterface;
  * `ACTIVE` identity reaches a password check, and nothing is left for after it.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(UserChecker::class)]
 final class UserCheckerTest extends TestCase
@@ -42,7 +44,7 @@ final class UserCheckerTest extends TestCase
     }
 
     /**
-     * @param Closure(): User                       $identity
+     * @param Closure(): User                      $identity
      * @param class-string<AccountStatusException> $wall
      */
     #[DataProvider('provideEveryNonActiveStatusIsWalledBeforeVerificationAndPaysTheFloorCases')]
@@ -55,12 +57,12 @@ final class UserCheckerTest extends TestCase
         try {
             (new UserChecker($floor))->checkPreAuth(new SecurityUser($identity()));
             $this->fail('The identity was admitted to a password check.');
-        } catch (AccountStatusException $refusal) {
-            $this->assertInstanceOf($wall, $refusal);
+        } catch (AccountStatusException $accountStatusException) {
+            $this->assertInstanceOf($wall, $accountStatusException);
             // A custom-message status exception survives the authenticator's re-wrap and reaches the wire as
             // something other than the uniform 401, so a wall raising one would answer differently from a wrong
             // password and confirm the guess.
-            $this->assertNotInstanceOf(CustomUserMessageAccountStatusException::class, $refusal);
+            $this->assertNotInstanceOf(CustomUserMessageAccountStatusException::class, $accountStatusException);
         }
 
         $this->assertSame(1, $floor->invocations);
