@@ -70,18 +70,11 @@ updates:
     #
     # Membership is what breaks together: rector/rector on that measurement, the
     # phpstan-* extensions and extension-installer because they exist only to
-    # plug into phpstan, and phpstan/phpdoc-parser because the phar bundles its
-    # own copy but any tool loading the phar under the project autoloader
-    # (rector) gets api/vendor's classes instead. Measured: phpstan 2.3.4,
-    # built against phpdoc-parser 2.4.0, with vendor still at 2.3.6 (#1166)
-    # fails every file in php.rector.dry-run with a TypeError —
-    # CallableTypeNode::__construct() handed a FullyQualifiedNameNode, a class
-    # 2.3.x does not have. Neither constraint refuses it: phpdoc-parser is
-    # not a requirement of the phpstan package at all. Deliberately OUT:
-    # deptrac/deptrac — which carries the loosest bound (^2.0) and so is the
-    # most exposed, but is an independent tool on its own cadence; it is named
-    # here rather than grouped, and is the first candidate if this class bites
-    # again.
+    # plug into phpstan. Deliberately OUT: phpstan/phpdoc-parser (a production
+    # library that constrains phpstan not at all) and deptrac/deptrac — which
+    # carries the loosest bound of the five (^2.0) and so is the most exposed,
+    # but is an independent tool on its own cadence; it is named here rather
+    # than grouped, and is the first candidate if this class bites again.
     #
     # Re-derive the exposure before trusting this list:
     #   jq -r '[.packages,."packages-dev"]|flatten|.[]
@@ -92,7 +85,6 @@ updates:
         patterns:
           - "phpstan/phpstan"
           - "phpstan/phpstan-*"
-          - "phpstan/phpdoc-parser"
           - "phpstan/extension-installer"
           - "rector/rector"
       phpstan-rector-security:
@@ -100,7 +92,6 @@ updates:
         patterns:
           - "phpstan/phpstan"
           - "phpstan/phpstan-*"
-          - "phpstan/phpdoc-parser"
           - "phpstan/extension-installer"
           - "rector/rector"
 
