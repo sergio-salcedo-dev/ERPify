@@ -297,12 +297,14 @@ jobs:
           echo "=== messenger_worker (last 50 lines) ==="; docker compose logs --tail=50 messenger_worker || true
 
   # -------------------------
-  # STATIC (ShellCheck + the ERPify Semgrep rules — no stack, no application image)
+  # STATIC (ShellCheck, the ERPify Semgrep rules, the composer advisory check — no stack,
+  # no application image)
   # -------------------------
-  # One job rather than two because each takes seconds and a job is billed by the
-  # started minute: apart they were 7 s and 33 s, billed 1 min each, ~630 min a
-  # month for 40 s of work. They share nothing but the checkout, and ShellCheck runs
-  # first so its gating verdict never waits on the scanner.
+  # One job rather than three because each takes seconds and a job is billed by the
+  # started minute: ShellCheck and Semgrep apart were 7 s and 33 s, billed 1 min each,
+  # ~630 min a month for 40 s of work. They share nothing but the checkout, and ShellCheck
+  # runs first so its gating verdict never waits on the scanner. The advisory check needs
+  # the network (a ghcr.io pull plus the advisory feed), so it runs last.
   static:
     name: Static (ShellCheck + Semgrep + advisories)
     runs-on: ubuntu-latest
@@ -330,13 +332,6 @@ jobs:
       - name: Lint tracked shell scripts
         run: make shell.lint
 
-      # Reads only api/composer.lock, so it needs neither the php image nor a built stack
-      # and starts with the job. A new advisory on a package the lock already pins turns
-      # every run red whatever the diff touches; here that verdict arrives in seconds
-      # instead of after the whole api-test leg.
-      - name: Security advisories (composer.lock)
-        run: make composer.check.advisories
-
       # The ruleset is local YAML and the scanner is a pinned container, so this
       # needs neither the registry nor a Semgrep account. It stays out of the
       # php.quality.dry-run sweep because it runs in its own container rather than
@@ -358,6 +353,15 @@ jobs:
         with:
           sarif_file: .semgrep/erpify-rules.sarif
           category: erpify-semgrep
+
+      # Last on purpose: a new advisory on a package the lock already pins turns EVERY run
+      # red whatever the diff touches (as does an unreachable ghcr.io or advisory feed), and a
+      # red step skips the ones after it, so anywhere earlier it would hide the Semgrep verdict
+      # behind an unrelated feed. Reads only api/composer.lock, so it needs neither the php
+      # image nor a built stack. It runs on dependabot pull requests too, where `static` is the
+      # only job: a bump that leaves an advisory standing is red there as well.
+      - name: Security advisories (composer.lock)
+        run: make composer.check.advisories
 
   # -------------------------
   # PWA NODE (isolated, fast)
