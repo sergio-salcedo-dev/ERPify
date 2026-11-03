@@ -9,11 +9,13 @@
     Reuse EncryptionScopeId, Keystore and destroyScope(); do not change the string-oriented
     encrypt/decrypt contract. Sealing under a destroyed scope must throw DekDestroyed: test
     seal, destroy, seal again. DbalKeystore::destroy() writes no tombstone for a scope never
-    minted (it updates zero rows), so a late writer mints a live key: destroying an unminted
-    scope must leave a tombstone, tested by destroy-unminted, seal, expect DekDestroyed, and the
-    boolean it returns must never decide erasure. The stream seal authenticates truncation (a
-    final-chunk marker in the associated data). Measure peak memory on a large input rather than
-    asserting it.
+    minted (it updates zero rows), so a late writer mints a live key: make it an upsert of a
+    destroyed row (kek_version is NOT NULL, so the row carries the current KEK version and a null
+    wrapped_dek), add a reason to the keystore row (aborted-upload or erasure), and test
+    destroy-unminted, seal, expect DekDestroyed. The boolean it returns must never decide
+    erasure. The stream seal authenticates truncation (a final-chunk marker in the associated
+    data) and binds the scope in that data, never a storage path, so a rename needs no re-seal.
+    Measure peak memory on a large input rather than asserting it.
 - id: "doc-2"
   title: Documents bounded context skeleton and storage port
   description: >-
@@ -31,30 +33,38 @@
     GRANT or trigger exists, and none is part of this story). Custody stays readable after key
     destruction and is not claimed tamper-proof against a PostgreSQL administrator. Each
     version is its own aggregate; the first migration carries series_id (the first version's
-    own id) and predecessor_id with a partial UNIQUE on predecessor_id. Decide here which scope
-    seals each free-text field (filename, title, uploader) or forbid it as free text. The port
-    declares no WORM guarantee. Do not reuse ImageStorage or any generic storage port. Register
-    every person-id column (person-reference policy, attribute, detective source) and the
-    Document resource type in the same PR that adds it.
+    own id), predecessor_id with its UNIQUE, a scope_id column (random, never derived from the
+    document id) and Erased in the state enum from the start. Decide here which scope seals each
+    free-text field (filename, title, uploader) or forbid it as free text. The port declares no
+    WORM guarantee. Do not reuse ImageStorage or any generic storage port. Register every
+    person-id column (person-reference policy, attribute, detective source) and the Document
+    resource type in the same PR that adds it.
 - id: "doc-3"
   title: UploadEvidence ingest
   description: >-
     Accept an evidence upload through the Symfony 8.1 resolver and the transport-only
     denormalizer, store it sealed and untransformed via staging, and end in Received with
     digest, metadata and the first custody record (CAP-1). Depends on doc-2. Exposes no read
-    route.
+    route; its acceptance reads through the storage port and the decryptor in a test.
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
     No transport type or caller-supplied path past Infrastructure; add the scan and regression
-    test ADR invariant 6 asks for. Staging on the same mount as the final namespace, synced,
-    row inserted in the transaction that mints the key, then rename; orphan reaper with a
-    liveness lease and a sweep of the final namespace. Idempotency key: the same key with
-    different bytes is a conflict, a replay after Erased returns the tombstone; the key column is
-    a person reference. This story owns the production precondition: before its output holds
-    real documents the stored bytes need an encrypted offsite backup, digest verification and a
-    proven restore of originals and metadata (SPEC Constraints); record who proved it. Needs the
-    retention and legal-basis vocabulary decided. Put the misfiling question to the user.
+    test ADR invariant 6 asks for. Order: a durable upload-intent record (scope id, actor, lease,
+    heartbeat) before any byte is sealed; the seal commits on its own and no transaction spans the
+    stream; staging on the same mount as the final namespace, synced; one short transaction
+    asserts the lease is live and the scope not tombstoned under the keystore lock, inserts the
+    Received row and seq 1, and commits; then rename, sync the final directory, and only then
+    dispatch the scan message. A committed row owns its staged object: the reaper acts on
+    intents and never reaps a scope that has a row, and a crash between commit and rename is
+    recovered by a sweep that rolls the promotion forward, never by the reaper. Idempotency key:
+    the same key with different bytes is a conflict, a replay after Erased returns the tombstone,
+    the loser of a concurrent replay cleans its own intent, and consider an early probe at intent
+    time; the key column is a person reference. This story owns the production precondition:
+    before its output holds real documents the stored bytes need an encrypted offsite backup,
+    digest verification and a proven restore of originals and metadata (SPEC Constraints); record
+    who proved it and where the proof lives. Needs the retention and legal-basis vocabulary
+    decided. Put the misfiling question to the user.
 - id: "doc-4"
   title: Scan and readiness gate
   description: >-
@@ -65,22 +75,29 @@
   done_checkpoint: true
   invoke_dev_with: >-
     Needs the scanner, scan-versus-seal and retry-cap decisions. Compare-and-set on every
-    transition, carrying the lease token or attempt number so a verdict from a superseded lease
-    is dropped. Count retries on the snapshot; custody records the lease claim and the verdict,
-    not each failed attempt. The scanner gets a decrypt stream only, never a file or spool;
-    measure its size limit against the largest supported original and end in ScanFailed, never
-    Ready, beyond it. Add the stuck-document alarm. A schedule is dead until a worker consumes it.
+    transition, carrying a monotonic lease_epoch (incremented on every claim and operator reset,
+    never reset, independent of the retry counter); the lease expiry is itself a compare-and-set
+    on the stale epoch. Count retries on the snapshot; custody records the first claim, the
+    verdict and the operator decision, and a lease return or re-claim writes no custody row.
+    Whichever scan order is chosen, no plaintext reaches a disk file or a spool; measure the
+    scanner's size limit against the largest supported original and end in ScanFailed, never
+    Ready, beyond it. A lost scan message is re-driven by a sweep over Received rows older than a
+    bound, and a Received row whose object is not yet in the final namespace is not scanned and
+    does not burn an attempt. Add the stuck-document alarm. A schedule is dead until a worker
+    consumes it. Test that Erased rejects a verdict from a live lease.
 - id: "doc-5"
   title: Audited read path
   description: >-
     Serve a Ready document through a route that declares its voter, refuses other states and
-    writes an audit row (CAP-9). Depends on doc-4. Not served for real documents before doc-3's
-    backup and restore proof exists.
+    writes an audit row (CAP-9). Depends on doc-4. Does not serve real documents before doc-3's
+    backup and restore proof exists and before doc-7 ships, or a documented operator procedure
+    for subject erasure requests exists until then.
   invoke_dev_with: >-
     Mirror the hardening of ImageGetController (nosniff, locked-down CSP, no media type taken
     on trust). The route is a conscious frontier decision: voter, not a public route. A Ready
     document whose bytes are missing or fail digest verification fails closed with a defined
-    problem type and an alarm.
+    problem type and an alarm. Refuse to enable the route outside dev and test unless the proof
+    recorded by doc-3 exists; the done checkpoint cites it.
 - id: "doc-6"
   title: Custody trail listing and document metadata
   description: >-
@@ -91,8 +108,9 @@
   title: Erasure by key destruction
   description: >-
     Erase a document from any non-terminal state by destroyScope(), keeping digest and custody
-    (CAP-4); record the digest residual in the security checklist. Depends on doc-6 and on
-    doc-1's tombstone fix. Blocked on the key-resurrection question.
+    (CAP-4); record the digest residual in the security checklist. Depends on doc-4 (states and
+    lease), doc-6 and doc-1's tombstone fix. Blocked on the key-resurrection question and on
+    the operator-surface question.
   done_checkpoint: true
   invoke_dev_with: >-
     Owes a recorded adversarial pass. Needs the key-resurrection-on-restore question answered
@@ -100,8 +118,10 @@
     transition, its custody row and the key destruction commit together or are re-drivable from a
     recorded intent; write a scenario for a crash at each point. Erased is decided by the
     aggregate's compare-and-set, never by destroyScope()'s boolean, and a repeat appends no
-    custody row. Erasure must not wait on a scan. Lock order is document, then keystore. No
-    person event on a persisted transport. Doc-9 amends this use case to iterate every version.
+    custody row. The tombstone reconciler is driven by Document rows: a non-Erased row whose
+    scope is tombstoned is an alarm whatever the ledger says. Erasure must not wait on a scan.
+    Lock order is document, then keystore. No person event on a persisted transport. Doc-9 amends
+    this use case to iterate every version.
 - id: "doc-8"
   title: Dependent derivatives through the images module
   description: >-
@@ -118,18 +138,22 @@
   title: Document versioning
   description: >-
     A new version is a new immutable original linked to its predecessor, with erased nodes
-    kept as readable tombstones (CAP-7). Depends on doc-7.
+    kept as readable tombstones (CAP-7). Depends on doc-7. Blocked on the version-slot and
+    subject-erasure-over-versions questions.
   invoke_dev_with: >-
     Touches erasure semantics, so it owes a recorded adversarial pass. Each version is its own
-    aggregate (decided); the series is a scalar id plus a read projection. The chain is linear: a
-    new version requires a Ready predecessor and the partial UNIQUE on predecessor_id refuses a
-    fork. Amend doc-7's use case so a subject's erasure iterates every version and re-queries
-    until none remains. A tombstone carries only id and digest.
+    aggregate (decided); the series is a scalar id plus a read projection. The chain is linear:
+    the new-version transaction takes FOR UPDATE on the predecessor after the new bytes are
+    sealed (never across the stream), rechecks Ready, and the UNIQUE on predecessor_id refuses a
+    fork; the loser maps to a conflict and its bytes fall into the aborted-upload class. Amend
+    doc-7's use case so a subject's erasure iterates every version under the fence the open
+    question settles. A tombstone keeps id, digest, series_id, predecessor_id, state and
+    timestamps and nothing that names a person.
 - id: "doc-10"
   title: OCR of scanned PDFs
   description: >-
     Extract searchable text from Ready scanned PDFs as a derivative that dies with its
-    document (CAP-8). Depends on doc-8.
+    document (CAP-8). Depends on doc-4 and doc-8.
   invoke_dev_with: >-
     Reads the original through the same decrypt stream as the scanner: no plaintext written to
     disk or a spool.

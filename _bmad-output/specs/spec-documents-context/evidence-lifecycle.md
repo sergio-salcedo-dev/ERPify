@@ -4,13 +4,13 @@ Logical states of a document and who may act in each. They are not table columns
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Received: UploadEvidence (complete sealed stream, promoted from staging)
+    [*] --> Received: UploadEvidence (row committed with the sealed stream still in staging; renamed to final right after)
     Received --> Scanning: post-commit message claims a lease
     Scanning --> Ready: clean
     Scanning --> Quarantined: infected
     Scanning --> Received: scanner unavailable or lease expired
     Received --> ScanFailed: attempt cap reached
-    ScanFailed --> Received: operator decision (own custody row)
+    ScanFailed --> Received: operator decision (own custody row, resets the retry counter)
     Received --> Erased: destroyScope()
     Scanning --> Erased: destroyScope()
     Ready --> Erased: destroyScope()
@@ -30,6 +30,7 @@ stateDiagram-v2
 
 Invariants over the table:
 
+- **A document is scanned only once its object is in the final namespace.** `Received` is entered when the row commits, before the rename, so the scan message follows the rename and a `Received` row whose object is still staged is rolled forward by a sweep, never scanned and never reaped. A lease return (`Scanning` back to `Received`) and a re-claim write no custody row; the first claim, the verdict and an operator decision do.
 - **No consumer reaches content outside `Ready`.** The gate sits on the aggregate, not in a controller.
 - **Erasure is reachable from every non-terminal state and never waits on a scan.** A subject's erasure with the scanner down must still be satisfiable.
 - **`Erased` is terminal and idempotent.** `destroyScope()` returns false on a repeat and on a scope never minted, so that boolean never decides `Erased`: the aggregate's compare-and-set does, and a repeat appends no custody row. Every state change is a compare-and-set that `Erased` rejects, so a verdict that arrives after erasure is discarded.
