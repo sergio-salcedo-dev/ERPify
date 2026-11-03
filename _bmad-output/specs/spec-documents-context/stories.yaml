@@ -19,8 +19,15 @@
     Amend DbalSubjectErasureReconciler to exclude aborted-upload tombstones and Document
     scopes, with a test that plants one of each and expects unreconciledScopes() empty. The
     stream seal authenticates truncation (a final-chunk marker in the associated data) and binds
-    the scope in that data, never a storage path, so a rename needs no re-seal. Measure peak
-    memory at 100 MiB (MAX_ORIGINAL_BYTES) rather than asserting it.
+    the scope in that data, never a storage path, so a rename needs no re-seal. The final-chunk
+    marker is decided by lookahead, so the seal never emits a final-marked chunk for a stream the
+    counter then rejects at byte MAX_ORIGINAL_BYTES + 1. The unseal refuses a stream with no
+    final-marked chunk (a 0-byte file from a full disk or a partial restore), and the sibling
+    either seals an authenticated empty final chunk or throws on empty input, with a test pinning
+    whichever is chosen. Test at MAX-1, MAX and MAX+1 and at exact multiples of the chunk size
+    (104,857,600 is one for any power-of-two chunk). Measure peak memory at 1 MiB and at
+    MAX_ORIGINAL_BYTES (100 MiB) rather than asserting it, and fix by measurement the bound on
+    the difference.
 - id: "doc-2"
   title: Documents bounded context skeleton and storage port
   description: >-
@@ -80,10 +87,16 @@
     before its output holds real documents the stored bytes need an encrypted offsite backup,
     digest verification and a proven restore of originals and metadata (SPEC Constraints); record
     who proved it and where the proof lives. Needs the retention and legal-basis vocabulary
-    decided. Refuse a zero-length original on the first read, before the intent record exists (no
-    keystore row, no tombstone); abort an upload over MAX_ORIGINAL_BYTES (100 MiB, one constant)
-    while streaming, in the aborted-upload class; make the route's Caddy request_body bound agree
-    with it. Put the misfiling question to the user.
+    decided, and the upload transport (multipart or raw stream). Refuse a zero-length original
+    before the intent record exists (no keystore row, no tombstone). Exactly MAX_ORIGINAL_BYTES
+    (100 MiB, one constant) is accepted and the next byte aborts the upload, counted before each
+    chunk is sealed or staged; the writer that detects the overflow deletes its staged file and
+    expires its own intent, and the upload falls into the aborted-upload class. Size the route's
+    Caddy request_body bound on the original path, in MiB, strictly above the cap plus a stated
+    framing allowance (the 1MB block in the Caddyfile must not also cap it), and raise
+    post_max_size, upload_max_filesize, temp-directory capacity and the request time limit where
+    PHP parses the body. The application counter answers with a Problem Details; a body Caddy cuts
+    off never reads as a complete shorter original. Put the misfiling question to the user.
 - id: "doc-4"
   title: Scan and readiness gate
   description: >-
@@ -93,10 +106,17 @@
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
-    Needs the scanner, scan-versus-seal and retry-policy decisions (the cap value, whether a lease
-    expiry counts). Scanner unavailable burns no attempt; only an error the scanner reports does.
-    The scan lease is renewed by heartbeat, not scaled to size. Once the scanner is chosen, add a
-    gate comparing MAX_ORIGINAL_BYTES with its configured limit and verify that limit. Compare-and-set on every
+    Needs the scanner, scan-versus-seal and retry-policy decisions (the cap value and backoff,
+    whether a lease expiry counts, which scanner failures count and how a reset, a timeout and a
+    crash on the input are classified, a terminal bound independent of that classification, who
+    drives the retry, whether Ready is rescanned). Scanner unavailable burns no attempt. The scan
+    lease is renewed by heartbeat, not scaled to size; the heartbeat is a compare-and-set on
+    state and lease_epoch, and a heartbeat that finds the epoch superseded or the row Erased
+    aborts the scan without counting an attempt, as does DekDestroyed seen mid-scan (an open
+    decrypt stream outlives a destroyed key). The lease expiry predicate is state = Scanning AND
+    lease_epoch = e AND lease_expires_at < NOW(), evaluated inside the UPDATE by the database
+    clock. Once the scanner is chosen, add a gate comparing MAX_ORIGINAL_BYTES with its configured
+    limit and verify that limit. Compare-and-set on every
     transition, carrying a monotonic lease_epoch (incremented on every claim and operator reset,
     never reset, independent of the retry counter); the lease expiry is itself a compare-and-set
     on the stale epoch. Count retries on the snapshot; custody records the first claim, the
@@ -123,7 +143,8 @@
     Mirror the hardening of ImageGetController (nosniff, locked-down CSP, no media type taken
     on trust). The route is a conscious frontier decision: voter, not a public route. A Ready
     document whose bytes are missing or fail digest verification fails closed with a defined
-    problem type and an alarm. Refuse to enable the route outside dev and test unless the proof
+    problem type and an alarm, after re-reading the row: an Erased row answers the gone problem
+    type with no alarm (an erasure can commit between the read's snapshot and its open). Refuse to enable the route outside dev and test unless the proof
     recorded by doc-3 exists; the done checkpoint cites it.
 - id: "doc-6"
   title: Custody trail listing and document metadata
@@ -135,8 +156,8 @@
   title: Erasure by key destruction
   description: >-
     Erase a document from any non-terminal state by destroyScope(), keeping digest and custody
-    (CAP-4); record the digest residual in the security checklist. Depends on doc-4 (states and
-    lease), doc-6 and doc-1's tombstone fix. Blocked on the key-resurrection question and the
+    (CAP-4) and delete its sealed object after commit; record the digest residual in the security
+    checklist. Depends on doc-4 (states and lease), doc-6 and doc-1's tombstone fix. Blocked on the key-resurrection question and the
     operator-surface question.
   done_checkpoint: true
   invoke_dev_with: >-
@@ -146,8 +167,12 @@
     recorded intent; write a scenario for a crash at each point. Erased is decided by the
     aggregate's compare-and-set, never by destroyScope()'s boolean, and a repeat appends no
     custody row. The sealed object of an Erased document is deleted after commit by an
-    idempotent step re-driven by a sweep over Erased rows that still have an object, with an
-    alarm on one older than a bound; a failed delete never rolls the erasure back. The tombstone
+    idempotent step re-driven by a sweep, the single owner of that object: staged path first and
+    then final, ENOENT tolerated on each, a row done only when neither exists, recorded by a
+    nullable timestamp on the snapshot (no custody row) so the sweep does not probe every Erased
+    row for ever. An alarm fires on an object older than a bound measured from the Erased custody
+    row; a failed delete never rolls the erasure back. The sweep is the one deletion in the final
+    namespace and stays disabled during a restore until the ledger is replayed. The tombstone
     reconciler is driven by Document rows: a non-Erased row whose
     scope is tombstoned is an alarm whatever the ledger says. Erasure must not wait on a scan.
     Lock order is document, then keystore. No person event on a persisted transport. Doc-9 amends
@@ -176,7 +201,9 @@
     the predecessor with a voter before sealing, and answer absent and forbidden alike. The chain
     is linear: the new-version transaction takes the new scope's keystore row and then FOR UPDATE
     on the predecessor after the new bytes are sealed (never across the stream), rechecks Ready, and the UNIQUE on predecessor_id refuses a
-    fork; the loser maps to a conflict and its bytes fall into the aborted-upload class. Amend
+    fork; the loser maps to a conflict and its bytes fall into the aborted-upload class. The size
+    bounds of doc-3 (zero-length refusal, MAX_ORIGINAL_BYTES, the body bounds) apply to this
+    path too, since it also seals. Amend
     doc-7's use case so a subject's erasure iterates every version under the fence the open
     question settles. A tombstone keeps id, digest, series_id, predecessor_id, state and
     timestamps and nothing that names a person.
