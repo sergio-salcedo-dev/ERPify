@@ -11,8 +11,12 @@ use Erpify\Tests\Behat\NodeModifier\AbstractNodeModifier;
 use Override;
 
 /**
- * Normalises date-like values (strings, `now`, or `DateTimeInterface` instances) into a
- * formatted timestamp so the compared sides always share the same shape, ignoring seconds.
+ * Normalises date-like values (strings, `now`, or `DateTimeInterface` instances) into an instant
+ * and matches two of them when they lie less than {@see self::TOLERANCE_SECONDS} apart.
+ *
+ * A window, not a truncation: formatting both sides to the minute would answer on which side of a
+ * minute boundary each instant fell, failing a row stamped at `13:02:59` and read at `13:03:00` one
+ * second apart while matching two instants 57 seconds apart inside one minute.
  *
  * Example (Gherkin):
  *   And the JSON node "createdAt::date" should be equal to "now"
@@ -22,6 +26,12 @@ use Override;
  */
 class DateNodeModifier extends AbstractNodeModifier
 {
+    /**
+     * Covers a `"now"` compared against a value the application stamped during the same scenario: the
+     * round trip and nothing more.
+     */
+    public const int TOLERANCE_SECONDS = 5;
+
     #[Override]
     public function getModifier(): string
     {
@@ -78,9 +88,23 @@ class DateNodeModifier extends AbstractNodeModifier
             return null === $expected && null === $value;
         }
 
-        $processedExpected = $this->getProcessedValue($expected, 'Y-m-d H:i');
+        $processedExpected = $this->getProcessedValue($expected);
+        $processedValue = $this->getProcessedValue($value);
 
         return null !== $processedExpected
-            && $processedExpected === $this->getProcessedValue($value, 'Y-m-d H:i');
+            && null !== $processedValue
+            && $this->matches($processedExpected, $processedValue);
+    }
+
+    /**
+     * Receives both sides as {@see getProcessedValue()} rendered them, so a subclass that changes the
+     * rendering changes what is compared here too.
+     */
+    protected function matches(string $expected, string $value): bool
+    {
+        $expectedAt = (new DateTime($expected))->getTimestamp();
+        $valueAt = (new DateTime($value))->getTimestamp();
+
+        return \abs($expectedAt - $valueAt) < self::TOLERANCE_SECONDS;
     }
 }

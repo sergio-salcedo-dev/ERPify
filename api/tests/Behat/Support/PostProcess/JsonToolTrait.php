@@ -7,6 +7,7 @@ namespace Erpify\Tests\Behat\Support\PostProcess;
 use BackedEnum;
 use DateMalformedStringException;
 use DateTime;
+use Erpify\Tests\Behat\NodeModifier\Date\DateNodeModifier;
 use Erpify\Tests\Behat\Support\Json\Json;
 use Erpify\Tests\Behat\Support\Json\JsonInspector;
 use Erpify\Tests\Behat\Support\Json\JsonSchema;
@@ -31,12 +32,10 @@ trait JsonToolTrait
     use PropertyPostProcessTrait;
 
     /**
-     * How far a date node may sit from the expected instant. The steps that use it compare a value the
-     * application stamped against a scenario's `"now"`, so the window has to cover the round trip and
-     * nothing more; the previous arithmetic divided by 60 before comparing against 2, which admitted
-     * anything under two minutes and reported no message when it did not.
+     * How far a date node may sit from the expected instant — the one window the `::date` modifier
+     * applies too, so `"now"` means the same thing in a JSON step and in an entity table.
      */
-    private const int DATE_TOLERANCE_SECONDS = 5;
+    private const int DATE_TOLERANCE_SECONDS = DateNodeModifier::TOLERANCE_SECONDS;
 
     private ?JsonInspector $jsonInspector = null;
 

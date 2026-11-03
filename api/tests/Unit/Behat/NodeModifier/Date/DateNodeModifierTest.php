@@ -17,12 +17,38 @@ use PHPUnit\Framework\TestCase;
 final class DateNodeModifierTest extends TestCase
 {
     #[Test]
-    public function itComparesDatesIgnoringSeconds(): void
+    public function itMatchesTwoInstantsInsideTheToleranceWindow(): void
     {
         $modifier = new DateNodeModifier();
 
-        $this->assertTrue($modifier->compare('2026-04-23 10:00:00', new DateTime('2026-04-23 10:00:45')));
+        $this->assertTrue($modifier->compare('2026-04-23 10:00:00', new DateTime('2026-04-23 10:00:00')));
+        $this->assertTrue($modifier->compare('2026-04-23 10:00:00', new DateTime('2026-04-23 10:00:04')));
+        $this->assertFalse($modifier->compare('2026-04-23 10:00:00', new DateTime('2026-04-23 10:00:05')));
         $this->assertFalse($modifier->compare('2026-04-23 10:00:00', new DateTime('2026-04-23 11:00:00')));
+    }
+
+    #[Test]
+    public function itMatchesTwoInstantsOneSecondApartAcrossAMinuteBoundary(): void
+    {
+        // A row stamped in the last second of a minute and asserted in the first second of the next.
+        $this->assertTrue(
+            (new DateNodeModifier())->compare('2026-11-03 13:02:59', new DateTime('2026-11-03 13:03:00')),
+        );
+    }
+
+    #[Test]
+    public function itRefusesTwoInstantsFarApartInsideOneMinute(): void
+    {
+        $this->assertFalse(
+            (new DateNodeModifier())->compare('2026-11-03 13:02:01', new DateTime('2026-11-03 13:02:58')),
+        );
+    }
+
+    #[Test]
+    public function itMatchesNowAgainstAnInstantStampedAMomentAgo(): void
+    {
+        $this->assertTrue((new DateNodeModifier())->compare('now', new DateTime('-1 second')));
+        $this->assertFalse((new DateNodeModifier())->compare('now', new DateTime('-1 minute')));
     }
 
     #[Test]
