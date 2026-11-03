@@ -101,7 +101,9 @@ ls -lh "$db_file"
 # —— Confirm (destructive) ————————————————————————————————————————————————
 confirm_tty() { # $1 = expected phrase, $2 = prompt
   local expected="$1" prompt="$2"
-  if [[ ! -r /dev/tty ]]; then
+  # Open it rather than test it: `-r` passes on a session that has the device node but no controlling
+  # terminal, and the printf below would then die under `set -e` with a bare "No such device or address".
+  if ! { true < /dev/tty; } 2>/dev/null; then
     log_error "no TTY for confirmation — refusing to run unattended."
     exit 1
   fi
