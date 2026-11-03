@@ -1,8 +1,8 @@
 - id: "doc-1"
   title: Stream-oriented envelope encryption in Shared/Crypto
   description: >-
-    Add the stream sibling of EnvelopeEncryptor so a multi-gigabyte original can be sealed
-    without buffering (CAP-3), and close the destroy-before-mint hole in the keystore. Pure
+    Add the stream sibling of EnvelopeEncryptor so an original can be sealed with peak memory
+    independent of its size (CAP-3), and close the destroy-before-mint hole in the keystore. Pure
     Shared/Crypto, no Documents code yet. No dependency.
   spec_checkpoint: true
   invoke_dev_with: >-
@@ -18,9 +18,9 @@
     into the tombstone upsert or state a sentinel (it is a private constant of the encryptor).
     Amend DbalSubjectErasureReconciler to exclude aborted-upload tombstones and Document
     scopes, with a test that plants one of each and expects unreconciledScopes() empty. The
-    stream seal emits a final empty chunk for a zero-length stream and authenticates truncation (a final-chunk marker in the associated
-    data) and binds the scope in that data, never a storage path, so a rename needs no re-seal.
-    Measure peak memory on a large input rather than asserting it.
+    stream seal authenticates truncation (a final-chunk marker in the associated data) and binds
+    the scope in that data, never a storage path, so a rename needs no re-seal. Measure peak
+    memory at 100 MiB (MAX_ORIGINAL_BYTES) rather than asserting it.
 - id: "doc-2"
   title: Documents bounded context skeleton and storage port
   description: >-
@@ -79,8 +79,11 @@
     otherwise record it as consciously deferred. This story owns the production precondition:
     before its output holds real documents the stored bytes need an encrypted offsite backup,
     digest verification and a proven restore of originals and metadata (SPEC Constraints); record
-    who proved it and where the proof lives. Needs the retention and legal-basis vocabulary and
-    the empty-and-oversize-original question decided. Put the misfiling question to the user.
+    who proved it and where the proof lives. Needs the retention and legal-basis vocabulary
+    decided. Refuse a zero-length original on the first read, before the intent record exists (no
+    keystore row, no tombstone); abort an upload over MAX_ORIGINAL_BYTES (100 MiB, one constant)
+    while streaming, in the aborted-upload class; make the route's Caddy request_body bound agree
+    with it. Put the misfiling question to the user.
 - id: "doc-4"
   title: Scan and readiness gate
   description: >-
@@ -90,13 +93,16 @@
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
-    Needs the scanner, scan-versus-seal and retry-cap decisions. Compare-and-set on every
+    Needs the scanner, scan-versus-seal and retry-policy decisions (the cap value, whether a lease
+    expiry counts). Scanner unavailable burns no attempt; only an error the scanner reports does.
+    The scan lease is renewed by heartbeat, not scaled to size. Once the scanner is chosen, add a
+    gate comparing MAX_ORIGINAL_BYTES with its configured limit and verify that limit. Compare-and-set on every
     transition, carrying a monotonic lease_epoch (incremented on every claim and operator reset,
     never reset, independent of the retry counter); the lease expiry is itself a compare-and-set
     on the stale epoch. Count retries on the snapshot; custody records the first claim, the
     verdict and the operator decision, and a lease return or re-claim writes no custody row.
     Whichever scan order is chosen, no plaintext reaches a disk file or a spool; measure the
-    scanner's size limit against the largest supported original and end in ScanFailed, never
+    scanner's size limit against MAX_ORIGINAL_BYTES and end in ScanFailed, never
     Ready, beyond it (a deterministic failure goes Scanning to ScanFailed without retries; the
     re-scan entry point waits for the operator-surface question). The
     object-in-final-namespace check is part of the claim's compare-and-set predicate. Alarm on
@@ -130,8 +136,8 @@
   description: >-
     Erase a document from any non-terminal state by destroyScope(), keeping digest and custody
     (CAP-4); record the digest residual in the security checklist. Depends on doc-4 (states and
-    lease), doc-6 and doc-1's tombstone fix. Blocked on the key-resurrection question, the
-    operator-surface question and the ciphertext-of-an-Erased-document question.
+    lease), doc-6 and doc-1's tombstone fix. Blocked on the key-resurrection question and the
+    operator-surface question.
   done_checkpoint: true
   invoke_dev_with: >-
     Owes a recorded adversarial pass. Needs the key-resurrection-on-restore question answered
@@ -139,7 +145,10 @@
     transition, its custody row and the key destruction commit together or are re-drivable from a
     recorded intent; write a scenario for a crash at each point. Erased is decided by the
     aggregate's compare-and-set, never by destroyScope()'s boolean, and a repeat appends no
-    custody row. The tombstone reconciler is driven by Document rows: a non-Erased row whose
+    custody row. The sealed object of an Erased document is deleted after commit by an
+    idempotent step re-driven by a sweep over Erased rows that still have an object, with an
+    alarm on one older than a bound; a failed delete never rolls the erasure back. The tombstone
+    reconciler is driven by Document rows: a non-Erased row whose
     scope is tombstoned is an alarm whatever the ledger says. Erasure must not wait on a scan.
     Lock order is document, then keystore. No person event on a persisted transport. Doc-9 amends
     this use case to iterate every version.

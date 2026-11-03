@@ -9,8 +9,8 @@ stateDiagram-v2
     Scanning --> Ready: clean
     Scanning --> Quarantined: infected
     Scanning --> ScanFailed: deterministic failure (over the size limit, unscannable); a verdict, own custody row, no retries
-    Scanning --> Received: scanner unavailable or lease expired
-    Received --> ScanFailed: attempt cap reached
+    Scanning --> Received: scanner unavailable (burns no attempt) or lease expired
+    Received --> ScanFailed: attempt cap reached (scanner-reported errors only)
     ScanFailed --> Received: operator decision (own custody row, resets the retry counter)
     Received --> Erased: destroyScope()
     Scanning --> Erased: destroyScope()
@@ -27,7 +27,7 @@ stateDiagram-v2
 | Ready | yes, via the voter (CAP-9) | may be materialised | the only state a consumer reaches |
 | Quarantined | no | none | infected bytes kept sealed for custody, never served; erasable by an authorised operator |
 | ScanFailed | no | none | unscannable after the attempt cap; erasable, re-scannable only by an operator decision |
-| Erased | no | all deleted | key destroyed; digest and custody record stay |
+| Erased | no | all deleted | key destroyed and the sealed object deleted after commit; digest and custody record stay |
 
 Invariants over the table:
 
@@ -36,6 +36,7 @@ Invariants over the table:
 - **Erasure is reachable from every non-terminal state and never waits on a scan.** A subject's erasure with the scanner down must still be satisfiable.
 - **`Erased` is terminal and idempotent.** `destroyScope()` returns false on a repeat and on a scope never minted, so that boolean never decides `Erased`: the aggregate's compare-and-set does, and a repeat appends no custody row. Every state change is a compare-and-set that `Erased` rejects, so a verdict that arrives after erasure is discarded.
 - **Erasure orders derivative deletion after commit**, through the existing `ImageDeletionRequested` signal; a failure of the image delete retries and never rolls the erasure back. Each retry re-queries by origin, so a derivative created after the first attempt is still found, and the materialisation entry point checks origin liveness in its own transaction and deletes a late arrival. An orphan sweep catches `Image` rows whose origin is erased or absent.
+- **The sealed object of an `Erased` document is deleted after commit.** The delete is idempotent and re-driven by a sweep over `Erased` rows that still have an object, and an alarm fires on one older than a bound; a failed delete never rolls the erasure back.
 - **Sealing under a destroyed scope is refused.** A late writer (a retry, a re-seal) cannot bring an erased document's key back.
 - **The original is never rewritten in any state.** A correction is a new version (CAP-7), not an edit.
 - **A subject's erasure covers every version defined as theirs** (candidate: the uploader; open in `SPEC.md`). Each version has its own scope, so erasure is per document and subject erasure iterates the chain in ascending id; links to an `Erased` node stay readable as tombstones.
