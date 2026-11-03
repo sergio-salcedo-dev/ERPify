@@ -56,12 +56,14 @@ jobs:
 
       - uses: ./.github/actions/docker-setup
 
+      # No `load`: this job exists to fill the layer cache its dependents import, and nothing
+      # here runs an image. Loading would tar each one into the daemon for nobody (php and
+      # messenger_worker share a manifest and would be sent twice).
       - name: Build images
         uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7.5.0
         with:
           source: "."
           pull: true
-          load: true
           files: |
             compose.yaml
             compose.dev.yaml
