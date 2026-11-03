@@ -51,7 +51,6 @@ context:
 - `api/tests/Functional/Shared/Event/EventStoreSubjectAnonymiserFunctionalTest.php` -- semántica actual (caja, claves históricas): debe seguir verde sin tocar las aserciones.
 - `api/tests/Functional/Shared/Audit/AuditPrunePlanFunctionalTest.php` / `.../Event/FailedMessagePrunePlanFunctionalTest.php` -- patrón de test de plan sobre una población sembrada y con `ANALYZE`.
 - `docs/adr/event-store-and-projections.md` D12 -- enmienda: el predicado y su índice, con las cifras medidas y las alternativas descartadas.
-- Scratch de medición: `tmp/dw15/` (BD desechable `dw15_measure`; borrarla al final).
 - `_bmad-output/implementation-artifacts/deferred-work.md` -- DW-13, DW-15, DW-60 se cierran; DW-14 recibe la re-medición. DW-14: `EventStore` solo expone `append`/`stream`; no hay rehidratación ni flag de borrado (trigger sin saltar, 2026-10-23).
 
 ## Tasks & Acceptance
@@ -81,7 +80,7 @@ context:
 
 ## Implementation Notes
 
-- **Re-medición con el extractor final (2026-10-23, 1M de filas, PG 18.6, `tmp/dw15/remeasure.sh` → `remeasure.out`):** la selección coincide con `ILIKE` (`same_rows = t`, 9 filas). `UPDATE` sin índice: 3,40–3,42 s (Seq Scan). Indexado: 9–144 ms, por BitmapOr de los tres índices. Índice de `payload`: 138 MB. Construcción: 32 s + 5,5 s. Inserts de 50k: 1,7–5,7 s sin índice y 8,9–12,0 s con índice. **La variación entre rondas es alta, así que el factor de inserción hay que darlo como rango (unos ×2–×7) y no como ×1,7–2,1.** Estas cifras van al ADR y a la PR en lugar de los `<re-measure>`.
+- **Re-medición con el extractor final (2026-10-23, 1M de filas, PG 18.6):** la selección coincide con `ILIKE` (`same_rows = t`, 9 filas). `UPDATE` sin índice: 3,40–3,42 s (Seq Scan). Indexado: 9–144 ms, por BitmapOr de los tres índices. Índice de `payload`: 138 MB. Construcción: 32 s + 5,5 s. Inserts de 50k: 1,7–5,7 s sin índice y 8,9–12,0 s con índice. **La variación entre rondas es alta, así que el factor de inserción hay que darlo como rango (unos ×2–×7) y no como ×1,7–2,1.** Estas cifras van al ADR y a la PR en lugar de los `<re-measure>`.
 
 - Raíz de trabajo: `/home/dev/Projects/ERPify/.claude/worktrees/shared-gdpr-erasure-residuals-nza3` (worktree de la rama `fix/shared-gdpr-erasure-residuals-nza3`, con su propio stack levantado). Todos los paths y `make` se resuelven ahí, nunca en `/home/dev/Projects/ERPify`. Sin `git commit`/`push`/`stash`. Los SQL de medición están en `/home/dev/Projects/ERPify/tmp/dw15/` (`psql.sh [db]`).
 

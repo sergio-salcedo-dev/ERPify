@@ -113,6 +113,9 @@ pnpm-debug.log*
 /tmp/
 /tmp.old/
 
+# Backups a script takes before it replaces something; unlike tmp/, they must survive a cleanup.
+/.backups/
+
 /next-steps-audit-trail-crosswalk.md
 .bmad-loop/runs/
 .bmad-loop/cache/

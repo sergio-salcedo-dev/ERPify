@@ -460,6 +460,14 @@ Commit (`chore(deps): …`), **push the branch**, and open the PR listing the
 superseded numbers. Per `CLAUDE.md` → "Finishing substantial work means committed
 **and pushed**", a local commit is not a deliverable.
 
+Then empty the scratch the earlier steps wrote — `tmp/` holds only what dies with the task:
+
+```bash
+rm -f tmp/lock-main.json tmp/gate.log tmp/gate-docker.log tmp/gate-compose.log
+```
+
+The exit codes belong in the PR body, which outlives the logs.
+
 **Never merge** — that needs the user's explicit per-PR permission.
 
 **Leave the dependabot PRs open.** Dependabot closes them itself on its next pass
