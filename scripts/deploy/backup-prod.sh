@@ -16,7 +16,8 @@
 #   PROD_ENV_FILE          compose secrets file        (default .env.prod.local)
 #   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/prod-env.sh)
 #   BACKUP_SYNC_CMD        optional offsite hook, run after a successful backup
-#                          (e.g. 'rclone sync /var/backups/erpify remote:erpify-backups')
+#                          (a snapshot tool, never a mirror — see docs/vps-deployment.md § Offsite copy;
+#                          exit 0 must mean the snapshot was committed offsite)
 #
 # Usage: scripts/deploy/backup-prod.sh   (or `make backup.prod`)
 set -euo pipefail
