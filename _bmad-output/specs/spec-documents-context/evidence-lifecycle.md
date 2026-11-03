@@ -10,6 +10,7 @@ stateDiagram-v2
     Scanning --> Quarantined: infected
     Scanning --> Received: scanner unavailable or lease expired
     Received --> ScanFailed: attempt cap reached
+    ScanFailed --> Received: operator decision (own custody row)
     Received --> Erased: destroyScope()
     Scanning --> Erased: destroyScope()
     Ready --> Erased: destroyScope()
@@ -31,7 +32,7 @@ Invariants over the table:
 
 - **No consumer reaches content outside `Ready`.** The gate sits on the aggregate, not in a controller.
 - **Erasure is reachable from every non-terminal state and never waits on a scan.** A subject's erasure with the scanner down must still be satisfiable.
-- **`Erased` is terminal and idempotent.** `destroyScope()` returns false on a repeat, so re-running an erasure is safe. Every state change is a compare-and-set that `Erased` rejects, so a verdict that arrives after erasure is discarded.
+- **`Erased` is terminal and idempotent.** `destroyScope()` returns false on a repeat and on a scope never minted, so that boolean never decides `Erased`: the aggregate's compare-and-set does, and a repeat appends no custody row. Every state change is a compare-and-set that `Erased` rejects, so a verdict that arrives after erasure is discarded.
 - **Erasure orders derivative deletion after commit**, through the existing `ImageDeletionRequested` signal; a failure of the image delete retries and never rolls the erasure back. Each retry re-queries by origin, so a derivative created after the first attempt is still found, and the materialisation entry point checks origin liveness in its own transaction and deletes a late arrival. An orphan sweep catches `Image` rows whose origin is erased or absent.
 - **Sealing under a destroyed scope is refused.** A late writer (a retry, a re-seal) cannot bring an erased document's key back.
 - **The original is never rewritten in any state.** A correction is a new version (CAP-7), not an edit.
