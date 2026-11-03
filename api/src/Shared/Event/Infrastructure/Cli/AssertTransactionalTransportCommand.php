@@ -103,14 +103,12 @@ final class AssertTransactionalTransportCommand extends Command
             static fn (): bool => false,
         );
 
-        if ([] === $schema->getTables()) {
-            return \sprintf(
+        return [] === $schema->getTables()
+            ? \sprintf(
                 'The "%s" transport is a Doctrine transport on a different connection '
                 . 'than the application writes through.',
                 self::TRANSPORT,
-            );
-        }
-
-        return null;
+            )
+            : null;
     }
 }
