@@ -111,6 +111,7 @@ pnpm-debug.log*
 /.superpowers/brainstorm/
 
 /tmp/
+/tmp.old/
 
 /next-steps-audit-trail-crosswalk.md
 .bmad-loop/runs/
