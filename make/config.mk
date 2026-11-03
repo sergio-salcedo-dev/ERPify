@@ -59,6 +59,10 @@ IS_LINKED_WORKTREE := $(shell cd "$(PROJECT_ROOT)" 2>/dev/null && \
 	_c="$$(git rev-parse --git-common-dir 2>/dev/null)" && [ -n "$$_c" ] && \
 	[ "$$(cd "$$_c/.." 2>/dev/null && pwd -P)" != "$$(pwd -P)" ] && echo true)
 
+# Non-empty only for a dev-overlay worktree stack (see below). Elsewhere compose keeps resolving
+# IMAGES_PREFIX from the shell or --env-file, so a prod deploy's registry prefix is untouched.
+DOCKER_IMAGES_PREFIX_ENV :=
+
 ifeq ($(IS_LINKED_WORKTREE),true)
   # Lower-cased dir name, non-alphanumerics → '-', trimmed (e.g. chore+x → chore-x).
   WORKTREE_SLUG := $(shell printf '%s' "$$(basename '$(PROJECT_ROOT)')" \
@@ -75,6 +79,15 @@ ifeq ($(IS_LINKED_WORKTREE),true)
     POSTGRES_PORT   ?= 0
     MAILPIT_UI_PORT ?= 0
     export HTTP_PORT HTTPS_PORT HTTP3_PORT POSTGRES_PORT MAILPIT_UI_PORT
+    # Image names are `${IMAGES_PREFIX:-}app-php-dev` and `…app-pwa-dev` in every checkout, and the
+    # php entrypoint comes from the IMAGE while api/ is bind-mounted from the worktree: one branch
+    # rebuilding the shared tag changes what every other stack boots on its next recreation. A
+    # private tag per worktree ends that. A deliberate IMAGES_PREFIX (shell, command line) wins, as
+    # COMPOSE_PROJECT_NAME does, and is handed on all the same. Not exported, for the reason given
+    # below the block: a nested `make -C` would inherit the caller's prefix. worktree.mk removes
+    # `<slug>-app-{php,pwa}-dev` on teardown by this same rule.
+    IMAGES_PREFIX ?= $(WORKTREE_SLUG)-
+    DOCKER_IMAGES_PREFIX_ENV := IMAGES_PREFIX='$(IMAGES_PREFIX)'
   endif
 else
   COMPOSE_PROJECT_NAME ?= erpify
@@ -137,7 +150,7 @@ ifneq ($(filter $(ENV),prod staging),)
   endif
 endif
 
-DOCKER_COMPOSE := cd $(PROJECT_ROOT) && docker compose -p $(COMPOSE_PROJECT_NAME) $(ENV_FILE_ARGS) $(COMPOSE_FILES)
+DOCKER_COMPOSE := cd $(PROJECT_ROOT) && $(DOCKER_IMAGES_PREFIX_ENV) docker compose -p $(COMPOSE_PROJECT_NAME) $(ENV_FILE_ARGS) $(COMPOSE_FILES)
 DOCKER_COMPOSE_EXEC := $(DOCKER_COMPOSE) exec
 
 # —— PHP exec helpers ——————————————————————————————————————————————————————

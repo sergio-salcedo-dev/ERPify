@@ -118,6 +118,8 @@ docker.up.wait: $(DOCKER_UP_GUARDS) ## Start stack detached with --wait health g
 # service can flap during cold boot (composer install + migrations + dev worker),
 # so on failure we settle briefly and re-run --wait — already-up services just get
 # re-evaluated and pass once php is healthy. A second failure is a real fault.
+# In a linked worktree the image is tagged `<slug>-app-php-dev` (config.mk), so a worktree that has not
+# built yet fails here with a registry `pull access denied`: run `make docker.build` or `make app.dev` first.
 docker.up.wait.no-build: $(DOCKER_UP_GUARDS) ## Start stack detached with --wait, skip rebuild (CI: images already loaded)
 	$(DOCKER_COMPOSE) up --wait --no-build --detach \
 		|| { echo '[docker.up.wait.no-build] first --wait aborted (cold-boot restart); retrying once after settle...'; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach; }
