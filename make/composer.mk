@@ -4,7 +4,8 @@
 # =============================================================================
 
 .PHONY: composer composer.install composer.update composer.upgrade composer.check.all \
-        composer.check.platform-reqs composer.check.missing-deps composer.check.unused
+        composer.check.platform-reqs composer.check.missing-deps composer.check.unused \
+        composer.check.advisories
 
 ## —— Composer ————————————————————————————————————————————————————————————
 
@@ -37,3 +38,13 @@ composer.check.unused: ## Check for unused Composer packages
 				--ignore-exit-code
 
 composer.check.all: composer.check.platform-reqs composer.check.missing-deps composer.check.unused ## Run all composer integrity checks
+
+# The database is FriendsOfPHP/security-advisories, which the checker downloads on every run
+# (the image carries none), so pinning the tag does not freeze the advisories and an offline
+# run exits 127 rather than green. Only the lock file is mounted: no source tree, no secrets,
+# no docker.sock. Deliberately outside composer.check.all, which runs in the php container.
+SECURITY_CHECK_IMAGE ?= ghcr.io/symfony-cli/symfony-cli:v5
+
+composer.check.advisories: ## Check api/composer.lock against known advisories (docker + network)
+	@docker run --rm -v "$(API_ROOT)/composer.lock:/composer.lock:ro" $(SECURITY_CHECK_IMAGE) \
+		security:check --format ansi --dir /composer.lock

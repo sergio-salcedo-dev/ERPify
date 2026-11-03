@@ -142,7 +142,8 @@ Log levels: `debug` in `dev`/`test`, `fingers_crossed` (action level `error`) wi
 make composer c='req symfony/uid'     # install a package
 make composer c='require --dev ...'   # dev dependency
 make composer c='update'              # respect allow-plugins + bump-after-update
-make composer.check.all               # composer-unused + composer-require-checker + security advisories
+make composer.check.all               # composer-unused + composer-require-checker + platform reqs
+make composer.check.advisories        # api/composer.lock against known advisories (docker + network; CI: the Static job)
 ```
 
 **Never** add `symfony/symfony` (it is in `conflict`) to `api/composer.json`.
