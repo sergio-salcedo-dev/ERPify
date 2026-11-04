@@ -1,0 +1,24 @@
+name: API vendor cache
+description: >-
+  Restore api/vendor before the stack starts, so the php entrypoint's `composer install` has
+  nothing (or only the delta) to download. Saved by the first job that finishes green on a miss.
+runs:
+  using: "composite"
+  steps:
+    # api/ is bind-mounted into the php container and the runner starts with an empty vendor/, so
+    # without this the entrypoint downloads every zipball from api.github.com on EVERY cold boot — the
+    # transport failure (composer exit 100) that restarts the container and reads as "php is unhealthy".
+    #
+    # vendor/composer/.lock-content-hash travels with the directory: on an exact hit the entrypoint's
+    # stamp matches composer.lock and it skips the install altogether. On a prefix hit (composer.lock
+    # moved) it installs only the packages that differ, and the job saves the result under the new key.
+    #
+    # Trust: a PR's cache is scoped to its own ref and can only be read from there; the default branch's
+    # entries are written by pushes to main, so a PR cannot plant a vendor/ another ref restores.
+    - name: Restore api/vendor
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: api/vendor
+        key: api-vendor-${{ runner.os }}-${{ hashFiles('api/composer.lock') }}
+        restore-keys: |
+          api-vendor-${{ runner.os }}-

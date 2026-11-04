@@ -109,6 +109,8 @@ jobs:
             php.cache-from=type=gha,scope=php-${{ github.ref_name }}
             php.cache-from=type=gha,scope=php-main
 
+      - uses: ./.github/actions/api-vendor-cache
+
       - name: Start API stack (backend only — no PWA)
         run: make docker.up.wait.no-build.api
 
@@ -197,6 +199,8 @@ jobs:
             php.cache-from=type=gha,scope=php-${{ github.ref_name }}
             php.cache-from=type=gha,scope=php-main
 
+      - uses: ./.github/actions/api-vendor-cache
+
       # Every php.* target execs into the running php container, and the gates that
       # read docs/ or the repo root do it through that service's read-only bind mounts.
       - name: Start API stack (backend only — no PWA)
@@ -258,6 +262,8 @@ jobs:
           set: |
             php.cache-from=type=gha,scope=php-${{ github.ref_name }}
             php.cache-from=type=gha,scope=php-main
+
+      - uses: ./.github/actions/api-vendor-cache
 
       - name: Start API stack (backend only — no PWA)
         run: make docker.up.wait.no-build.api
@@ -448,6 +454,8 @@ jobs:
       - name: Install PWA dependencies (host)
         run: make pwa.install
 
+      - uses: ./.github/actions/api-vendor-cache
+
       - name: Start full stack
         env:
           COMPOSE_PROJECT_NAME: erpify-e2e
@@ -599,6 +607,8 @@ jobs:
 
       - name: Install PWA dependencies (host)
         run: make pwa.install
+
+      - uses: ./.github/actions/api-vendor-cache
 
       - name: Start full stack
         env:
