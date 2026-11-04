@@ -56,7 +56,8 @@ agent.uninstall: ## Disable and remove the systemd user timers
 	@systemctl --user daemon-reload
 	@echo "✓ agent.uninstall: timers removed"
 
-agent.status: ## Show the agent timers and the tail of today's agent log
+agent.status: ## Show the agent timers, open agent PRs against the cap, and the tail of today's log
+	@$(PROJECT_ROOT)/scripts/agent/status.sh || true
 	@systemctl --user list-timers 'erpify-agent-*' --no-pager 2>/dev/null || echo "no erpify-agent timers installed"
 	@tail -n 20 "$${XDG_STATE_HOME:-$$HOME/.local/state}/erpify-agent/logs/$$(date +%Y%m%d).log" 2>/dev/null || echo "no log for today"
 

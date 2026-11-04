@@ -206,7 +206,7 @@ A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clea
 
 ### Unattended agents
 
-`make agent.poll` (issue labelled `agent:claude`/`agent:agy` → PR), `make agent.maintenance` (`scripts/agent/tasks/*.md`), `make agent.review PR=<n>` (read-only second opinion, `agy` by default and not yet exercised live), `make agent.labels.setup`, `make agent.install` / `agent.uninstall` / `agent.status` (systemd user timers, primary checkout only). Agents get no shell, no git and no `gh`; the script commits and opens the PR, and nothing merges. `make agent.selftest` runs the pipeline against a stub engine. Setup, containment and limits: [`runbooks/agent-automation.md`](./runbooks/agent-automation.md).
+`make agent.poll` (issue labelled `agent:claude`/`agent:agy` → PR), `make agent.maintenance` (`scripts/agent/tasks/*.md`), `make agent.review PR=<n>` (read-only second opinion, `agy` by default and not yet exercised live), `make agent.labels.setup`, `make agent.install` / `agent.uninstall` / `agent.status` (systemd user timers, primary checkout only; `status` also prints open agent PRs against the `AGENT_MAX_OPEN_PRS` cap, default 3). Agents get no shell, no git and no `gh`; the script commits and opens the PR, and nothing merges. `make agent.selftest` runs the pipeline against a stub engine. Setup, containment and limits: [`runbooks/agent-automation.md`](./runbooks/agent-automation.md).
 
 ### Merging a green PR
 

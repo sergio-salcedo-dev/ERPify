@@ -68,6 +68,21 @@ check "secret scan: GitHub token" yes "$(truth scan_secrets <<<'x ghp_aaaaaaaaaa
 check "secret scan: private key" yes "$(truth scan_secrets <<<'-----BEGIN OPENSSH PRIVATE KEY-----')"
 check "secret scan: plain prose" no "$(truth scan_secrets <<<'a normal sentence about tokens and keys')"
 
+# The PR budget reads GitHub through `gh`; a stub feeds it a fixed listing.
+gh_dir="$(mktemp -d)"
+printf '#!/usr/bin/env bash\n[[ -f "%s/fail" ]] && exit 1\ncat "%s/prs.json"\n' "$gh_dir" "$gh_dir" >"$gh_dir/gh"
+chmod +x "$gh_dir/gh"
+agent_body="x\\n---\\n$AGENT_PR_MARKER (engine: \`claude\`)."
+budget() { PATH="$gh_dir:$PATH" AGENT_MAX_OPEN_PRS=$1 truth pr_budget_ok; }
+printf '[{"state":"OPEN","body":"%s"},{"state":"OPEN","body":"%s"},{"state":"OPEN","body":"a human PR"},{"state":"OPEN","body":null}]' \
+	"$agent_body" "$agent_body" >"$gh_dir/prs.json"
+check "pr budget: 2 agent PRs open, cap 3 leaves room (human and null-body PRs are not counted)" yes "$(budget 3)"
+check "pr budget: 2 agent PRs open, cap 2 is reached" no "$(budget 2)"
+check "pr budget: cap 0 pauses PR creation" no "$(budget 0)"
+touch "$gh_dir/fail"
+check "pr budget: unreadable GitHub fails closed" no "$(budget 3)"
+rm -rf "$gh_dir"
+
 echo "pipeline (stub engine, real worktrees)"
 write_stub() { # <shell body run inside the worktree> [json the engine prints]
 	# The JSON travels in a file: pasting it into the heredoc lost its quotes.

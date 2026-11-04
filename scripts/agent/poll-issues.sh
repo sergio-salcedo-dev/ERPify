@@ -164,6 +164,9 @@ if ! $DRY_RUN; then
 	done
 fi
 
+# At the cap nothing is claimed: the labelled issue stays queued for a later tick.
+pr_budget_ok || exit 0
+
 for engine in claude agy; do
 	command -v "$engine" >/dev/null 2>&1 || {
 		log "engine '$engine' not installed; skipping its label"
