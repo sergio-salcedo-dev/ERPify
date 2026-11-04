@@ -75,6 +75,11 @@ the wording of the prompt. Each point below was exercised against the real `clau
 
 ## Limits worth knowing
 
+- **The units carry `NoNewPrivileges` and no other sandbox directive.** `PrivateTmp=yes` was measured breaking every
+  `git fetch` over SSH (`Bad owner or permissions on /etc/ssh/ssh_config.d/...`): the first labelled issue failed in three
+  seconds. A sandbox directive is only safe here after `systemd-run --user --pipe --wait -p <directive> git ls-remote origin main`
+  still succeeds. After changing a template, run `make agent.install` again.
+
 - **Read is a deny-list, not a jail.** A path nobody listed is readable, and the agent's text reaches a public PR through
   the script. The token scan catches common credential formats, not every secret. Real isolation would be a container or
   a dedicated OS user; this is not that.
