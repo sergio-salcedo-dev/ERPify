@@ -1,27 +1,18 @@
 {
 	"permissions": {
-		"allow": [
-			"command(git status)",
-			"command(git diff)",
-			"command(git log)",
-			"command(git show)",
-			"command(git blame)",
-			"command(ls)",
-			"command(grep)",
-			"command(rg)"
-		],
+		"allow": [],
 		"deny": [
-			"command(git push)",
-			"command(git commit)",
-			"command(git add)",
-			"command(git reset)",
-			"command(git checkout)",
-			"command(gh)",
-			"command(curl)",
-			"command(wget)",
-			"command(sudo)",
+			"command(*)",
+			"mcp(*)",
 			"read_url(*)",
 			"execute_url(*)",
+			"read_file(~/.ssh/)",
+			"read_file(~/.config/gh/)",
+			"read_file(~/.aws/)",
+			"read_file(~/.gnupg/)",
+			"read_file(~/.claude/)",
+			"read_file(~/.gemini/)",
+			"read_file(~/.local/state/erpify-agent/)",
 			"write_file(*)"
 		]
 	}
