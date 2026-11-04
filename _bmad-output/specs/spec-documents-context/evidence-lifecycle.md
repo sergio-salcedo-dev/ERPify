@@ -5,13 +5,13 @@ Logical states of a document and who may act in each. They are not table columns
 ```mermaid
 stateDiagram-v2
     [*] --> Received: UploadEvidence (row committed with the sealed stream still in staging; renamed to final right after)
-    Received --> Scanning: sweep on next_scan_at (promoted, attempts below the cap), woken by the post-commit message, claims a lease after a scanner health probe
+    Received --> Scanning: sweep on next_scan_at (promoted, both counters below their caps), woken by the post-commit message, claims a lease after a scanner health probe
     Scanning --> Ready: clean
     Scanning --> Quarantined: infected
     Scanning --> ScanFailed: deterministic failure (over the size limit, unscannable); a verdict, own custody row, no retries
-    Scanning --> Received: no verdict (reset, timeout, crash, worker death, lease expiry, deadline; burns an attempt only if streaming had begun and the re-probe finds the scanner up; otherwise it counts an outage return)
+    Scanning --> Received: no verdict (reset, timeout, crash, worker death, lease expiry, deadline; burns an attempt if streaming had begun and the re-probe finds the scanner up; otherwise counts an outage return, the connect failing before the first byte included)
     Scanning --> ScanFailed: attempt cap or outage-return cap reached on a no-verdict return (same compare-and-set as the return)
-    ScanFailed --> Received: operator decision (own custody row, resets the retry counter; a live sibling holding the version slot maps to a conflict)
+    ScanFailed --> Received: operator decision (own custody row, resets both counters; requires a non-Erased predecessor and a free version slot, else a conflict)
     Received --> Erased: destroyScope()
     Scanning --> Erased: destroyScope()
     Ready --> Erased: destroyScope()
@@ -26,12 +26,12 @@ stateDiagram-v2
 | Scanning | no | none | holds a lease; scanning classifies, it never rewrites the byte |
 | Ready | yes, via the voter (CAP-9) | may be materialised | the only state a consumer reaches |
 | Quarantined | no | none | infected bytes kept sealed for custody, never served; erasable by an authorised operator |
-| ScanFailed | no | none | unscannable (a deterministic scanner failure, or the attempt cap reached); erasable, re-scannable only by an operator decision |
+| ScanFailed | no | none | unscannable (a deterministic scanner failure, or the attempt or outage-return cap reached); erasable, re-scannable only by an operator decision |
 | Erased | no | all deleted | key destroyed and the sealed object deleted after commit; digest and custody record stay |
 
 Invariants over the table:
 
-- **A document is scanned only once its object is in the final namespace.** `Received` is entered when the row commits, before the rename, so the scan message follows the rename and a `Received` row whose object is still staged is rolled forward by a sweep, never scanned and never reaped. A lease return (`Scanning` back to `Received`) and a re-claim write no custody row; the first claim since the last operator decision, every verdict (`ScanFailed` by cap or by deterministic failure included) and every operator decision do. The claim's compare-and-set predicate requires `promoted_at` not `NULL` (set after the rename and directory sync, by the writer or by the roll-forward sweep), `scan_attempts` below the cap and `next_scan_at <= NOW()`: a row that fails it is not claimed, no epoch is taken and no attempt is burnt, and a claim whose connect to the scanner fails before the first byte keeps the counter too. A scanner that fails its health probe is the same case: nothing is claimed, so an outage never moves a document toward `ScanFailed`. The roll-forward sweep skips `Erased` rows, whose object belongs to the delete step below, and the missing-object alarm exempts them.
+- **A document is scanned only once its object is in the final namespace.** `Received` is entered when the row commits, before the rename, so the scan message follows the rename and a `Received` row whose object is still staged is rolled forward by a sweep, never scanned and never reaped. A lease return (`Scanning` back to `Received`) and a re-claim write no custody row; the first claim since the last operator decision, every verdict (`ScanFailed` by cap or by deterministic failure included) and every operator decision do. The claim's compare-and-set predicate requires `promoted_at` not `NULL` (set after the rename and directory sync, by the writer or by the roll-forward sweep), `scan_attempts` and `scan_outage_returns` below their caps and `next_scan_at <= NOW()`: a row that fails it is not claimed, no epoch is taken and no attempt is burnt, and a claim whose connect to the scanner fails before the first byte counts an outage return. A scanner that fails its health probe is the same case: nothing is claimed, so an outage never moves a document toward `ScanFailed`. The roll-forward sweep skips `Erased` rows, whose object belongs to the delete step below, and the missing-object alarm exempts them.
 - **No consumer reaches content outside `Ready`.** The gate sits on the aggregate, not in a controller.
 - **Erasure is reachable from every non-terminal state and never waits on a scan.** An erasure with the scanner down must still be satisfiable.
 - **`Erased` is terminal and idempotent.** `destroyScope()` returns false on a repeat and on a scope never minted, so that boolean never decides `Erased`: the aggregate's compare-and-set does, and a repeat appends no custody row. Every state change is a compare-and-set that `Erased` rejects, so a verdict that arrives after erasure is discarded.
