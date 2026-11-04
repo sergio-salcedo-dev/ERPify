@@ -12,4 +12,5 @@ TimeoutStartSec=2h
 Nice=10
 # The agent CLIs write only under the home directory and the state dir; nothing here needs to gain privilege.
 NoNewPrivileges=yes
-PrivateTmp=yes
+# No PrivateTmp=: its namespace makes /etc look owned by nobody,
+# ssh refuses its own system config ("Bad owner or permissions") and every git fetch over SSH fails.
