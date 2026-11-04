@@ -15,7 +15,9 @@
 # Installing the timer (`make agent.install`) is the standing authorization for
 # one branch per task per run; the guard below keeps that to one OPEN PR per
 # task, because the repo's rule is the fewest PRs possible and a weekly task must
-# not pile up unreviewed ones.
+# not pile up unreviewed ones. A second brake, AGENT_MAX_OPEN_PRS (default 3), caps
+# the agent PRs open at once across tasks and the issue poller: each one is a full
+# CI run. Report tasks open no PR and are not counted.
 #
 #   maintenance.sh [--dry-run] [--only <task>]
 # Env: AGENT_TASKS_DIR overrides the task directory (used by the self-test).
@@ -124,6 +126,7 @@ for file in "$TASKS_DIR"/*.md; do
 			log "task $name: could not list open PRs; skipping rather than risk a duplicate"
 			continue
 		fi
+		pr_budget_ok || continue
 	fi
 	if $DRY_RUN; then
 		log "dry-run: would run task=$name engine=$engine mode=$mode type=$type"

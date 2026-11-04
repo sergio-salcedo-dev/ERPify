@@ -81,7 +81,16 @@ the wording of the prompt. Each point below was exercised against the real `clau
 - **CI runs the pushed branch before any human reads it**, as it does for any contributor branch, including the tests and
   application code an agent adds. The protected list keeps the agent away from the files that decide *how* CI runs.
 - **No stack, no local gates.** The agent cannot run `make php.quality` / `make pwa.quality` (no containers). Every PR says
-  so and CI is the gate. A PR spends CI minutes, which is why a maintenance task with an open PR is skipped.
+  so and CI is the gate.
+- **Every PR the automation opens spends a full CI run, so the open count is capped.** `AGENT_MAX_OPEN_PRS` (default 3)
+  is the most agent PRs open at once, across the issue poller and the maintenance tasks. At the cap the poller leaves the
+  issue labelled and queued, and a `pr` task is skipped until someone merges or closes one. `0` pauses PR creation while
+  `report` tasks keep running. An agent PR is recognised by the marker the script stamps in its body, not by its branch
+  name, and an unreadable GitHub counts as "cap reached". To raise it for the timers, run
+  `systemctl --user edit erpify-agent-poll.service` and add `Environment=AGENT_MAX_OPEN_PRS=5`, and the same for the
+  maintenance unit. `make agent.status` prints the open PRs against the cap and, for the last 30 days, how many merged and
+  how many were closed unmerged: the latter ran CI for nothing, and is the number to read before adding a task. No minute
+  figure is quoted because none has been measured; read one off the first PR the automation opens.
 - **A run is not free.** A trivial read-only `claude` call inside this repo (two turns) reported about $0.60 of API-equivalent
   usage, mostly the large `CLAUDE.md` context. A 45-minute edit task costs far more.
 - **`agy` is wired from its documentation and not yet exercised live.** Its `permissions` keys, the `--settings` flag and the
