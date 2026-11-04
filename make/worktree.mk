@@ -168,7 +168,8 @@
 #   grep -nE '[^$]\$\([A-Za-z]' make/worktree.mk | grep -v ':[[:space:]]*#'
 # The leading [^$] is what stops every `$$(cmd)` substitution answering as a false
 # positive, and the second grep drops this comment's own prose. It must return only
-# $(PROJECT_ROOT), $(MAKE), $(shell …), $(call …) and $(worktree_slugify).
+# $(PROJECT_ROOT), $(MAKE), $(shell …), $(call …), $(worktree_slugify) and
+# $(worktree_rm_images).
 #
 # Stale dirs: when a worktree's directory was deleted out-of-band (e.g. an agent
 # `rm -rf`), its stack can't be torn down via `$(MAKE) -C <dir>`. The recipe then
@@ -192,6 +193,13 @@
 # stack. `\n` is kept in the tr set deliberately: the collision check feeds it a
 # LIST, and the original per-value form folded newlines into '-'.
 worktree_slugify = tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9\n' '-' | sed -E 's/^-+|-+$$//g'
+
+# Removes the private images config.mk's IMAGES_PREFIX gave a worktree stack (needs $$slug set).
+# `compose down` leaves them: both carry an explicit `image:`, and `--rmi all` would also go after
+# postgres and mailpit. The names are `<slug>-app-{php,pwa}-dev`, so nothing outside this stack
+# can be holding them; a stack that predates the prefix has none and is skipped silently. One
+# logical line on purpose: make folds a backslash-newline inside a variable.
+worktree_rm_images = for img in "$$slug-app-php-dev" "$$slug-app-pwa-dev"; do docker image inspect "$$img" >/dev/null 2>&1 || continue; docker image rm "$$img" >/dev/null && echo "✓ removed image $$img" || { echo "• image $$img kept; remove it with: docker image rm $$img"; incomplete=1; }; done
 
 worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main; NAME=<dir-base>); a random suffix keeps branch/dir/stack unique; START=true brings its stack up
 	@if [ -z "$$BRANCH" ]; then echo "✗ BRANCH=<branch> required (e.g. BRANCH=feat/backoffice-foo)"; exit 1; fi
@@ -288,6 +296,7 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 					echo "    docker compose -p erpify-$$slug -f compose.yaml -f compose.dev.yaml down --remove-orphans --volumes"; \
 					incomplete=1; \
 				fi; \
+				$(worktree_rm_images); \
 			fi; \
 			rm -rf "$$orphan" || { echo "✗ could not delete $$orphan — root-owned files ('Permission denied' → run 'make worktree.chown' first)"; exit 1; }; \
 			git -C "$$main" worktree prune; \
@@ -316,10 +325,12 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 				|| { echo "• stack erpify-$$slug did NOT come down; after this removal reach it by name with:"; \
 					echo "    docker compose -p erpify-$$slug -f compose.yaml -f compose.dev.yaml down --remove-orphans --volumes"; \
 					incomplete=1; }; \
+			$(worktree_rm_images); \
 		else \
 			echo "→ worktree dir is gone; tearing down stack erpify-$$slug by project name"; \
 			(cd "$$main" && docker compose -p "erpify-$$slug" -f compose.yaml -f compose.dev.yaml down --remove-orphans --volumes) \
 				|| { echo "• stack erpify-$$slug did NOT come down; rerun that compose command by hand"; incomplete=1; }; \
+			$(worktree_rm_images); \
 		fi; \
 		echo "→ removing worktree $$wt"; \
 		git -C "$$main" worktree remove $$wtf "$$wt" || { echo "✗ worktree remove failed — dirty worktree (re-run with FORCE=true) or root-owned files ('Permission denied' → run 'make worktree.chown' first)"; exit 1; }; \

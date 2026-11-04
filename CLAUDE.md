@@ -69,6 +69,8 @@ make ci                             # Full CI (ci.quality + ci.test).
 
 - **Browse a worktree UI (on demand; default is browse-from-`main`)** — `HTTPS_PORT=8443 make docker.up` from inside it (any free port ≠ main's 443; also feeds `DEFAULT_URI`/Mercure so internal URLs stay consistent). Other `*_PORT` vars work the same; `make docker.info` prints the resolved project + ports.
 
+A worktree also gets its own image tags (`<slug>-app-php-dev`, via a derived `IMAGES_PREFIX`), so it must build once (`make app.dev` / `make docker.build`) before any `--no-build` target; `worktree.remove` deletes them.
+
 Full mechanics (ephemeral-port internals, degraded-state recovery) → [`docs/claude-code-quickref.md`](docs/claude-code-quickref.md).
 
 ---
