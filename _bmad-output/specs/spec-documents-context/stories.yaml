@@ -31,104 +31,133 @@
 - id: "doc-2"
   title: Documents bounded context skeleton and storage port
   description: >-
-    Create the context, the Document aggregate shell and its own stream-writing storage port
-    with a first filesystem adapter (CAP-1 groundwork): the document snapshot table and the
-    append-only document_custody table. Depends on doc-1. Blocked on the host-context decision
-    and on the actor pseudonymisation question.
+    Create the top-level Documents context, the Document aggregate shell and its own
+    stream-writing storage port with a first filesystem adapter (CAP-1 groundwork): the document
+    snapshot table and the append-only document_custody table. Depends on doc-1. The host
+    context and the actor route are decided (SPEC).
   spec_checkpoint: true
   invoke_dev_with: >-
     State-oriented Document plus document_custody in one transaction. Load the aggregate under
     the lock (PESSIMISTIC_WRITE or re-read after SELECT ... FOR UPDATE), compute seq inside it,
     UNIQUE (document_id, seq) as second defence with a violation mapped to a retry; seq 1 shares
     the document insert's transaction. A source gate over api/src in the style of
-    SanctionedLogMutationGateTest refuses update/delete of custody rows (no database role,
-    GRANT or trigger exists, and none is part of this story). Custody stays readable after key
-    destruction and is not claimed tamper-proof against a PostgreSQL administrator. Each
-    version is its own aggregate; the first migration carries series_id (the first version's
-    own id), predecessor_id with its UNIQUE, a scope_id column (random, never derived from the
-    document id, with a UNIQUE so two documents never share a scope) and Erased in the state enum from the start. Decide here which scope seals each
-    free-text field (filename, title, uploader) or forbid it as free text. The port declares no
-    WORM guarantee. Do not reuse ImageStorage or any generic storage port. Register every
-    person-id column (person-reference policy, attribute, detective source) and the Document
-    resource type in the same PR that adds it.
+    SanctionedLogMutationGateTest refuses update/delete of custody rows except one sanctioned
+    statement, the actor anonymisation (it rewrites the actor to one constant marker, never a
+    per-subject value, takes custody rows in ascending id inside the lock order and needs an
+    index on the actor; precedent DbalAuditActorAnonymiser): add its line to the gate's
+    SANCTIONED set and write its decision in a Documents ADR for the custody log, created by
+    this story (no database role, GRANT or trigger exists, and none is part of this story).
+    Custody stays readable after key destruction and is not claimed tamper-proof against a
+    PostgreSQL administrator. Each version is its own aggregate; the first migration carries
+    series_id (the first version's own id), predecessor_id with a partial unique index that
+    excludes children in Quarantined, ScanFailed and Erased (the accepted chain is linear,
+    failed attempts are siblings), a scope_id column (random, never derived from the document
+    id, with a UNIQUE so two documents never share a scope) and Erased in the state enum from
+    the start. Decide here which scope seals each free-text field (filename, title) or forbid it
+    as free text; the uploader and the custody actor are person references anonymised by
+    erasure, not sealed fields, and the idempotency hash on the snapshot is nulled by the same
+    erasure. The port declares no WORM guarantee. Do not reuse ImageStorage or any generic
+    storage port. Register every person-id column (person-reference policy, attribute, detective
+    source) and the Document resource type in the same PR that adds it.
 - id: "doc-3"
   title: UploadEvidence ingest
   description: >-
-    Accept an evidence upload through the Symfony 8.1 resolver and the transport-only
-    denormalizer, store it sealed and untransformed via staging, and end in Received with
-    digest, metadata and the first custody record (CAP-1). Depends on doc-2. Exposes no read
-    route; its acceptance reads through the storage port and the decryptor in a test.
+    Accept an evidence upload as a declare step plus a raw-body PUT, store it sealed and
+    untransformed via staging, and end in Received with digest, metadata and the first custody
+    record (CAP-1). Depends on doc-2. Exposes no read route; its acceptance reads through the
+    storage port and the decryptor in a test.
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
-    No transport type or caller-supplied path past Infrastructure; add the scan and regression
-    test ADR invariant 6 asks for. Order: a durable upload-intent record (scope id, actor, lease,
-    heartbeat) before any byte is sealed; the seal commits on its own and no transaction spans the
-    stream; staging on the same mount as the final namespace, synced, with st_dev of the two roots
-    compared at boot (refuse to start otherwise); one short transaction locks the intent row, then
-    the keystore row, asserts the lease is live by the database clock and the scope not tombstoned,
+    Run the transport spike first and measure, do not assume, what FrankenPHP and PHP do with a
+    raw PUT body (the request stream, post_max_size, upload_max_filesize, the temp directory,
+    the request time limit, a 100 MiB body at constant memory). Two steps: the declare step
+    takes the size (and optionally a sha256) and the actor-scoped idempotency key, takes the
+    UNIQUE on that key, refuses a zero or over-MAX_ORIGINAL_BYTES size before any keystore row
+    exists (no tombstone), applies a per-actor rate limit through the existing limiter pattern
+    and creates the upload-intent record; the PUT requires Content-Length (411 otherwise) equal
+    to the declared size and counts bytes to end of stream, and a body that differs aborts into
+    the aborted-upload class. No UploadedFile, transport type or caller-supplied path past
+    Infrastructure or into the Documents tree; add the scan and regression test ADR invariant 6
+    asks for. Order: a durable upload-intent record (scope id, actor, lease, heartbeat) before
+    any byte is sealed; the seal commits on its own and no transaction spans the stream; staging
+    on the same mount as the final namespace, synced, with st_dev of the two roots compared at
+    boot (refuse to start otherwise); one short transaction locks the intent row, then the
+    keystore row, asserts the lease is live by the database clock and the scope not tombstoned,
     inserts the Received row and seq 1, and commits; the reaper locks in the same order and
-    rechecks expiry and the absence of a row under both locks, and a test interleaves the two; then rename, sync the final directory, and only then
-    dispatch the scan message. A committed row owns its staged object: the reaper acts on
-    intents and never reaps a scope that has a row, and a crash between commit and rename is
-    recovered by a sweep that rolls the promotion forward, never by the reaper. A heartbeat that
-    finds its intent gone aborts the writer and deletes its staged file; an age sweep over the
-    staging namespace deletes older orphans; a final object with no row is alarmed on, never
-    deleted. The reaper and the sweeps need a schedule and its transport named in both compose
-    files (a schedule is dead until a worker consumes it). Idempotency key: bytes are compared by
-    digest first, the same key with different bytes is a conflict even against an Erased original,
-    a match against Erased returns the tombstone, the loser of a concurrent replay cleans its own
-    intent (two concurrent first uploads both stream: accepted), and consider an early probe at
-    intent time. The key column and the actor of the upload-intent record are person references:
+    rechecks expiry and the absence of a row under both locks, and a test interleaves the two;
+    then rename, sync the final directory, and only then dispatch the scan message. A committed
+    row owns its staged object: the reaper acts on intents and never reaps a scope that has a
+    row, and a crash between commit and rename is recovered by a sweep that rolls the promotion
+    forward, never by the reaper. A heartbeat that finds its intent gone aborts the writer and
+    deletes its staged file; an age sweep over the staging namespace deletes older orphans; a
+    final object with no row is alarmed on, never deleted. The reaper and the sweeps need a
+    schedule and its transport named in both compose files (a schedule is dead until a worker
+    consumes it). Idempotency key: the declare step takes the UNIQUE, so a concurrent first
+    upload under one key does not stream; bytes are compared by digest first (at the declare
+    step if a digest was declared, else at end of stream), the same key with different bytes is
+    a conflict even against an Erased original, and a match against Erased returns the
+    tombstone. The key column and the actor of the upload-intent record are person references:
     register both in api/.person-reference-policy with #[PersonSubjectReference] and a
-    PersonReferenceSource in this story, and say which scope seals or erases them. Apply the
-    per-actor in-flight quota and rate limit if the tombstone-growth question is decided,
-    otherwise record it as consciously deferred. This story owns the production precondition:
-    before its output holds real documents the stored bytes need an encrypted offsite backup,
-    digest verification and a proven restore of originals and metadata (SPEC Constraints); record
-    who proved it and where the proof lives. Needs the retention and legal-basis vocabulary
-    decided, and the upload transport (multipart or raw stream). Refuse a zero-length original
-    before the intent record exists (no keystore row, no tombstone). Exactly MAX_ORIGINAL_BYTES
-    (100 MiB, one constant) is accepted and the next byte aborts the upload, counted before each
-    chunk is sealed or staged; the writer that detects the overflow deletes its staged file and
-    expires its own intent, and the upload falls into the aborted-upload class. Size the route's
-    Caddy request_body bound on the original path, in MiB, strictly above the cap plus a stated
-    framing allowance (the 1MB block in the Caddyfile must not also cap it), and raise
-    post_max_size, upload_max_filesize, temp-directory capacity and the request time limit where
-    PHP parses the body. The application counter answers with a Problem Details; a body Caddy cuts
-    off never reads as a complete shorter original. Put the misfiling question to the user.
+    PersonReferenceSource in this story, and say which scope seals or erases them. No in-flight
+    quota (deferred, YAGNI); add a keystore tombstone growth metric, and aborted-upload
+    tombstones are never pruned. This story owns the production precondition: before its output
+    holds real documents the stored bytes need an encrypted offsite backup, digest verification
+    and a proven restore of originals and metadata (SPEC Constraints); record who proved it and
+    where the proof lives. Record retention_reason (closed enum), legal_basis (GDPR Article 6
+    enum) and a nullable consumer-supplied review_at, nothing more is enforced. Exactly
+    MAX_ORIGINAL_BYTES (100 MiB, one constant) is accepted at the declare step, a larger
+    declared size is refused there, and a body that runs past its declared size aborts at the
+    first extra byte, counted before each chunk is sealed or staged; the writer that detects the
+    overflow deletes its staged file and expires its own intent, and the upload falls into the
+    aborted-upload class. Scope a Caddy request_body bound to the upload route on the original
+    path, in bytes, equal to the cap (the body is the original, so no framing allowance) and
+    keep the 1MB block in the Caddyfile from also capping it; set the PHP limits only as far as
+    the spike shows they apply. The application counter answers with a Problem Details;
+    Content-Length and the end-of-stream count keep a body Caddy cuts off from reading as a
+    complete shorter original. The misfiling guard is UI-only and not part of this story.
 - id: "doc-4"
   title: Scan and readiness gate
   description: >-
-    Scan after ingest through a leased, retried post-commit message, move to Ready,
-    Quarantined or ScanFailed, and fail closed while the scanner is unavailable (CAP-2).
-    Depends on doc-3.
+    Scan after ingest through a leased, retried post-commit message, move to Ready, Quarantined
+    or ScanFailed, and fail closed while the scanner is unavailable (CAP-2). Depends on doc-3.
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
-    Needs the scanner, scan-versus-seal and retry-policy decisions (the cap value and backoff,
-    whether a lease expiry counts, which scanner failures count and how a reset, a timeout and a
-    crash on the input are classified, a terminal bound independent of that classification, who
-    drives the retry, whether Ready is rescanned). Scanner unavailable burns no attempt. The scan
-    lease is renewed by heartbeat, not scaled to size; the heartbeat is a compare-and-set on
-    state and lease_epoch, and a heartbeat that finds the epoch superseded or the row Erased
-    aborts the scan without counting an attempt, as does DekDestroyed seen mid-scan (an open
-    decrypt stream outlives a destroyed key). The lease expiry predicate is state = Scanning AND
-    lease_epoch = e AND lease_expires_at < NOW(), evaluated inside the UPDATE by the database
-    clock. Once the scanner is chosen, add a gate comparing MAX_ORIGINAL_BYTES with its configured
-    limit and verify that limit. Compare-and-set on every
-    transition, carrying a monotonic lease_epoch (incremented on every claim and operator reset,
-    never reset, independent of the retry counter); the lease expiry is itself a compare-and-set
-    on the stale epoch. Count retries on the snapshot; custody records the first claim, the
-    verdict and the operator decision, and a lease return or re-claim writes no custody row.
-    Whichever scan order is chosen, no plaintext reaches a disk file or a spool; measure the
-    scanner's size limit against MAX_ORIGINAL_BYTES and end in ScanFailed, never
-    Ready, beyond it (a deterministic failure goes Scanning to ScanFailed without retries; the
-    re-scan entry point waits for the operator-surface question). The
-    object-in-final-namespace check is part of the claim's compare-and-set predicate. Alarm on
-    Quarantined and ScanFailed documents older than a bound. A lost scan message is re-driven by a sweep over Received rows older than a
-    bound, and a Received row whose object is not yet in the final namespace is not scanned and
-    does not burn an attempt. Add the stuck-document alarm. A schedule is dead until a worker
+    The scanner is ClamAV, a local clamd container, and the scan decrypts after sealing and
+    streams to clamd. Run the scanner spike first: verify StreamMaxLength, MaxFileSize,
+    MaxScanSize, MaxFiles, MaxRecursion and AlertExceedsMax (exceeding a limit must end in
+    ScanFailed, never clean) and clamd's memory against the VPS, and fix by measurement the
+    provisional constants (attempt cap 3, per-claim deadline 10 minutes, backoff). A health
+    probe runs before the claim and a down scanner leaves Received untouched (no claim, no
+    epoch, no attempt, no custody row). scan_attempts counts claims that began streaming and
+    ended with no verdict (reset, timeout, crash, worker death, lease expiry, deadline) and
+    reaching the cap goes to ScanFailed; Ready is never rescanned. Retries are driven by a sweep
+    on next_scan_at in PostgreSQL, which is authoritative; the Messenger message only wakes it.
+    The scan lease is renewed by heartbeat, not scaled to size; the heartbeat is a
+    compare-and-set on state, lease_epoch and now < claimed_at + deadline, so it cannot extend
+    the deadline, and a heartbeat that finds the epoch superseded or the row Erased aborts the
+    scan without counting an attempt, as does DekDestroyed seen mid-scan (an open decrypt stream
+    outlives a destroyed key). The lease expiry predicate is state = Scanning AND lease_epoch =
+    e AND lease_expires_at < NOW(), evaluated inside the UPDATE by the database clock. Once the
+    scanner is chosen, add a gate comparing MAX_ORIGINAL_BYTES with its configured limit and
+    verify that limit. Compare-and-set on every transition, carrying a monotonic lease_epoch
+    (incremented on every claim and operator reset, never reset, independent of the retry
+    counter); the lease expiry is itself a compare-and-set on the stale epoch. Count retries on
+    the snapshot; custody records the first claim, the verdict and the operator decision, and a
+    lease return or re-claim writes no custody row. Plaintext never reaches persistent storage:
+    clamd's temporary directory is a tmpfs, swap is off, and the tmpfs and memory residual goes
+    to PRODUCTION_SECURITY_CHECKLIST.md section 7 in this story; measure the scanner's size
+    limit against MAX_ORIGINAL_BYTES and end in ScanFailed, never Ready, beyond it (a
+    deterministic failure goes Scanning to ScanFailed without retries). The operator re-scan of
+    a ScanFailed document ships here as an API route behind a voter with a closed-enum reason,
+    never a console command, with entries in api/.route-manifest.json and
+    api/.credential-proof-policy; a re-scan resets scan_attempts and increments lease_epoch (the
+    operator erase route ships with doc-7). The object-in-final-namespace check is part of the
+    claim's compare-and-set predicate. Alarm on Quarantined and ScanFailed documents older than
+    a bound. A lost scan message is re-driven by a sweep over Received rows older than a bound,
+    and a Received row whose object is not yet in the final namespace is not scanned and does
+    not burn an attempt. Add the stuck-document alarm. A schedule is dead until a worker
     consumes it. Test that Erased rejects a verdict from a live lease.
 - id: "doc-5"
   title: Audited read path
@@ -156,27 +185,31 @@
   title: Erasure by key destruction
   description: >-
     Erase a document from any non-terminal state by destroyScope(), keeping digest and custody
-    (CAP-4) and delete its sealed object after commit; record the digest residual in the security
-    checklist. Depends on doc-4 (states and lease), doc-6 and doc-1's tombstone fix. Blocked on the key-resurrection question and the
-    operator-surface question.
+    (CAP-4) and delete its sealed object after commit; record the digest residual in the
+    security checklist. Depends on doc-4 (states and lease), doc-6 and doc-1's tombstone fix.
+    Blocked on the ledger adapter, chosen with the backup and restore policy.
   done_checkpoint: true
   invoke_dev_with: >-
-    Owes a recorded adversarial pass. Needs the key-resurrection-on-restore question answered
-    (write-ahead erasure ledger, replay through this use case, restore step). The Erased
-    transition, its custody row and the key destruction commit together or are re-drivable from a
-    recorded intent; write a scenario for a crash at each point. Erased is decided by the
+    Owes a recorded adversarial pass. Implements the decided erasure ledger (properties in SPEC;
+    its adapter is chosen with the backup and restore policy, which blocks this story): written
+    synchronously off the VPS before destroyScope(), completed by a per-scope sweep with an
+    alarm, replayed through this use case, a restore step in restore.prod, and a real restore
+    drill proving the key does not return. The operator erase route for a Quarantined or
+    ScanFailed document ships here, behind a voter, with a closed-enum reason. The Erased
+    transition, its custody row and the key destruction commit together or are re-drivable from
+    a recorded intent; write a scenario for a crash at each point. Erased is decided by the
     aggregate's compare-and-set, never by destroyScope()'s boolean, and a repeat appends no
     custody row. The sealed object of an Erased document is deleted after commit by an
     idempotent step re-driven by a sweep, the single owner of that object: staged path first and
     then final, ENOENT tolerated on each, a row done only when neither exists, recorded by a
     nullable timestamp on the snapshot (no custody row) so the sweep does not probe every Erased
-    row for ever. An alarm fires on an object older than a bound measured from the Erased custody
-    row; a failed delete never rolls the erasure back. The sweep is the one deletion in the final
-    namespace and stays disabled during a restore until the ledger is replayed. The tombstone
-    reconciler is driven by Document rows: a non-Erased row whose
-    scope is tombstoned is an alarm whatever the ledger says. Erasure must not wait on a scan.
-    Lock order is document, then keystore. No person event on a persisted transport. Doc-9 amends
-    this use case to iterate every version.
+    row for ever. An alarm fires on an object older than a bound measured from the Erased
+    custody row; a failed delete never rolls the erasure back. The sweep is the one deletion in
+    the final namespace and stays disabled during a restore until the ledger is replayed. The
+    tombstone reconciler is driven by Document rows: a non-Erased row whose scope is tombstoned
+    is an alarm whatever the ledger says. Erasure must not wait on a scan. Lock order is
+    document, then keystore. No person event on a persisted transport. Doc-9 amends this use
+    case to iterate every version.
 - id: "doc-8"
   title: Dependent derivatives through the images module
   description: >-
@@ -192,26 +225,29 @@
 - id: "doc-9"
   title: Document versioning
   description: >-
-    A new version is a new immutable original linked to its predecessor, with erased nodes
-    kept as readable tombstones (CAP-7). Depends on doc-7. Blocked on the version-slot and
-    subject-erasure-over-versions questions.
+    A new version is a new immutable original linked to its predecessor, with erased nodes kept
+    as readable tombstones (CAP-7). Depends on doc-7. The version slot and the erasure semantics
+    are decided (SPEC).
   invoke_dev_with: >-
     Touches erasure semantics, so it owes a recorded adversarial pass. Each version is its own
-    aggregate (decided); the series is a scalar id plus a read projection. Authorise the caller on
-    the predecessor with a voter before sealing, and answer absent and forbidden alike. The chain
-    is linear: the new-version transaction takes the new scope's keystore row and then FOR UPDATE
-    on the predecessor after the new bytes are sealed (never across the stream), rechecks Ready, and the UNIQUE on predecessor_id refuses a
-    fork; the loser maps to a conflict and its bytes fall into the aborted-upload class. The size
-    bounds of doc-3 (zero-length refusal, MAX_ORIGINAL_BYTES, the body bounds) apply to this
-    path too, since it also seals. Amend
-    doc-7's use case so a subject's erasure iterates every version under the fence the open
-    question settles. A tombstone keeps id, digest, series_id, predecessor_id, state and
-    timestamps and nothing that names a person.
+    aggregate (decided); the series is a scalar id plus a read projection. Authorise the caller
+    on the predecessor with a voter before sealing, and answer absent and forbidden alike. The
+    chain is linear: the new-version transaction takes the new scope's keystore row and then FOR
+    UPDATE on the predecessor after the new bytes are sealed (never across the stream), rechecks
+    Ready, and the partial unique index on predecessor_id (excluding children in Quarantined,
+    ScanFailed and Erased) refuses a second live child; the loser maps to a conflict and its
+    bytes fall into the aborted-upload class. The size bounds of doc-3 (zero-length refusal,
+    MAX_ORIGINAL_BYTES, the body bounds) apply to this path too, since it also seals. Add series
+    erasure to doc-7's use case as a repeatable operator action (each non-Erased version in its
+    own transaction, newest first, reporting what remains); a person's erasure touches no
+    document and anonymises references only. The series projection orders by creation. A
+    tombstone keeps id, digest, series_id, predecessor_id, state and timestamps and nothing that
+    names a person.
 - id: "doc-10"
   title: OCR of scanned PDFs
   description: >-
-    Extract searchable text from Ready scanned PDFs as a derivative that dies with its
-    document (CAP-8). Depends on doc-4 and doc-8.
+    Extract searchable text from Ready scanned PDFs as a derivative that dies with its document
+    (CAP-8). Depends on doc-4 and doc-8.
   invoke_dev_with: >-
-    Reads the original through the same decrypt stream as the scanner: no plaintext written to
-    disk or a spool.
+    Reads the original through the same decrypt stream as the scanner: no plaintext on
+    persistent storage (a tmpfs for tool temp files, swap off).
