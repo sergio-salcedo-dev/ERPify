@@ -204,6 +204,10 @@ A `SessionStart` hook in `.claude/settings.json` runs it with `--quiet-when-clea
 
 `/local-generate-handoff [focus]` (`.claude/commands/local-generate-handoff.md`) writes a resumable handoff to `_bmad-output/handoffs/<scope>/<task>/<YYYYMMDD-HHMMSS>-<slug>.md`, commits only that file and pushes the current branch, so the next session can continue from any machine or a fresh cloud container. On `main` it commits nothing and falls back to the gitignored `tmp/bmad-md/`. `/local-resume-handoff [<scope>[/<task>] | <branch>]` (`.claude/commands/local-resume-handoff.md`) fetches, finds the newest handoff across origin's branches, checks its branch out in a worktree and resumes from it. The repository is public: a handoff carries no secret and no person's data.
 
+### Unattended agents
+
+`make agent.poll` (issue labelled `agent:claude`/`agent:agy` → PR), `make agent.maintenance` (`scripts/agent/tasks/*.md`), `make agent.review PR=<n>` (read-only second opinion by `agy`), `make agent.labels.setup`, `make agent.install` / `agent.uninstall` / `agent.status` (systemd user timers, primary checkout only). Agents get no git write and no `gh`; the script commits and opens the PR, and nothing merges. Setup, containment and limits: [`runbooks/agent-automation.md`](./runbooks/agent-automation.md).
+
 ### Merging a green PR
 
 `/merge-when-green <pr> [--remove-worktree]` (`.claude/commands/merge-when-green.md`) squash-merges one pull request once every check in `statusCheckRollup` is green and SonarCloud's quality gate for that PR reads `OK`, pinned with `--match-head-commit` to the head it verified, so a push landing between the check and the merge fails the merge instead of shipping an unseen head. Invoking it is the per-merge permission `CLAUDE.md` requires, for that PR only. `--remove-worktree` audits the PR's worktree before removing it (clean tree, local tip contained in `refs/pull/<n>/head`) and clears root-owned bind-mount residue with a container scoped to the exact directory.

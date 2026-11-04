@@ -1,0 +1,5 @@
+# GitHub logins allowed to drive an unattended agent, one per line.
+# An issue is run only when its AUTHOR and the person who applied the agent:*
+# label are both listed here: the repository is public, and an issue body is the
+# prompt. A PR review (review-pr.sh) is likewise refused for other authors.
+sergio-salcedo-dev

@@ -1,0 +1,12 @@
+[Unit]
+Description=ERPify unattended agent: pick up one agent:* labelled issue
+# A long engine run holds the flock; a second tick exits immediately.
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+# systemd user units get a minimal PATH; the agent CLIs live under the home directory.
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@REPO@/scripts/agent/poll-issues.sh
+TimeoutStartSec=2h
+Nice=10

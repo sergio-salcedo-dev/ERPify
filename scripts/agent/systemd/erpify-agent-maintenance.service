@@ -1,0 +1,10 @@
+[Unit]
+Description=ERPify unattended agent: scheduled maintenance tasks
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=@REPO@/scripts/agent/maintenance.sh
+TimeoutStartSec=4h
+Nice=10

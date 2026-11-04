@@ -1,0 +1,28 @@
+{
+	"permissions": {
+		"allow": [
+			"command(git status)",
+			"command(git diff)",
+			"command(git log)",
+			"command(git show)",
+			"command(git blame)",
+			"command(ls)",
+			"command(grep)",
+			"command(rg)"
+		],
+		"deny": [
+			"command(git push)",
+			"command(git commit)",
+			"command(git add)",
+			"command(git reset)",
+			"command(git checkout)",
+			"command(gh)",
+			"command(curl)",
+			"command(wget)",
+			"command(sudo)",
+			"read_url(*)",
+			"execute_url(*)",
+			"write_file(*)"
+		]
+	}
+}
