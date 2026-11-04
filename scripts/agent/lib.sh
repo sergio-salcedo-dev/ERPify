@@ -61,6 +61,17 @@ AGENT_MAX_CHANGED_FILES="${AGENT_MAX_CHANGED_FILES:-60}"
 AGENT_MAX_DIFF_BYTES="${AGENT_MAX_DIFF_BYTES:-2000000}"
 # Opt-out knob for the self-test: commit locally, skip push and PR.
 AGENT_NO_PUSH="${AGENT_NO_PUSH:-0}"
+# Every PR the automation opens runs the full CI, so the budget is a number of
+# OPEN agent PRs, not of runs. 0 pauses PR creation without uninstalling the timers.
+AGENT_MAX_OPEN_PRS="${AGENT_MAX_OPEN_PRS:-3}"
+[[ $AGENT_MAX_OPEN_PRS =~ ^[0-9]+$ ]] || {
+	echo "AGENT_MAX_OPEN_PRS must be a non-negative integer, got '$AGENT_MAX_OPEN_PRS'" >&2
+	exit 1
+}
+# Stamped into every PR body by run_task and read back to tell an agent PR from a
+# human one: a branch name cannot, `chore/agent-automation-*` being a human's.
+# shellcheck disable=SC2016 # the backticks are literal Markdown, not command substitution
+AGENT_PR_MARKER='Opened unattended by `scripts/agent`'
 
 mkdir -p "$LOG_DIR" "$REPORT_DIR" "$WORK_DIR"
 LOG_FILE="${LOG_FILE:-$LOG_DIR/$(date +%Y%m%d).log}"
@@ -112,6 +123,35 @@ acquire_lock() {
 		exit 0
 	} ;;
 	esac
+}
+
+# agent_pr_stats <open|all> [since-date] prints "open merged closed" for the PRs
+# carrying the marker (created on or after the date when given). Returns 1 when
+# GitHub cannot be read, so callers fail closed. The listing is capped at 200 PRs,
+# newest first, which `open` never hits in practice and `all` can.
+agent_pr_stats() {
+	local state=${1:?state} since=${2:-} json
+	local -a args=(--state "$state" --limit 200 --json "state,body")
+	[[ -z $since ]] || args+=(--search "created:>=$since")
+	json="$(gh pr list "${args[@]}")" || return 1
+	jq -r --arg m "$AGENT_PR_MARKER" '
+		[.[] | select((.body // "") | contains($m))] as $a
+		| "\([$a[] | select(.state == "OPEN")] | length) \([$a[] | select(.state == "MERGED")] | length) \([$a[] | select(.state == "CLOSED")] | length)"' <<<"$json"
+}
+
+# pr_budget_ok: 0 while fewer than AGENT_MAX_OPEN_PRS agent PRs are open. Unreadable
+# GitHub counts as "no budget": an unattended run must not spend CI on a guess.
+pr_budget_ok() {
+	local open
+	read -r open _ _ < <(agent_pr_stats open | sed -n '1p') || true
+	if [[ -z ${open:-} ]]; then
+		log "could not count open agent PRs; opening none rather than risk the cap"
+		return 1
+	fi
+	if ((open >= AGENT_MAX_OPEN_PRS)); then
+		log "$open open agent PR(s), cap $AGENT_MAX_OPEN_PRS (AGENT_MAX_OPEN_PRS); not opening another"
+		return 1
+	fi
 }
 
 # An empty login must never match: a blank line in the file would authorize "".
@@ -380,8 +420,8 @@ run_task() {
 		cat "$clean"
 		[[ -z $issue ]] || printf '\nCloses #%s\n' "$issue"
 		# shellcheck disable=SC2016 # the backticks are literal Markdown, not command substitution
-		printf '\n---\nOpened unattended by `scripts/agent` (engine: `%s`). The agent had no shell, git or `gh`: the script committed and pushed. Quality gates were **not** run locally (no stack), so CI is the gate. A human must review before merging.\n\n%s\n' \
-			"$engine" "$(engine_footer "$engine")"
+		printf '\n---\n%s (engine: `%s`). The agent had no shell, git or `gh`: the script committed and pushed. Quality gates were **not** run locally (no stack), so CI is the gate. A human must review before merging.\n\n%s\n' \
+			"$AGENT_PR_MARKER" "$engine" "$(engine_footer "$engine")"
 	} >"$body"
 	if scan_secrets <"$body"; then
 		reject "the PR description contains a token-shaped string"
