@@ -49,6 +49,7 @@ make pwa.test                       # Vitest + Playwright (also: make pwa.test.u
 make pwa.quality                    # ESLint + dependency-cruiser + Prettier + tsc — REQUIRED at end of any PWA task.
 make pwa.lint.graph                 # dependency-cruiser boundary gate over pwa/src (check-only).
 make shell.lint                     # shellcheck over every tracked shell script (own CI job, not in ci.quality).
+make agent.poll                     # Unattended agents (claude/agy): issue label → PR; also agent.maintenance, agent.review PR=<n>, agent.install. Runbook: docs/runbooks/agent-automation.md.
 make composer.check.advisories      # api/composer.lock against known advisories (docker + network; CI: the static job, not in ci.quality).
 make app.quality                    # All linters (PHP + PWA).
 make app.test                       # All tests (PHP + PWA).

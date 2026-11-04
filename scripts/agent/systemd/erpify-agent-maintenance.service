@@ -1,0 +1,14 @@
+[Unit]
+Description=ERPify unattended agent: scheduled maintenance tasks
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+# System directories first: a user-writable directory must not be able to shadow git, gh or make.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin:%h/.npm-global/bin
+ExecStart=@REPO@/scripts/agent/maintenance.sh
+TimeoutStartSec=4h
+Nice=10
+# The agent CLIs write only under the home directory and the state dir; nothing here needs to gain privilege.
+NoNewPrivileges=yes
+PrivateTmp=yes
