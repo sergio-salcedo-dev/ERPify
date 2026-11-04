@@ -1,6 +1,6 @@
 ---
 description: Consolidate the open dependabot "chore: bump" PRs into one branch and one PR, ecosystem-aware
-argument-hint: "[--dry-run]   (default: inventory, then STOP for branch authorization)"
+argument-hint: "[--dry-run]   (default: inventory, then branch and batch)"
 ---
 
 Batch the open dependabot PRs into a single branch. Dependabot opens **one PR per
@@ -222,14 +222,13 @@ apart. For a suspected 3B, the A/B is the answer, not the error text.
 
 `--dry-run` STOPS here.
 
-## 5. STOP — branch authorization
+## 5. Create the branch
 
-Propose a branch (`chore/<slug>`, base `main`) and **wait for the user's explicit
-OK**. Creating a branch or worktree unasked violates the hard rule in `CLAUDE.md`
-→ Conventions → "Confirm branch creation & topology". Then:
+A branch needs no OK (`CLAUDE.md` → Conventions → "Branch creation & topology"):
+name it `chore/<slug>`, base a fresh `origin/main`.
 
 ```bash
-make worktree.create BRANCH=chore/<slug>
+make worktree.create BRANCH=chore/<slug> BASE=origin/main
 ```
 
 Run every later command **from inside that worktree**.
