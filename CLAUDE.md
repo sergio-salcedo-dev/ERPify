@@ -357,7 +357,7 @@ passes had not — a storage key derived from the identifier's *spelling* while 
 A local commit is not a deliverable. It is invisible to CI, to review, and to the user, and it dies with the worktree — so when a substantial piece of work is done and its gates are green, **commit and push the branch in the same breath**, without waiting to be asked.
 
 - **Trigger:** any change worth a commit message beyond a typo — a feature slice, a fix, a review pass applied, a docs sweep. If you would summarise it to the user as "done", it gets pushed.
-- **Push the feature branch, never `main`** (see *Protected `main`* above). Pushing a branch is not merging it; opening the PR is still the separate, permitted step, and merging still needs per-merge permission.
+- **Push the feature branch, never `main`** (see *Protected `main`* above). Pushing a branch is not merging it. Opening the PR is the next step of finishing and needs no OK (see *Pull requests: as few as the work needs* below); merging still needs per-merge permission.
 - **Gates first.** Push only behind the required checks for what you touched (`make php.quality`, `make pwa.quality`, the relevant tests), each from a fresh run with its printed exit code.
 - **Report the remote state, not the local one.** "Committed" and "pushed" are different claims; say which one is true. If a push is deliberately withheld, say so and why — silence reads as pushed.
 
@@ -370,6 +370,17 @@ The rule exists because the silent failure is expensive and asymmetric: a code r
 - "Edit on a branch" approval is **not** a blanket OK to spin up *additional* branches later — re-confirm each new branch.
 - Default to **one branch / one PR** unless the user asks to split.
 - This is a confirmation gate on the *number/topology* of branches; it does not loosen the worktree rule (feature/multi-edit work still belongs in an isolated worktree — just confirm the plan before creating it) or "Protected `main`" above.
+
+### Pull requests: as few as the work needs (hard rule for agents)
+
+- **Opening a PR needs no OK from the user.** Once the branch is authorized and the required gates are green from a fresh run, open the PR in the same breath as the push — `gh pr create`, never `--draft` (a state nobody uses; say in the body what is and is not ready). What stays gated: creating a branch or splitting the work across branches (above), and merging (*Protected `main`*).
+- **The fewest PRs that keep the quality.** Every PR is a full CI run, a review surface and a merge decision, and branch-per-change tooling bills for each one — measured here, 43 dependabot PRs cost ~1,650 CI minutes before being closed into batches. Quality comes from the gates, the three review layers and the checklists, never from the number of PRs. In practice:
+  - one coherent intent is one branch and one PR, carrying its tests, docs, registries and migration;
+  - a finding from review, CI or your own second look is a **commit on the open PR**, never a follow-up PR; a defect found in the files you touch is fixed there and named in the body;
+  - mechanical, recurring work is batched (dependency bumps go through `/deps-update`);
+  - a handoff, a status marker, a registry line or a doc correction rides the PR it belongs to and earns its own only when it is the whole change;
+  - split only for a reason the diff cannot absorb: a part that must be revertable or deployable on its own (a destructive migration apart from the code that stops using the column), a part waiting on a decision that is not yours, or a different base (a hotfix from the production tag).
+- **The model** is trunk-based delivery as the large ERP and CRM vendors run it — few, short-lived integration points, with automated gates carrying the quality — scaled down to what a small or mid-sized company can run: one branch, one PR and one CI run per intent, no release-train ceremony.
 
 ### Branch naming
 
