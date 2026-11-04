@@ -1,0 +1,15 @@
+[Unit]
+Description=ERPify unattended agent: pick up one agent:* labelled issue
+# A long engine run holds the flock; a second tick exits immediately.
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO@
+# System directories first: a user-writable directory must not be able to shadow git, gh or make.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:%h/.local/bin:%h/.npm-global/bin
+ExecStart=@REPO@/scripts/agent/poll-issues.sh
+TimeoutStartSec=2h
+Nice=10
+# The agent CLIs write only under the home directory and the state dir; nothing here needs to gain privilege.
+NoNewPrivileges=yes
+PrivateTmp=yes

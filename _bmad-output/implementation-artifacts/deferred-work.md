@@ -610,7 +610,7 @@ severity: medium
 - Historia del lockfile: `8b7bbd4` (#1111) tenía 3 altas, `fe40884` (#1104) 4 altas y 1 moderada, `ce45691` 3 críticas, 9 altas y 8 moderadas; desde `1c8aca9` (#1112), 0. Ninguna revisión da 7.
 
 **Hipótesis, por orden:**
-1. El audit se lanzó en `tmp/sonar/`, un entorno desechable de `eslint-plugin-sonarjs` con su propio lockfile. Se borró en esta sesión y no se puede comprobar. Rehecho con las versiones de hoy da 0.
+1. El audit se lanzó en un entorno desechable de `eslint-plugin-sonarjs` con su propio lockfile. Se borró en esta sesión y no se puede comprobar. Rehecho con las versiones de hoy da 0.
 2. La copia local de `pwa/package-lock.json` es anterior a #1112. Comprobar `git log -1 -- pwa/package-lock.json`.
 3. Son alertas de Dependabot en GitHub y no la salida de `npm audit`.
 

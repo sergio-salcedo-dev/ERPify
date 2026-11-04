@@ -118,9 +118,18 @@ docker.up.wait: $(DOCKER_UP_GUARDS) ## Start stack detached with --wait health g
 # service can flap during cold boot (composer install + migrations + dev worker),
 # so on failure we settle briefly and re-run --wait — already-up services just get
 # re-evaluated and pass once php is healthy. A second failure is a real fault.
+# The retry itself: print php's log BEFORE settling, because a retry that passes leaves no other trace of
+# why the first --wait aborted (the CI failure dump runs only on `failure()`), and that log is the only
+# evidence of which cold-boot step exited non-zero. `$(1)` is the target name, `$(2)` the services to start.
+define docker_up_wait_retry
+{ echo '[$(1)] first --wait aborted (cold-boot restart); php log follows, then retrying once after settle...'; $(DOCKER_COMPOSE) logs --tail=50 php || true; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach $(2); }
+endef
+
+# In a linked worktree the image is tagged `<slug>-app-php-dev` (config.mk), so a worktree that has not
+# built yet fails here with a registry `pull access denied`: run `make docker.build` or `make app.dev` first.
 docker.up.wait.no-build: $(DOCKER_UP_GUARDS) ## Start stack detached with --wait, skip rebuild (CI: images already loaded)
 	$(DOCKER_COMPOSE) up --wait --no-build --detach \
-		|| { echo '[docker.up.wait.no-build] first --wait aborted (cold-boot restart); retrying once after settle...'; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach; }
+		|| $(call docker_up_wait_retry,docker.up.wait.no-build,)
 
 # Backend-only variant for API-only CI jobs (PHPUnit/Behat hit /api/* and need the
 # async worker for audit/email; they never touch the pwa container). Naming the php
@@ -129,7 +138,7 @@ docker.up.wait.no-build: $(DOCKER_UP_GUARDS) ## Start stack detached with --wait
 # critical path. Mirrors the cold-boot retry-once logic of docker.up.wait.no-build.
 docker.up.wait.no-build.api: $(DOCKER_UP_GUARDS) ## Start backend only (php + worker + deps), --wait, skip rebuild — excludes pwa (CI: API-only jobs)
 	$(DOCKER_COMPOSE) up --wait --no-build --detach php messenger_worker \
-		|| { echo '[docker.up.wait.no-build.api] first --wait aborted (cold-boot restart); retrying once after settle...'; sleep 10; $(DOCKER_COMPOSE) up --wait --no-build --detach php messenger_worker; }
+		|| $(call docker_up_wait_retry,docker.up.wait.no-build.api,php messenger_worker)
 
 docker.build: ## Rebuild images (--pull --no-cache)
 	$(DOCKER_COMPOSE) build --pull --no-cache

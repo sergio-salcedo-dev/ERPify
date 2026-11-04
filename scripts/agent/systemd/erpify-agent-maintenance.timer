@@ -1,0 +1,11 @@
+[Unit]
+Description=ERPify unattended agent: weekly maintenance (Mondays 08:00)
+
+[Timer]
+OnCalendar=Mon *-*-* 08:00:00
+RandomizedDelaySec=15m
+# Persistent: a laptop asleep on Monday morning still runs it when it wakes.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
