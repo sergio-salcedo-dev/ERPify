@@ -1,0 +1,10 @@
+[Unit]
+Description=ERPify unattended agent: issue poll every 10 minutes
+
+[Timer]
+OnCalendar=*:0/10
+# Not Persistent: a missed tick while the machine slept is picked up by the next one.
+Persistent=false
+
+[Install]
+WantedBy=timers.target
