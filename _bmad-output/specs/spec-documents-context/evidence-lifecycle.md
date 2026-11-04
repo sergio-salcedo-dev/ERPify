@@ -11,8 +11,8 @@ stateDiagram-v2
     Scanning --> ScanFailed: deterministic failure (over the size limit, unscannable); a verdict, own custody row, no retries
     Scanning --> Received: no verdict (reset, timeout, crash, worker death, lease expiry, deadline; burns an attempt if streaming had begun and the re-probe finds the scanner up; otherwise counts an outage return, the connect failing before the first byte included)
     Scanning --> ScanFailed: attempt cap or outage-return cap reached on a no-verdict return (same compare-and-set as the return)
-    Received --> ScanFailed: sweep finds a counter at or above a lowered cap (own custody row, holds_slot cleared)
-    ScanFailed --> Received: operator decision (own custody row, resets both counters; requires a non-Erased predecessor and a free version slot, else a conflict)
+    Received --> ScanFailed: sweep finds a counter at or above a lowered cap (own custody row)
+    ScanFailed --> Received: operator decision (own custody row, resets both counters; once doc-9 ships it requires a non-Erased predecessor and a free version slot, else a conflict)
     Received --> Erased: destroyScope()
     Scanning --> Erased: destroyScope()
     Ready --> Erased: destroyScope()

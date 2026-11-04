@@ -54,15 +54,14 @@
     created by this story (no database role, GRANT or trigger exists, and none is part of this
     story). Custody stays readable after key destruction and is not claimed tamper-proof against a
     PostgreSQL administrator. Each version is its own aggregate; the first migration carries
-    series_id (the first version's own id), predecessor_id with a partial unique index over a
-    holds_slot boolean on the snapshot (true from insert, false on Quarantined or ScanFailed, true
-    again on an operator reopen, false on Erased only when no child holds the slot; the accepted
-    chain is linear, failed attempts are siblings), a scope_id column (random, never derived from
+    series_id (the first version's own id) and predecessor_id, with no slot column, index or
+    walk-up (doc-9 decides that mechanism, since no node has a child before it), a scope_id column (random, never derived from
     the document id, with a UNIQUE so two documents never share a scope), a nullable UNIQUE on the
     idempotency hash of the snapshot (NULL after the actor's erasure), the declared size and the
     retention fields (retention_reason, legal_basis, review_at; the tombstone keeps them, the values
-    arrive with doc-3) and Erased in the state enum from the start. No free-text field (original
-    filename, title) is persisted in the first slices; the uploader and the custody actor are person
+    arrive with doc-3) and Erased in the state enum from the start. The snapshot carries a
+    ciphertext column for the original filename (sealed under the document's own scope by doc-3's
+    commit; no plaintext name and no title column); the uploader and the custody actor are person
     references anonymised by erasure, not sealed fields, and the idempotency hash on the snapshot is
     nulled by the same erasure. The port declares no WORM guarantee. Do not reuse ImageStorage or
     any generic storage port. Register every person-id column (person-reference policy, attribute,
@@ -82,7 +81,7 @@
     Document aggregate type in api/.persistent-transport-policy only if a DomainEvent declares it
     (the gate fails a line nothing emits). The Document audit resource type is classified by the
     story that first writes it, not here (the gate refuses a type nothing writes). The snapshot
-    migration carries holds_slot and the nullable UNIQUE on the idempotency hash; promoted_at and
+    migration carries the nullable UNIQUE on the idempotency hash; promoted_at and
     next_scan_at arrive with doc-3 and the scan columns with doc-4. Record the custody-append-only
     and anonymisation-race residuals in PRODUCTION_SECURITY_CHECKLIST.md section 7.
 - id: "doc-3"
@@ -108,14 +107,17 @@
     predecessor id (NULL until doc-9), retention fields, ttl_expires_at, claimed_at,
     lease_expires_at and upload_deadline_at. The PUT validates before it claims (Content-Length
     present and equal to the declared size, the caller authorised as the intent's actor by the voter
-    of the declare step), so a request that fails leaves the intent Declared; it then claims the
-    intent with a compare-and-set Declared to Streaming under the intent row lock, before reading a
+    of the declare step), so a request that fails leaves the intent Declared. The PUT also carries the
+    original filename (validated and length-bounded, held in memory only, never a path, never
+    in logs, Sentry, audit metadata or events), which the commit transaction seals under the
+    document's scope once the key exists, so the intent row never holds it in plaintext; it
+    then claims the intent with a compare-and-set Declared to Streaming under the intent row lock, before reading a
     byte or minting a key, setting claimed_at, lease_expires_at and upload_deadline_at = claimed_at
     + declared size / minimum accepted throughput + a constant margin (the throughput and the margin
     are fixed by this story's transport spike so that a 100 MiB upload on the slowest accepted link
     finishes inside it; a commit refused for crossing it answers the aborted-upload problem type).
     The claim also requires ttl_expires_at > NOW() and enforces the cap on Streaming intents with a
-    live lease and deadline, per actor and globally (provisional constants fixed here), under
+    live lease and deadline, per actor and globally (provisional 2 per actor and 4 globally, fixed here), under
     transaction-scoped advisory locks (per actor, then global) taken after its own intent row, with
     nothing else acquired while one is held; over a cap it answers the rate-limit problem type with
     no Retry-After and leaves the intent Declared. The heartbeat renews the lease and never beyond
@@ -206,7 +208,10 @@
     to clamd. Run the scanner spike first: verify StreamMaxLength, MaxFileSize, MaxScanSize,
     MaxFiles, MaxRecursion and AlertExceedsMax (exceeding a limit must end in ScanFailed, never
     clean) and clamd's memory against the VPS, and fix by measurement the provisional constants
-    (attempt cap 3, outage-return cap, per-claim deadline 10 minutes, backoff). A health probe runs
+    (attempt cap 3, outage-return cap 10 with an alarm at 5, per-claim deadline 10 minutes, scan
+    lease 2 minutes with a 30-second heartbeat, backoff 1, 5, 15 and 60 minutes with 20 percent
+    jitter; clamd's MaxScanTime stays below the deadline and a limit-exceeded answer maps to
+    ScanFailed). A health probe runs
     before the claim and a down scanner leaves Received untouched (no claim, no epoch, no attempt,
     no custody row). This story adds to the snapshot scan_attempts, scan_outage_returns (its own
     higher cap), scan_streaming_started_at (set by compare-and-set immediately before the first byte
@@ -234,9 +239,9 @@
     a failed authentication, a missing final-chunk marker or a missing final object is deterministic
     (ScanFailed and an alarm), a transient local I/O error counts as no verdict. The lease expiry
     predicate is state = Scanning AND lease_epoch = e AND lease_expires_at < NOW(), evaluated inside
-    the UPDATE by the database clock. Every entry into Quarantined or ScanFailed (the cap transition
-    included) clears holds_slot in the same compare-and-set; the ancestor walk-up (which the
-    verdict, the cap return, the cap sweep and the reopen all use) is doc-9's routine. Once the
+    the UPDATE by the database clock. Versioning adds no state here: no slot column or
+    walk-up exists until doc-9, which amends the verdict, cap-return, cap-sweep and reopen paths
+    if its mechanism needs it. Once the
     scanner is chosen, add a gate comparing MAX_ORIGINAL_BYTES with its configured limit and verify
     that limit. Compare-and-set on every transition, carrying a monotonic lease_epoch (incremented
     on every claim and operator reset, never reset, independent of the retry counters); the lease
@@ -291,8 +296,10 @@
   title: Custody trail listing and document metadata
   description: >-
     List the ordered states and metadata of a document (CAP-6). Depends on doc-2 and doc-3;
-    lands before erasure, which depends on it. No free-text field is persisted (SPEC),
-    so there is nothing to seal here.
+    lands before erasure, which depends on it. The listing returns the original filename
+    by opening the sealed column under the document's scope (SPEC); an Erased or
+    key-destroyed document lists no name, and a decrypt failure on one row never fails the
+    whole listing.
   invoke_dev_with: >-
     The custody listing is a route: it regenerates api/.route-manifest.json, is classified in
     api/.credential-proof-policy and names its voter and Permission.
@@ -302,11 +309,15 @@
     Erase a document from any non-terminal state by destroyScope(), keeping digest and custody
     (CAP-4) and delete its sealed object after commit; record the digest residual in the
     security checklist. Depends on doc-4 (states and lease), doc-6 and doc-1's tombstone fix.
-    Blocked on the ledger adapter, chosen with the backup and restore policy.
+    Blocked on the restore.prod change and the restore drill, decided with the backup and
+    restore policy; the ledger adapter itself is decided (SPEC).
   done_checkpoint: true
   invoke_dev_with: >-
-    Owes a recorded adversarial pass. Implements the decided erasure ledger (properties in SPEC; its
-    adapter is chosen with the backup and restore policy, which blocks this story): written
+    Owes a recorded adversarial pass. Implements the decided erasure ledger (properties and the first
+    adapter in SPEC: an ErasureLedger port over a restic repository behind an append-only REST
+    server on a second host, apart from the backup repository, whose write credentials cannot
+    delete or shorten retention; restore.prod stays in recovery mode when the ledger cannot be
+    read in full): written
     synchronously off the VPS after the voter, existence and erasable-state checks and before the
     erasure transaction and destroyScope(), holding no database lock, with a bounded timeout and
     idempotent entries (a failure before the entry is durable leaves the document untouched; a
@@ -323,7 +334,7 @@
     document ships here, behind a voter, with a closed-enum reason. The Erased transition, its
     custody row and the key destruction commit together or are re-drivable from a recorded intent;
     write a scenario for a crash at each point. Erased is decided by the aggregate's compare-and-set
-    (which also sets holds_slot per SPEC; doc-9 adds the ancestor walk), never by destroyScope()'s
+    (no slot column exists until doc-9), never by destroyScope()'s
     boolean, and a repeat appends no custody row. The sealed object of an Erased document is deleted
     after commit by an idempotent step re-driven by a sweep, the single owner of that object: staged
     path first and then final, ENOENT tolerated on each, a row done only when neither exists,
@@ -358,23 +369,24 @@
   title: Document versioning
   description: >-
     A new version is a new immutable original linked to its predecessor, with erased nodes kept
-    as readable tombstones (CAP-7). Depends on doc-5 and doc-7. The version slot and the erasure semantics
-    are decided (SPEC).
+    as readable tombstones (CAP-7). Depends on doc-5 and doc-7. The erasure semantics are decided
+    (SPEC); the mechanism that refuses a second live successor is decided here.
   invoke_dev_with: >-
     Touches erasure semantics, so it owes a recorded adversarial pass. Each version is its own
     aggregate (decided); the series is a scalar id plus a read projection. Authorise the caller on
     the predecessor with a voter before sealing, and answer absent and forbidden alike. The chain is
     linear: the new-version transaction takes the new scope's keystore row and then FOR UPDATE on
-    the predecessor after the new bytes are sealed (never across the stream), rechecks Ready, and
-    the partial unique index on predecessor_id over holds_slot refuses a second live child; the
-    loser maps to a conflict and its bytes fall into the aborted-upload class. The size bounds of
-    doc-3 (zero-length refusal, MAX_ORIGINAL_BYTES, the body bounds) apply to this path too, since
-    it also seals. Supply the shared holds_slot walk-up routine (SPEC: read the chain, lock the
-    contiguous Erased ancestors and the first non-Erased predecessor in ascending id, re-validate,
-    recompute each locked Erased ancestor as some child holds) and call it from every transition
-    that changes holds_slot: amend doc-7's erasure and doc-4's verdict, cap-return, cap-sweep and
-    operator-reopen paths (the routine locks the node's own row inside its ascending sequence and
-    restarts on a failed re-validation); the reopen takes FOR UPDATE on the predecessor and refuses
+    the predecessor after the new bytes are sealed (never across the stream), rechecks Ready; the
+    loser of a successor race maps to a conflict and its bytes fall into the aborted-upload
+    class. The size bounds of doc-3 (zero-length refusal, MAX_ORIGINAL_BYTES, the body bounds)
+    apply to this path too, since it also seals. First decide the successor-exclusion mechanism
+    and record it in the Documents ADR: a holds_slot flag with a partial unique index on
+    predecessor_id and a locked walk-up over the contiguous Erased ancestors on every transition
+    that takes or frees the slot (the verdict, cap-return, cap-sweep, operator-reopen and erasure
+    paths of doc-4 and doc-7 then change), or a series row whose head pointer moves by one UPDATE
+    under the row lock (the assistant's lean, since it removes the walk-up). A version_no with
+    UNIQUE (series_id, version_no) alone does not refuse two concurrent successors. Whichever is
+    chosen keeps the SPEC properties; the reopen takes FOR UPDATE on the predecessor and refuses
     with a conflict when it is Erased. Tests: erase a middle node, file a sibling and expect a
     conflict; erase its last descendant and expect the slot free; quarantine the only child of an
     Erased node and expect the slot free; erase the predecessor of a ScanFailed child and expect the
