@@ -80,4 +80,5 @@ propose the final decision with your reasoning.
 ### 4. Report
 
 Print the generated file path and a one-line summary of the decision captured. Do **not** invoke
-any external AI yourself — this command only produces the `.md`.
+any external AI yourself — this command only produces the `.md`. The file is scratch: once the user
+has pasted the answer back and the decision is made, delete it (`tmp/` stays empty between tasks).

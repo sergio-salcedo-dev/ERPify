@@ -161,8 +161,12 @@ final class BmadSkillsSyncGuardrailGateTest extends TestCase
         $this->assertSame(0, $run->getExitCode(), $this->explain($run));
         $this->assertDirectoryDoesNotExist($this->fixture . '/.claude/skills/bmad-retired');
 
-        $archived = \glob($this->fixture . '/tmp/bmad-skills-backup-*.tar.gz') ?: [];
+        $backups = $this->fixture . '/.backups/bmad-skills';
+        $archived = \glob($backups . '/bmad-skills-backup-*.tar.gz') ?: [];
         $this->assertCount(1, $archived, 'the run must leave exactly one backup');
+        $kept = \count(\scandir($backups) ?: []) - 2;
+        $this->assertSame(1, $kept, 'the backup is all a run keeps; a lock file is state');
+        $this->assertDirectoryDoesNotExist($this->fixture . '/tmp', 'tmp/ is scratch; a run keeps no state in it');
 
         $listing = new Process(['tar', 'tzf', $archived[0]]);
         $listing->mustRun();

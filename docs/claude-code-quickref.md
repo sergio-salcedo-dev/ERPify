@@ -119,7 +119,7 @@ make super-lint.slim                # SuperLinter on changed files only (slim im
 make bmad.status.audit              # Report stale markers across every sprint-status board (canonical + sprint-status-*.yaml).
 make bmad.status.audit c='--strict' # Same, but exit 1 on drift (for a gate).
 make bmad.skills.sync.dry-run       # Report drift between the primary's .claude/skills/bmad-* and its .agent/skills.
-make bmad.skills.sync               # Replace that tree from .agent/skills (destructive; backs up to tmp/ first).
+make bmad.skills.sync               # Replace that tree from .agent/skills (destructive; backs up to `.backups/bmad-skills/` first).
 make bmad.skills.sync c='--force'   # Same, but also removes a hand-written skill the installer never wrote.
 ```
 

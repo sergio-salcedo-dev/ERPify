@@ -106,7 +106,7 @@ fi
 
 SOURCE="${ROOT}/.agent/skills"
 TARGET="${ROOT}/.claude/skills"
-BACKUP_DIR="${ROOT}/tmp"
+BACKUP_DIR="${ROOT}/.backups/bmad-skills"
 
 # ---------------------------------------------------------------------------
 # Inventory
@@ -213,18 +213,18 @@ fi
 # Replace, under a trap: past this point a failure must restore, never abort
 # ---------------------------------------------------------------------------
 
-mkdir -p "${BACKUP_DIR}"
+mkdir -p "${BACKUP_DIR}" "${TARGET}"
 
-# The lock file must exist before flock can take it, and a failure to CREATE it
-# is not a held lock — reporting one for the other is the shape of diagnosis
-# this script exists to stop making.
-if exec 9>"${BACKUP_DIR}/.bmad-skills-sync.lock"; then
+# The lock is taken on the skills directory itself, so there is no lock file to
+# leave behind. A failure to OPEN it is not a held lock — reporting one for the
+# other is the shape of diagnosis this script exists to stop making.
+if exec 9<"${TARGET}"; then
 	flock -n 9 || {
 		printf '✗ another sync holds the lock on %s\n' "${ROOT}" >&2
 		exit 2
 	}
 else
-	printf '✗ cannot create %s/.bmad-skills-sync.lock — not locking, not syncing\n' "${BACKUP_DIR}" >&2
+	printf '✗ cannot open %s — not locking, not syncing\n' "${TARGET}" >&2
 	exit 2
 fi
 
@@ -276,7 +276,6 @@ if [ ${#target_names[@]} -gt 0 ]; then
 	done
 fi
 
-mkdir -p "${TARGET}"
 cp -a "${SOURCE}"/bmad-*/ "${TARGET}/"
 
 for name in "${source_names[@]}"; do
@@ -285,8 +284,8 @@ done
 
 trap - INT TERM HUP ERR
 
-# Keep the backup directory bounded: this archives ~2 MB a run and tmp/ is
-# gitignored, so nothing else would ever notice them accumulating.
+# Keep the backup directory bounded: this archives ~2 MB a run and the directory
+# is gitignored, so nothing else would ever notice them accumulating.
 mapfile -t old < <(
 	find "${BACKUP_DIR}" -maxdepth 1 -name 'bmad-skills-backup-*.tar.gz' -printf '%T@ %p\n' 2>/dev/null |
 		sort -rn | tail -n "+$((KEEP_BACKUPS + 1))" | cut -d' ' -f2-
