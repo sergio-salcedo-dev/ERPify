@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -26,8 +27,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * key — before the same transaction destroys that key, and the `GDPR_SUBJECT_ERASED` security entry commits
  * with them, so a destroyed key always has its evidence row. It is not a business deletion (no domain event,
  * no CLOSED-only lifecycle guard); the compliance record is that security entry plus the surviving,
- * now-unreadable change rows. Idempotent: a re-run finds nothing live and an already-destroyed key, erases
- * nothing and skips the self-audit.
+ * now-unreadable change rows. A scope that never held a key is closed all the same, so nothing can later be
+ * sealed under it, and that counts as an erasure. Idempotent: a re-run finds nothing live and an
+ * already-destroyed key, erases nothing and skips the self-audit.
  */
 final readonly class EraseBankAccountSubject
 {
@@ -60,7 +62,7 @@ final readonly class EraseBankAccountSubject
                 $this->bankAccountRepository->remove($account);
             }
 
-            $keyDestroyed = $this->encryptor->destroyScope($scope);
+            $keyDestroyed = $this->encryptor->destroyScope($scope, DestroyReason::Erasure);
 
             $result = new SubjectErasureResult($scope->toString(), $liveRecordErased, $keyDestroyed);
 

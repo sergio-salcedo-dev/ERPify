@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Crypto\Application;
 
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
@@ -34,8 +35,10 @@ interface EnvelopeEncryptor
     public function decrypt(EncryptionScopeId $scope, string $ciphertext, string $aad): string;
 
     /**
-     * @return bool true when a live key was destroyed, false when there was none or it was already gone
-     *              (idempotent)
+     * Destroys the scope's key, or closes a scope that has none yet, so nothing can be sealed under it again.
+     *
+     * @return bool true when this call wrote the tombstone, false when one was already there (idempotent);
+     *              see {@see Keystore::destroy()}
      */
-    public function destroyScope(EncryptionScopeId $scope): bool;
+    public function destroyScope(EncryptionScopeId $scope, DestroyReason $reason): bool;
 }

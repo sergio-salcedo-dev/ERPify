@@ -180,7 +180,7 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
         }
 
         $this->outsideConnection()->executeStatement(
-            'UPDATE dek_keystore SET destroyed_at = NOW(), wrapped_dek = NULL '
+            "UPDATE dek_keystore SET destroyed_at = NOW(), wrapped_dek = NULL, destroy_reason = 'erasure' "
             . 'WHERE encryption_scope_id = :scope AND destroyed_at IS NULL',
             ['scope' => $this->scope],
         );

@@ -10,6 +10,7 @@ use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -74,6 +75,31 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         });
     }
 
+    public function testErasingASubjectThatNeverHeldAKeyClosesItsScopeAndRecordsTheEvidence(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $accountId = Uuid::generate();
+            $scope = 'BankAccount:' . $accountId;
+            $this->assertSame(0, $this->liveKeys($connection, $scope));
+
+            $result = $this->eraser()->execute($accountId);
+
+            $this->assertFalse($result->liveRecordErased);
+            $this->assertNull($em->find(BankAccount::class, $accountId), 'there never was a live record');
+            $this->assertTrue($result->keyDestroyed, 'the scope is closed, so a late writer cannot mint under it');
+            $this->assertSame(1, $this->subjectErasedRows($connection, $scope), 'the closure carries its evidence');
+            $this->assertFalse(
+                $this->hasEvidencelessDestroyedKey($connection, $scope),
+                'reconciliation: the tombstone commits with its GDPR_SUBJECT_ERASED evidence row',
+            );
+
+            $rerun = $this->eraser()->execute($accountId);
+
+            $this->assertFalse($rerun->keyDestroyed, 'idempotent: the tombstone is already there');
+            $this->assertSame(1, $this->subjectErasedRows($connection, $scope));
+        });
+    }
+
     public function testAReconciliationCrossCheckDetectsADestroyedKeyMissingItsEvidence(): void
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
@@ -91,7 +117,7 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
 
             // Destroy the key WITHOUT the self-audit — the exact divergence a compliance reconciliation exists
             // to catch (the atomic erase use case can never produce it; a manual repair or a future bug could).
-            $this->encryptor()->destroyScope(EncryptionScopeId::forBankAccount($accountId));
+            $this->encryptor()->destroyScope(EncryptionScopeId::forBankAccount($accountId), DestroyReason::Erasure);
 
             $this->assertSame(0, $this->liveKeys($connection, $scope), 'the DEK is destroyed');
             $this->assertSame(0, $this->subjectErasedRows($connection, $scope), 'no evidence row was written');

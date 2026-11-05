@@ -97,6 +97,9 @@ migrated database, and the reverse). Neither proves that a `contains` field read
   that pair unsatisfiable and turns every crypto-shredded subject into a permanent reported divergence. The
   exemption keys on `action`, never on `level`, because `action` is what the detective control reads:
   discriminating by different columns is how the two would drift apart in silence.
+  Two tombstones are outside that pair by construction: `destroy_reason = 'aborted-upload'` (a write that never
+  completed erased nothing) and any `Document:` scope (the document's own rows reconcile it); every other
+  destroyed key still answers to an evidence row.
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data
   minimisation — **on every row the window still covers.** On an exempt row it is not, and that is the price
   of the exemption rather than an oversight: those rows keep the same triple indefinitely, and their only
