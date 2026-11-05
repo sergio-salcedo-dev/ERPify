@@ -29,6 +29,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceA
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -68,7 +69,10 @@ use PHPUnit\Framework\TestCase;
  * reordering: the counts in the result, the compliance entries and every anonymiser assertion are all
  * order-blind. Its sibling below is the other half, not a redundancy.
  *
- * What a green proves is that the USE CASES reach for the tables in this order. That the production adapters
+ * What a green proves is that the USE CASES reach for the tables in this order. The session, audit, event-store
+ * and Documents positions asserted here come from doubles that write to the journal; the functional sibling asks
+ * the real database about the identity and invitation rows and which Documents rows are held, and nothing else,
+ * so the session, audit and event-store positions are not probed on a real connection. That the production adapters
  * really take a lock where the doubles record one is a different claim, and its instrument is
  * {@see \Erpify\Tests\Functional\Iam\Identity\ErasureLockOrderFunctionalTest}.
  *
@@ -83,6 +87,8 @@ final class ErasureLockOrderTest extends TestCase
     private const string ACTING_ADMIN_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a90';
 
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50';
+
+    private const string SUBJECT = UserMother::DEFAULT_ID;
 
     #[Test]
     public function theChainAcquiresInTheOrderEveryOtherPathAlreadyAgreesOn(): void
@@ -195,6 +201,75 @@ final class ErasureLockOrderTest extends TestCase
     }
 
     #[Test]
+    public function theDocumentsPurgeFollowsTheIdentitySessionAuditAndEventStoreLocks(): void
+    {
+        // Documents sits last in the global lock order: a flow that holds one of its rows never reaches for an
+        // identity, session, audit or business-log row afterwards, so an erasure that took them in that order
+        // and reached Documents last cannot close a cycle with it. Moved ahead of any of them, the erasure
+        // would hold a document row while waiting on rows another transaction takes in the opposite order.
+        //
+        // The upload-intent rows the order also places ahead of documents do not exist yet, so this asserts
+        // only what the tree can: identity < session < audit < event store < documents, then custody.
+        $journal = new LockOrderJournal();
+        $sessions = new InMemorySessionRepository();
+        $sessions->lockOrderJournal = $journal;
+
+        $eventStore = new RecordingEventStoreSubjectAnonymiser();
+        $eventStore->lockOrderJournal = $journal;
+
+        $trailLock = new RecordingAuditSubjectRowLock();
+        $trailLock->lockOrderJournal = $journal;
+
+        $documents = new RecordingPersonReferenceErasure();
+        $documents->lockOrderJournal = $journal;
+
+        $this->useCase(
+            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryPasswordResetTokenRepository(PasswordResetTokenMother::pendingFor()),
+            new InMemoryRecoverySecretRepository(RecoverySecretMother::mintedFor()),
+            new InMemoryInvitationRepository($this->invitationFor(UserMother::DEFAULT_ID)),
+            $journal,
+            trailLock: $trailLock,
+            sessions: $sessions,
+            eventStore: $eventStore,
+            documents: $documents,
+        )->execute(UserMother::DEFAULT_ID);
+
+        $order = $journal->crossTableOrder();
+        $positions = [];
+
+        $cases = [
+            LockOrderJournal::IDENTITY_USER,
+            LockOrderJournal::AUDIT_LOG,
+            LockOrderJournal::IAM_SESSION,
+            LockOrderJournal::EVENT_STORE,
+            LockOrderJournal::DOCUMENT,
+            LockOrderJournal::DOCUMENT_CUSTODY,
+        ];
+
+        foreach ($cases as $table) {
+            $position = \array_search($table, $order, true);
+            $this->assertIsInt($position, \sprintf('the chain reaches %s', $table));
+            $positions[$table] = $position;
+        }
+
+        $this->assertSame([self::SUBJECT], $documents->erasedSubjects);
+        $this->assertSame(
+            [
+                LockOrderJournal::IDENTITY_USER,
+                LockOrderJournal::AUDIT_LOG,
+                LockOrderJournal::IAM_SESSION,
+                LockOrderJournal::EVENT_STORE,
+                LockOrderJournal::DOCUMENT,
+                LockOrderJournal::DOCUMENT_CUSTODY,
+            ],
+            \array_values(\array_intersect($order, \array_keys($positions))),
+            'The Documents purge must come after the identity, audit, session and event-store locks, and take '
+            . 'the documents before their custody rows.',
+        );
+    }
+
+    #[Test]
     public function anAdministratorIsRefusedBeforeAnyOfTheFourTablesIsReachedFor(): void
     {
         // The UNLOCKED guard is a precondition and belongs ahead of every acquisition — including the
@@ -247,6 +322,7 @@ final class ErasureLockOrderTest extends TestCase
         ?RecordingAuditSubjectRowLock $trailLock = null,
         ?InMemorySessionRepository $sessions = null,
         ?RecordingEventStoreSubjectAnonymiser $eventStore = null,
+        ?RecordingPersonReferenceErasure $documents = null,
     ): FulfilIdentityErasure {
         $users->lockOrderJournal = $journal;
         $tokens->lockOrderJournal = $journal;
@@ -271,6 +347,7 @@ final class ErasureLockOrderTest extends TestCase
             new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),
             new InMemoryErasureResweepRepository(),
+            $documents ?? new RecordingPersonReferenceErasure(),
         );
     }
 

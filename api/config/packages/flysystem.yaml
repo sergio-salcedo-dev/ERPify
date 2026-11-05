@@ -11,6 +11,15 @@ parameters:
     # existence would be reported as a confirmed erasure — with every gate green.
     erpify.images.storage_root: '%env(STORAGE_LOCAL_PATH)%/images'
 
+    # Evidence has a root of its own on a volume of its own, because it is backed up, restored and erased under
+    # a different regime from fungible images, and because `staging/` and `final/` must sit on ONE filesystem
+    # for a promotion to be a single-filesystem move. Provisioned by `docker-entrypoint.sh` only when a volume
+    # is mounted at this path. The Documents adapter uses native filesystem calls rather than a Flysystem
+    # storage (it needs create-exclusive and link-without-replace, which the local adapter cannot express), so
+    # the path is declared here beside its sibling and handed to the adapter as a plain string.
+    env(DOCUMENTS_STORAGE_PATH): '%kernel.project_dir%/var/documents-storage'
+    erpify.documents.storage_root: '%env(DOCUMENTS_STORAGE_PATH)%'
+
 flysystem:
     storages:
         images.storage:

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Persistence\Infrastructure;
 
 use Doctrine\DBAL\Connection;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentCustodyActorPersonReferences;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentUploaderPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalErasureResweepPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalRecoverySecretPersonReferences;
@@ -41,6 +43,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DbalRecoverySecretPersonReferences::class)]
 #[CoversClass(DbalErasureResweepPersonReferences::class)]
 #[CoversClass(DbalPersonResourceReferences::class)]
+#[CoversClass(DbalDocumentUploaderPersonReferences::class)]
+#[CoversClass(DbalDocumentCustodyActorPersonReferences::class)]
 #[CoversClass(KeysetDistinctIds::class)]
 final class PersonReferenceSourcesPageTheirReadTest extends TestCase
 {
@@ -119,6 +123,18 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
                 new FixedClock(SystemClock::now()),
                 1,
             ))->retainedPersonIds(),
+        ];
+
+        yield 'document uploader' => [
+            DbalDocumentUploaderPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalDocumentUploaderPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'document custody actor' => [
+            DbalDocumentCustodyActorPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalDocumentCustodyActorPersonReferences($connection, 1))
+                ->retainedPersonIds(),
         ];
 
         yield 'audit resource' => [

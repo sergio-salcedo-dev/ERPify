@@ -57,6 +57,7 @@ final readonly class FulfilIdentityErasureResult
         'sessionsDeleted' => 'its sessions',
         'membershipsDeleted' => 'its organization membership',
         'invitationsDeleted' => 'every invitation addressed to it',
+        'documentReferencesAnonymised' => 'its uploader and custody-actor references on documents',
     ];
 
     public function __construct(
@@ -69,19 +70,29 @@ final readonly class FulfilIdentityErasureResult
         public int $sessionsDeleted,
         public int $membershipsDeleted,
         public int $invitationsDeleted,
+        public int $documentReferencesAnonymised,
     ) {
     }
 
     public function erasedAnything(): bool
     {
-        return $this->identityErased
-            || $this->resetTokensDeleted > 0
-            || $this->recoverySecretsDeleted > 0
-            || $this->anonymizedAuditRows > 0
-            || $this->anonymizedResourceRows > 0
-            || $this->anonymizedEventRows > 0
-            || $this->sessionsDeleted > 0
-            || $this->membershipsDeleted > 0
-            || $this->invitationsDeleted > 0;
+        return $this->identityErased || $this->rowsTouched() > 0;
+    }
+
+    /**
+     * Every count in one sum, which is the same question as the disjunction of "is any of them positive" because
+     * a count is never negative — and keeps the method from growing a branch each time the chain gains a link.
+     */
+    private function rowsTouched(): int
+    {
+        return $this->resetTokensDeleted
+            + $this->recoverySecretsDeleted
+            + $this->anonymizedAuditRows
+            + $this->anonymizedResourceRows
+            + $this->anonymizedEventRows
+            + $this->sessionsDeleted
+            + $this->membershipsDeleted
+            + $this->invitationsDeleted
+            + $this->documentReferencesAnonymised;
     }
 }

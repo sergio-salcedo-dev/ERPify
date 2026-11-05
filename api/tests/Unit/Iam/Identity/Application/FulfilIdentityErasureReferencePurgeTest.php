@@ -26,6 +26,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -91,6 +92,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             'sessions_deleted' => 0,
             'memberships_deleted' => 1,
             'invitations_deleted' => 2,
+            'document_references_anonymised' => 0,
         ], $audit->records[1]['metadata']);
     }
 
@@ -127,11 +129,37 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
         $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[0]['action']);
     }
 
+    public function testDocumentReferencesAloneStillProduceComplianceEvidenceCarryingTheirCount(): void
+    {
+        // The identity is gone and every other count is zero: the only thing this erasure removed is the
+        // uploader / actor references Documents held, so `erasedAnything()` is true on that term alone and
+        // the combined entry is written with that exact figure.
+        $audit = new RecordingAuditLogger();
+        $documents = new RecordingPersonReferenceErasure(4);
+
+        $result = $this->useCase(
+            $audit,
+            new InMemoryUserRepository(),
+            new InMemoryMembershipRepository(),
+            documents: $documents,
+        )->execute(UserMother::DEFAULT_ID);
+
+        $this->assertFalse($result->identityErased);
+        $this->assertSame(0, $result->membershipsDeleted);
+        $this->assertSame(4, $result->documentReferencesAnonymised);
+        $this->assertTrue($result->erasedAnything());
+        $this->assertSame([UserMother::DEFAULT_ID], $documents->erasedSubjects);
+        $this->assertCount(1, $audit->records);
+        $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[0]['action']);
+        $this->assertSame(4, $audit->records[0]['metadata']['document_references_anonymised'] ?? null);
+    }
+
     private function useCase(
         RecordingAuditLogger $audit,
         InMemoryUserRepository $users,
         InMemoryMembershipRepository $memberships,
         ?InMemoryInvitationRepository $invitations = null,
+        ?RecordingPersonReferenceErasure $documents = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject(
@@ -155,6 +183,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),
             new InMemoryErasureResweepRepository(),
+            $documents ?? new RecordingPersonReferenceErasure(),
         );
     }
 

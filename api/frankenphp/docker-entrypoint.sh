@@ -51,6 +51,21 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		fi
 	fi
 
+	# The evidence-storage root, provisioned under the same rule and for the same reason as the image root:
+	# only when a volume is genuinely mounted at the path, because a root invented inside the container's
+	# writable layer is one every later deletion would answer "done" against. `staging` and `final` are
+	# created side by side on that volume, since a promotion between them is only a single-filesystem move
+	# while they share one.
+	if [ -n "${DOCUMENTS_STORAGE_PATH:-}" ]; then
+		if [ ! -d "$DOCUMENTS_STORAGE_PATH" ]; then
+			echo "! $DOCUMENTS_STORAGE_PATH does not exist — leaving the document storage root unprovisioned."
+		elif [ "$(stat -c '%d' "$DOCUMENTS_STORAGE_PATH")" != "$(stat -c '%d' "$(dirname "$DOCUMENTS_STORAGE_PATH")")" ]; then
+			mkdir -p "$DOCUMENTS_STORAGE_PATH/staging" "$DOCUMENTS_STORAGE_PATH/final"
+		else
+			echo "! $DOCUMENTS_STORAGE_PATH is not a mount point — leaving the document storage root unprovisioned."
+		fi
+	fi
+
 	# Display information about the current project
 	# Or about an error in project initialization
 	php bin/console -V

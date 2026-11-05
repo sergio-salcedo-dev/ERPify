@@ -72,6 +72,11 @@ services:
             - '../src/{DependencyInjection,Migrations,Tests,Kernel.php}'
             - '../src/**/Domain/Entity/'
 
+    # The seam both identity-erasure consumers call to reach a context that is neither Iam, Organization nor
+    # Shared. Documents is its only implementer today; a second one turns this alias into a tagged collection.
+    Erpify\Shared\Privacy\Application\PersonReferenceErasure:
+        alias: Erpify\Documents\Document\Application\PurgeUserDocumentReferences
+
     Erpify\Shared\Event\Application\ProjectionRunner:
         arguments:
             $projectors: !tagged_iterator erpify.projector

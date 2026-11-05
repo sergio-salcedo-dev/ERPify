@@ -21,6 +21,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -106,6 +107,7 @@ final class FulfilIdentityErasureAuditLockTest extends TestCase
             new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),
             new InMemoryErasureResweepRepository(),
+            new RecordingPersonReferenceErasure(),
         );
     }
 }

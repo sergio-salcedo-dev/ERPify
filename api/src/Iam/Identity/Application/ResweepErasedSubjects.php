@@ -19,6 +19,7 @@ use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Event\Application\SubjectPseudonym;
 use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
 use Throwable;
 
 /**
@@ -58,8 +59,8 @@ use Throwable;
  * together once the others are done ({@see ErasureResweepIncomplete}), which is what keeps the tick visible at
  * `critical`; a failing subject keeps its row, is retried on the next tick, and is reported by the detective
  * source once it outlives its window. The lock order is the erasure's — audit rows, then sessions, then the
- * business log, for the reason {@see FulfilIdentityErasure} purges sessions first — with `identity_user`
- * absent because the row is gone.
+ * business log, then the Documents rows, for the reason {@see FulfilIdentityErasure} purges sessions first —
+ * with `identity_user` absent because the row is gone.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
@@ -76,6 +77,7 @@ final readonly class ResweepErasedSubjects
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
         private Clock $clock,
+        private PersonReferenceErasure $personReferenceErasure,
     ) {
     }
 
@@ -135,7 +137,12 @@ final readonly class ResweepErasedSubjects
             pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
         ));
 
-        $rewritten = $anonymisation->affectedRows + $resourceRows + $eventRows + $sessionsDeleted;
+        // After every table the erasure's lock order puts ahead of Documents, as in the erasure itself. A request
+        // in flight when the erasure ran can commit a document or a custody row naming the subject after it, and
+        // this is where that row is rewritten.
+        $documentReferences = $this->personReferenceErasure->eraseReferencesTo($subjectId);
+
+        $rewritten = $anonymisation->affectedRows + $resourceRows + $eventRows + $sessionsDeleted + $documentReferences;
 
         if ($rewritten > 0) {
             $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
@@ -144,6 +151,7 @@ final readonly class ResweepErasedSubjects
                 'anonymized_resource_rows' => $resourceRows,
                 'anonymized_event_rows' => $eventRows,
                 'sessions_deleted' => $sessionsDeleted,
+                'document_references_anonymised' => $documentReferences,
                 'resweep' => true,
             ]);
         }

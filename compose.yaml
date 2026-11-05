@@ -53,6 +53,8 @@ services:
       # `var/` when this is unset (a CLI run outside the stack), which is gitignored but NOT durable —
       # durability is the volume's job, and this variable is what connects the two.
       STORAGE_LOCAL_PATH: ${STORAGE_LOCAL_PATH:-/app/storage}
+      # Evidence has a volume of its own (`document_storage` below), never a directory of the image one.
+      DOCUMENTS_STORAGE_PATH: ${DOCUMENTS_STORAGE_PATH:-/app/documents}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       # Seconds an SMTP server may hold a caller per socket operation; one send costs round-trips x this.
@@ -63,6 +65,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - image_storage:/app/storage
+      - document_storage:/app/documents
       - caddy_access_log:/var/log/caddy
     ports:
       - name: http
@@ -163,6 +166,7 @@ services:
       # The worker is what physically deletes bytes, so it must resolve the same root as `php`. A worker
       # pointed elsewhere finds an empty store and reports every deletion as done.
       STORAGE_LOCAL_PATH: ${STORAGE_LOCAL_PATH:-/app/storage}
+      DOCUMENTS_STORAGE_PATH: ${DOCUMENTS_STORAGE_PATH:-/app/documents}
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       # Seconds an SMTP server may hold a caller per socket operation; one send costs round-trips x this.
@@ -179,6 +183,9 @@ services:
       # this mount would answer every deletion against an empty root — and an empty root is exactly what a
       # confirmed erasure of bytes that are still there looks like from the inside.
       - image_storage:/app/storage
+      # Same for evidence: the worker is the process that will physically delete the sealed object of an
+      # erased document, and against an empty root that deletion reads as done.
+      - document_storage:/app/documents
     command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600"]
 
 volumes:
@@ -192,6 +199,11 @@ volumes:
   # two must never diverge on it. It deliberately sits outside `./api`, so the bytes are not in the bind
   # mount, never reach `git status`, and are not reachable as static files.
   image_storage:
+  # Sealed bytes of evidence-class documents, `staging/` and `final/` side by side so a promotion is a move
+  # within one filesystem. Separate from `image_storage` because the two are backed up, restored and erased
+  # under different regimes, and because a bytes-of-evidence volume must never be emptied by whatever clears
+  # derivatives. Mounted by `php` (writes) and by `messenger_worker` (deletes), which must never diverge.
+  document_storage:
   # Caddy's access log, rolled daily and kept 14 days by the `output file` block in `api/frankenphp/Caddyfile`.
   # A volume of its own so it neither shares the container stdio budget with the application's channels nor
   # dies with the container; and deliberately left out of every backup, so a restore can never bring back a
