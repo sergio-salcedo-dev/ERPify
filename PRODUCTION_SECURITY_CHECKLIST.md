@@ -2536,6 +2536,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       history (a per-run key, or a push-only relay), which is not designed; accepting it is a decision to
       record. Untested alongside it: whether the upload-only credential permits `restic backup` at all (it
       must take and remove lock files) — gate 2 below is the test.
+- [ ] **A stream unseal hands out plaintext before it has verified the end of the object.**
+      `SodiumStreamEnvelopeEncryptor::unseal()` opens one 64 KiB chunk at a time, so a stream cut short, extended or
+      altered after its first chunks has already written an authenticated prefix to its sink when the exception
+      arrives; only the FINAL tag proves the object is whole. Every consumer therefore treats its sink as discarded
+      on any exception, and one that forwards the plaintext as it arrives (an HTTP response, a scanner stream)
+      must decide, before it ships, what a partial delivery means. **Open — to be settled by the first story
+      that reads a sealed object (the scan and the audited read path).** Two neighbours, both accepted
+      by construction: the plaintext chunk buffers are ordinary PHP strings that are not wiped (only keys and the
+      stream state are), and the per-document keys are wrapped by the same `AUDIT_KEK` as the audit keys, so one
+      key-encryption key protects both until a separate one is introduced.
 
 ## 8. Deploy & verify
 
