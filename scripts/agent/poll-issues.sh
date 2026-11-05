@@ -5,11 +5,10 @@
 #
 # One issue per invocation, oldest first, so a timer tick never queues quota.
 #
-# The label is the standing authorization for exactly ONE branch and ONE PR:
-# root CLAUDE.md asks for a branch plan and an OK, and an `agent:*` label from an
-# account in allowed-users is that OK given in advance, with the name and base
-# fixed by this script (`<type>/agent-issue-<n>` off origin/main). It is a
-# deliberate, narrow exception, recorded in docs/runbooks/agent-automation.md.
+# The label triggers exactly ONE branch and ONE PR. Root CLAUDE.md needs no OK for
+# either, so what bounds the run is the trigger: an `agent:*` label from an
+# account in allowed-users, with the name and base fixed by this script
+# (`<type>/agent-issue-<n>` off origin/main). See docs/runbooks/agent-automation.md.
 #
 # Lifecycle labels: agent:<engine> → agent:running → agent:done | agent:failed.
 # The swap to `running` happens BEFORE the engine starts so an overlapping tick
