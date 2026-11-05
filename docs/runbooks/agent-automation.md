@@ -12,11 +12,11 @@ maintenance) with the CLIs already installed here: `claude -p` and `agy -p`.
 
 Nothing here merges. Merging stays a per-PR human decision ([`CLAUDE.md`](../../CLAUDE.md) → "Protected `main`").
 
-**Standing authorization.** Root `CLAUDE.md` asks for a branch plan and an OK before a branch is created. For
-these flows that OK is given in advance and bounded: an `agent:*` label applied by an account in `allowed-users`
-authorizes one branch and one PR for that issue, and `make agent.install` authorizes one branch per task per
-run, skipped while that task still has an open PR. Names and base are fixed by the scripts
-(`<type>/agent-<slug>-<suffix>` off `origin/main`). This is a deliberate exception to that rule, not a reading of it.
+**What bounds a run.** Root `CLAUDE.md` lets an agent create a branch and open a PR without asking, so these flows
+need no exception to it; what they add is a ceiling. An `agent:*` label applied by an account in `allowed-users`
+triggers one branch and one PR for that issue, and `make agent.install` one branch per task per run, skipped while
+that task still has an open PR. Names and base are fixed by the scripts (`<type>/agent-<slug>-<suffix>` off
+`origin/main`).
 
 ## Setup
 
@@ -107,6 +107,13 @@ the wording of the prompt. Each point below was exercised against the real `clau
   retries mint a new suffix each time.
 - **A green proves less than it looks.** Neither the protected list nor the allowlist judges whether the diff is *good*;
   review is the only control on that.
+
+## Checking a run
+
+- `make agent.status`: timers, open agent PRs against the cap, and the tail of today's log.
+- The full log is `~/.local/state/erpify-agent/logs/<YYYYMMDD>.log`, and report-mode output goes to
+  `~/.local/state/erpify-agent/reports/`.
+- An issue left `agent:failed` carries a generic reason in its comment; the detail (paths, engine output) is only in the log.
 
 ## Adding a maintenance task
 
