@@ -13,7 +13,7 @@ use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -146,7 +146,7 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
                 $this->service(BankAccountRepository::class),
                 $this->competingErasureFromASecondConnection(...),
             ),
-            $this->service(EnvelopeEncryptor::class),
+            $this->service(Keystore::class),
             $this->service(AuditLogger::class),
             $this->service(TransactionManager::class),
         );

@@ -83,7 +83,7 @@ The PHPUnit suite pins both of the application's time sources to `FreezeSystemCl
 
 **Which lever overrides it depends on the lane, and reaching for the wrong one fails silently.**
 
-- Kernel-free test: `SystemClock::set(FixedClock::at(…))` — `FixedClock` is `Erpify\Tests\Double\Clock\FixedClock`, under `api/tests/Double/` and deliberately not under `api/tests/Support/`, whose namespace `ArtifactGateSweep` reads as a signal that a kernel-free test is an artifact gate.
+- Kernel-free test: `SystemClock::set(FixedClock::at(…))` — `FixedClock` is `Erpify\Tests\Double\Clock\FixedClock`, under `api/tests/Double/` and deliberately not under `api/tests/Support/`, whose namespace `ArtifactGateSweep` reads as a signal that a kernel-free test is an artifact gate; the shared stream doubles (`api/tests/Double/Stream`) live there for the same reason.
 - Once a request, command or worker message is dispatched: `Symfony\Component\Clock\Clock::set(new MockClock(…))`. `SystemClockInitializer` runs at priority 4096 on `kernel.request` and overwrites the ambient clock with the container's, so a `SystemClock::set()` made before the request is gone by the time the controller reads it — and the failure surfaces as a wrong expiry, pointing nowhere near the listener that caused it.
 
 Restore with `FreezeSystemClockExtension::pin()`, never `SystemClock::reset()`: `reset()` un-pins to the host wall clock, which under this harness is an escape rather than a restore. The trailing pin makes a missed restore harmless at the test boundary, not within a test.

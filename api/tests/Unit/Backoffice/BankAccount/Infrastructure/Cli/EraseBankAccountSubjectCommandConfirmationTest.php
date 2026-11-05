@@ -8,7 +8,7 @@ use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
 use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -153,10 +153,11 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
     }
 
     /**
-     * An eraser whose two irreversible calls are refused outright, so a test asserting "nothing was erased"
-     * fails on the mutation itself instead of on an exit code that happens to agree with it. A stubbed eraser
-     * cannot do this job and reading it as if it could is the trap: stubs answer `findById(): null` and
-     * `destroyScope(): false`, so the use case runs to completion and reports "nothing to erase" — a green
+     * An eraser that refuses both irreversible calls (removing the record, tombstoning the scope) and the keystore
+     * lock read that precedes them, so a test asserting "nothing was erased" fails on the mutation itself, and
+     * "the command declined to look" is asserted directly rather than inferred from an exit code. A stubbed
+     * eraser cannot do this job and reading it as if it could is the trap: stubs answer `findById(): null` and
+     * `lockState(): Absent`, so the use case runs to completion and reports "nothing to erase" — a green
      * that says the subject had no record, never that the command declined to look.
      */
     private function refusingEraser(): EraseBankAccountSubject
@@ -164,12 +165,13 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
         $repository = $this->createMock(BankAccountRepository::class);
         $repository->expects($this->never())->method('remove');
 
-        $encryptor = $this->createMock(EnvelopeEncryptor::class);
-        $encryptor->expects($this->never())->method('destroyScope');
+        $keystore = $this->createMock(Keystore::class);
+        $keystore->expects($this->never())->method('destroy');
+        $keystore->expects($this->never())->method('lockState');
 
         return new EraseBankAccountSubject(
             $repository,
-            $encryptor,
+            $keystore,
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),
         );

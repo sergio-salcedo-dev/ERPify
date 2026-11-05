@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Crypto\Application;
 
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\CannotSealEmptyStream;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
@@ -25,8 +26,26 @@ interface StreamEnvelopeEncryptor
 {
     /**
      * Reads `$plaintext` to its end and writes the sealed form to `$sealed`, minting the scope's key on first
-     * use. The key is minted only once the first byte has arrived, so an empty or failing source leaves no
-     * keystore row.
+     * use. The key is minted once the first chunk has been read, so a source that is empty or fails before
+     * that chunk completes leaves no keystore row. A failure after it leaves a live key and a partial object
+     * in `$sealed`: the caller discards the object and tombstones the scope with
+     * {@see DestroyReason::AbortedUpload}, which is only right when no Document row refers to the scope.
+     *
+     * Run it outside any transaction that can roll back. The minted key row enrols in the caller's open
+     * transaction while the sealed bytes go to an external sink, so a rollback would delete the key of an
+     * object that already exists, and an uncommitted insert holds the scope's unique-index lock for the whole
+     * outer transaction, blocking every other writer and any destroy of the scope.
+     *
+     * The original's filename is sealed with {@see EnvelopeEncryptor::encrypt()} under the same scope. A
+     * filename ciphertext and a stream object cannot stand in for one another by construction (different
+     * primitives and formats), even with equal `$aad`; passing a different `$aad` for the filename is defence in
+     * depth.
+     *
+     * Both streams must be blocking, and the sink must support `fflush()`: a userland wrapper without
+     * `stream_flush` makes it return false, and `seal()` then throws {@see StreamTransferFailed} after a
+     * complete object was written. Three consecutive empty reads that report no end of stream are refused, so a
+     * non-blocking source with nothing ready is refused rather than waited for; a slow drip of one byte at a
+     * time is never refused and is bounded by the caller's own deadline.
      *
      * @param resource $plaintext a readable stream
      * @param resource $sealed    a writable stream
@@ -38,7 +57,8 @@ interface StreamEnvelopeEncryptor
     public function seal(EncryptionScopeId $scope, $plaintext, $sealed, string $aad): void;
 
     /**
-     * Reads a sealed stream to its end, writing the plaintext to `$plaintext`.
+     * Reads a sealed stream to its end, writing the plaintext to `$plaintext` and flushing it. The same
+     * stream requirements as {@see seal()} apply.
      *
      * @param resource $sealed    a readable stream holding the output of {@see seal()}
      * @param resource $plaintext a writable stream

@@ -29,6 +29,10 @@ interface Keystore
      * later cannot mint a live key under it. First writer wins: an existing tombstone keeps its reason and
      * its destruction time, so a later destroy under another reason cannot relabel it.
      *
+     * {@see DestroyReason::AbortedUpload} is for a scope that has no record of the thing it protected, which
+     * the caller establishes under the locks that keep one from appearing. The reconciler ignores that reason,
+     * so a live scope labelled this way raises no alarm, and first-writer-wins makes the label permanent.
+     *
      * @return bool true when this call wrote the tombstone (a live key was destroyed, or a scope with no row
      *              was closed), false when a tombstone was already there (idempotent). Never evidence that
      *              anything was erased: the caller's own record of the erasure decides that, not this flag.

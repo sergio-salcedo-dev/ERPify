@@ -17,20 +17,19 @@
     wrapped_dek), add a reason to the keystore row (aborted-upload or erasure), and test
     destroy-unminted, seal, expect DekDestroyed. The boolean it returns must never decide
     erasure. Add a Keystore method that locks the scope's row and reports live, tombstoned or
-    absent (wrappedDekFor() cannot tell a tombstone from absence), and pass the KEK version
-    into the tombstone upsert or state a sentinel (it is a private constant of the encryptor).
+    absent (wrappedDekFor() cannot tell a tombstone from absence), and the tombstone of an unminted
+    scope carries the sentinel kek_version 0.
     Amend DbalSubjectErasureReconciler to exclude aborted-upload tombstones and Document
     scopes, with a test that plants one of each and expects unreconciledScopes() empty. The
-    stream seal authenticates truncation (a final-chunk marker in the associated data) and binds
-    the scope in that data, never a storage path, so a rename needs no re-seal. The final-chunk
+    stream seal authenticates truncation (an authenticated final-chunk marker, the secretstream FINAL tag) and
+    binds the scope in the associated data of every chunk, never a storage path, so a rename needs no re-seal. The final-chunk
     marker is decided by lookahead, so the seal never emits a final-marked chunk for a stream the
     counter then rejects at byte MAX_ORIGINAL_BYTES + 1. The unseal refuses a stream with no
     final-marked chunk (a 0-byte file from a full disk or a partial restore), and the sibling
-    either seals an authenticated empty final chunk or throws on empty input, with a test pinning
-    whichever is chosen. Test at MAX-1, MAX and MAX+1 and at exact multiples of the chunk size
+    throws CannotSealEmptyStream on empty input before any key is minted, with a test pinning it. Test at MAX-1, MAX and MAX+1 and at exact multiples of the chunk size
     (104,857,600 is a multiple of every power-of-two chunk up to 4 MiB; for a larger chunk test the
-    largest multiple below the cap and one byte either side of it). The nonce or associated data of
-    each chunk binds its 64-bit index and the final flag, so reordering, duplicating or dropping a
+    largest multiple below the cap and one byte either side of it). The secretstream
+    construction chains each chunk to its predecessors, so reordering, duplicating or dropping a
     chunk fails authentication, and the unseal refuses any byte after the final-marked chunk. A chunk
     is filled by looping until the chunk size or end of stream, never on one fread (php://input and
     network streams return short reads). Tests: a source returning one byte per read; a source
@@ -153,7 +152,9 @@
     matched as a substring after the same padding and decoding reduction and consulted only by the
     URI redaction paths (not RedactionDenylist::KEYS, which strips response-body extension keys, and
     not IDENTITY_KEYS, which is matched whole and parity-gated), so Monolog's request_uri, the
-    per-error log line and Sentry's url and query_string drop it; mirror the set in
+    per-error log line and Sentry's url and query_string drop it; on the upload route's path those
+    paths replace the whole query with the sentinel (the user, 2026-11-05; unit row: a misspelt key
+    such as file_name=); mirror the set in
     pwa/src/context/shared/observability/domain/redaction.ts and extend RedactionVocabularyParityTest
     to compare the two. Unit rows: filename, FILENAME, filename[], filename[0], %66ilename,
     filename%00, a repeated key and a double-encoded key, through redact(), redactQuery(), the Monolog
@@ -205,7 +206,8 @@
     renames it into the final root and removes it, refusing to start on any failure (st_dev equality
     is not proof: rename fails with EXDEV across two mount points of one filesystem); one short
     transaction locks the intent row, then the keystore row, asserts the intent is Streaming with a
-    live lease and a deadline not passed and the scope not tombstoned, reads the actor and key hash
+    live lease and a deadline not passed and the scope Live under the lock (lockState: Absent is a
+    snapshot, never accepted), reads the actor and key hash
     from the locked intent row (never from the writer's memory), inserts the Received row
     (promoted_at NULL, next_scan_at = transaction time; this story creates both columns) and seq 1,
     sets the intent Committed with the document id, and commits; the reaper locks in the same order
@@ -238,7 +240,7 @@
     the actor and expires the Declared and Streaming ones (a Committed intent stays Committed for
     the retention sweep), never deleting a row, so the reaper still tombstones a minted scope; only
     then do the document and custody statements run, all inside the identity erasure's transaction.
-    Add a keystore tombstone growth metric; aborted-upload tombstones are never pruned. The declare
+    Add a keystore tombstone growth line to the scheduled report; aborted-upload tombstones are never pruned. The declare
     and PUT routes regenerate api/.route-manifest.json, are classified in
     api/.credential-proof-policy and name their voter and Permission; every problem type this story
     mints (conflict, gone, missing or mismatched Content-Length, rate limit, replay conflict) goes
@@ -254,7 +256,8 @@
     path and format this story fixes (one record per proof: who, when, what was restored, digest set
     verified), which the doc-5 gate reads and doc-7 reuses for the drill. Record retention_reason (closed enum), legal_basis (GDPR Article 6
     enum) and a nullable consumer-supplied review_at, nothing more is enforced. Exactly
-    MAX_ORIGINAL_BYTES (100 MiB, one constant) is accepted at the declare step, a larger declared
+    MAX_ORIGINAL_BYTES (100 MiB, one constant that replaces the literal doc-1's tests carry) is
+    accepted at the declare step, a larger declared
     size is refused there, and a body that runs past its declared size aborts at the first extra
     byte, counted before each chunk is sealed or staged; the writer that detects the overflow
     deletes its staged file and expires its own intent, and the upload falls into the aborted-upload
@@ -368,7 +371,7 @@
     (an erasure can commit between the read's snapshot and its open). The route is always registered
     (so the route manifest, the credential-proof classification and the voter hold) and its
     controller answers 404 while a boolean parameter, documents.read_enabled (default false outside
-    dev and test), is false; a gate test reads the two tracked proof records (the backup and restore
+    dev and test), is false, or the gone problem type while doc-7's ledger-override flag is set; a gate test reads the two tracked proof records (the backup and restore
     proof, and the restore drill with ledger replay; doc-3 fixes their path and format and doc-3
     and doc-7 commit theirs there) and fails when the tracked production configuration sets the
     parameter true while either is missing; a value injected by the deploy environment is a stated
@@ -392,7 +395,7 @@
     page with a capped page size, through a batch method this story adds to Keystore (doc-1 delivers
     only the per-scope one); an Erased document (ciphertext NULL), a destroyed scope or a
     missing scope lists no name, any other decrypt failure on a non-Erased document lists no name
-    and raises an alarm (a metric, not a per-request error log), and none ever fails the page; a
+    and raises an alarm (a line of the scheduled report, not a per-request error log), and none ever fails the page; a
     test plants a destroyed scope inside a page.
   invoke_dev_with: >-
     The custody listing is a route: it regenerates api/.route-manifest.json, is classified in
@@ -472,7 +475,11 @@
     leaves no trace; the drill plants a corrupted one and expects recovery mode to hold). The
     ledger is a single copy (the user, 2026-11-05): losing it fails
     closed, and an explicit, documented override procedure exercised in the drill is the only way a
-    restore proceeds. Record in section 7 that whoever holds the write credential can append an
+    restore proceeds. The override sets a database flag that doc-5's read controller checks (gone
+    problem type whatever documents.read_enabled says), cleared only when a completion run has
+    replayed the whole ledger and the Document-driven reconciler reports no non-Erased row whose
+    scope is in it; it leaves a custody-style record (who, when, why) and the drill asserts that no
+    resurrected document is served before the replay completes. Record in section 7 that whoever holds the write credential can append an
     entry for a live scope and the sweep then destroys that document with no voter, that the
     ledger is a single copy, that a deleted entry leaves no trace and that a leaked repository
     password cannot be rotated while the repository is append-only. This story delivers the tombstone reconciler, a scheduled alarm driven by Document rows

@@ -36,6 +36,9 @@ interface EnvelopeEncryptor
 
     /**
      * Destroys the scope's key, or closes a scope that has none yet, so nothing can be sealed under it again.
+     * No production code calls this today: it is kept as the seam the Documents erasure story uses.
+     * {@see DestroyReason::AbortedUpload} belongs to the {@see Keystore::destroy()} callers on the upload-abort
+     * path, and only for a scope with no Document row, which the caller establishes under the locks.
      *
      * @return bool true when this call wrote the tombstone, false when one was already there (idempotent);
      *              see {@see Keystore::destroy()}

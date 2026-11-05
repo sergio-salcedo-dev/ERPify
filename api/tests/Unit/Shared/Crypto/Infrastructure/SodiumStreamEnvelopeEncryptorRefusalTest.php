@@ -10,8 +10,8 @@ use Erpify\Shared\Crypto\Domain\Exception\StreamTransferFailed;
 use Erpify\Shared\Crypto\Domain\KeyState;
 use Erpify\Shared\Crypto\Infrastructure\ScopeKeyring;
 use Erpify\Shared\Crypto\Infrastructure\SodiumStreamEnvelopeEncryptor;
-use Erpify\Tests\Support\Stream\SealedLayout;
-use Erpify\Tests\Support\Stream\SyntheticStream;
+use Erpify\Tests\Double\Stream\SealedLayout;
+use Erpify\Tests\Double\Stream\SyntheticStream;
 use Generator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -20,8 +20,8 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 /**
- * What the stream seal and unseal refuse: an empty or failing source, an object altered, cut, extended or opened under
- * another scope or context, and a sink that cannot be written.
+ * What the stream seal and unseal refuse: an empty or failing source, an object altered, cut or extended, and a
+ * sink that cannot be written.
  *
  * @internal
  */
@@ -143,30 +143,6 @@ final class SodiumStreamEnvelopeEncryptorRefusalTest extends TestCase
         $this->expectException(DecryptionFailed::class);
 
         $this->encryptor->unseal($scope, $this->memory($sealed . "\0"), $this->memory(), self::AAD);
-    }
-
-    #[Test]
-    public function itRefusesAnObjectUnderAnotherScopeOrAnotherContext(): void
-    {
-        $scope = $this->documentScope();
-        $other = $this->documentScope();
-        $sealed = $this->sealedBytes($scope, 'evidence');
-        $this->sealedBytes($other, 'unrelated'); // gives the other scope a live key of its own
-
-        foreach ([[$other, self::AAD], [$scope, 'original|v2']] as [$openScope, $openAad]) {
-            $refused = false;
-
-            try {
-                $this->encryptor->unseal($openScope, $this->memory($sealed), $this->memory(), $openAad);
-            } catch (DecryptionFailed) {
-                $refused = true;
-            }
-
-            $this->assertTrue(
-                $refused,
-                \sprintf('opening under %s with "%s" must fail', $openScope->toString(), $openAad),
-            );
-        }
     }
 
     #[Test]

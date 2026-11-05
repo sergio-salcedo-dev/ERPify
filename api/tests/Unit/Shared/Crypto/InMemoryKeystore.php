@@ -8,7 +8,9 @@ use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Application\WrappedDek;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Crypto\Domain\Exception\KeystoreLockRequiresTransaction;
 use Erpify\Shared\Crypto\Domain\KeyState;
+use Erpify\Shared\Crypto\Infrastructure\Persistence\DbalKeystore;
 use Override;
 
 /**
@@ -17,6 +19,10 @@ use Override;
  * reads as unavailable, a scope never minted is tombstoned too, the first tombstone keeps its reason, the
  * destroy is idempotent, and a later `store` for that scope is a no-op — the scope can never be re-minted,
  * exactly as the surviving `destroyed_at` row enforces in Postgres.
+ *
+ * It does not model the transaction `lockState()` requires of {@see DbalKeystore}, nor any lock: it never
+ * throws {@see KeystoreLockRequiresTransaction} and nothing blocks. A test of that requirement or of
+ * serialisation between writers belongs against the real keystore.
  */
 final class InMemoryKeystore implements Keystore
 {

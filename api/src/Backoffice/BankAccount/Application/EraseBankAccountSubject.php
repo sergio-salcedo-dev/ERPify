@@ -9,9 +9,10 @@ use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
 use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Crypto\Domain\KeyState;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -27,9 +28,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * key — before the same transaction destroys that key, and the `GDPR_SUBJECT_ERASED` security entry commits
  * with them, so a destroyed key always has its evidence row. It is not a business deletion (no domain event,
  * no CLOSED-only lifecycle guard); the compliance record is that security entry plus the surviving,
- * now-unreadable change rows. A scope that never held a key is closed all the same, so nothing can later be
- * sealed under it, and that counts as an erasure. Idempotent: a re-run finds nothing live and an
- * already-destroyed key, erases nothing and skips the self-audit.
+ * now-unreadable change rows. A subject with no live record and no keystore row is not an erasure at all: the
+ * id names nothing this installation ever held, so a mistyped but well-formed id writes no tombstone and no
+ * evidence. Idempotent: a re-run finds nothing live and an already-destroyed key, erases nothing and skips
+ * the self-audit.
  */
 final readonly class EraseBankAccountSubject
 {
@@ -37,7 +39,7 @@ final readonly class EraseBankAccountSubject
 
     public function __construct(
         private BankAccountRepository $bankAccountRepository,
-        private EnvelopeEncryptor $encryptor,
+        private Keystore $keystore,
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
     ) {
@@ -46,23 +48,34 @@ final readonly class EraseBankAccountSubject
     public function execute(string $bankAccountId): SubjectErasureResult
     {
         Uuid::ensure($bankAccountId);
-        $scope = EncryptionScopeId::forBankAccount($bankAccountId);
+        // `ensure()` accepts either case and canonicalises nothing, while keystore scopes compare exactly and
+        // the change capture seals under the hydrated (lowercase) id: the scope is built from the canonical
+        // spelling, or an upper-case id would tombstone a scope the data was never sealed under.
+        $canonicalId = \strtolower($bankAccountId);
+        $scope = EncryptionScopeId::forBankAccount($canonicalId);
 
-        return $this->transactionManager->transactional(function () use ($bankAccountId, $scope): SubjectErasureResult {
+        return $this->transactionManager->transactional(function () use ($canonicalId, $scope): SubjectErasureResult {
             // Locking read: it is what makes a second erasure of the same subject a no-op instead of a
             // failure. Unlocked, a competitor can destroy the scope's key between this read and the flush
             // below, and the change capture then seals the deletion snapshot under a tombstoned key.
-            $account = $this->bankAccountRepository->findByIdForUpdate($bankAccountId);
+            $account = $this->bankAccountRepository->findByIdForUpdate($canonicalId);
             $liveRecordErased = $account instanceof BankAccount;
+
+            // Without a live record, only a keystore row makes this an erasure. The row is locked in this same
+            // transaction as the destroy, so a concurrent erasure cannot change it in between; an absent row
+            // has nothing to lock, and a mint that lands after this read belongs to a record created later.
+            if (!$liveRecordErased && KeyState::Absent === $this->keystore->lockState($scope)) {
+                return new SubjectErasureResult($scope->toString(), false, false);
+            }
 
             if ($liveRecordErased) {
                 // Load-bearing: remove() flushes eagerly, so the final BANK_ACCOUNT_DELETED change row is
-                // captured and sealed under the still-live key here, before destroyScope() below tombstones
+                // captured and sealed under the still-live key here, before destroy() below tombstones
                 // it. A future lazy flush would move that capture past the destroy and break erasure.
                 $this->bankAccountRepository->remove($account);
             }
 
-            $keyDestroyed = $this->encryptor->destroyScope($scope, DestroyReason::Erasure);
+            $keyDestroyed = $this->keystore->destroy($scope, DestroyReason::Erasure);
 
             $result = new SubjectErasureResult($scope->toString(), $liveRecordErased, $keyDestroyed);
 
