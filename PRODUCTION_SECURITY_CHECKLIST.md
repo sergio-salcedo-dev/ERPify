@@ -2487,7 +2487,7 @@ mitigated state. Accepting one means recording who accepted it and against which
   |---|---|---|---|
   | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
-  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin; each service now refuses to boot on a DSN that drops it, so what remains is a process started outside the entrypoint (`--entrypoint`) — caught only if the §8 `exec` check is run — and that the assertion proves where `async` writes, not that every publisher calls `EventBus::publish()` inside a transaction | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of `ImageDeletionRequested` (none in `api/src` today) — the first `async` consumer whose effect cannot be undone, since it destroys stored bytes. The Bank and BankAccount events already publish to `async` inside the writer's transaction, so the guarantee is already relied on, but a message escaping a rollback there costs a stray email or realtime refresh. The boot-time assertion is adopted (`event:transport:assert-transactional`, run by the container entrypoint of every service, gated by `AsyncTransportBootAssertionGateTest`), and §8 carries the manual `exec` verification that covers a process started outside the entrypoint; a scripted deploy-time smoke check is not adopted | not recorded (opened 2026-08-28) |
+  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin; each service now refuses to boot on a DSN that drops it, so what remains is a service whose compose definition replaces the entrypoint — caught only if the §8 `exec` check is run — a one-off container (`run --entrypoint`, `docker run`), which no check reaches and §8 only asks the operator to look for, and that the assertion proves where `async` writes, not that every publisher calls `EventBus::publish()` inside a transaction | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of `ImageDeletionRequested` (none in `api/src` today) — the first `async` consumer whose effect cannot be undone, since it destroys stored bytes. The Bank and BankAccount events already publish to `async` inside the writer's transaction, so the guarantee is already relied on, but a message escaping a rollback there costs a stray email or realtime refresh. The boot-time assertion is adopted (`event:transport:assert-transactional`, run by the container entrypoint of every service, gated by `AsyncTransportBootAssertionGateTest`), and §8 carries the manual `exec` verification of the running service containers; a scripted deploy-time smoke check is not adopted | not recorded (opened 2026-08-28) |
 
 
 - [x] **A production restore could take the scriptable non-production path, closed 2026-10-23.**
@@ -2603,14 +2603,18 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] `make deploy.local` (or `scripts/deploy/deploy-local.sh`) reaches a 200 on
       `https://$SERVER_NAME/api/v1/health`.
 - [ ] `docker compose … ps` shows every service healthy under the prod overlay.
-- [ ] **`async` is transactional on every service that publishes.** Run
-      `docker compose … exec <service> php bin/console event:transport:assert-transactional` for `php`,
-      `messenger_worker` and `scheduler_worker`; each must print `"async" is the Doctrine transport on the
-      application connection` and exit 0. The entrypoint already refuses to boot on a bad
-      `MESSENGER_TRANSPORT_DSN`, so this box exists for the one path it does not cover — a container started
-      with `--entrypoint`, or a `compose.override` that changed the DSN after the image was verified — because
-      `exec` asks the environment of the container that is actually running. A failure means domain events
-      are published outside the transaction that produced them; do not take traffic until it passes.
+- [ ] **`async` is transactional on every service that publishes.** For `php`, `messenger_worker` and
+      `scheduler_worker` (each replica of a scaled one, `--index=N`) run
+      `docker compose … exec -T <service> php bin/console event:transport:assert-transactional` and read the
+      exit code rather than grepping the text: it must be 0, with `"async" is the Doctrine transport on the
+      application connection` reported. The entrypoint already refuses to boot on a bad
+      `MESSENGER_TRANSPORT_DSN`, so this box covers the one path it does not: a service whose compose
+      definition replaces `entrypoint:` or runs a command other than `php`, `frankenphp` or `bin/console`.
+      `exec` asks the environment of the service container that is actually running; a one-off container
+      (`docker compose run --entrypoint …`, `docker run`) is never reached, so list those with
+      `docker compose … ps --all` and `docker ps` and remove any that is not yours. A failure may mean domain
+      events are published outside the transaction that produced them; the printed `[ERROR]` says which cause.
+      Do not take traffic until it passes.
 - [ ] `make docker.down.clean-volumes` and `db.reset` are **never** run against
       a prod stack.
 - [ ] **Disaster-recovery gate 1: a restore drill ran on the real VPS, before the first customer.** The
