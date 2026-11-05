@@ -37,6 +37,7 @@ enum AuditMetadataKey: string
             self::RecoverySecretsDeleted,
             self::MembershipsDeleted,
             self::InvitationsDeleted,
+            self::DocumentReferencesAnonymised,
             self::OrphanRoleValueCount,
             self::MalformedRoles,
             self::UnreadableCredentials,
@@ -72,6 +73,7 @@ enum AuditMetadataKey: string
     case RecoverySecretsDeleted = 'recovery_secrets_deleted';
     case MembershipsDeleted = 'memberships_deleted';
     case InvitationsDeleted = 'invitations_deleted';
+    case DocumentReferencesAnonymised = 'document_references_anonymised';
     case Resweep = 'resweep';
     case EncryptionScopeId = 'encryption_scope_id';
     case PreviousRoles = 'previous_roles';

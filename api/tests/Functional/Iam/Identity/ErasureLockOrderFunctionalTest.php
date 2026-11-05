@@ -9,6 +9,9 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Documents\Document\Application\PurgeUserDocumentReferences;
+use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
+use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
@@ -29,8 +32,12 @@ use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Functional\Documents\Document\PlantsDocumentRows;
+use Erpify\Tests\Functional\Documents\Document\ProbingDocumentCustodyRepository;
+use Erpify\Tests\Functional\Documents\Document\ProbingDocumentRepository;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Override;
@@ -84,6 +91,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(EraseIdentitySubject::class)]
 final class ErasureLockOrderFunctionalTest extends KernelTestCase
 {
+    use PlantsDocumentRows;
     use ResolvesContainerServices;
 
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01';
@@ -122,6 +130,8 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
 
             return;
         }
+
+        $this->emptyDocumentTables();
 
         // The fixtures are COMMITTED — a row written inside a rolled-back transaction is invisible to the
         // probe's connection, which would report every row unlocked and the test would prove nothing. So they
@@ -202,6 +212,67 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
         );
     }
 
+    #[Test]
+    public function theDocumentRowsAreTakenAfterTheIdentityAndTheirCustodyRowsAfterThem(): void
+    {
+        // Documents sits last in the global lock order: a flow holding a document row never reaches for an
+        // identity, invitation, session, audit or business-log row afterwards, so an erasure that takes them
+        // first and the documents last cannot close a cycle with it. The unit sibling proves the use cases call
+        // the seam last; this asks the database what is held at the instant each Documents statement runs.
+        $this->seedCommittedSubject();
+        $other = Uuid::generate();
+        $subjectDocument = $this->plantDocument($this->subjectId);
+        $theirDocument = $this->plantDocument($other);
+        $custodyRows = [
+            'other' => $this->plantCustody($theirDocument, 1, $this->subjectId),
+            'subject' => $this->plantCustody($subjectDocument, 1, $this->subjectId),
+        ];
+
+        $atTheDocuments = [];
+        $atTheCustody = [];
+
+        $seam = new PurgeUserDocumentReferences(
+            new ProbingDocumentRepository(
+                $this->service(DocumentRepository::class),
+                function () use (&$atTheDocuments, $subjectDocument, $custodyRows): void {
+                    $atTheDocuments = [
+                        'identity' => $this->identityRowIsGoneOnOurOwnConnection(),
+                        'invitation' => $this->isLocked('iam_invitation', $this->invitationId),
+                        'document' => $this->isLocked('document', $subjectDocument),
+                        'custody' => $this->isLocked('document_custody', $custodyRows['subject']),
+                    ];
+                },
+            ),
+            new ProbingDocumentCustodyRepository(
+                $this->service(DocumentCustodyRepository::class),
+                beforeAnonymise: function () use (&$atTheCustody, $subjectDocument, $custodyRows): void {
+                    $atTheCustody = [
+                        'document' => $this->isLocked('document', $subjectDocument),
+                        'custody of the subject' => $this->isLocked('document_custody', $custodyRows['subject']),
+                        'custody on another document' => $this->isLocked('document_custody', $custodyRows['other']),
+                    ];
+                },
+            ),
+        );
+
+        $chain = $this->chainProbing(static fn (): null => null, static fn (): null => null, $seam);
+        $result = $chain->execute($this->subjectId);
+
+        // Anti-vacuity: both statements matched rows, so a lock "not held" is an answer and not an absence.
+        $this->assertSame(3, $result->documentReferencesAnonymised, 'one uploader and two custody actors');
+        $this->assertSame(
+            ['identity' => true, 'invitation' => true, 'document' => false, 'custody' => false],
+            $atTheDocuments,
+            'When the uploader rewrite runs, the identity and invitation are already taken and no Documents row '
+            . 'is yet: Documents is last in the order every other path agrees on.',
+        );
+        $this->assertSame(
+            ['document' => true, 'custody of the subject' => false, 'custody on another document' => false],
+            $atTheCustody,
+            'The documents are taken before the custody rows that travel with them, never the other way round.',
+        );
+    }
+
     /**
      * Whether the subject's row is already gone from the erasure's OWN view — the uncommitted `DELETE` is
      * visible to the transaction that issued it and to nothing else, which is exactly the property wanted:
@@ -225,6 +296,7 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
     private function chainProbing(
         callable $beforeIdentityRowLock,
         callable $beforeResetTokenDelete,
+        ?PersonReferenceErasure $documents = null,
     ): FulfilIdentityErasure {
         return new FulfilIdentityErasure(
             new EraseIdentitySubject(
@@ -246,6 +318,7 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             $this->service(ActorContextFactory::class),
             $this->service(TransactionManager::class),
             $this->service(ErasureResweepRepository::class),
+            $documents ?? $this->service(PersonReferenceErasure::class),
         );
     }
 

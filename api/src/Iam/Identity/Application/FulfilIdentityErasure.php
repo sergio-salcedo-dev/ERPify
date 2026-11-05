@@ -22,6 +22,7 @@ use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Event\Application\SubjectPseudonym;
 use Erpify\Shared\Event\Application\SubjectPseudonymisation;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
@@ -34,7 +35,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * EntityManager wraps, so they commit or roll back with the rest, the hard-delete of the subject's sessions
  * ({@see PurgeUserSessions}), the anonymisation of the reproducible business log
  * ({@see EventStoreSubjectAnonymiser}, run only for a subject whose identity was live), the hard-delete of the
- * membership that admitted them ({@see PurgeUserMembership}), the combined compliance self-audit, and the
+ * membership that admitted them ({@see PurgeUserMembership}), the rewrite of every document uploader and custody
+ * actor naming them ({@see PersonReferenceErasure}, the seam Documents implements; it never erases a document, it
+ * anonymises the references to the person), the combined compliance self-audit, and the
  * scheduling of the re-sweep ({@see ResweepErasedSubjects}) that repeats the anonymising passes for one window
  * afterwards — a request already in flight when this runs can still commit a row naming the subject, and
  * nothing inside this transaction can reach a row that does not exist yet.
@@ -101,14 +104,16 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *
  * Its object coupling sits above the default threshold and stays there. Every collaborator is one link of
  * the single atomic act this orchestrates — refuse an administrator, erase the identity, anonymise both
- * trail axes, anonymise the business log, purge sessions, purge the membership, purge the invitations, seal
- * the actor, schedule the re-sweep, own the transaction — and the two types the resource axis speaks in are
- * that seam's vocabulary, not extra responsibilities. Splitting the chain would hide, from the one place a
- * reader looks, that every place the subject's id is persisted is erased together; that atomicity is the
- * property the whole design rests on, and the list grows by one every time a new context comes to hold a
- * person's id.
+ * trail axes, anonymise the business log, purge sessions, purge the membership, purge the invitations,
+ * anonymise the document references, seal the actor, schedule the re-sweep, own the transaction — and the
+ * two types the resource axis speaks in are that seam's vocabulary, not extra responsibilities. Splitting the
+ * chain would hide, from the one place a reader looks, that every place the subject's id is persisted is erased
+ * together; that atomicity is the property the whole design rests on, and the list grows by one every time a
+ * new context comes to hold a person's id.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveParameterList") one collaborator per link of the chain, as the paragraph above
+ *                                                   argues: grouping them would hide the list
  */
 final readonly class FulfilIdentityErasure
 {
@@ -143,6 +148,7 @@ final readonly class FulfilIdentityErasure
         private ActorContextFactory $actorContext,
         private TransactionManager $transactionManager,
         private ErasureResweepRepository $erasureResweeps,
+        private PersonReferenceErasure $personReferenceErasure,
     ) {
     }
 
@@ -197,7 +203,7 @@ final readonly class FulfilIdentityErasure
                 // It re-links nothing, because the original id is gone from both columns.
                 $anonymisedResourceRows = $this->auditTrail->completeForSubject($subject, $anonymisation);
                 [$sessionsDeleted, $eventRows] = $this->purgeSessionsThenBusinessLog($identity, $pseudonymisation);
-                $membershipsDeleted = $this->purgeUserMembership->purge($subjectId);
+                [$membershipsDeleted, $documentReferencesAnonymised] = $this->purgeMembershipThenDocuments($subjectId);
 
                 $result = new FulfilIdentityErasureResult(
                     $identity->identityErased,
@@ -209,6 +215,7 @@ final readonly class FulfilIdentityErasure
                     $sessionsDeleted,
                     $membershipsDeleted,
                     $invitationsDeleted,
+                    $documentReferencesAnonymised,
                 );
 
                 $this->recordCombinedErasure($result, $anonymisation->pseudonym);
@@ -217,6 +224,24 @@ final readonly class FulfilIdentityErasure
                 return $result;
             },
         );
+    }
+
+    /**
+     * The membership, then every document uploader and custody actor naming the subject.
+     *
+     * The Documents step is last of the purges, and the position is the lock order that context declares: its
+     * rows are taken after the identity, session, audit and business-log rows this chain already holds, and no
+     * Documents flow takes any of those after one of its own. The membership has no foreign key and so no
+     * position of its own; it runs here because nothing else about it is order-sensitive.
+     *
+     * @return array{int, int} memberships deleted and document references anonymised, in that order
+     */
+    private function purgeMembershipThenDocuments(string $subjectId): array
+    {
+        return [
+            $this->purgeUserMembership->purge($subjectId),
+            $this->personReferenceErasure->eraseReferencesTo($subjectId),
+        ];
     }
 
     /**
@@ -331,6 +356,7 @@ final readonly class FulfilIdentityErasure
             'sessions_deleted' => $result->sessionsDeleted,
             'memberships_deleted' => $result->membershipsDeleted,
             'invitations_deleted' => $result->invitationsDeleted,
+            'document_references_anonymised' => $result->documentReferencesAnonymised,
         ]);
     }
 

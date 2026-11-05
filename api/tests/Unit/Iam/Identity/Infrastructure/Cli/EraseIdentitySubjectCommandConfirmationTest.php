@@ -30,6 +30,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceA
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -198,6 +199,7 @@ final class EraseIdentitySubjectCommandConfirmationTest extends TestCase
             new FixedActorContextFactory(ActorContext::system()),
             new InlineTransactionManager(),
             new InMemoryErasureResweepRepository(),
+            new RecordingPersonReferenceErasure(),
         ));
     }
 }
