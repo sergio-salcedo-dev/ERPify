@@ -12,8 +12,7 @@
 #   ---
 #   <prompt>
 #
-# Installing the timer (`make agent.install`) is the standing authorization for
-# one branch per task per run; the guard below keeps that to one OPEN PR per
+# Each run creates at most one branch per task; the guard below keeps that to one OPEN PR per
 # task, because the repo's rule is the fewest PRs possible and a weekly task must
 # not pile up unreviewed ones. A second brake, AGENT_MAX_OPEN_PRS (default 3), caps
 # the agent PRs open at once across tasks and the issue poller: each one is a full
