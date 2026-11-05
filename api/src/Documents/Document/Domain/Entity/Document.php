@@ -64,8 +64,10 @@ final class Document extends AggregateRoot
     #[ORM\Column(name: 'series_id', type: Types::GUID, updatable: false)]
     private string $seriesId;
 
+    // Only first versions are filed here; a successor is a different way in, and it brings its own argument.
     #[ORM\Column(name: 'predecessor_id', type: Types::GUID, nullable: true, updatable: false)]
-    private ?string $predecessorId;
+    // @phpstan-ignore property.unusedType (Doctrine hydrates a successor's id; only first versions are filed here)
+    private ?string $predecessorId = null;
 
     #[ORM\Column(name: 'uploader_id', type: Types::GUID)]
     #[PersonSubjectReference(erasedBy: 'src/Documents/Document/Application/PurgeUserDocumentReferences.php')]
@@ -104,7 +106,6 @@ final class Document extends AggregateRoot
     private function __construct(
         string $id,
         string $scopeId,
-        ?string $predecessorId,
         string $uploaderId,
         string $digest,
         int $sizeBytes,
@@ -113,13 +114,12 @@ final class Document extends AggregateRoot
     ) {
         parent::__construct();
 
-        $this->ensureIdentifiers($id, $scopeId, $uploaderId, $predecessorId);
+        $this->ensureIdentifiers($id, $scopeId, $uploaderId);
         $this->ensureContent($digest, $sizeBytes, $idempotencyKeyHash);
 
         $this->id = $id;
         $this->scopeId = $scopeId;
         $this->seriesId = $id;
-        $this->predecessorId = $predecessorId;
         $this->uploaderId = $uploaderId;
         $this->digest = $digest;
         $this->sizeBytes = $sizeBytes;
@@ -146,7 +146,6 @@ final class Document extends AggregateRoot
         return new self(
             $id,
             $scopeId,
-            null,
             $uploaderId,
             $digest,
             $sizeBytes,
@@ -218,17 +217,9 @@ final class Document extends AggregateRoot
     /**
      * Every identifier is a lower-case UUID, so one row has one spelling, and the scope is never the document.
      */
-    private function ensureIdentifiers(
-        string $id,
-        string $scopeId,
-        string $uploaderId,
-        ?string $predecessorId,
-    ): void {
-        foreach ([$id, $scopeId, $uploaderId, $predecessorId] as $identifier) {
-            if (null === $identifier) {
-                continue;
-            }
-
+    private function ensureIdentifiers(string $id, string $scopeId, string $uploaderId): void
+    {
+        foreach ([$id, $scopeId, $uploaderId] as $identifier) {
             Uuid::ensure($identifier);
 
             if (\strtolower($identifier) !== $identifier) {
