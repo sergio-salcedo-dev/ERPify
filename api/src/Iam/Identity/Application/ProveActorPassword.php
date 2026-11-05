@@ -20,12 +20,12 @@ use Erpify\Iam\Identity\Domain\Repository\UserRepository;
  * next redemption is refused. The caller's password is the one thing a stolen session does not hold, so asking
  * for it turns "whoever holds the cookie" into "whoever holds the cookie AND the password".
  *
- * **It is a collaborator the controller calls, and not a step inside the use cases it precedes, because those
- * use cases are also driven with no session behind them** — the invitation and role-assignment commands run
- * from the console as the operator. A proof inside them would either refuse the console or need a way to be
- * switched off, and a switch is exactly what a stolen session would look for. The cost is stated: the proof and
- * the mutation are not one transaction, and nothing here stops a future controller reaching those use cases
- * without calling this — `api/.credential-proof-policy` is what holds the membership of the routes that do.
+ * **It is a collaborator the controller calls, and not a step inside the use cases it precedes**: the
+ * invitation use case is also driven from the console as the operator (`iam:invitation:create`), so a proof
+ * inside it would either refuse the console or need a way to be switched off, and a switch is exactly what a
+ * stolen session would look for. The roles and status use cases have no other caller; the proof sits beside
+ * the invitation's so the rule has one reading. `api/.credential-proof-policy` holds the membership of the
+ * routes that call it.
  *
  * The identity is read WITHOUT a row lock: the proof reads one column and takes no decision that outlives it,
  * so serialising it against the rows the mutation locks would only widen the lock-order surface. An identity

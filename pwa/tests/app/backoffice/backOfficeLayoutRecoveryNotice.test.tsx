@@ -31,9 +31,9 @@ import type { Role } from "@/context/shared/access/domain/Role";
 import type { Session } from "@/context/shared/access/domain/Session";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import {
-  clearRecoveryRedeemedSession,
-  markRecoveryRedeemed,
-} from "@/context/backoffice/user/application/recoveryRedeemedNotice";
+  clearSessionRedeemed,
+  markSessionRedeemed,
+} from "@/context/shared/access/infrastructure/redeemedSession";
 
 function sessionWith(roles: Role[]): Session {
   return {
@@ -76,11 +76,11 @@ describe("BackOfficeLayoutClient — recovery readiness notice", () => {
     globalThis.localStorage.clear();
     auth.session = sessionWith(["ADMIN"]);
     shell.readiness = { kind: "unknown" };
-    clearRecoveryRedeemedSession();
+    clearSessionRedeemed();
   });
 
   it("warns an administrator holding no secret, and links to where one is created", () => {
-    markRecoveryRedeemed();
+    markSessionRedeemed();
     shell.readiness = { kind: "not-live", reason: "none" };
     renderShell();
 
@@ -128,7 +128,7 @@ describe("BackOfficeLayoutClient — recovery readiness notice", () => {
   });
 
   it("sits first inside <main>, so the focus a navigation moves there reaches it first", () => {
-    markRecoveryRedeemed();
+    markSessionRedeemed();
     shell.readiness = { kind: "not-live", reason: "none" };
     renderShell();
 
@@ -137,7 +137,7 @@ describe("BackOfficeLayoutClient — recovery readiness notice", () => {
   });
 
   it("is never a live region and offers no dismiss", () => {
-    markRecoveryRedeemed();
+    markSessionRedeemed();
     shell.readiness = { kind: "not-live", reason: "none" };
     renderShell();
 

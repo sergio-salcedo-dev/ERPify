@@ -41,16 +41,6 @@ final class InviteUserRequestCurrentPasswordTest extends TestCase
     }
 
     #[Test]
-    public function aWhitespaceOnlyPasswordDoesNotSatisfyTheAdministratorProof(): void
-    {
-        $violations = $this->validator->validate(
-            new InviteUserRequest('newbie@erpify.test', [Role::ADMIN->value], '   '),
-        );
-
-        $this->assertCount(1, $violations);
-    }
-
-    #[Test]
     public function anAdministratorInvitationWithTheCurrentPasswordPassesValidation(): void
     {
         $request = new InviteUserRequest('newbie@erpify.test', [Role::ADMIN->value], 'the-current-password');

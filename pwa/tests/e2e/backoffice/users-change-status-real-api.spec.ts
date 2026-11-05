@@ -69,7 +69,11 @@ test.describe("BackOffice - Change user status (real API)", () => {
 
   test("an admin suspends an active member and the detail reflects the new status", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    testInfo.skip(
+      testInfo.repeatEachIndex > 0,
+      "the suspension is unidirectional and each save spends a password proof of the 10 per 15 minutes; a repetition would find the member already suspended and lock out the run",
+    );
     // The seed re-activates the target each run, so it starts ACTIVE and the control renders.
     expect(target.status).toBe("ACTIVE");
 

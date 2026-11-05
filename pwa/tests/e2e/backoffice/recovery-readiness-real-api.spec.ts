@@ -27,11 +27,18 @@ function banner(page: Page) {
  * answer — no navigation, no reload.
  *
  * The E2E administrator starts live (`global-setup.ts`) and ends live. The "none" state is built here by
- * revoking through the API, and the test mints through the UI. Mint and revoke share the per-identity
- * password-proof limit (10 per 15 minutes) with the role, status and ADMIN-invitation writes, and it is not
- * relaxed for E2E. This test spends 2 proofs (revoke, mint) and the restore ≤2 more if it fails between them;
- * repeating or retrying would add up to 4, so it runs only on the first repetition (`--repeat-each`; the weekly
- * burn-in runs ten) and never on a retry (CI retries twice).
+ * revoking through the API, and the test mints through the UI.
+ *
+ * **Proof budget of the shared administrator.** Mint, revoke, the role and status writes and an ADMIN invitation
+ * all spend one shared per-identity limit (10 per 15 minutes), not relaxed for E2E. A healthy run spends: global
+ * setup 1 on a fresh stack and up to 2 when it must first revoke a lapsed secret, role change 1, status change 1,
+ * ADMIN invitation 1, and this spec 2 (revoke, mint) — 6 on a fresh stack, 7 at worst. With CI's two retries every
+ * spender except this spec may run three times, and a proof is spent even by an attempt that then fails, so the
+ * theoretical worst is 2 + 3 + 3 + 3 + 2 + 2 (this spec's restore) = 15. The spenders are skipped on
+ * `--repeat-each` repetitions, and this spec on retries, so repetition adds nothing.
+ *
+ * A 429 between this spec's revoke and its restore leaves the shared administrator without a secret until the
+ * 15-minute window slides; it heals itself and costs time, not data.
  */
 test.describe("BackOffice - Recovery enrolment wall (real API)", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });

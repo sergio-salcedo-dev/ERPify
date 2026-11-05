@@ -444,12 +444,14 @@ stolen session does not hold, so "whoever has the cookie" becomes "whoever has t
 - **Roles and status ask always, whoever the target is.** Asking only for an administrator target needs the
   target loaded before the decision — a check-then-act window for a target granted `ADMIN` in between — or the
   proof moved inside the use case under the target's lock, which holds the active-administrator lock across a
-  password hash and needs an off switch. The off switch is the second problem: both use cases are also driven
-  from the console as the operator, and a switch is what a stolen session would look for.
+  password hash. For the invitation there is a second problem: its use case is also driven from the console as
+  the operator (`iam:invitation:create`), so a proof inside it needs an off switch, and a switch is what a
+  stolen session would look for. The roles and status use cases have no other caller today; the proof sits
+  beside the invitation's so the rule has one reading.
 - **The invitation asks only when the set carries `ADMIN`**, decided from the payload alone, so no row is read
   between the decision and the act. Inviting a lower role stays free: the invitee cannot sign in until the
   mailbox holder accepts.
-- **The proof is a controller-called collaborator, not a step of the use case** — for the console reason above.
+- **The proof is a controller-called collaborator, not a step of the use case** — for the invitation's console caller above.
   `api/.credential-proof-policy` holds the membership (`credential-affecting`) and the gate checks the call
   order. It cannot see that the invitation's spend is conditional, so `CreateInvitationControllerTest` holds that
   in both directions.
@@ -459,4 +461,6 @@ stolen session does not hold, so "whoever has the cookie" becomes "whoever has t
 **What it costs, and what it does not close.** An owner who drained the shared budget waits for the window
 before an admin act, as in D8. A stolen session can still invite identities holding a role below `ADMIN`; an
 attacker who also holds the password is outside what any session-level control reaches. Acts over another
-identity's credentials (unlock, erase, invitation resend and revoke) stay under permissions alone.
+identity's credentials (unlock, erase, invitation resend and revoke) stay under permissions alone. Erase
+cannot remove the owner: `FulfilIdentityErasure` refuses a subject that still carries `ADMIN` until it is demoted,
+and the demotion is gated. Unlock only reopens a sign-in.

@@ -1381,10 +1381,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       `revoke-others` and evict the other, with no budget on either side, but **re-entry is not symmetric** —
       the owner returns with the credential, while a revoked cookie is dead and no path re-mints one without
       the password. Each round costs the owner one login. That asymmetry holds for a non-administrator; an
-      _administrator's_ stolen session can mint its own re-entry — invite an address it controls and grant it
-      `ADMIN` (`users.invite`, `users.grantAdmin`) — which evicting the stolen session does not reach.
-      **What survives is the composition, and it belongs to
-      [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602), not here:** an attacker who _also_
+      _administrator's_ stolen session could once mint its own re-entry — invite an address it controls and grant
+      it `ADMIN` — which evicting the stolen session does not reach; that now costs the caller's password
+      (ii below). **What survives is the composition, which
+      [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) closed on 2026-11-05:** an attacker who _also_
       drives the per-email lockout (10 failures → `PT15M`, needing ≥2 source addresses to clear the per-IP
       throttle) denies the owner the very session eviction requires. **A live recovery secret now closes that
       composition for the identity holding it.** Any `ACTIVE` identity can mint one from its own session
@@ -1421,16 +1421,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       `credential-affecting` in `api/.credential-proof-policy`, pinned by name. **What survives**: (1) an
       attacker who also holds the password; (2) a stolen session can still invite identities holding a role
       **below** `ADMIN` (a planted `MANAGER` is a foothold the owner has to find in the users register); (3)
-      the console, which drives the same use cases as the operator and so is outside the proof by design; (4)
-      the shared budget — a stolen session can spend it and delay the owner's own admin acts by up to one
-      window, as in §6 (b). Self-targeted role and status writes stay refused (409
+      the console invitation command (`iam:invitation:create`), which drives the invitation use case as the
+      operator and so is outside the proof by design; (4) the shared budget — a stolen session can spend it
+      and delay the owner's own admin acts, every window, until the owner evicts it with `revoke-others` (not
+      budget-gated, so the eviction is never delayed), as in §6 (b); and ordinary use is capped by it too: ten
+      proofs in fifteen minutes, so a bulk edit of eleven users is refused until the window refills. Self-targeted role and status writes stay refused (409
       `self-role-change-forbidden` / `self-status-change-forbidden`), which closes the race in which such a
       write, admitted before the eviction and queued on the user row, committed after the redemption and its
       post-commit teardown revoked the redeemed session. Each of the four self-refusals writes a resource-less
       `SELF_TARGETED_ACT_REFUSED` row at `security` level (`metadata` holds the problem `type` and the route),
       where a 409 would otherwise reach no `audit_log` row at all — the generic hook records successful reads
       only. There is no deployment yet, so there are no administrators planted or demoted before the proof
-      existed to go and look for.
+      existed to go and look for. One UX residual: in the invitation form the proof field sits under the
+      invitee's email, so a browser's credential manager may offer to save the inviter's password beside that
+      address; no autocomplete token avoids it (`off` is ignored, `new-password` is worse), and the structural
+      fix is a separate confirm step with no email field beside it, as the roles and status dialogs already are.
       **(iii) A leaked secret is an eviction weapon as well as a way in.** Whoever redeems it signs out every
       session of the identity, the owner's included, and the owner's way back is the password — shut for as
       long as the same attacker keeps the email-keyed lockout sealed. The trade is deliberate: an owner who kept
@@ -1445,7 +1450,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       rows attest it. Accepted by Sergio on 2026-09-28 as a variant of (iii), which already presupposes the leak;
       ADR `administrative-recovery-channel.md` D10.
       **What the product delivers for (i):** every `ADMIN` session that has never minted a secret is held at a
-      blocking step in the back office until it does (`RecoveryEnrolmentGate`): the explanation, the existing
+      blocking step in the back office until it does (`RecoveryEnrolmentGate`) — **a client-side step, not a
+      server control**: a direct API call by an un-enrolled administrator is not stopped, and a readiness read
+      that fails leaves the step down for that document: the explanation, the existing
       mint form unchanged — the secret is shown once and held until the owner confirms it is saved — and a way to
       sign out, with no skip. It blocks only an ACTIVE administrator whose readiness is `not-live` / `none`, never
       `unknown` or `expired` (a lapsed row occupies the slot and a mint over it can only answer 409), and never a

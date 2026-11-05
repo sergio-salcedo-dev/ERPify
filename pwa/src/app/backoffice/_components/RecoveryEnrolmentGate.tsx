@@ -10,7 +10,7 @@ import { useRecoverySecret } from "@/context/shared/access/application/useRecove
 import type { MintedRecoverySecret } from "@/context/shared/access/domain/RecoverySecret";
 import { Role } from "@/context/shared/access/domain/Role";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
-import { isRecoveryRedeemedSession } from "@/context/backoffice/user/application/recoveryRedeemedNotice";
+import { isSessionRedeemed } from "@/context/shared/access/infrastructure/redeemedSession";
 import { MintRecoverySecretForm } from "../profile/_components/MintRecoverySecretForm";
 import { MintedSecretNotice } from "../profile/_components/RecoverySecretPanel";
 
@@ -59,10 +59,7 @@ export function RecoveryEnrolmentGate({
   }
 
   const blocking =
-    isAdmin &&
-    readiness.kind === "not-live" &&
-    readiness.reason === "none" &&
-    !isRecoveryRedeemedSession();
+    isAdmin && readiness.kind === "not-live" && readiness.reason === "none" && !isSessionRedeemed();
   if (!blocking) return <>{children}</>;
 
   return <EnrolmentStep onMinted={setMinted} onSignOut={onSignOut} signingOut={signingOut} />;

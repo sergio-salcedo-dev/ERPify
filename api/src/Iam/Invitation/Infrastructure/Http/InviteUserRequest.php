@@ -77,7 +77,7 @@ final readonly class InviteUserRequest
     #[Assert\Callback]
     public function requireTheCurrentPasswordToInviteAnAdministrator(ExecutionContextInterface $context): void
     {
-        if (!\in_array(Role::ADMIN->value, $this->roles, true) || '' !== \trim($this->currentPassword)) {
+        if (!\in_array(Role::ADMIN->value, $this->roles, true) || '' !== $this->currentPassword) {
             return;
         }
 

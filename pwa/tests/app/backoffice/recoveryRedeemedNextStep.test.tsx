@@ -10,8 +10,6 @@ import { RecoveryRedeemedNextStep } from "@/app/backoffice/_components/RecoveryR
 import BackOfficeDashboard from "@/app/backoffice/page";
 import {
   clearRecoveryRedeemed,
-  clearRecoveryRedeemedSession,
-  isRecoveryRedeemedSession,
   markRecoveryRedeemed,
   peekRecoveryRedeemed,
 } from "@/context/backoffice/user/application/recoveryRedeemedNotice";
@@ -21,35 +19,6 @@ const NEXT_STEP =
 
 beforeEach(() => {
   clearRecoveryRedeemed();
-  clearRecoveryRedeemedSession();
-});
-
-describe("the redeemed-session fact", () => {
-  it("is set by the same mark as the one-shot notice", () => {
-    expect(isRecoveryRedeemedSession()).toBe(false);
-
-    markRecoveryRedeemed();
-
-    expect(isRecoveryRedeemedSession()).toBe(true);
-  });
-
-  it("outlives the notice, which the dashboard consumes on first paint", () => {
-    markRecoveryRedeemed();
-
-    clearRecoveryRedeemed();
-
-    expect(peekRecoveryRedeemed()).toBe(false);
-    expect(isRecoveryRedeemedSession()).toBe(true);
-  });
-
-  it("is cleared on its own, by a password sign-in", () => {
-    markRecoveryRedeemed();
-
-    clearRecoveryRedeemedSession();
-
-    expect(isRecoveryRedeemedSession()).toBe(false);
-    expect(peekRecoveryRedeemed()).toBe(true);
-  });
 });
 
 describe("<RecoveryRedeemedNextStep>", () => {

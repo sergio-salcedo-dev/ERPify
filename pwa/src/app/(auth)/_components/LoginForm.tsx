@@ -19,7 +19,6 @@ import { AccessWall, AccessWallVariant } from "@/context/shared/error/infrastruc
 import { useSession } from "@/context/shared/access/application/useSession";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
-import { clearRecoveryRedeemedSession } from "@/context/backoffice/user/application/recoveryRedeemedNotice";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 
@@ -59,9 +58,6 @@ export function LoginForm() {
         setRequestFailed(true);
         return;
       }
-      // A password sign-in is the proof the enrolment step waits on, so a recovery redemption earlier in
-      // this document no longer excuses the account from minting a secret.
-      clearRecoveryRedeemedSession();
       toastNotifier.success("Signed in");
       // Return to the deep link RequireAuth stashed in `?next=`, falling back to
       // the back-office root. safeInternalPath rejects any off-origin target.

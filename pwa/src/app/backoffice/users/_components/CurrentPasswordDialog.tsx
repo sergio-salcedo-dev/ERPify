@@ -52,7 +52,7 @@ interface CurrentPasswordDialogProps {
  * password and hands it to the owner, so a borrowed session cannot re-grant roles or retire an identity on its
  * own. A wrong password is a field error here and the dialog stays open for another try; every other failure
  * belongs to the owner's persistent `<MutationError>` (the dialog closes itself, per the action-button
- * contract), including a spent proof budget (429), which is not retryable from this field.
+ * contract), including a spent proof budget (429).
  *
  * The form lives in a child that mounts only while the dialog is open, so the typed credential exists in
  * exactly one component's state for exactly as long as the dialog is on screen: every exit — cancel, Esc, an

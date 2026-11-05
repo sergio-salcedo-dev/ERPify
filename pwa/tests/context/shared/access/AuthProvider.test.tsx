@@ -32,6 +32,11 @@ import type { Identity } from "@/context/shared/access/domain/Identity";
 import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { AccessContext } from "@/context/shared/access/domain/AccessContext";
 import { IdentityUnavailableError } from "@/context/shared/access/domain/IdentityUnavailableError";
+import {
+  clearSessionRedeemed,
+  isSessionRedeemed,
+  markSessionRedeemed,
+} from "@/context/shared/access/infrastructure/redeemedSession";
 
 function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
@@ -738,5 +743,66 @@ describe("AuthProvider", () => {
 
     expect(result.current.session?.context).toBe(AccessContext.SUPPLIER_PORTAL);
     expect(result.current.session?.roles).toEqual(["ADMIN"]);
+  });
+});
+
+/**
+ * Whether the session was opened by redeeming a recovery secret lives and dies with the session: whichever
+ * route starts the next one (the password form, the reset flow, the invitation accept all call `login()`) or
+ * ends this one finds it already cleared, with no per-form bookkeeping.
+ */
+describe("AuthProvider — the redeemed-session mark", () => {
+  beforeEach(() => {
+    clearSessionRedeemed();
+    me.mockResolvedValue(ADMIN);
+  });
+
+  it("is cleared by login(), the call every sign-in route makes", async () => {
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+    markSessionRedeemed();
+
+    await act(async () => {
+      await result.current.login();
+    });
+
+    expect(isSessionRedeemed()).toBe(false);
+  });
+
+  it("is cleared by logout()", async () => {
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+    markSessionRedeemed();
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(isSessionRedeemed()).toBe(false);
+  });
+
+  it("is cleared by logout() even when the server revoke fails", async () => {
+    revokeCurrent.mockRejectedValue(new Error("network down"));
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+    markSessionRedeemed();
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(isSessionRedeemed()).toBe(false);
+  });
+
+  it("survives refresh(), which re-reads the same session rather than starting one", async () => {
+    const { result } = renderAuth();
+    await waitFor(() => expect(result.current.status).toBe(AuthStatus.AUTHENTICATED));
+    markSessionRedeemed();
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(isSessionRedeemed()).toBe(true);
   });
 });

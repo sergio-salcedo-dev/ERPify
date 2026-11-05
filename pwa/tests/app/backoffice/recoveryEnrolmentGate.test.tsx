@@ -36,10 +36,9 @@ import type { Session } from "@/context/shared/access/domain/Session";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import {
-  clearRecoveryRedeemed,
-  clearRecoveryRedeemedSession,
-  markRecoveryRedeemed,
-} from "@/context/backoffice/user/application/recoveryRedeemedNotice";
+  clearSessionRedeemed,
+  markSessionRedeemed,
+} from "@/context/shared/access/infrastructure/redeemedSession";
 
 const PASSWORD = "correct-horse-battery";
 const SECRET = "erpify-rs-0123456789abcdef";
@@ -118,13 +117,11 @@ beforeEach(() => {
   repo.read.mockResolvedValue(NONE);
   repo.mint.mockResolvedValue({ secret: SECRET, mintedAt: MINTED_AT, expiresAt: EXPIRES_AT });
   auth.session = sessionWith(["ADMIN"]);
-  clearRecoveryRedeemed();
-  clearRecoveryRedeemedSession();
+  clearSessionRedeemed();
 });
 
 afterEach(() => {
-  clearRecoveryRedeemed();
-  clearRecoveryRedeemedSession();
+  clearSessionRedeemed();
 });
 
 /**
@@ -216,21 +213,11 @@ describe("<RecoveryEnrolmentGate> — what it leaves open", () => {
   });
 
   it("does not block a session opened by redeeming a recovery secret, which may not know the password", () => {
-    markRecoveryRedeemed();
-    // The dashboard clears the one-shot notice on first paint; the session fact has to outlive it.
-    clearRecoveryRedeemed();
+    markSessionRedeemed();
     renderGate(NOT_LIVE_NONE);
 
     expect(screen.getByTestId("page")).toBeInTheDocument();
     expect(screen.queryByTestId("recovery-enrolment")).not.toBeInTheDocument();
-  });
-
-  it("blocks again once a password sign-in has cleared the redemption", async () => {
-    markRecoveryRedeemed();
-    clearRecoveryRedeemedSession();
-    renderGate(NOT_LIVE_NONE);
-
-    expect(await screen.findByTestId("recovery-enrolment")).toBeInTheDocument();
   });
 });
 

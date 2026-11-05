@@ -18,10 +18,13 @@ import { CurrentPasswordDialog, isInvalidCurrentPassword } from "./CurrentPasswo
 /** The two legal transitions out of ACTIVE — the identity lifecycle is unidirectional, so there is no reinstate. */
 type TransitionTarget = typeof UserStatus.SUSPENDED | typeof UserStatus.DEACTIVATED;
 
-const TRANSITIONS: ReadonlyArray<{ value: TransitionTarget; label: string }> = [
-  { value: UserStatus.SUSPENDED, label: "Suspend" },
-  { value: UserStatus.DEACTIVATED, label: "Deactivate" },
-];
+/** Exhaustive over the targets, so a label lookup cannot miss for any selectable transition. */
+const TRANSITION_LABEL: Record<TransitionTarget, string> = {
+  [UserStatus.SUSPENDED]: "Suspend",
+  [UserStatus.DEACTIVATED]: "Deactivate",
+};
+
+const TRANSITIONS: readonly TransitionTarget[] = [UserStatus.SUSPENDED, UserStatus.DEACTIVATED];
 
 const SELECT_CLASS =
   "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56";
@@ -85,7 +88,7 @@ export function UserStatusControl({ user, onChanged }: Readonly<UserStatusContro
     }
   };
 
-  const targetLabel = TRANSITIONS.find((transition) => transition.value === selected)?.label;
+  const targetLabel = TRANSITION_LABEL[selected];
 
   return (
     <Can permission={Permission.USERS_CHANGE_STATUS}>
@@ -121,8 +124,8 @@ export function UserStatusControl({ user, onChanged }: Readonly<UserStatusContro
             data-testid="user-status__select"
           >
             {TRANSITIONS.map((transition) => (
-              <option key={transition.value} value={transition.value}>
-                {transition.label}
+              <option key={transition} value={transition}>
+                {TRANSITION_LABEL[transition]}
               </option>
             ))}
           </select>
@@ -142,7 +145,7 @@ export function UserStatusControl({ user, onChanged }: Readonly<UserStatusContro
         open={confirming}
         onOpenChange={setConfirming}
         title={`${targetLabel} this member`}
-        description={`Enter your password to ${targetLabel?.toLowerCase()} ${user.email}. This cannot be undone from here.`}
+        description={`Enter your password to ${targetLabel.toLowerCase()} ${user.email}. This cannot be undone from here.`}
         confirmLabel="Change status"
         testIdPrefix="user-status"
         onConfirm={confirm}

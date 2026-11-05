@@ -424,6 +424,46 @@ describe("InviteUserForm current-password proof", () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
+  it("sends one request for two submits presented before the first settles", async () => {
+    let resolveInvite: () => void = () => {};
+    mocks.inviteRun.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveInvite = resolve;
+      }),
+    );
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    // Two presentations in the same tick, as holding Enter produces before the button greys out.
+    const form = screen.getByTestId("invite-user-form");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(mocks.inviteRun).toHaveBeenCalledTimes(1));
+    resolveInvite();
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(mocks.inviteRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a new submit once the first has settled", async () => {
+    mocks.inviteRun.mockRejectedValueOnce(conflict()).mockResolvedValue(undefined);
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+    fireEvent.click(await screen.findByTestId("invite-user-form__conflict-retry"));
+
+    await waitFor(() => expect(mocks.inviteRun).toHaveBeenCalledTimes(2));
+  });
+
   it("shows a spent proof budget in the persistent error surface", async () => {
     mocks.inviteRun.mockRejectedValue(
       new HttpError({

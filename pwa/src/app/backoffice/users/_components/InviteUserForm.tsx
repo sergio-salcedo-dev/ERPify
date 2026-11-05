@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
@@ -140,7 +140,7 @@ export function InviteUserForm() {
     setProblem(null);
   };
 
-  const onSubmit = handleSubmit(async (values) => {
+  const submitInvitation = handleSubmit(async (values) => {
     try {
       const useCase = container.get<InviteUser>("BackOfficeInviteUser");
       // The password is the inviter's proof for an ADMIN grant and nothing else: any other invitation
@@ -159,6 +159,23 @@ export function InviteUserForm() {
       handleHttpError(err);
     }
   });
+
+  // In-flight latch: `disabled` lands on the next React commit, so holding Enter in a field (or the retry
+  // action) presents the same ADMIN password twice, and each attempt spends a unit of the per-identity
+  // proof budget that is the only ceiling on guessing it from a live session.
+  const submitting = useRef(false);
+  const onSubmit = (event?: FormEvent<HTMLFormElement>) => {
+    if (submitting.current) {
+      event?.preventDefault();
+      return;
+    }
+    submitting.current = true;
+    // `handleSubmit` settles after a validation reject too, so releasing here rather than inside the async
+    // body also frees a submit that never reached the use case.
+    return submitInvitation(event).finally(() => {
+      submitting.current = false;
+    });
+  };
 
   // Typed recovery in the persistent error surface, keyed off the problem type. Only the lost race
   // has an action the user can take from here; every other type carries none, so the surface stays

@@ -21,6 +21,7 @@ import { container } from "@/context/shared/dependency-injection/infrastructure/
 import { telemetry } from "@/context/shared/observability/infrastructure";
 import { apiScope } from "@/context/shared/observability/domain/TelemetryScope";
 import { SessionExpiryCurtain } from "./SessionExpiryCurtain";
+import { clearSessionRedeemed } from "../redeemedSession";
 
 const IDENTITY_REPOSITORY_KEY = "IdentityRepository";
 const SESSIONS_REPOSITORY_KEY = "SessionsRepository";
@@ -262,15 +263,22 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     };
   }, [staleVerdict, route, sequencedProbe, applyProbe]);
 
-  const login = useCallback(async (): Promise<Session | null> => {
+  const refresh = useCallback(async (): Promise<Session | null> => {
     const probe = await sequencedProbe();
     if (probe === null) return winningSession();
     applyProbe(probe);
     return probe.session;
   }, [sequencedProbe, applyProbe, winningSession]);
 
+  // A sign-in starts a session of its own, so whatever the previous one was opened by is not its to inherit.
+  const login = useCallback((): Promise<Session | null> => {
+    clearSessionRedeemed();
+    return refresh();
+  }, [refresh]);
+
   const logout = useCallback(
     async (budgetMs?: number): Promise<void> => {
+      clearSessionRedeemed();
       probeSeqRef.current += 1;
       try {
         await sessionsRepository.revokeCurrent(budgetMs);
@@ -324,8 +332,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [hydrated, unavailableAt, route, session]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, session, login, refresh: login, logout, override }),
-    [status, session, login, logout, override],
+    () => ({ status, session, login, refresh, logout, override }),
+    [status, session, login, refresh, logout, override],
   );
 
   return (
