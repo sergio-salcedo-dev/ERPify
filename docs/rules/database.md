@@ -121,6 +121,17 @@ migrated database, and the reverse). Neither proves that a `contains` field read
   equal to it as `[client-supplied] <value>` (`AuditRedaction::neutraliseCaptured()`), so a row that still
   holds the bare literal from a client predates that rewrite, and the erasure flags are what attribute it.
 
+- **`document_custody` is a retention exception of its own — never pruned, and rewritten by exactly one statement.**
+  The Documents custody log (`Documents/Document`, a `readOnly` ORM entity) is the conservation record of an
+  evidence-class binary, so unlike `audit_log` it has **no retention prune at all**: a row is never deleted,
+  its foreign key to `document` has no cascade, and a document is erased by changing its state, never by
+  removing a row. Its single sanctioned mutation is the analogue of `audit_log`'s actor axis: a person's
+  erasure rewrites `actor_id` (and `document.uploader_id`) to one constant nil-UUID marker — never a per-subject
+  pseudonym, which would be the stable identifier the erasure exists to end — in an `UPDATE … WHERE id IN
+  (SELECT id … ORDER BY id FOR UPDATE)` that carries no state filter. That set is closed by a source gate
+  (`make php.lint.document-custody`), not by the database: no role separation, `GRANT` or trigger backs it.
+  Decision and cost: [`../adr/documents-custody-log.md`](../adr/documents-custody-log.md) D3.
+
 ## Identifiers (UUID v7, app-assigned)
 - **All entity ids are UUID v7**, generated in the application layer (`Uuid::generate()` (`Shared/Uuid/Domain`)
   on the API; the `uuidV7()` helper on the PWA). v7 keeps ids time-ordered for index locality and lets
@@ -148,8 +159,18 @@ coexist; pick by what the row *is*:
   **`default`** `Connection` (so they join the aggregate's write transaction) and mapped by hand to
   readonly DTOs (`StoredEvent`) — never hydrated as managed objects. Full design:
   [`../adr/event-store-and-projections.md`](../adr/event-store-and-projections.md).
+- **A per-aggregate custody log keyed by a computed sequence → a `readOnly` ORM entity beside its snapshot.**
+  `document_custody` is inserted through the ORM in the snapshot's own transaction (`#[ORM\Entity(readOnly: true)]`,
+  so no `UPDATE` is ever emitted) and has no association to cascade through. Its `seq` is `MAX + 1` read **under
+  the lock on the parent row**, never a PostgreSQL sequence (a rollback would leave a gap); `UNIQUE (parent_id,
+  seq)` is the second defence, its violation is classified by constraint **name** and re-runs the whole
+  transaction, bounded. The foreign key to the parent has no cascade, and the one statement that ever rewrites a
+  row is closed by `make php.lint.document-custody`. Rationale:
+  [`../adr/documents-custody-log.md`](../adr/documents-custody-log.md).
 
-**Why a log is deliberately *not* an ORM entity** (an omission would be a bug; this is a choice): an
+**Why `event_store` and `audit_log` are deliberately *not* ORM entities** (an omission would be a bug; this is a
+choice, and it is scoped to those two raw-DBAL logs — `document_custody` above is a `readOnly` entity because its
+rows are inserted once beside a snapshot in the same unit of work and never replayed as a stream): an
 append-only log is immutable, so the ORM's whole reason to exist — UnitOfWork change-tracking,
 dirty-checking, the identity map — is dead weight over rows that never mutate; idempotent append needs
 `INSERT … ON CONFLICT (event_id) DO NOTHING` (a Postgres upsert, awkward through the UnitOfWork); the
@@ -231,7 +252,7 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
   **`User` is NOT one of them in this codebase**: it is the aggregate of the
   `Iam/Identity` bounded context, so a reference to it crosses a context and
   follows Level 2 — a bare UUID column, no `FOREIGN KEY`. Measured: the schema
-  holds exactly two foreign keys and neither points at `identity_user`.
+  holds exactly three foreign keys and none points at `identity_user`.
 - **ID-only references** across contexts (`project.leadId`) — no JOIN, no entity
   association, no foreign repository.
 - **Integration via events** — `ProjectCreated → CRM updates its projection`.

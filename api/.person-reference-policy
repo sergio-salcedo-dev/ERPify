@@ -220,6 +220,16 @@ Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$id => non-person
 # classification would go unasked for rather than being made and checked.
 Erpify\Shared\Images\Domain\Entity\Image::$id => non-person
 
+# The Documents context's own keys. A document is evidence of something, never a person: `$id` and `$seriesId`
+# denote the conservation contract (a series is the first version's own id), `$predecessorId` another version of
+# it, and `$scopeId` the random identifier of its encryption scope, minted independently of every other id.
+Erpify\Documents\Document\Domain\Entity\Document::$id => non-person
+Erpify\Documents\Document\Domain\Entity\Document::$scopeId => non-person
+Erpify\Documents\Document\Domain\Entity\Document::$seriesId => non-person
+Erpify\Documents\Document\Domain\Entity\Document::$predecessorId => non-person
+Erpify\Documents\Document\Domain\Entity\DocumentCustody::$id => non-person
+Erpify\Documents\Document\Domain\Entity\DocumentCustody::$documentId => non-person
+
 # References between aggregates that are not people.
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person
@@ -245,10 +255,20 @@ Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/A
 Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$subjectId => person :: src/Iam/Identity/Application/ResweepErasedSubjects.php
 
 # The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — the
-# database holds exactly two foreign keys, `bank_account.bank_id` and `membership.organization_id` — so
+# database holds exactly three foreign keys, `bank_account.bank_id`, `membership.organization_id` and
+# `document_custody.document_id` — so
 # deleting an identity cascades to nothing at all, and every line above owes its erasure to a use case rather
 # than to a constraint. What distinguishes these two is not the absence of a key but that, until now, they
 # had no owner. Each is erased by its owning context's published use case, chained into the erasure
 # transaction — the person's context orchestrates, but never reaches into another's storage.
 Erpify\Organization\Membership\Domain\Entity\Membership::$userId => person :: src/Organization/Membership/Application/PurgeUserMembership.php
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$invitedUserId => person :: src/Iam/Invitation/Application/PurgeUserInvitations.php
+
+# The two Documents columns that hold a person. The uploader on the snapshot and the actor of a custody row are
+# the person who caused the fact, never the subject of the evidence, so a person's erasure rewrites both to one
+# constant marker (the nil UUID) and erases no document — erasing an employee must not destroy the company's
+# records. Each has a detective source (`DbalDocumentUploaderPersonReferences`,
+# `DbalDocumentCustodyActorPersonReferences`) that excludes the marker. The owner is a Documents use case reached
+# through the `Shared\Privacy` seam, so the identity erasure imports nothing from this context.
+Erpify\Documents\Document\Domain\Entity\Document::$uploaderId => person :: src/Documents/Document/Application/PurgeUserDocumentReferences.php
+Erpify\Documents\Document\Domain\Entity\DocumentCustody::$actorId => person :: src/Documents/Document/Application/PurgeUserDocumentReferences.php

@@ -23,6 +23,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -87,6 +88,7 @@ final class FulfilIdentityErasureCredentialArtefactTest extends TestCase
             'sessions_deleted' => 0,
             'memberships_deleted' => 0,
             'invitations_deleted' => 0,
+            'document_references_anonymised' => 0,
         ], $audit->records[1]['metadata']);
     }
 
@@ -137,6 +139,7 @@ final class FulfilIdentityErasureCredentialArtefactTest extends TestCase
             new FixedActorContextFactory(ActorContext::forUser(self::ACTING_ADMIN_ID)),
             new InlineTransactionManager(),
             new InMemoryErasureResweepRepository(),
+            new RecordingPersonReferenceErasure(),
         );
     }
 }

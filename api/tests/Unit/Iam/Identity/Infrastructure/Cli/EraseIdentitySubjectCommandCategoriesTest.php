@@ -37,6 +37,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -75,6 +76,8 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
     private const int MEMBERSHIPS = 2;
 
     private const int INVITATIONS = 7;
+
+    private const int DOCUMENT_REFERENCES = 8;
 
     public function testTheHelpNamesEveryCategoryTheResultReports(): void
     {
@@ -133,6 +136,7 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
             'sessionsDeleted' => (string) self::SESSIONS,
             'membershipsDeleted' => (string) self::MEMBERSHIPS,
             'invitationsDeleted' => (string) self::INVITATIONS,
+            'documentReferencesAnonymised' => (string) self::DOCUMENT_REFERENCES,
         ];
         $previous = -1;
 
@@ -197,6 +201,7 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
             [self::AUTHORED_ROWS, self::NAMING_ROWS, self::EVENT_ROWS],
             $memberships,
             new InMemoryInvitationRepository(...$invitations),
+            self::DOCUMENT_REFERENCES,
         );
     }
 
@@ -211,6 +216,7 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
         array $anonymised = [0, 0, 0],
         InMemoryMembershipRepository $memberships = new InMemoryMembershipRepository(),
         InMemoryInvitationRepository $invitations = new InMemoryInvitationRepository(),
+        int $documentReferences = 0,
     ): EraseIdentitySubjectCommand {
         return new EraseIdentitySubjectCommand(new FulfilIdentityErasure(
             new EraseIdentitySubject($users, $tokens, $secrets, new InlineTransactionManager()),
@@ -228,6 +234,7 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
             new FixedActorContextFactory(ActorContext::system()),
             new InlineTransactionManager(),
             new InMemoryErasureResweepRepository(),
+            new RecordingPersonReferenceErasure($documentReferences),
         ));
     }
 }

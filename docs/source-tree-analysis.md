@@ -18,6 +18,8 @@ ERPify/
 │   │   │   │   └── Infrastructure/ # Audit, Controller, Persistence
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
+│   │   ├── Documents/
+│   │   │   └── Document/           # evidence-class binaries (skeleton) — Document snapshot + append-only document_custody log, DocumentStorage port + filesystem adapter, erasure owner behind Shared/Privacy — adr/documents-custody-log.md
 │   │   ├── Frontoffice/
 │   │   │   ├── Dev/Infrastructure/Controller
 │   │   │   ├── Health/Infrastructure/Controller

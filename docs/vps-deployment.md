@@ -200,7 +200,9 @@ point for them. It is not every byte: the `image_storage` volume holds the canon
 (`compose.yaml`), and `backup-prod.sh` dumps Postgres only, so a restore returns rows whose bytes are missing,
 and leaves the bytes of a subject erased after the dump on disk. The upload surface is withdrawn, so the
 volume may be empty today; it is part of the backup scope the day images return, and of the Documents scope
-below. `caddy_data` holds Caddy's ACME account key and issued
+below. The `document_storage` volume (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`) is the evidence
+scope: nothing writes to it before the upload story, and its encrypted offsite backup and restore drill are
+owned there (`PRODUCTION_SECURITY_CHECKLIST.md` §7). `caddy_data` holds Caddy's ACME account key and issued
 certificates, and `caddy_config` its autosave. Losing them costs a certificate
 re-issue on the next boot, not data — but on a real domain that re-issue counts
 against the Let's Encrypt duplicate-certificate rate limit, so snapshot

@@ -2597,6 +2597,29 @@ mitigated state. Accepting one means recording who accepted it and against which
       `down()` is not run by a code rollback, and the previous release's `destroy()` then violates
       `dek_keystore_destroy_reason_check` and fails. **Accepted — basis: no deployment is live, so there is no
       release to roll back to; revisit with the first production deploy.**
+- [ ] **The Documents custody log is no longer absolutely append-only, and nothing but a source gate says
+      so.** A person's erasure rewrites `document_custody.actor_id` (and `document.uploader_id`, and nulls the
+      idempotency hash) to the nil UUID with one sanctioned `UPDATE`; `make php.lint.document-custody` holds
+      the set of statements `api/src` issues against the log to that one. No database role separation,
+      `GRANT`, `REVOKE` or trigger exists in the tree, so whoever holds the application's database credential
+      — or a PostgreSQL administrator — can still rewrite or delete a custody row, and the gate sees neither
+      a migration nor runtime-built SQL. Custody is not claimed cryptographically immutable; hash-chaining or
+      a restricted role are separate decisions (`docs/adr/documents-custody-log.md` D3). **Accepted — basis:
+      no deployment is live and no document is filed before the upload story; revisit with the first one.**
+- [ ] **A document or custody row committed by an in-flight action of an erased person, after the purge
+      statement's snapshot, keeps the person's id until the re-sweep.** The two `UPDATE`s match rows that
+      exist when they run. `ResweepErasedSubjects` repeats them for one window and
+      `DbalDocumentUploaderPersonReferences` / `DbalDocumentCustodyActorPersonReferences` report any id left
+      once the window closes through `identity:gdpr:reconcile-subject-references`. Idempotency replay
+      protection for the erased actor ends with the erasure (accepted: the hash is nulled by the same purge).
+      **Open until the upload story writes documents; the detective source is the control meanwhile.**
+- [ ] **The `document_storage` volume has no backup, no restore drill and no read gate.** The volume
+      (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`) holds sealed bytes only after the upload story
+      exists, and a database dump is not a backup of evidence. Nothing writes to it today; the storage port
+      claims no WORM guarantee and its promotion is atomic only for one filesystem, asserted on the adapter test's
+      own temporary filesystem and not yet probed on the deployed volume, which is the upload story's boot
+      probe. **Open — owner: the upload story (doc-3), before any document is
+      served.**
 
 ## 8. Deploy & verify
 

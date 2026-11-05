@@ -28,6 +28,8 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
+use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +46,8 @@ use RuntimeException;
  * @internal
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength") one case per pass of the sweep over the same fixtures
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(ResweepErasedSubjects::class)]
 #[CoversClass(ErasureResweep::class)]
@@ -99,6 +103,7 @@ final class ResweepErasedSubjectsTest extends TestCase
             'anonymized_resource_rows' => 2,
             'anonymized_event_rows' => 3,
             'sessions_deleted' => 1,
+            'document_references_anonymised' => 0,
             'resweep' => true,
         ], $audit->records[0]['metadata']);
         $this->assertStringNotContainsString(self::SUBJECT_ID, (string) \json_encode($audit->records[0]));
@@ -154,6 +159,7 @@ final class ResweepErasedSubjectsTest extends TestCase
             new RecordingAuditLogger(),
             new InlineTransactionManager(),
             new FixedClock(SystemClock::now()),
+            new RecordingPersonReferenceErasure(),
         );
         $resweep->resweep();
 
@@ -380,6 +386,50 @@ final class ResweepErasedSubjectsTest extends TestCase
         $this->assertSame([], $actor->anonymisedActorIds);
     }
 
+    public function testTheDocumentsStepRunsLastAndItsCountAloneProducesTheTicksEvidence(): void
+    {
+        // Every other pass finds nothing, so the Documents count is the only reason the tick writes anything: a
+        // tick that dropped it would report an idle window over rows it had just rewritten.
+        $journal = new LockOrderJournal();
+        $sessions = new InMemorySessionRepository();
+        $sessions->lockOrderJournal = $journal;
+
+        $events = new RecordingEventStoreSubjectAnonymiser(matchCount: 0);
+        $events->lockOrderJournal = $journal;
+
+        $documents = new RecordingPersonReferenceErasure(6);
+        $documents->lockOrderJournal = $journal;
+
+        $audit = new RecordingAuditLogger();
+
+        $rewritten = $this->useCase(
+            new InMemoryErasureResweepRepository(ErasureResweep::scheduleFor(self::SUBJECT_ID)),
+            new RecordingAuditActorAnonymiser(matchCount: 0),
+            new RecordingAuditResourceAnonymiser(matchCount: 0),
+            $events,
+            $sessions,
+            $audit,
+            documents: $documents,
+        )->resweep();
+
+        $this->assertSame(6, $rewritten);
+        $this->assertSame([self::SUBJECT_ID], $documents->erasedSubjects);
+        $this->assertSame(
+            [
+                LockOrderJournal::IAM_SESSION,
+                LockOrderJournal::EVENT_STORE,
+                LockOrderJournal::DOCUMENT,
+                LockOrderJournal::DOCUMENT_CUSTODY,
+            ],
+            $journal->crossTableOrder(),
+            'Documents follows the sessions and the business log, the order the erasure itself takes.',
+        );
+        $this->assertCount(1, $audit->records);
+        $this->assertSame('GDPR_ERASURE_EXECUTED', $audit->records[0]['action']);
+        $this->assertSame(6, $audit->records[0]['metadata']['document_references_anonymised'] ?? null);
+        $this->assertSame(0, $audit->records[0]['metadata']['sessions_deleted'] ?? null);
+    }
+
     private function useCase(
         InMemoryErasureResweepRepository $resweeps,
         RecordingAuditActorAnonymiser $actor,
@@ -389,6 +439,7 @@ final class ResweepErasedSubjectsTest extends TestCase
         RecordingAuditLogger $audit,
         ?TransactionManager $transactions = null,
         ?InMemoryUserRepository $users = null,
+        ?RecordingPersonReferenceErasure $documents = null,
     ): ResweepErasedSubjects {
         return new ResweepErasedSubjects(
             $resweeps,
@@ -399,6 +450,7 @@ final class ResweepErasedSubjectsTest extends TestCase
             $audit,
             $transactions ?? new InlineTransactionManager(),
             new FixedClock(SystemClock::now()),
+            $documents ?? new RecordingPersonReferenceErasure(),
         );
     }
 

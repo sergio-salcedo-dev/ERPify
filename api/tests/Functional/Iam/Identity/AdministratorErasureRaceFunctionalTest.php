@@ -26,6 +26,7 @@ use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -171,6 +172,7 @@ final class AdministratorErasureRaceFunctionalTest extends KernelTestCase
             $this->service(ActorContextFactory::class),
             $this->service(TransactionManager::class),
             $this->service(ErasureResweepRepository::class),
+            $this->service(PersonReferenceErasure::class),
         );
     }
 

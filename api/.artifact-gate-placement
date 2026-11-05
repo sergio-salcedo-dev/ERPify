@@ -156,6 +156,10 @@ tests/Unit/Gate/CredentialProofGateTest.php :: home
 tests/Unit/Gate/CredentialProofRulesGateTest.php :: home
 tests/Unit/Gate/DeptracBlessedLayerGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
+tests/Unit/Gate/DocumentCustodyMutationBlindSpotGateTest.php :: home
+tests/Unit/Gate/DocumentCustodyMutationGateTest.php :: home
+tests/Unit/Gate/DocumentCustodyMutationRulesGateTest.php :: home
+tests/Unit/Gate/DocumentErasureStatementLockOrderGateTest.php :: home
 tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
 tests/Unit/Gate/EventDispatchGateTest.php :: home

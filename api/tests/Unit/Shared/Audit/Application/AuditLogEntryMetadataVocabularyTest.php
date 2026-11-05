@@ -51,6 +51,7 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
             'recovery_secrets_deleted' => 1,
             'memberships_deleted' => 1,
             'invitations_deleted' => 0,
+            'document_references_anonymised' => 2,
             'resweep' => true,
             'encryption_scope_id' => 'BankAccount:0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d',
             'previous_roles' => [],

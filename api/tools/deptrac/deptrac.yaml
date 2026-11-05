@@ -125,6 +125,14 @@ deptrac:
         - name: Organization.Membership.Infrastructure
           collectors: [{ type: directory, value: src/Organization/Membership/Infrastructure/.* }]
 
+        # ---- Documents / Document -----------------------------------------------
+        - name: Documents.Document.Domain
+          collectors: [{ type: directory, value: src/Documents/Document/Domain/.* }]
+        - name: Documents.Document.Application
+          collectors: [{ type: directory, value: src/Documents/Document/Application/.* }]
+        - name: Documents.Document.Infrastructure
+          collectors: [{ type: directory, value: src/Documents/Document/Infrastructure/.* }]
+
         # ---- Frontoffice / Dev --------------------------------------------------
         - name: Frontoffice.Dev.Infrastructure
           collectors: [{ type: directory, value: src/Frontoffice/Dev/Infrastructure/.* }]
@@ -275,6 +283,7 @@ deptrac:
         Iam.Session.Domain: *domain
         Organization.Organization.Domain: *domain
         Organization.Membership.Domain: *domain
+        Documents.Document.Domain: *domain
         Shared.Domain: *domain
 
         # Application may orchestrate its own Domain + the shared kernel, plus the
@@ -345,6 +354,14 @@ deptrac:
             - Vendor.PassiveMetadata
         Organization.Membership.Application:
             - Organization.Membership.Domain
+            - Shared.Domain
+            - Shared.Application
+            - Shared.ValidatorSeam
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+        Documents.Document.Application:
+            - Documents.Document.Domain
             - Shared.Domain
             - Shared.Application
             - Shared.ValidatorSeam
@@ -514,6 +531,24 @@ deptrac:
             - Vendor.Monolog
             - Vendor.ApiPlatform
             - Vendor.Guzzle
+        # Narrower than the other modules' Infrastructure rulesets on purpose: it admits only what the module
+        # imports (Doctrine, the DI attributes, Uid, PSR), so a first Monolog, Guzzle or API Platform import here
+        # is a decision rather than something inherited from a template. The two validator twins are not a
+        # choice: a layer reaching Shared.Application must list Shared.ValidatorSeam, and one reaching
+        # Vendor.Symfony must list Vendor.SymfonyValidatorRuntime (DeptracBlessedLayerGateTest).
+        Documents.Document.Infrastructure:
+            - Documents.Document.Domain
+            - Documents.Document.Application
+            - Shared.Domain
+            - Shared.Application
+            - Shared.ValidatorSeam
+            - Shared.Infrastructure
+            - Vendor.Psr
+            - Vendor.SymfonyUid
+            - Vendor.PassiveMetadata
+            - Vendor.Doctrine
+            - Vendor.Symfony
+            - Vendor.SymfonyValidatorRuntime
         Frontoffice.Dev.Infrastructure:
             - Shared.Domain
             - Shared.Application
