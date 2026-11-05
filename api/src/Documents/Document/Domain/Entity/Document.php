@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
+use Erpify\Documents\Document\Domain\IntakeMetadata;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -82,6 +83,24 @@ final class Document extends AggregateRoot
     #[ORM\Column(name: 'idempotency_key_hash', length: self::DIGEST_HEX_LENGTH, nullable: true)]
     private ?string $idempotencyKeyHash;
 
+    /**
+     * The original filename sealed under this document's own scope, written in the commit transaction by the
+     * upload story and set to NULL by the `Erased` transition. Never plaintext.
+     */
+    #[ORM\Column(name: 'filename_ciphertext', type: Types::TEXT, nullable: true)]
+    private ?string $filenameCiphertext;
+
+    /** Closed vocabulary supplied by the intake flow; its values are defined by the upload story, hence no CHECK. */
+    #[ORM\Column(name: 'retention_reason', length: 32, nullable: true)]
+    private ?string $retentionReason;
+
+    /** GDPR Article 6 basis; its values are defined by the upload story, hence no CHECK. */
+    #[ORM\Column(name: 'legal_basis', length: 32, nullable: true)]
+    private ?string $legalBasis;
+
+    #[ORM\Column(name: 'review_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?DateTimeImmutable $reviewAt;
+
     private function __construct(
         string $id,
         string $scopeId,
@@ -90,20 +109,7 @@ final class Document extends AggregateRoot
         string $digest,
         int $sizeBytes,
         ?string $idempotencyKeyHash,
-        /**
-         * The original filename sealed under this document's own scope, written in the commit transaction by the
-         * upload story and set to NULL by the `Erased` transition. Never plaintext.
-         */
-        #[ORM\Column(name: 'filename_ciphertext', type: Types::TEXT, nullable: true)]
-        private ?string $filenameCiphertext,
-        /** Closed enum supplied by the consumer; its values are defined by the upload story, hence no CHECK. */
-        #[ORM\Column(name: 'retention_reason', length: 32, nullable: true)]
-        private ?string $retentionReason,
-        /** GDPR Article 6 basis; its values are defined by the upload story, hence no CHECK. */
-        #[ORM\Column(name: 'legal_basis', length: 32, nullable: true)]
-        private ?string $legalBasis,
-        #[ORM\Column(name: 'review_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
-        private ?DateTimeImmutable $reviewAt,
+        IntakeMetadata $intake,
     ) {
         parent::__construct();
 
@@ -118,6 +124,10 @@ final class Document extends AggregateRoot
         $this->digest = $digest;
         $this->sizeBytes = $sizeBytes;
         $this->idempotencyKeyHash = $idempotencyKeyHash;
+        $this->filenameCiphertext = $intake->filenameCiphertext;
+        $this->retentionReason = $intake->retentionReason;
+        $this->legalBasis = $intake->legalBasis;
+        $this->reviewAt = $intake->reviewAt;
     }
 
     /**
@@ -131,10 +141,7 @@ final class Document extends AggregateRoot
         string $digest,
         int $sizeBytes,
         ?string $idempotencyKeyHash = null,
-        ?string $filenameCiphertext = null,
-        ?string $retentionReason = null,
-        ?string $legalBasis = null,
-        ?DateTimeImmutable $reviewAt = null,
+        ?IntakeMetadata $intake = null,
     ): self {
         return new self(
             $id,
@@ -144,10 +151,7 @@ final class Document extends AggregateRoot
             $digest,
             $sizeBytes,
             $idempotencyKeyHash,
-            $filenameCiphertext,
-            $retentionReason,
-            $legalBasis,
-            $reviewAt,
+            $intake ?? new IntakeMetadata(),
         );
     }
 

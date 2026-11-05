@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
+use Erpify\Documents\Document\Domain\IntakeMetadata;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
@@ -147,10 +148,12 @@ final class DocumentTest extends TestCase
             Uuid::generate(),
             self::DIGEST,
             1,
-            filenameCiphertext: 'sealed',
-            retentionReason: 'contract',
-            legalBasis: 'legal_obligation',
-            reviewAt: $review,
+            intake: new IntakeMetadata(
+                filenameCiphertext: 'sealed',
+                retentionReason: 'contract',
+                legalBasis: 'legal_obligation',
+                reviewAt: $review,
+            ),
         );
 
         $this->assertSame('sealed', $full->filenameCiphertext());
