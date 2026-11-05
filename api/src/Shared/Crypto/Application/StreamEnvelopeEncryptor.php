@@ -36,8 +36,16 @@ interface StreamEnvelopeEncryptor
      * object that already exists, and an uncommitted insert holds the scope's unique-index lock for the whole
      * outer transaction, blocking every other writer and any destroy of the scope.
      *
-     * The original's filename is sealed with {@see EnvelopeEncryptor::encrypt()} under the same scope, with an
-     * `$aad` that differs from the one passed here, so neither can be presented as the other.
+     * The original's filename is sealed with {@see EnvelopeEncryptor::encrypt()} under the same scope. A
+     * filename ciphertext and a stream object cannot stand in for one another by construction (different
+     * primitives and formats), even with equal `$aad`; passing a different `$aad` for the filename is defence in
+     * depth.
+     *
+     * Both streams must be blocking, and the sink must support `fflush()`: a userland wrapper without
+     * `stream_flush` makes it return false, and `seal()` then throws {@see StreamTransferFailed} after a
+     * complete object was written. Three consecutive empty reads that report no end of stream are refused, so a
+     * non-blocking source with nothing ready is refused rather than waited for; a slow drip of one byte at a
+     * time is never refused and is bounded by the caller's own deadline.
      *
      * @param resource $plaintext a readable stream
      * @param resource $sealed    a writable stream
@@ -49,7 +57,8 @@ interface StreamEnvelopeEncryptor
     public function seal(EncryptionScopeId $scope, $plaintext, $sealed, string $aad): void;
 
     /**
-     * Reads a sealed stream to its end, writing the plaintext to `$plaintext`.
+     * Reads a sealed stream to its end, writing the plaintext to `$plaintext` and flushing it. The same
+     * stream requirements as {@see seal()} apply.
      *
      * @param resource $sealed    a readable stream holding the output of {@see seal()}
      * @param resource $plaintext a writable stream

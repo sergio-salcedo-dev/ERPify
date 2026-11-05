@@ -124,6 +124,60 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         });
     }
 
+    public function testAnUpperCaseIdErasesTheLiveRecordAndShredsTheKeyUnderTheLowercaseScope(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $bankId = Uuid::generate();
+            $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->flush();
+
+            $accountId = Uuid::generate();
+            $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+            $em->flush();
+
+            $scope = 'BankAccount:' . $accountId;
+            $this->assertSame(1, $this->liveKeys($connection, $scope));
+
+            $result = $this->eraser()->execute(\strtoupper($accountId));
+
+            $this->assertTrue($result->liveRecordErased);
+            $this->assertTrue($result->keyDestroyed);
+            $this->assertSame($scope, $result->encryptionScopeId, 'the result names the canonical scope');
+            $this->assertSame(0, $this->bankAccountRows($connection, $accountId));
+            $this->assertSame(0, $this->liveKeys($connection, $scope), 'the lowercase-scope key is gone');
+            $this->assertSame(1, $this->subjectErasedRows($connection, $scope), 'the evidence names that scope');
+            $this->assertSame(0, $this->keystoreRows($connection, 'BankAccount:' . \strtoupper($accountId)));
+            $this->assertFalse($this->hasEvidencelessDestroyedKey($connection, $scope));
+        });
+    }
+
+    public function testAnUpperCaseIdStillShredsAKeyWhoseRecordIsAlreadyGone(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $bankId = Uuid::generate();
+            $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->flush();
+
+            $accountId = Uuid::generate();
+            $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+            $em->flush();
+
+            $scope = 'BankAccount:' . $accountId;
+            $connection->executeStatement('DELETE FROM bank_account WHERE id = :id', ['id' => $accountId]);
+            $em->clear();
+            $this->assertSame(1, $this->liveKeys($connection, $scope));
+
+            $result = $this->eraser()->execute(\strtoupper($accountId));
+
+            $this->assertFalse($result->liveRecordErased);
+            $this->assertTrue($result->keyDestroyed, 'the lowercase scope is found whatever the spelling of the id');
+            $this->assertSame(0, $this->liveKeys($connection, $scope));
+            $this->assertSame(1, $this->subjectErasedRows($connection, $scope));
+        });
+    }
+
     public function testAReconciliationCrossCheckDetectsADestroyedKeyMissingItsEvidence(): void
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {

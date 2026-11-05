@@ -44,8 +44,6 @@ final class SyntheticStream
 
     private int $offset = 0;
 
-    private int $accepted = 0;
-
     private int $stalledPolls = 0;
 
     private int $length = 0;
@@ -58,19 +56,23 @@ final class SyntheticStream
 
     private int $emptyReadsLeft = 0;
 
+    private int $emptyReadsBetween = 0;
+
     private ?int $stallsAfter = null;
 
     private ?int $maxBytesPerWrite = null;
 
-    private ?int $capacity = null;
+    /** Bytes the sink will still take; null for no limit. */
+    private ?int $room = null;
 
     private bool $flushFails = false;
 
     /**
-     * @param int|null $failBeyond      throw on the first read that would pass this offset
-     * @param int|null $maxBytesPerRead hand back at most this many bytes per read
-     * @param int      $emptyReadsFirst answer this many reads with nothing, without reporting the end
-     * @param int|null $stallsAfter     from this offset on answer every read with nothing, without an end
+     * @param int|null $failBeyond        throw on the first read that would pass this offset
+     * @param int|null $maxBytesPerRead   hand back at most this many bytes per read
+     * @param int      $emptyReadsFirst   answer this many reads with nothing, without reporting the end
+     * @param int|null $stallsAfter       from this offset on answer every read with nothing, without an end
+     * @param int      $emptyReadsBetween answer this many reads with nothing after every read that had data
      *
      * @return resource
      */
@@ -80,6 +82,7 @@ final class SyntheticStream
         ?int $maxBytesPerRead = null,
         int $emptyReadsFirst = 0,
         ?int $stallsAfter = null,
+        int $emptyReadsBetween = 0,
     ) {
         return self::open('source', 'r', [
             'length' => $length,
@@ -87,6 +90,7 @@ final class SyntheticStream
             'maxBytesPerRead' => $maxBytesPerRead,
             'emptyReadsFirst' => $emptyReadsFirst,
             'stallsAfter' => $stallsAfter,
+            'emptyReadsBetween' => $emptyReadsBetween,
         ]);
     }
 
@@ -101,6 +105,7 @@ final class SyntheticStream
         ?int $maxBytesPerRead = null,
         int $emptyReadsFirst = 0,
         ?int $stallsAfter = null,
+        int $emptyReadsBetween = 0,
     ) {
         return self::open('source', 'r', [
             'contents' => $contents,
@@ -109,6 +114,7 @@ final class SyntheticStream
             'maxBytesPerRead' => $maxBytesPerRead,
             'emptyReadsFirst' => $emptyReadsFirst,
             'stallsAfter' => $stallsAfter,
+            'emptyReadsBetween' => $emptyReadsBetween,
         ]);
     }
 
@@ -161,8 +167,9 @@ final class SyntheticStream
         $this->maxBytesPerRead = $this->intSetting($settings, 'maxBytesPerRead');
         $this->emptyReadsLeft = $this->intSetting($settings, 'emptyReadsFirst') ?? 0;
         $this->stallsAfter = $this->intSetting($settings, 'stallsAfter');
+        $this->emptyReadsBetween = $this->intSetting($settings, 'emptyReadsBetween') ?? 0;
         $this->maxBytesPerWrite = $this->intSetting($settings, 'maxBytesPerWrite');
-        $this->capacity = $this->intSetting($settings, 'capacity');
+        $this->room = $this->intSetting($settings, 'capacity');
         $this->flushFails = true === ($settings['flushFails'] ?? false);
 
         return true;
@@ -200,6 +207,7 @@ final class SyntheticStream
             ? self::bytesAt($this->offset, $count)
             : \substr($this->contents, $this->offset, $count);
         $this->offset += $count;
+        $this->emptyReadsLeft = $this->emptyReadsBetween;
 
         return $bytes;
     }
@@ -208,12 +216,12 @@ final class SyntheticStream
     {
         $accepted = \min(\strlen($data), $this->maxBytesPerWrite ?? \strlen($data));
 
-        if (null !== $this->capacity) {
-            $accepted = \min($accepted, $this->capacity - $this->accepted);
+        if (null !== $this->room) {
+            $accepted = \min($accepted, $this->room);
+            $this->room -= $accepted;
         }
 
         $this->sink?->take(\substr($data, 0, $accepted));
-        $this->accepted += $accepted;
 
         return $accepted;
     }

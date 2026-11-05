@@ -287,7 +287,7 @@ Not every `DomainException` carries a marker. Two of them guard the session-mint
 | `DekDestroyed`             | `dek-destroyed`               | `ScopeKeyring` (`decrypt`, `unseal`, and the `mint` tombstone race on `encrypt`/`seal`)                | No             |
 | `DecryptionFailed`         | `decryption-failed`           | `ScopeKeyring::unwrap`, `SodiumEnvelopeEncryptor::decrypt`, `SodiumStreamEnvelopeEncryptor::unseal` (truncated, extended or altered stream) & `DbalKeystore::wrappedDekFor` — AEAD open / corrupt bytes | No             |
 | `CannotSealEmptyStream`    | `cannot-seal-empty-stream`    | `SodiumStreamEnvelopeEncryptor::seal` — a source that yields no bytes, refused before any key is minted | No             |
-| `StreamTransferFailed`     | `stream-transfer-failed`      | `SodiumStreamEnvelopeEncryptor::seal`/`unseal` — a failed read or write on the source or sink          | No             |
+| `StreamTransferFailed`     | `stream-transfer-failed`      | `SodiumStreamEnvelopeEncryptor::seal`/`unseal` — a failed read, write or `fflush` on the source or sink, or a source silent for three consecutive reads without reporting end of stream | No             |
 | `KeystoreLockRequiresTransaction` | `keystore-lock-requires-transaction` | `DbalKeystore::lockState` called with no transaction active                              | No             |
 | `InvalidEncryptionScopeId` | `invalid-encryption-scope-id` | `EncryptionScopeId::of` on a malformed scope built from trusted internal data                          | No             |
 | `InvalidKek`               | `invalid-kek`                 | `ScopeKeyring` constructor — `AUDIT_KEK` length check                                       | No (misconfig) |

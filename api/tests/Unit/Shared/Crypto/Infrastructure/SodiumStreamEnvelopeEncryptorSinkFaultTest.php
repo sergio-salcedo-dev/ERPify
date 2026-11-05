@@ -45,6 +45,22 @@ final class SodiumStreamEnvelopeEncryptorSinkFaultTest extends TestCase
     }
 
     #[Test]
+    public function aPlaintextSinkThatFailsToFlushAfterTheLastChunkIsReported(): void
+    {
+        $scope = $this->documentScope();
+        $sealed = $this->sealedBytes($scope, 'evidence');
+
+        $this->expectException(StreamTransferFailed::class);
+
+        $this->encryptor->unseal(
+            $scope,
+            $this->memory($sealed),
+            SyntheticStream::unflushableSink(new SyntheticSink()),
+            self::AAD,
+        );
+    }
+
+    #[Test]
     public function aSinkAcceptingFewBytesPerWriteStillReceivesTheWholeObject(): void
     {
         $scope = $this->documentScope();

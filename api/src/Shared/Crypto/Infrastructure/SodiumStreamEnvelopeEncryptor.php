@@ -47,7 +47,7 @@ final readonly class SodiumStreamEnvelopeEncryptor implements StreamEnvelopeEncr
      * fail a transfer; a few in a row mean the source is not going to answer, and three leaves room for that
      * hiccup without making a stalled source cost more than three blocking calls.
      */
-    private const int MAX_EMPTY_READS = 3;
+    public const int MAX_EMPTY_READS = 3;
 
     private const string FORMAT_VERSION = "\x01";
 
@@ -140,6 +140,11 @@ final readonly class SodiumStreamEnvelopeEncryptor implements StreamEnvelopeEncr
             // Whatever follows the FINAL chunk was not sealed by this stream.
             if ('' !== $this->readChunk($scope, $sealed, 1)) {
                 throw DecryptionFailed::forScope($scope);
+            }
+
+            // Same reason as in seal(): a buffered sink reports a failed write only when it is flushed.
+            if (!\fflush($plaintext)) {
+                throw StreamTransferFailed::forScope($scope);
             }
         } finally {
             \sodium_memzero($state);

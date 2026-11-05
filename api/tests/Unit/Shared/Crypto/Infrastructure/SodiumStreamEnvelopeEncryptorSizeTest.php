@@ -34,12 +34,15 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
      * Measured, not derived: seal peaks at ~340 KB above baseline for 1 MiB when it is the first run in a
      * process (it pays to warm the allocator) and at ~218 KB warm, for 1 MiB and 100 MiB alike, and opening
      * peaks at ~218 KB. The difference between the two sizes measures 0 warm and 128 KiB cold, so its bound is
-     * twice the larger; the absolute ceiling is twice the largest peak measured (~348 KB), far under the 99 MiB
-     * a buffering implementation would add.
+     * twice the larger; that relative bound is the measurement.
+     *
+     * The absolute ceiling is only a sanity bound: a coverage driver (xdebug, pcov) moves
+     * `memory_get_peak_usage()` deltas, so it sits at 2 MiB, far above any peak measured and far below a
+     * whole-buffer regression (an 8 MiB chunk peaks at ~8.6 MB).
      */
     private const int PEAK_GROWTH_BOUND_BYTES = 262_144;
 
-    private const int PEAK_CEILING_BYTES = 700_000;
+    private const int PEAK_CEILING_BYTES = 2_097_152;
 
     #[Test]
     #[DataProvider('provideItRoundTripsByteIdenticalAtEverySizeCases')]

@@ -48,13 +48,17 @@ final readonly class EraseBankAccountSubject
     public function execute(string $bankAccountId): SubjectErasureResult
     {
         Uuid::ensure($bankAccountId);
-        $scope = EncryptionScopeId::forBankAccount($bankAccountId);
+        // `ensure()` accepts either case and canonicalises nothing, while keystore scopes compare exactly and
+        // the change capture seals under the hydrated (lowercase) id: the scope is built from the canonical
+        // spelling, or an upper-case id would tombstone a scope the data was never sealed under.
+        $canonicalId = \strtolower($bankAccountId);
+        $scope = EncryptionScopeId::forBankAccount($canonicalId);
 
-        return $this->transactionManager->transactional(function () use ($bankAccountId, $scope): SubjectErasureResult {
+        return $this->transactionManager->transactional(function () use ($canonicalId, $scope): SubjectErasureResult {
             // Locking read: it is what makes a second erasure of the same subject a no-op instead of a
             // failure. Unlocked, a competitor can destroy the scope's key between this read and the flush
             // below, and the change capture then seals the deletion snapshot under a tombstoned key.
-            $account = $this->bankAccountRepository->findByIdForUpdate($bankAccountId);
+            $account = $this->bankAccountRepository->findByIdForUpdate($canonicalId);
             $liveRecordErased = $account instanceof BankAccount;
 
             // Without a live record, only a keystore row makes this an erasure. The row is locked in this same

@@ -62,22 +62,38 @@ final class SodiumStreamEnvelopeEncryptorSourceFaultTest extends TestCase
     }
 
     #[Test]
-    public function aSourceThatAnswersNothingBeforeItsDataStillRoundTrips(): void
+    public function aSingleEmptyReadBeforeTheDataStillRoundTrips(): void
     {
+        $this->assertRoundTripsWith(1000, emptyReadsFirst: 1);
+    }
+
+    #[Test]
+    public function aSourceAnsweringNothingTwiceBetweenEveryDataReadRoundTripsAcrossChunks(): void
+    {
+        // Each run of empties stays under the budget; only a counter reset by every data read keeps the
+        // total, which is far past it, from being refused.
+        $this->assertRoundTripsWith(self::TWO_CHUNKS + SealedLayout::CHUNK, emptyReadsBetween: 2);
+    }
+
+    #[Test]
+    public function theEmptyReadBudgetIsSurvivedJustBelowItsLimitAndRefusedAtIt(): void
+    {
+        $limit = SodiumStreamEnvelopeEncryptor::MAX_EMPTY_READS;
+        $this->assertRoundTripsWith(1000, emptyReadsFirst: $limit - 1);
+
         $scope = $this->documentScope();
-        $sealed = $this->memory();
 
-        $this->encryptor->seal($scope, SyntheticStream::source(1000, emptyReadsFirst: 2), $sealed, self::AAD);
-
-        $sink = new SyntheticSink();
-        $this->encryptor->unseal(
-            $scope,
-            SyntheticStream::over($this->contents($sealed), emptyReadsFirst: 2),
-            SyntheticStream::sink($sink),
-            self::AAD,
-        );
-
-        $this->assertSame(SyntheticStream::digestOf(1000), $sink->digest());
+        try {
+            $this->encryptor->seal(
+                $scope,
+                SyntheticStream::source(1000, emptyReadsFirst: $limit),
+                $this->memory(),
+                self::AAD,
+            );
+            $this->fail('The budget is exhausted by this many consecutive empty reads.');
+        } catch (StreamTransferFailed) {
+            $this->assertSame(KeyState::Absent, $this->keystore->lockState($scope), 'refused before any key');
+        }
     }
 
     #[Test]
@@ -171,6 +187,34 @@ final class SodiumStreamEnvelopeEncryptorSourceFaultTest extends TestCase
             SyntheticStream::sink(new SyntheticSink()),
             self::AAD,
         );
+    }
+
+    private function assertRoundTripsWith(int $size, int $emptyReadsFirst = 0, int $emptyReadsBetween = 0): void
+    {
+        $scope = $this->documentScope();
+        $sealed = $this->memory();
+
+        $this->encryptor->seal(
+            $scope,
+            SyntheticStream::source($size, emptyReadsFirst: $emptyReadsFirst, emptyReadsBetween: $emptyReadsBetween),
+            $sealed,
+            self::AAD,
+        );
+
+        $sink = new SyntheticSink();
+        $this->encryptor->unseal(
+            $scope,
+            SyntheticStream::over(
+                $this->contents($sealed),
+                emptyReadsFirst: $emptyReadsFirst,
+                emptyReadsBetween: $emptyReadsBetween,
+            ),
+            SyntheticStream::sink($sink),
+            self::AAD,
+        );
+
+        $this->assertSame($size, $sink->bytes());
+        $this->assertSame(SyntheticStream::digestOf($size), $sink->digest());
     }
 
     private function assertNoCompleteObject(EncryptionScopeId $scope, string $partial): void

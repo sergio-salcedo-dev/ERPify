@@ -153,9 +153,10 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
     }
 
     /**
-     * An eraser whose two irreversible calls are refused outright, so a test asserting "nothing was erased"
-     * fails on the mutation itself instead of on an exit code that happens to agree with it. A stubbed eraser
-     * cannot do this job and reading it as if it could is the trap: stubs answer `findById(): null` and
+     * An eraser that refuses both irreversible calls (removing the record, tombstoning the scope) and the keystore
+     * lock read that precedes them, so a test asserting "nothing was erased" fails on the mutation itself, and
+     * "the command declined to look" is asserted directly rather than inferred from an exit code. A stubbed
+     * eraser cannot do this job and reading it as if it could is the trap: stubs answer `findById(): null` and
      * `lockState(): Absent`, so the use case runs to completion and reports "nothing to erase" — a green
      * that says the subject had no record, never that the command declined to look.
      */
@@ -166,6 +167,7 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
 
         $keystore = $this->createMock(Keystore::class);
         $keystore->expects($this->never())->method('destroy');
+        $keystore->expects($this->never())->method('lockState');
 
         return new EraseBankAccountSubject(
             $repository,
