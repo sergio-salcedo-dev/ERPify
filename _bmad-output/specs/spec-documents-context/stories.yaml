@@ -17,20 +17,19 @@
     wrapped_dek), add a reason to the keystore row (aborted-upload or erasure), and test
     destroy-unminted, seal, expect DekDestroyed. The boolean it returns must never decide
     erasure. Add a Keystore method that locks the scope's row and reports live, tombstoned or
-    absent (wrappedDekFor() cannot tell a tombstone from absence), and pass the KEK version
-    into the tombstone upsert or state a sentinel (it is a private constant of the encryptor).
+    absent (wrappedDekFor() cannot tell a tombstone from absence), and the tombstone of an unminted
+    scope carries the sentinel kek_version 0.
     Amend DbalSubjectErasureReconciler to exclude aborted-upload tombstones and Document
     scopes, with a test that plants one of each and expects unreconciledScopes() empty. The
-    stream seal authenticates truncation (a final-chunk marker in the associated data) and binds
-    the scope in that data, never a storage path, so a rename needs no re-seal. The final-chunk
+    stream seal authenticates truncation (an authenticated final-chunk marker, the secretstream FINAL tag) and
+    binds the scope in the associated data of every chunk, never a storage path, so a rename needs no re-seal. The final-chunk
     marker is decided by lookahead, so the seal never emits a final-marked chunk for a stream the
     counter then rejects at byte MAX_ORIGINAL_BYTES + 1. The unseal refuses a stream with no
     final-marked chunk (a 0-byte file from a full disk or a partial restore), and the sibling
-    either seals an authenticated empty final chunk or throws on empty input, with a test pinning
-    whichever is chosen. Test at MAX-1, MAX and MAX+1 and at exact multiples of the chunk size
+    throws CannotSealEmptyStream on empty input before any key is minted, with a test pinning it. Test at MAX-1, MAX and MAX+1 and at exact multiples of the chunk size
     (104,857,600 is a multiple of every power-of-two chunk up to 4 MiB; for a larger chunk test the
-    largest multiple below the cap and one byte either side of it). The nonce or associated data of
-    each chunk binds its 64-bit index and the final flag, so reordering, duplicating or dropping a
+    largest multiple below the cap and one byte either side of it). The secretstream
+    construction chains each chunk to its predecessors, so reordering, duplicating or dropping a
     chunk fails authentication, and the unseal refuses any byte after the final-marked chunk. A chunk
     is filled by looping until the chunk size or end of stream, never on one fread (php://input and
     network streams return short reads). Tests: a source returning one byte per read; a source
@@ -207,7 +206,8 @@
     renames it into the final root and removes it, refusing to start on any failure (st_dev equality
     is not proof: rename fails with EXDEV across two mount points of one filesystem); one short
     transaction locks the intent row, then the keystore row, asserts the intent is Streaming with a
-    live lease and a deadline not passed and the scope not tombstoned, reads the actor and key hash
+    live lease and a deadline not passed and the scope Live under the lock (lockState: Absent is a
+    snapshot, never accepted), reads the actor and key hash
     from the locked intent row (never from the writer's memory), inserts the Received row
     (promoted_at NULL, next_scan_at = transaction time; this story creates both columns) and seq 1,
     sets the intent Committed with the document id, and commits; the reaper locks in the same order
@@ -256,7 +256,8 @@
     path and format this story fixes (one record per proof: who, when, what was restored, digest set
     verified), which the doc-5 gate reads and doc-7 reuses for the drill. Record retention_reason (closed enum), legal_basis (GDPR Article 6
     enum) and a nullable consumer-supplied review_at, nothing more is enforced. Exactly
-    MAX_ORIGINAL_BYTES (100 MiB, one constant) is accepted at the declare step, a larger declared
+    MAX_ORIGINAL_BYTES (100 MiB, one constant that replaces the literal doc-1's tests carry) is
+    accepted at the declare step, a larger declared
     size is refused there, and a body that runs past its declared size aborts at the first extra
     byte, counted before each chunk is sealed or staged; the writer that detects the overflow
     deletes its staged file and expires its own intent, and the upload falls into the aborted-upload
