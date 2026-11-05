@@ -49,6 +49,12 @@ git rev-list "$(git merge-base origin/main <tip>)..<tip>"       # what the branc
 Comparing the tip with `headRefOid` is not the test: once the remote branch is gone that commit is
 not in the local object store, so the comparison can fail without meaning anything.
 
+A remote branch that is still there after its PR merged is itself a signal. With
+`delete_branch_on_merge` on (`gh api repos/{owner}/{repo} --jq .delete_branch_on_merge`) GitHub deletes
+the head branch at merge, and a push to a deleted name recreates it, so a survivor means someone pushed
+afterwards (measured: deleted two seconds after the merge, recreated by a commit pushed minutes to hours
+later). Read it as "has post-merge commits" until the containment check above says otherwise.
+
 For a commit the PR did **not** carry, find where it went before deciding:
 `git log origin/main --grep='<subject>' -F` (it often merged as a sibling PR), then
 `gh api repos/{owner}/{repo}/commits/<sha>/pulls`, then compare its added lines against
