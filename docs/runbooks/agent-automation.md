@@ -108,6 +108,13 @@ the wording of the prompt. Each point below was exercised against the real `clau
 - **A green proves less than it looks.** Neither the protected list nor the allowlist judges whether the diff is *good*;
   review is the only control on that.
 
+## Checking a run
+
+- `make agent.status`: timers, open agent PRs against the cap, and the tail of today's log.
+- The full log is `~/.local/state/erpify-agent/logs/<YYYYMMDD>.log`, and report-mode output goes to
+  `~/.local/state/erpify-agent/reports/`.
+- An issue left `agent:failed` carries a generic reason in its comment; the detail (paths, engine output) is only in the log.
+
 ## Adding a maintenance task
 
 Drop a Markdown file in `scripts/agent/tasks/` — a header (`engine`, `mode`, `branch-type`) closed by `---`, and a prompt.
