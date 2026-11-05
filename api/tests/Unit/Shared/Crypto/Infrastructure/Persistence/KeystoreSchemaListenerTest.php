@@ -74,6 +74,7 @@ final class KeystoreSchemaListenerTest extends TestCase
             'kek_version' => ColumnShape::of(Types::SMALLINT),
             'created_at' => ColumnShape::of(Types::DATETIMETZ_IMMUTABLE),
             'destroyed_at' => ColumnShape::of(Types::DATETIMETZ_IMMUTABLE)->nullable(),
+            'destroy_reason' => ColumnShape::of(Types::STRING)->length(24)->nullable(),
         ]);
     }
 

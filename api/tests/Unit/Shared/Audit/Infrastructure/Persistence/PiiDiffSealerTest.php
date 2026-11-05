@@ -10,6 +10,7 @@ use Erpify\Shared\Audit\Infrastructure\Persistence\PiiDiffSealer;
 use Erpify\Shared\Audit\Infrastructure\Persistence\SealedDiff;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
+use Erpify\Shared\Crypto\Infrastructure\ScopeKeyring;
 use Erpify\Shared\Crypto\Infrastructure\SodiumEnvelopeEncryptor;
 use Erpify\Shared\Privacy\Infrastructure\ReflectionPersonalDataClassifier;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -119,7 +120,7 @@ final class PiiDiffSealerTest extends TestCase
     public function aSealedValueDecryptsUnderItsSlotAadAndFailsWhenRelocated(): void
     {
         $keystore = new InMemoryKeystore();
-        $encryptor = new SodiumEnvelopeEncryptor($keystore, self::KEK);
+        $encryptor = new SodiumEnvelopeEncryptor(new ScopeKeyring($keystore, self::KEK));
         $sealer = new PiiDiffSealer(new ReflectionPersonalDataClassifier(), $encryptor);
 
         $id = Uuid::generate();
@@ -165,7 +166,7 @@ final class PiiDiffSealerTest extends TestCase
     {
         return new PiiDiffSealer(
             new ReflectionPersonalDataClassifier(),
-            new SodiumEnvelopeEncryptor(new InMemoryKeystore(), self::KEK),
+            new SodiumEnvelopeEncryptor(new ScopeKeyring(new InMemoryKeystore(), self::KEK)),
         );
     }
 }

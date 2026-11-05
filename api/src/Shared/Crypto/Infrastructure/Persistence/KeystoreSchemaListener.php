@@ -18,7 +18,8 @@ use Erpify\Shared\Persistence\Infrastructure\InjectedTableSchemaListener;
  *
  * One wrapped data-encryption key per encryption scope: `wrapped_dek` is base64 of the KEK-sealed key and
  * becomes NULL on destruction, while the row survives with a `destroyed_at` so a crypto-shredding can be
- * reconciled. No foreign key to any domain table — the scope is a cryptographic identity, not a domain one
+ * reconciled; `destroy_reason` says why (see {@see \Erpify\Shared\Crypto\Domain\DestroyReason}) and is NULL
+ * for a live key. No foreign key to any domain table — the scope is a cryptographic identity, not a domain one
  * (ADR D13/D17). No column default: the writer supplies every value, as in `audit_log`.
  */
 #[AsDoctrineListener(event: ToolEvents::postGenerateSchema)]
@@ -38,6 +39,7 @@ final class KeystoreSchemaListener extends InjectedTableSchemaListener
                 $this->column('kek_version', Types::SMALLINT)->create(),
                 $this->column('created_at', Types::DATETIMETZ_IMMUTABLE)->create(),
                 $this->column('destroyed_at', Types::DATETIMETZ_IMMUTABLE)->setNotNull(false)->create(),
+                $this->column('destroy_reason', Types::STRING)->setLength(24)->setNotNull(false)->create(),
             )
             ->setPrimaryKeyConstraint(
                 PrimaryKeyConstraint::editor()->setUnquotedColumnNames('encryption_scope_id')->create(),

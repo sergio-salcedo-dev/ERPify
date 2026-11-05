@@ -59,7 +59,7 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
             // — the key gone, the row kept. What is under test is the pair of controls that read it.
             $connection->executeStatement(
                 'INSERT INTO dek_keystore (encryption_scope_id, wrapped_dek, kek_version, created_at, '
-                . 'destroyed_at) VALUES (:scope, NULL, 1, NOW(), NOW())',
+                . "destroyed_at, destroy_reason) VALUES (:scope, NULL, 1, NOW(), NOW(), 'erasure')",
                 ['scope' => $scope],
             );
 

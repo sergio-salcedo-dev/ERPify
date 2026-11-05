@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalSubjectErasureReconciler;
 use Erpify\Shared\Crypto\Application\WrappedDek;
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Infrastructure\Persistence\DbalKeystore;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -40,8 +41,8 @@ final class SubjectErasureReconcilerFunctionalTest extends KernelTestCase
                 $keystore->store($scope, new WrappedDek('wrapped', 1));
             }
 
-            $keystore->destroy($orphan);
-            $keystore->destroy($reconciled);
+            $keystore->destroy($orphan, DestroyReason::Erasure);
+            $keystore->destroy($reconciled, DestroyReason::Erasure);
             $this->seedErasureEvidence($connection, $reconciled);
 
             $unreconciled = (new DbalSubjectErasureReconciler($connection))->unreconciledScopes();
@@ -49,6 +50,30 @@ final class SubjectErasureReconcilerFunctionalTest extends KernelTestCase
             $this->assertContains($orphan->toString(), $unreconciled, 'a destroyed key with no evidence diverges');
             $this->assertNotContains($reconciled->toString(), $unreconciled, 'a destroyed key with evidence is clean');
             $this->assertNotContains($live->toString(), $unreconciled, 'a live key is not an erasure at all');
+        });
+    }
+
+    public function testItIgnoresAbortedUploadAndDocumentScopeTombstones(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $keystore = new DbalKeystore($connection);
+
+            $abortedUpload = EncryptionScopeId::forBankAccount(Uuid::generate());
+            $erasedDocument = EncryptionScopeId::forDocument(Uuid::generate());
+            $abortedDocument = EncryptionScopeId::forDocument(Uuid::generate());
+            $orphan = EncryptionScopeId::forBankAccount(Uuid::generate());
+
+            $keystore->destroy($abortedUpload, DestroyReason::AbortedUpload);
+            $keystore->destroy($erasedDocument, DestroyReason::Erasure);
+            $keystore->destroy($abortedDocument, DestroyReason::AbortedUpload);
+            $keystore->destroy($orphan, DestroyReason::Erasure);
+
+            $unreconciled = (new DbalSubjectErasureReconciler($connection))->unreconciledScopes();
+
+            $this->assertContains($orphan->toString(), $unreconciled, 'the control still alarms');
+            $this->assertNotContains($abortedUpload->toString(), $unreconciled, 'an aborted write erased nothing');
+            $this->assertNotContains($erasedDocument->toString(), $unreconciled, 'documents reconcile elsewhere');
+            $this->assertNotContains($abortedDocument->toString(), $unreconciled);
         });
     }
 

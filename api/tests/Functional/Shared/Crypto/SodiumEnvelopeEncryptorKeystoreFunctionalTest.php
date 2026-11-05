@@ -6,9 +6,11 @@ namespace Erpify\Tests\Functional\Shared\Crypto;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use Erpify\Shared\Crypto\Infrastructure\Persistence\DbalKeystore;
+use Erpify\Shared\Crypto\Infrastructure\ScopeKeyring;
 use Erpify\Shared\Crypto\Infrastructure\SodiumEnvelopeEncryptor;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -43,7 +45,7 @@ final class SodiumEnvelopeEncryptorKeystoreFunctionalTest extends KernelTestCase
                 'a fresh encryptor reads the persisted DEK',
             );
 
-            $this->encryptorOn($connection)->destroyScope($scope);
+            $this->encryptorOn($connection)->destroyScope($scope, DestroyReason::Erasure);
 
             $this->expectException(DekDestroyed::class);
 
@@ -53,7 +55,7 @@ final class SodiumEnvelopeEncryptorKeystoreFunctionalTest extends KernelTestCase
 
     private function encryptorOn(Connection $connection): SodiumEnvelopeEncryptor
     {
-        return new SodiumEnvelopeEncryptor(new DbalKeystore($connection), self::KEK);
+        return new SodiumEnvelopeEncryptor(new ScopeKeyring(new DbalKeystore($connection), self::KEK));
     }
 
     private function inRolledBackTransaction(callable $body): void

@@ -16,6 +16,8 @@ use Erpify\Shared\Crypto\Domain\Exception\InvalidEncryptionScopeId;
  */
 final readonly class EncryptionScopeId
 {
+    public const string DOCUMENT_TYPE = 'Document';
+
     private const string SEPARATOR = ':';
 
     private function __construct(
@@ -47,6 +49,15 @@ final readonly class EncryptionScopeId
     public static function forBankAccount(string $bankAccountId): self
     {
         return self::of('BankAccount', $bankAccountId);
+    }
+
+    /**
+     * A document's own scope. `$scopeId` is a random identifier minted for the scope, not the document's id,
+     * so no two documents can share a key and the scope names nothing about the document.
+     */
+    public static function forDocument(string $scopeId): self
+    {
+        return self::of(self::DOCUMENT_TYPE, $scopeId);
     }
 
     public static function fromString(string $value): self
