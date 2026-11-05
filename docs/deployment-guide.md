@@ -131,6 +131,14 @@ an issue, reopen a resolved one as a regression, and act on "resolve in next
 release". Sentry registers no deploy here, and it finalizes the release when the
 image is **built**, not when it ships.
 
+The `pwa` build is what creates the release, and it does so in the PWA project
+only. The API services join it with their first event carrying that release, so
+right after a deploy `erpify-api-prod` does not list it: measured on a rehearsal,
+the release was absent from that project minutes after the deploy and present
+after 40 health requests at `SENTRY_TRACES_SAMPLE_RATE=0.2`. Check the API project
+after real traffic, not after the smoke test. The release is organisation-wide, so
+the commits attached by the PWA build show under both projects.
+
 When the value comes from `make`, a shell value beats `.env.prod.local`: run
 `SENTRY_RELEASE=… make …` to override it. Outside a git checkout `make` exports
 nothing, so a value written in `.env.prod.local` takes effect. With neither,
@@ -162,8 +170,10 @@ A repository with no full-SHA release is warned about in the build log. A person
 token with `project:releases` and `org:read` is enough: `sentry-cli releases
 set-commits <sha> --commit <owner>/<name>@<sha>` run with one associated the
 release, and Sentry resolved the repository's history through the GitHub
-integration from that single revision. Whether the call also works without
-`org:read`, and the build's own call with such a token, have not been run. If
+integration from that single revision. The build's own call has run too: a
+rehearsal deploy with the token in the owner's `.env.prod.local` left the
+release with its commits attached. Whether the call also works without
+`org:read`, and which scopes that token holds, have not been checked. If
 Sentry refuses the call, the build log prints the error
 (`silent: false`), the build still succeeds, and the release is left
 unfinalized. That is loud on purpose, because the plugin's
