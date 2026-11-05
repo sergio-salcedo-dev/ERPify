@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Support\Stream;
+namespace Erpify\Tests\Double\Stream;
 
 use Erpify\Shared\Crypto\Infrastructure\SodiumStreamEnvelopeEncryptor;
 

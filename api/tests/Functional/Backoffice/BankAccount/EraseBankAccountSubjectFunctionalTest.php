@@ -75,23 +75,47 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         });
     }
 
-    public function testErasingASubjectThatNeverHeldAKeyClosesItsScopeAndRecordsTheEvidence(): void
+    public function testErasingAnIdThatNamesNothingWritesNoTombstoneAndNoEvidence(): void
     {
         $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
             $accountId = Uuid::generate();
             $scope = 'BankAccount:' . $accountId;
-            $this->assertSame(0, $this->liveKeys($connection, $scope));
+            $this->assertSame(0, $this->keystoreRows($connection, $scope));
 
             $result = $this->eraser()->execute($accountId);
 
             $this->assertFalse($result->liveRecordErased);
+            $this->assertFalse($result->keyDestroyed);
+            $this->assertFalse($result->erasedAnything(), 'a mistyped but well-formed id erases nothing');
             $this->assertNull($em->find(BankAccount::class, $accountId), 'there never was a live record');
-            $this->assertTrue($result->keyDestroyed, 'the scope is closed, so a late writer cannot mint under it');
-            $this->assertSame(1, $this->subjectErasedRows($connection, $scope), 'the closure carries its evidence');
-            $this->assertFalse(
-                $this->hasEvidencelessDestroyedKey($connection, $scope),
-                'reconciliation: the tombstone commits with its GDPR_SUBJECT_ERASED evidence row',
-            );
+            $this->assertSame(0, $this->keystoreRows($connection, $scope), 'no tombstone is written for it');
+            $this->assertSame(0, $this->subjectErasedRows($connection, $scope), 'and no evidence row either');
+        });
+    }
+
+    public function testErasingASubjectWhoseRecordIsGoneButWhoseKeyIsLiveStillShredsIt(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $bankId = Uuid::generate();
+            $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
+            $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+            $em->flush();
+
+            $accountId = Uuid::generate();
+            $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+            $em->flush();
+
+            $scope = 'BankAccount:' . $accountId;
+            $this->assertSame(1, $this->liveKeys($connection, $scope));
+            $connection->executeStatement('DELETE FROM bank_account WHERE id = :id', ['id' => $accountId]);
+            $em->clear();
+
+            $result = $this->eraser()->execute($accountId);
+
+            $this->assertFalse($result->liveRecordErased);
+            $this->assertTrue($result->keyDestroyed, 'a key that outlived its record is still shredded');
+            $this->assertSame(1, $this->subjectErasedRows($connection, $scope), 'the shredding carries its evidence');
+            $this->assertFalse($this->hasEvidencelessDestroyedKey($connection, $scope));
 
             $rerun = $this->eraser()->execute($accountId);
 
@@ -185,6 +209,15 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         return $this->countRows(
             $connection,
             'SELECT COUNT(*) FROM dek_keystore WHERE encryption_scope_id = :scope AND destroyed_at IS NULL',
+            ['scope' => $scope],
+        );
+    }
+
+    private function keystoreRows(Connection $connection, string $scope): int
+    {
+        return $this->countRows(
+            $connection,
+            'SELECT COUNT(*) FROM dek_keystore WHERE encryption_scope_id = :scope',
             ['scope' => $scope],
         );
     }

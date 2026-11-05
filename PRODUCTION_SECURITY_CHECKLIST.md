@@ -2542,10 +2542,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       arrives; only the FINAL tag proves the object is whole. Every consumer therefore treats its sink as discarded
       on any exception, and one that forwards the plaintext as it arrives (an HTTP response, a scanner stream)
       must decide, before it ships, what a partial delivery means. **Open — to be settled by the first story
-      that reads a sealed object (the scan and the audited read path).** Two neighbours, both accepted
-      by construction: the plaintext chunk buffers are ordinary PHP strings that are not wiped (only keys and the
-      stream state are), and the per-document keys are wrapped by the same `AUDIT_KEK` as the audit keys, so one
-      key-encryption key protects both until a separate one is introduced.
+      that reads a sealed object (the scan and the audited read path).** The same story owns the second face of
+      this: an `unseal()` that has already unwrapped the DEK keeps opening chunks after a concurrent
+      `destroy()` commits, so crypto-shredding holds for every read that starts after the tombstone and not for
+      one already in flight; serialising readers with erasure (or re-checking the scope between chunks) is a
+      read-path decision, not something the encryptor can offer. Neighbours, accepted by construction:
+      - the plaintext chunk buffers are ordinary PHP strings that are not wiped; of the key material, the
+        DEK and the stream state are wiped with `sodium_memzero()` on a best-effort basis, since the copy
+        libsodium returns from `init_push()`/`init_pull()` may remain in memory until PHP frees it;
+      - the per-document keys are wrapped by the same `AUDIT_KEK` as the audit keys, the only KEK the module has,
+        so one key-encryption key protects both; separating them is a rotation decision with no owner yet;
+      - until the Documents erasure story delivers the Document-driven reconciler, nothing reconciles Document
+        tombstones: `DbalSubjectErasureReconciler` excludes Document scopes by construction and no other reader
+        takes them, so a Document scope destroyed without its custody record raises no alarm;
+      - `dek_keystore.destroy_reason` is added by a migration whose `down()` is not run by a code rollback: the
+        previous release's `destroy()` then violates the `dek_keystore_destroy_reason_check` constraint and
+        fails. No deployment is live, so this is recorded, not mitigated.
 
 ## 8. Deploy & verify
 

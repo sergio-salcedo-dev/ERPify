@@ -9,7 +9,8 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
 use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Application\Keystore;
+use Erpify\Shared\Crypto\Domain\KeyState;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -59,10 +60,11 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
         $repository->method('findByIdForUpdate')->willReturn(
             BankAccount::create(self::ACCOUNT_ID, self::BANK_ID, 'Juan Pérez', 'ES9121000418450200051332'),
         );
-        $encryptor = $this->createStub(EnvelopeEncryptor::class);
-        $encryptor->method('destroyScope')->willReturn(true);
+        $keystore = $this->createStub(Keystore::class);
+        $keystore->method('lockState')->willReturn(KeyState::Live);
+        $keystore->method('destroy')->willReturn(true);
 
-        $tester = $this->tester($this->eraser($repository, $encryptor));
+        $tester = $this->tester($this->eraser($repository, $keystore));
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
 
         $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
@@ -72,7 +74,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function itReportsNothingToEraseForAnAlreadyErasedSubject(): void
     {
-        // The inert eraser finds no live record and no key, so a forced run is a no-op re-run.
+        // The inert eraser finds no live record and no keystore row, so a forced run erases nothing.
         $tester = $this->tester($this->inertEraser());
 
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
@@ -84,10 +86,11 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     #[Test]
     public function itReportsFailureWhenTheErasureThrows(): void
     {
-        $encryptor = $this->createStub(EnvelopeEncryptor::class);
-        $encryptor->method('destroyScope')->willThrowException(new RuntimeException('crypto backend down'));
+        $keystore = $this->createStub(Keystore::class);
+        $keystore->method('lockState')->willReturn(KeyState::Live);
+        $keystore->method('destroy')->willThrowException(new RuntimeException('crypto backend down'));
 
-        $tester = $this->tester($this->eraser($this->createStub(BankAccountRepository::class), $encryptor));
+        $tester = $this->tester($this->eraser($this->createStub(BankAccountRepository::class), $keystore));
         $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
 
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
@@ -101,10 +104,10 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
 
     private function inertEraser(): EraseBankAccountSubject
     {
-        return $this->eraser(
-            $this->createStub(BankAccountRepository::class),
-            $this->createStub(EnvelopeEncryptor::class),
-        );
+        $keystore = $this->createStub(Keystore::class);
+        $keystore->method('lockState')->willReturn(KeyState::Absent);
+
+        return $this->eraser($this->createStub(BankAccountRepository::class), $keystore);
     }
 
     /**
@@ -112,7 +115,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
      * fails on the mutation itself instead of on an exit code that happens to agree with it.
      *
      * {@see inertEraser()} cannot do this job and reading it as if it could is the trap: its stubs answer
-     * `findById(): null` and `destroyScope(): false`, so the use case runs to completion and reports
+     * `findById(): null` and `lockState(): Absent`, so the use case runs to completion and reports
      * "nothing to erase" — a green that says the subject had no record, never that the command declined to
      * look. Refusing the calls is what separates the two.
      */
@@ -121,17 +124,17 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
         $repository = $this->createMock(BankAccountRepository::class);
         $repository->expects($this->never())->method('remove');
 
-        $encryptor = $this->createMock(EnvelopeEncryptor::class);
-        $encryptor->expects($this->never())->method('destroyScope');
+        $keystore = $this->createMock(Keystore::class);
+        $keystore->expects($this->never())->method('destroy');
 
-        return $this->eraser($repository, $encryptor);
+        return $this->eraser($repository, $keystore);
     }
 
-    private function eraser(BankAccountRepository $repository, EnvelopeEncryptor $encryptor): EraseBankAccountSubject
+    private function eraser(BankAccountRepository $repository, Keystore $keystore): EraseBankAccountSubject
     {
         return new EraseBankAccountSubject(
             $repository,
-            $encryptor,
+            $keystore,
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),
         );

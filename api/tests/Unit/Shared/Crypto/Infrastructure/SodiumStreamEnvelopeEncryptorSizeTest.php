@@ -8,9 +8,9 @@ use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Crypto\Infrastructure\ScopeKeyring;
 use Erpify\Shared\Crypto\Infrastructure\SodiumStreamEnvelopeEncryptor;
-use Erpify\Tests\Support\Stream\SealedLayout;
-use Erpify\Tests\Support\Stream\SyntheticSink;
-use Erpify\Tests\Support\Stream\SyntheticStream;
+use Erpify\Tests\Double\Stream\SealedLayout;
+use Erpify\Tests\Double\Stream\SyntheticSink;
+use Erpify\Tests\Double\Stream\SyntheticStream;
 use Generator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -31,12 +31,15 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
     use StreamSealingFixture;
 
     /**
-     * Measured, not derived: seal peaks at ~340 KB above baseline for 1 MiB and ~217 KB for 100 MiB (three
-     * 64 KiB buffers plus allocator granularity; the first run in a process pays to warm the allocator), so
-     * the difference measures 128 KiB; opening peaks at ~218 KB for both. The bound is twice the measured
-     * difference, far under the 99 MiB a buffering implementation would add.
+     * Measured, not derived: seal peaks at ~340 KB above baseline for 1 MiB when it is the first run in a
+     * process (it pays to warm the allocator) and at ~218 KB warm, for 1 MiB and 100 MiB alike, and opening
+     * peaks at ~218 KB. The difference between the two sizes measures 0 warm and 128 KiB cold, so its bound is
+     * twice the larger; the absolute ceiling is twice the largest peak measured (~348 KB), far under the 99 MiB
+     * a buffering implementation would add.
      */
     private const int PEAK_GROWTH_BOUND_BYTES = 262_144;
+
+    private const int PEAK_CEILING_BYTES = 700_000;
 
     #[Test]
     #[DataProvider('provideItRoundTripsByteIdenticalAtEverySizeCases')]
@@ -88,16 +91,12 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
         [$sealSmall, $unsealSmall] = $this->peaksOf($scope, 1_048_576);
         [$sealLarge, $unsealLarge] = $this->peaksOf($scope, SealedLayout::MAX_ORIGINAL_BYTES);
 
-        \fwrite(STDERR, \sprintf(
-            "\npeak bytes above baseline: seal 1 MiB=%d, seal 100 MiB=%d, unseal 1 MiB=%d, unseal 100 MiB=%d\n",
-            $sealSmall,
-            $sealLarge,
-            $unsealSmall,
-            $unsealLarge,
-        ));
-
         $this->assertLessThan(self::PEAK_GROWTH_BOUND_BYTES, \abs($sealLarge - $sealSmall));
         $this->assertLessThan(self::PEAK_GROWTH_BOUND_BYTES, \abs($unsealLarge - $unsealSmall));
+
+        foreach ([$sealSmall, $sealLarge, $unsealSmall, $unsealLarge] as $peak) {
+            $this->assertLessThan(self::PEAK_CEILING_BYTES, $peak);
+        }
     }
 
     #[Test]

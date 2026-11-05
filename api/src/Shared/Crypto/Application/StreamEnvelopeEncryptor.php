@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Crypto\Application;
 
+use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\CannotSealEmptyStream;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
@@ -25,8 +26,18 @@ interface StreamEnvelopeEncryptor
 {
     /**
      * Reads `$plaintext` to its end and writes the sealed form to `$sealed`, minting the scope's key on first
-     * use. The key is minted only once the first byte has arrived, so an empty or failing source leaves no
-     * keystore row.
+     * use. The key is minted once the first chunk has been read, so a source that is empty or fails before
+     * that chunk completes leaves no keystore row. A failure after it leaves a live key and a partial object
+     * in `$sealed`: the caller discards the object and tombstones the scope with
+     * {@see DestroyReason::AbortedUpload}, which is only right when no Document row refers to the scope.
+     *
+     * Run it outside any transaction that can roll back. The minted key row enrols in the caller's open
+     * transaction while the sealed bytes go to an external sink, so a rollback would delete the key of an
+     * object that already exists, and an uncommitted insert holds the scope's unique-index lock for the whole
+     * outer transaction, blocking every other writer and any destroy of the scope.
+     *
+     * The original's filename is sealed with {@see EnvelopeEncryptor::encrypt()} under the same scope, with an
+     * `$aad` that differs from the one passed here, so neither can be presented as the other.
      *
      * @param resource $plaintext a readable stream
      * @param resource $sealed    a writable stream
