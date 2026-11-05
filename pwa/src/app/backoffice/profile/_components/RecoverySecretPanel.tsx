@@ -175,8 +175,11 @@ export function RecoverySecretPanel() {
  * The one and only reveal. The secret is selectable text beside a copy control rather than a
  * link or a download, so nothing about it ever reaches a URL, and the warning sits above it
  * rather than below: it has to be read before the value is acted on, not after.
+ *
+ * Exported for the back-office enrolment step, which reveals the secret it has just minted the
+ * same way; the panel and that step never render together.
  */
-function MintedSecretNotice({
+export function MintedSecretNotice({
   minted,
   onAcknowledge,
 }: Readonly<{ minted: MintedRecoverySecret; onAcknowledge: () => void }>) {

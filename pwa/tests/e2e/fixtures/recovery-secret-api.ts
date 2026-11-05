@@ -54,8 +54,10 @@ export async function ensureLiveRecoverySecret(api: APIRequestContext): Promise<
 
   if (before.exists) await revokeRecoverySecret(api);
 
+  // A 409 is a secret that appeared between the read and the mint (a parallel setup, a retry): not a
+  // failure in itself, so the read-back below decides whether the account ended up live.
   const mint = await api.post(RECOVERY_SECRET_PATH, proof(E2E_USER_PASSWORD));
-  if (mint.status() !== 201) {
+  if (mint.status() !== 201 && mint.status() !== 409) {
     throw new Error(`minting the recovery secret failed (${mint.status()})`);
   }
 

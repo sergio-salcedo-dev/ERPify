@@ -13,14 +13,18 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { isOwnIdentity } from "../_lib/isOwnIdentity";
+import { CurrentPasswordDialog, isInvalidCurrentPassword } from "./CurrentPasswordDialog";
 
 /** The two legal transitions out of ACTIVE — the identity lifecycle is unidirectional, so there is no reinstate. */
 type TransitionTarget = typeof UserStatus.SUSPENDED | typeof UserStatus.DEACTIVATED;
 
-const TRANSITIONS: ReadonlyArray<{ value: TransitionTarget; label: string }> = [
-  { value: UserStatus.SUSPENDED, label: "Suspend" },
-  { value: UserStatus.DEACTIVATED, label: "Deactivate" },
-];
+/** Exhaustive over the targets, so a label lookup cannot miss for any selectable transition. */
+const TRANSITION_LABEL: Record<TransitionTarget, string> = {
+  [UserStatus.SUSPENDED]: "Suspend",
+  [UserStatus.DEACTIVATED]: "Deactivate",
+};
+
+const TRANSITIONS: readonly TransitionTarget[] = [UserStatus.SUSPENDED, UserStatus.DEACTIVATED];
 
 const SELECT_CLASS =
   "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56";
@@ -34,8 +38,12 @@ interface UserStatusControlProps {
 /**
  * Lifecycle status transition for an identity, gated by `users.changeStatus`. Offered only for an ACTIVE
  * identity — the transition is unidirectional (no reinstate), so a suspended/deactivated user shows no
- * control. A failure (403 / 409 last-admin / 409 illegal transition / 422) surfaces in the persistent
- * {@link MutationError}, mirroring the bank-account status control.
+ * control. A failure (403 / 409 last-admin / 409 illegal transition / 422 / 429 spent proof budget) surfaces in
+ * the persistent {@link MutationError}, mirroring the bank-account status control.
+ *
+ * The button does not send anything: it opens {@link CurrentPasswordDialog}, because retiring another identity
+ * is not something a borrowed session may do alone. The operator's own password travels with the write; a wrong
+ * one stays on the dialog's field and keeps it open.
  *
  * On the operator's own identity it offers no control either: the API refuses a self-targeted transition, so
  * the section says another administrator makes it.
@@ -43,7 +51,7 @@ interface UserStatusControlProps {
 export function UserStatusControl({ user, onChanged }: Readonly<UserStatusControlProps>) {
   const [selected, setSelected] = useState<TransitionTarget>(UserStatus.SUSPENDED);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const { session } = useSession();
 
   if (user.status !== UserStatus.ACTIVE) {
@@ -64,21 +72,23 @@ export function UserStatusControl({ user, onChanged }: Readonly<UserStatusContro
     );
   }
 
-  const onSubmit = async (): Promise<void> => {
-    setSaving(true);
+  // A wrong password is the dialog's to show on its field, so it is handed back; every other failure
+  // is surfaced here and the dialog closes behind it.
+  const confirm = async (currentPassword: string): Promise<void> => {
     try {
       const useCase = container.get<ChangeUserStatus>("BackOfficeChangeUserStatus");
-      const updated = await useCase.run(user.id, selected);
+      const updated = await useCase.run(user.id, selected, currentPassword);
       setProblem(null);
       toastNotifier.success("Status updated", { description: updated.status });
       onChanged(updated);
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
+      if (isInvalidCurrentPassword(err)) throw err;
       setProblem(err.problem);
-    } finally {
-      setSaving(false);
     }
   };
+
+  const targetLabel = TRANSITION_LABEL[selected];
 
   return (
     <Can permission={Permission.USERS_CHANGE_STATUS}>
@@ -111,28 +121,35 @@ export function UserStatusControl({ user, onChanged }: Readonly<UserStatusContro
             className={SELECT_CLASS}
             value={selected}
             onChange={(event) => setSelected(event.target.value as TransitionTarget)}
-            disabled={saving}
             data-testid="user-status__select"
           >
             {TRANSITIONS.map((transition) => (
-              <option key={transition.value} value={transition.value}>
-                {transition.label}
+              <option key={transition} value={transition}>
+                {TRANSITION_LABEL[transition]}
               </option>
             ))}
           </select>
           <button
             type="button"
             className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
-            disabled={saving}
-            onClick={() => void onSubmit()}
+            onClick={() => setConfirming(true)}
             title={`Change ${user.email} status`}
             aria-label="Change status"
             data-testid="user-status__save"
           >
-            {saving ? "Saving…" : "Change status"}
+            Change status
           </button>
         </div>
       </section>
+      <CurrentPasswordDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`${targetLabel} this member`}
+        description={`Enter your password to ${targetLabel.toLowerCase()} ${user.email}. This cannot be undone from here.`}
+        confirmLabel="Change status"
+        testIdPrefix="user-status"
+        onConfirm={confirm}
+      />
     </Can>
   );
 }

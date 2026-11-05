@@ -34,6 +34,7 @@ import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Role } from "@/context/shared/access/domain/Role";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import type { Identity } from "@/context/shared/access/domain/Identity";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
@@ -90,6 +91,41 @@ function problem(): ProblemDetails {
   };
 }
 
+const PASSWORD = "callerPassword1";
+
+function wrongPassword(): HttpError {
+  return new HttpError({
+    type: "invalid-current-password",
+    title: "The current password is incorrect.",
+    status: HttpStatus.FORBIDDEN,
+    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b62",
+    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b63",
+  });
+}
+
+function budgetSpent(): HttpError {
+  return new HttpError({
+    type: "too-many-requests",
+    title: "Too many attempts.",
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b64",
+    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b65",
+  });
+}
+
+/** Saving is two steps: the form validates the set, then the dialog collects the operator's password. */
+async function typePassword(password: string = PASSWORD): Promise<void> {
+  fireEvent.change(await screen.findByTestId("user-roles__password"), {
+    target: { value: password },
+  });
+}
+
+async function saveAndConfirm(password: string = PASSWORD): Promise<void> {
+  fireEvent.submit(await screen.findByTestId("user-roles"));
+  await typePassword(password);
+  fireEvent.click(screen.getByTestId("user-roles__confirm"));
+}
+
 function renderControl(target: User, onChanged: (u: User) => void = vi.fn()) {
   return render(
     <AuthProvider>
@@ -133,11 +169,12 @@ describe("UserRolesControl", () => {
     renderControl(user([Role.VIEWER]), onChanged);
 
     fireEvent.click(await screen.findByTestId(`user-roles__role-${Role.MANAGER}`));
-    fireEvent.submit(screen.getByTestId("user-roles"));
+    await saveAndConfirm();
 
     await waitFor(() =>
-      expect(changeRun).toHaveBeenCalledWith(TARGET_ID, [Role.VIEWER, Role.MANAGER]),
+      expect(changeRun).toHaveBeenCalledWith(TARGET_ID, [Role.VIEWER, Role.MANAGER], PASSWORD),
     );
+    await waitFor(() => expect(screen.queryByTestId("user-roles__dialog")).not.toBeInTheDocument());
     expect(onChanged).toHaveBeenCalledWith(
       expect.objectContaining({ roles: [Role.VIEWER, Role.MANAGER] }),
     );
@@ -152,9 +189,11 @@ describe("UserRolesControl", () => {
     renderControl(user([Role.VIEWER, unknown]));
 
     expect(screen.queryByTestId(`user-roles__role-${unknown}`)).not.toBeInTheDocument();
-    fireEvent.submit(await screen.findByTestId("user-roles"));
+    await saveAndConfirm();
 
-    await waitFor(() => expect(changeRun).toHaveBeenCalledWith(TARGET_ID, [Role.VIEWER, unknown]));
+    await waitFor(() =>
+      expect(changeRun).toHaveBeenCalledWith(TARGET_ID, [Role.VIEWER, unknown], PASSWORD),
+    );
   });
 
   it("surfaces a server problem in the persistent error surface and does not report success", async () => {
@@ -162,10 +201,92 @@ describe("UserRolesControl", () => {
     changeRun.mockRejectedValueOnce(new HttpError(problem()));
     renderControl(user([Role.ADMIN]), onChanged);
 
-    fireEvent.submit(await screen.findByTestId("user-roles"));
+    await saveAndConfirm();
 
     expect(await screen.findByTestId("user-roles__error")).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
+    // The failure belongs to the persistent surface, so the dialog closes behind it.
+    expect(screen.queryByTestId("user-roles__dialog")).not.toBeInTheDocument();
+  });
+
+  it("asks for the operator's password before any request leaves", async () => {
+    renderControl(user([Role.VIEWER]));
+
+    fireEvent.click(await screen.findByTestId(`user-roles__role-${Role.MANAGER}`));
+    fireEvent.submit(screen.getByTestId("user-roles"));
+
+    expect(await screen.findByTestId("user-roles__dialog")).toBeInTheDocument();
+    expect(changeRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("user-roles__cancel"));
+    await waitFor(() => expect(screen.queryByTestId("user-roles__dialog")).not.toBeInTheDocument());
+    expect(changeRun).not.toHaveBeenCalled();
+  });
+
+  it("never sends a blank password", async () => {
+    renderControl(user([Role.VIEWER]));
+
+    fireEvent.submit(await screen.findByTestId("user-roles"));
+    fireEvent.click(await screen.findByTestId("user-roles__confirm"));
+
+    expect(await screen.findByText("Enter your current password.")).toBeInTheDocument();
+    expect(changeRun).not.toHaveBeenCalled();
+  });
+
+  it("masks the password field and declares it a current password", async () => {
+    renderControl(user([Role.VIEWER]));
+
+    fireEvent.submit(await screen.findByTestId("user-roles"));
+    const field = await screen.findByTestId("user-roles__password");
+
+    expect(field).toHaveAttribute("type", "password");
+    expect(field).toHaveAttribute("autocomplete", "current-password");
+  });
+
+  it("answers a wrong password on the field, keeps the dialog open and lets the next try through", async () => {
+    const onChanged = vi.fn();
+    changeRun
+      .mockRejectedValueOnce(wrongPassword())
+      .mockResolvedValueOnce(user([Role.VIEWER, Role.MANAGER]));
+    renderControl(user([Role.VIEWER]), onChanged);
+
+    fireEvent.click(await screen.findByTestId(`user-roles__role-${Role.MANAGER}`));
+    await saveAndConfirm("wrongPassword1");
+
+    expect(await screen.findByText("The current password is incorrect.")).toBeInTheDocument();
+    // Not a denial: no persistent "you may not do this" surface, and the dialog is still there.
+    expect(screen.queryByTestId("user-roles__error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("user-roles__dialog")).toBeInTheDocument();
+    expect(onChanged).not.toHaveBeenCalled();
+
+    await typePassword(PASSWORD);
+    fireEvent.click(screen.getByTestId("user-roles__confirm"));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(changeRun).toHaveBeenNthCalledWith(2, TARGET_ID, [Role.VIEWER, Role.MANAGER], PASSWORD);
+  });
+
+  it("sends the password as the use case's own argument and nowhere on the page", async () => {
+    changeRun.mockResolvedValueOnce(user([Role.VIEWER]));
+    renderControl(user([Role.VIEWER]));
+
+    await saveAndConfirm();
+
+    await waitFor(() => expect(changeRun).toHaveBeenCalled());
+    const [id, roles, password] = changeRun.mock.calls[0] as [string, Role[], string];
+    expect(password).toBe(PASSWORD);
+    expect(JSON.stringify([id, roles])).not.toContain(PASSWORD);
+    expect(globalThis.location.href).not.toContain(PASSWORD);
+  });
+
+  it("closes the dialog on a spent proof budget and shows it where the other failures go", async () => {
+    changeRun.mockRejectedValueOnce(budgetSpent());
+    renderControl(user([Role.VIEWER]));
+
+    await saveAndConfirm();
+
+    expect(await screen.findByTestId("user-roles__error")).toBeInTheDocument();
+    expect(screen.queryByTestId("user-roles__dialog")).not.toBeInTheDocument();
   });
 
   it("blocks an empty set client-side before any request leaves", async () => {
@@ -244,12 +365,12 @@ describe("UserRolesControl ADMIN delegation gate", () => {
     renderControl(user([Role.ADMIN]));
 
     fireEvent.click(await screen.findByTestId(`user-roles__role-${Role.MANAGER}`));
-    fireEvent.submit(screen.getByTestId("user-roles"));
+    await saveAndConfirm();
 
     // The complete set travels, ADMIN included: editing the rest never strips what the actor cannot re-grant.
     // Asserted as a set — the wire contract is which roles are granted, not the order the checkboxes emit.
     await waitFor(() => expect(changeRun).toHaveBeenCalled());
-    const [targetId, submittedRoles] = changeRun.mock.calls[0] as [string, Role[]];
+    const [targetId, submittedRoles] = changeRun.mock.calls[0] as [string, Role[], string];
     expect(targetId).toBe(TARGET_ID);
     expect([...submittedRoles].sort()).toEqual([Role.ADMIN, Role.MANAGER].sort());
   });

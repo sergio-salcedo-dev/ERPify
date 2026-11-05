@@ -52,6 +52,10 @@ import {
   clearRecoveryRedeemed,
   peekRecoveryRedeemed,
 } from "@/context/backoffice/user/application/recoveryRedeemedNotice";
+import {
+  clearSessionRedeemed,
+  isSessionRedeemed,
+} from "@/context/shared/access/infrastructure/redeemedSession";
 
 const SECRET = "0190b1c2d3e47f5a8b6c1d2e3f4a5b60.super-secret-verifier";
 const INVALID_SECRET_MESSAGE =
@@ -75,6 +79,7 @@ beforeEach(() => {
   outcome = { kind: RedeemRecoverySecretOutcomeKind.REDEEMED };
   online = true;
   clearRecoveryRedeemed();
+  clearSessionRedeemed();
 });
 
 const SIGNED_IN_TOAST =
@@ -152,6 +157,21 @@ describe("RecoveryRedeemForm — presenting the secret", () => {
     expect(markedWhenLeaving).toBe(true);
   });
 
+  it("marks the session as redeemed after its own sign-in, which would otherwise have cleared the mark", async () => {
+    // `login()` starts a session, and starting one clears the mark: set before it, this would be lost.
+    let markedDuringLogin: boolean | undefined;
+    login.mockImplementationOnce(async () => {
+      markedDuringLogin = isSessionRedeemed();
+      return SIGNED_IN_SESSION;
+    });
+    render(<RecoveryRedeemForm />);
+    submit();
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/backoffice"));
+    expect(markedDuringLogin).toBe(false);
+    expect(isSessionRedeemed()).toBe(true);
+  });
+
   it("never puts the secret anywhere but the field it was typed into", async () => {
     render(<RecoveryRedeemForm />);
     submit();
@@ -218,6 +238,7 @@ describe("RecoveryRedeemForm — refusals", () => {
     expect(login).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(peekRecoveryRedeemed()).toBe(false);
+    expect(isSessionRedeemed()).toBe(false);
     // The form stays: a typo and a spent secret are indistinguishable here, and the typo is the
     // recoverable one.
     expect(screen.getByTestId("recovery-redeem-form")).toBeInTheDocument();

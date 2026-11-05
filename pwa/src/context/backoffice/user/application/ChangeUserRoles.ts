@@ -15,7 +15,7 @@ export class ChangeUserRoles {
     private readonly repository: ChangeUserRolesRepository,
   ) {}
 
-  async run(id: string, roles: Role[]): Promise<User> {
-    return this.repository.changeRoles(id, roles);
+  async run(id: string, roles: Role[], currentPassword: string): Promise<User> {
+    return this.repository.changeRoles(id, roles, currentPassword);
   }
 }

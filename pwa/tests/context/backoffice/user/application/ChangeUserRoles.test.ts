@@ -18,9 +18,13 @@ describe("ChangeUserRoles", () => {
     const changeRoles = vi.fn().mockResolvedValue(regranted);
     const repository: ChangeUserRolesRepository = { changeRoles };
 
-    const result = await new ChangeUserRoles(repository).run(regranted.id, [Role.MANAGER]);
+    const result = await new ChangeUserRoles(repository).run(
+      regranted.id,
+      [Role.MANAGER],
+      "callerPassword1",
+    );
 
-    expect(changeRoles).toHaveBeenCalledWith(regranted.id, [Role.MANAGER]);
+    expect(changeRoles).toHaveBeenCalledWith(regranted.id, [Role.MANAGER], "callerPassword1");
     expect(result).toBe(regranted);
   });
 });

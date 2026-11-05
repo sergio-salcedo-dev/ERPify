@@ -57,9 +57,8 @@ use SensitiveParameter;
  * Its TTL is ten years, and that is a decision rather than a consequence of {@see SingleUseToken} demanding
  * one. A short TTL would reintroduce by the back door the silent destruction rejected when deciding that a
  * password change leaves a live secret standing: the holder is by construction someone with no shell and no
- * second administrator to notice. The residual — a credential valid for a decade, whose only detection of
- * theft is the owner seeing it disappear — is tracked as an open, searchable record rather than settled by
- * this paragraph. @accepted-risk #870
+ * second administrator to notice. What the decade costs, and what would reopen the choice, is recorded in
+ * `PRODUCTION_SECURITY_CHECKLIST.md` §6 (the recovery-secret item, residual (a)).
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'identity_recovery_secret')]

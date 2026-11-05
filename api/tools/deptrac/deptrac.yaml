@@ -609,6 +609,14 @@ deptrac:
             - Erpify\Iam\Identity\Domain\HashedPassword
             - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
             - Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort
+        Erpify\Iam\Invitation\Infrastructure\Http\CreateInvitationController:
+            - Erpify\Iam\Identity\Application\ProveActorPassword
+            - Erpify\Iam\Identity\Domain\HashedPassword
+            - Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
+            - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
+            - Erpify\Iam\Identity\Infrastructure\Security\SecurityUser
+        Erpify\Iam\Invitation\Infrastructure\Http\InviteUserRequest:
+            - Erpify\Iam\Identity\Infrastructure\Http\ExistingCredential
         Erpify\Iam\Identity\Application\RevokeSessionsBestEffort:
             - Erpify\Iam\Session\Application\RevokeAllSessions
         Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort:

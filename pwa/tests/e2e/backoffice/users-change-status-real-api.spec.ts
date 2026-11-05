@@ -1,6 +1,6 @@
 import { request } from "@playwright/test";
 import { test, expect, type APIRequestContext } from "../fixtures/authenticatedTest";
-import { VIEWPORT_DESKTOP } from "../constants";
+import { E2E_USER_PASSWORD, VIEWPORT_DESKTOP } from "../constants";
 import { apiBaseURL } from "../fixtures/api";
 
 /**
@@ -14,6 +14,9 @@ import { apiBaseURL } from "../fixtures/api";
  * the API refuses (409 `self-status-change-forbidden`) and whose detail offers no control. The
  * `make pwa.test.e2e` seed re-activates it before every run, so the unidirectional lifecycle (no reinstate)
  * never leaves it un-reseedable.
+ *
+ * The button only opens a confirmation: the signed-in administrator's own password is what lets the write
+ * leave, and it spends a unit of the per-identity password-proof budget shared with mint and revoke.
  */
 const SUSPENDABLE_EMAIL = "e2e-suspendable@erpify.test";
 
@@ -66,7 +69,11 @@ test.describe("BackOffice - Change user status (real API)", () => {
 
   test("an admin suspends an active member and the detail reflects the new status", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    testInfo.skip(
+      testInfo.repeatEachIndex > 0,
+      "the suspension is unidirectional and each save spends a password proof of the 10 per 15 minutes; a repetition would find the member already suspended and lock out the run",
+    );
     // The seed re-activates the target each run, so it starts ACTIVE and the control renders.
     expect(target.status).toBe("ACTIVE");
 
@@ -79,8 +86,10 @@ test.describe("BackOffice - Change user status (real API)", () => {
     const control = page.getByTestId("user-status");
     await expect(control).toBeVisible();
 
-    // The default target is Suspend; apply it.
+    // The default target is Suspend; apply it, proving who is asking in the confirmation.
     await control.getByTestId("user-status__save").click();
+    await page.getByTestId("user-status__password").fill(E2E_USER_PASSWORD);
+    await page.getByTestId("user-status__confirm").click();
 
     // reload() re-fetches after the mutation, so the detail badge flips to Suspended…
     await expect(page.getByTestId("users-detail__status-badge")).toContainText("Suspended");

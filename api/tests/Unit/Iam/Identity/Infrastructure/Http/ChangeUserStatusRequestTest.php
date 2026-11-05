@@ -35,7 +35,7 @@ final class ChangeUserStatusRequestTest extends TestCase
     #[DataProvider('provideALegalTransitionTargetPassesValidationCases')]
     public function aLegalTransitionTargetPassesValidation(IdentityStatus $status): void
     {
-        $this->assertCount(0, $this->validator->validate(new ChangeUserStatusRequest($status)));
+        $this->assertCount(0, $this->validator->validate(new ChangeUserStatusRequest($status, 'the-current-password')));
     }
 
     /**
@@ -45,6 +45,15 @@ final class ChangeUserStatusRequestTest extends TestCase
     {
         yield 'suspend' => [IdentityStatus::SUSPENDED];
         yield 'deactivate' => [IdentityStatus::DEACTIVATED];
+    }
+
+    #[Test]
+    public function aBlankCurrentPasswordIsRejected(): void
+    {
+        $violations = $this->validator->validate(new ChangeUserStatusRequest(IdentityStatus::SUSPENDED));
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('currentPassword', $violations->get(0)->getPropertyPath());
     }
 
     #[Test]

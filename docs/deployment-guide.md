@@ -383,8 +383,8 @@ administrator changes the password the operator chose, then mints the secret in 
 
 Operationally there is nothing to configure and nothing to back up separately — the row lives in Postgres and
 travels with the ordinary dump. It has a **ten-year** expiry, visible on the profile screen beside its minting
-date; that is the only way it dies without anyone acting, and it is a deliberate, tracked, accepted risk
-([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)).
+date; that is the only way it dies without anyone acting, and it is a deliberate, accepted risk
+recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §6.
 
 ## CI/CD
 

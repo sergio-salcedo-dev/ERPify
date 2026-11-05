@@ -294,3 +294,196 @@ describe("InviteUserForm ADMIN role gate", () => {
     expect(screen.getByTestId(`invite-user-form__role-${Role.VIEWER}`)).toBeInTheDocument();
   });
 });
+
+const PASSWORD_FIELD = "invite-user-form__current-password";
+const INVITER_PASSWORD = "inviterPassword1";
+
+function fillAdminInvitation() {
+  fireEvent.change(screen.getByTestId("invite-user-form__email"), {
+    target: { value: "newadmin@erpify.test" },
+  });
+  fireEvent.click(screen.getByTestId(ADMIN_CHECKBOX));
+}
+
+/**
+ * Granting ADMIN is proved with the inviter's own password, and only then. The field is the form's to show and
+ * hide; what it sends is the use case's input, so these cases pin the input rather than the markup alone.
+ */
+describe("InviteUserForm current-password proof", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.me.mockResolvedValue(GRANTER);
+  });
+
+  it("shows no password field until ADMIN is selected, and drops it when ADMIN is unchecked", async () => {
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+    expect(screen.queryByTestId(PASSWORD_FIELD)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(ADMIN_CHECKBOX));
+    expect(await screen.findByTestId(PASSWORD_FIELD)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId(ADMIN_CHECKBOX));
+    await waitFor(() => expect(screen.queryByTestId(PASSWORD_FIELD)).not.toBeInTheDocument());
+  });
+
+  it("keeps the field for any other role out of the page", async () => {
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    for (const role of [Role.VIEWER, Role.EDITOR, Role.MANAGER, Role.AUDIT_READER]) {
+      fireEvent.click(screen.getByTestId(`invite-user-form__role-${role}`));
+    }
+
+    expect(screen.queryByTestId(PASSWORD_FIELD)).not.toBeInTheDocument();
+  });
+
+  it("masks the field and declares it a current password", async () => {
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId(ADMIN_CHECKBOX));
+
+    const field = await screen.findByTestId(PASSWORD_FIELD);
+    expect(field).toHaveAttribute("type", "password");
+    expect(field).toHaveAttribute("autocomplete", "current-password");
+  });
+
+  it("refuses an ADMIN invitation with a blank password before any request leaves", async () => {
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    expect(await screen.findByText("Enter your current password.")).toBeInTheDocument();
+    expect(mocks.inviteRun).not.toHaveBeenCalled();
+  });
+
+  it("sends the password with an ADMIN invitation", async () => {
+    mocks.inviteRun.mockResolvedValue(undefined);
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    await waitFor(() =>
+      expect(mocks.inviteRun).toHaveBeenCalledWith({
+        email: "newadmin@erpify.test",
+        roles: [Role.ADMIN],
+        currentPassword: INVITER_PASSWORD,
+      }),
+    );
+    // Body only: the navigation that follows carries no trace of it.
+    expect(JSON.stringify(mocks.push.mock.calls)).not.toContain(INVITER_PASSWORD);
+  });
+
+  it("leaves the password out when ADMIN was unchecked after it was typed", async () => {
+    mocks.inviteRun.mockResolvedValue(undefined);
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    fireEvent.click(screen.getByTestId(ADMIN_CHECKBOX));
+    fireEvent.click(screen.getByTestId(`invite-user-form__role-${Role.EDITOR}`));
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    await waitFor(() => expect(mocks.inviteRun).toHaveBeenCalled());
+    const input = mocks.inviteRun.mock.calls[0][0] as Record<string, unknown>;
+    expect(input).toEqual({ email: "newadmin@erpify.test", roles: [Role.EDITOR] });
+    expect(JSON.stringify(input)).not.toContain(INVITER_PASSWORD);
+  });
+
+  it("answers a wrong password on the field, as a proof failure rather than a denial", async () => {
+    mocks.inviteRun.mockRejectedValue(
+      new HttpError({
+        type: "invalid-current-password",
+        title: "The current password is incorrect.",
+        status: HttpStatus.FORBIDDEN,
+        instance: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "correlation-id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c",
+      }),
+    );
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: "wrongPassword1" },
+    });
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    expect(await screen.findByText("The current password is incorrect.")).toBeInTheDocument();
+    expect(screen.queryByTestId("invite-user-form__mutation-error")).not.toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("sends one request for two submits presented before the first settles", async () => {
+    let resolveInvite: () => void = () => {};
+    mocks.inviteRun.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveInvite = resolve;
+      }),
+    );
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    // Two presentations in the same tick, as holding Enter produces before the button greys out.
+    const form = screen.getByTestId("invite-user-form");
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(mocks.inviteRun).toHaveBeenCalledTimes(1));
+    resolveInvite();
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(mocks.inviteRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a new submit once the first has settled", async () => {
+    mocks.inviteRun.mockRejectedValueOnce(conflict()).mockResolvedValue(undefined);
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+    fireEvent.click(await screen.findByTestId("invite-user-form__conflict-retry"));
+
+    await waitFor(() => expect(mocks.inviteRun).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows a spent proof budget in the persistent error surface", async () => {
+    mocks.inviteRun.mockRejectedValue(
+      new HttpError({
+        type: "too-many-requests",
+        title: "Too many attempts.",
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        instance: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b",
+        "correlation-id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c",
+      }),
+    );
+    renderForm();
+    expect(await screen.findByText(GRANTER.email)).toBeInTheDocument();
+
+    fillAdminInvitation();
+    fireEvent.change(await screen.findByTestId(PASSWORD_FIELD), {
+      target: { value: INVITER_PASSWORD },
+    });
+    fireEvent.submit(screen.getByTestId("invite-user-form"));
+
+    expect(await screen.findByTestId("invite-user-form__mutation-error")).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+});

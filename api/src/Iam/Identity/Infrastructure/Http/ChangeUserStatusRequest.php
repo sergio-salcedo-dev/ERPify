@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Http;
 
 use Erpify\Iam\Identity\Domain\Enum\IdentityStatus;
+use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -16,12 +17,19 @@ use Symfony\Component\Validator\Constraints as Assert;
  * `INVITED` or `ACTIVE` target is a well-typed enum yet not a transition this endpoint performs, so it too
  * is a 422, refused before the domain is touched. The transition matrix FROM the current state stays on the
  * aggregate ({@see \Erpify\Iam\Identity\Domain\Entity\User::guardTransitionTo}); the DTO only bounds the target.
+ *
+ * `currentPassword` is the CALLER's own password, re-proved before the transition. It carries only
+ * {@see ExistingCredential}'s coarse ceiling: a credential being verified is never held to today's policy.
  */
 final readonly class ChangeUserStatusRequest
 {
     public function __construct(
         #[Assert\Choice(choices: [IdentityStatus::SUSPENDED, IdentityStatus::DEACTIVATED])]
         public IdentityStatus $status,
+        #[Assert\NotBlank]
+        #[Assert\Length(max: ExistingCredential::LENGTH_CEILING)]
+        #[SensitiveParameter]
+        public string $currentPassword = '',
     ) {
     }
 }

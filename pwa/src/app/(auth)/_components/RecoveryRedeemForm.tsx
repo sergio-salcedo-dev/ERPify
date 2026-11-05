@@ -24,6 +24,7 @@ import { Routes } from "@/context/shared/routing/domain/Routes";
 import { toastNotifier } from "@/context/shared/notification/infrastructure/Toast";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { markRecoveryRedeemed } from "@/context/backoffice/user/application/recoveryRedeemedNotice";
+import { markSessionRedeemed } from "@/context/shared/access/infrastructure/redeemedSession";
 
 const REDEEM_REPOSITORY_KEY = "BackOfficeRedeemRecoverySecretRepository";
 const SECRET_FIELD = "secret";
@@ -122,6 +123,7 @@ export function RecoveryRedeemForm() {
       // Only here, with the session confirmed: the dashboard reads it once to state the half the
       // redemption does not do — the password is unchanged and the secret is spent.
       markRecoveryRedeemed();
+      markSessionRedeemed();
       // A static in-app destination, never one read from the URL: this page takes no
       // parameters, and a redeem is not a deep link anybody was interrupted on.
       router.push(safeHref(Routes.BACKOFFICE));

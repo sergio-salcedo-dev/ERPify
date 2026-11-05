@@ -9,6 +9,7 @@ import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEn
 import type { UserPrimitives } from "@/context/backoffice/user/domain/User";
 
 const USER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
+const PASSWORD = "callerPassword1";
 
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
 // HttpClient method; recover the spy for assertions via `vi.mocked(client.patch)`.
@@ -34,16 +35,22 @@ describe("ApiChangeUserRolesRepository", () => {
       data: userPrimitives([Role.EDITOR, Role.AUDIT_READER]),
     });
 
-    const user = await new ApiChangeUserRolesRepository(client).changeRoles(USER_ID, [
-      Role.EDITOR,
-      Role.AUDIT_READER,
-    ]);
+    const user = await new ApiChangeUserRolesRepository(client).changeRoles(
+      USER_ID,
+      [Role.EDITOR, Role.AUDIT_READER],
+      PASSWORD,
+    );
 
+    // The proof rides in the body, beside the roles — and nowhere else: the call carries no options
+    // argument for a header, and the URL is the bare endpoint.
     expect(client.patch).toHaveBeenCalledWith(
       API_ENDPOINTS.BACKOFFICE.USERS.CHANGE_ROLES(USER_ID),
-      { roles: [Role.EDITOR, Role.AUDIT_READER] },
+      { roles: [Role.EDITOR, Role.AUDIT_READER], currentPassword: PASSWORD },
       expect.any(Function),
     );
+    const call = vi.mocked(client.patch).mock.calls[0];
+    expect(call).toHaveLength(3);
+    expect(String(call[0])).not.toContain(PASSWORD);
     expect(user.id).toBe(USER_ID);
     expect(user.roles).toEqual([Role.EDITOR, Role.AUDIT_READER]);
   });
@@ -61,7 +68,7 @@ describe("ApiChangeUserRolesRepository", () => {
     );
 
     await expect(
-      new ApiChangeUserRolesRepository(client).changeRoles(USER_ID, [Role.VIEWER]),
+      new ApiChangeUserRolesRepository(client).changeRoles(USER_ID, [Role.VIEWER], PASSWORD),
     ).rejects.toBeInstanceOf(HttpError);
   });
 });

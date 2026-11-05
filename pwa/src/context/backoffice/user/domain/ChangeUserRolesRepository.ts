@@ -6,7 +6,10 @@ import type { User } from "./User";
  * console re-grants roles through a dedicated use case, never the generic `CrudRepository.update()` (which stays
  * a typed no-op — identity administration is not CRUD). `roles` is the COMPLETE target set, not a delta, so the
  * same set is a legitimate no-op. Resolves to the re-granted {@link User} so the detail reflects it in place.
+ *
+ * Re-granting authority is proved with the CALLER's current password, so a borrowed session cannot demote or
+ * promote another identity on its own; a wrong password rejects with `invalid-current-password`.
  */
 export interface ChangeUserRolesRepository {
-  changeRoles(id: string, roles: Role[]): Promise<User>;
+  changeRoles(id: string, roles: Role[], currentPassword: string): Promise<User>;
 }

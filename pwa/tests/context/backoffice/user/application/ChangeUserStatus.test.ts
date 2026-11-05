@@ -17,9 +17,17 @@ describe("ChangeUserStatus", () => {
     const changeStatus = vi.fn().mockResolvedValue(suspended);
     const repository: ChangeUserStatusRepository = { changeStatus };
 
-    const result = await new ChangeUserStatus(repository).run(suspended.id, UserStatus.SUSPENDED);
+    const result = await new ChangeUserStatus(repository).run(
+      suspended.id,
+      UserStatus.SUSPENDED,
+      "callerPassword1",
+    );
 
-    expect(changeStatus).toHaveBeenCalledWith(suspended.id, UserStatus.SUSPENDED);
+    expect(changeStatus).toHaveBeenCalledWith(
+      suspended.id,
+      UserStatus.SUSPENDED,
+      "callerPassword1",
+    );
     expect(result).toBe(suspended);
   });
 });

@@ -231,9 +231,9 @@ What it costs, none of which D1–D6 anticipated:
 - **The secret is valid for ten years, and that is a decision rather than a consequence.** `SingleUseToken`
   makes "no expiry" unrepresentable, so `RECOVERY_SECRET_TTL = P10Y` is the honest spelling. A short window
   would reintroduce by the back door the silent destruction rejected when deciding a password change leaves a
-  live secret standing — the holder is by construction someone with no shell to notice it went. Tracked as an
-  accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)), not as
-  a note here.
+  live secret standing — the holder is by construction someone with no shell to notice it went. Accepted for
+  good on 2026-11-05; what the decade costs and what would reopen the choice is recorded in
+  `PRODUCTION_SECURITY_CHECKLIST.md` §6 (residual (a)), not as a note here.
 - **Possessing it equals possessing a recovery credential until one of four events.** It survives a password
   rotation, it is not rotated when spent, and it dies only by redemption, revocation, expiry or subject
   erasure. The profile surface that lists it — minted at, expires at, with an explicit revoke — is the whole
@@ -380,7 +380,7 @@ What it costs: a **leaked** secret now signs the owner out as well as admitting 
 same attacker holds the email-keyed lockout the owner's password cannot bring them back. Before, the owner
 kept their session through a thief's redemption and could evict the thief, who had nothing left to return
 with. The trade is taken because the secret is shown once and held offline, while a session cookie rides
-every request; what remains open for #602 is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+every request; what #602 left accepted when it closed (2026-11-05) is recorded in `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 
 **Two residuals accepted (Sergio, 2026-09-28)**, both surfaced by the fourth review round:
 
@@ -424,5 +424,43 @@ persistent transports.
   the falsifier that goes red on the transition itself is `RedeemRecoverySecretTest`, which has no
   listener in its graph.
 - **D7 dies** if any of its four costs stops being true and stops being recorded: the TTL constant moving
-  without the issue moving with it, the profile surface losing the expiry it displays, the selector reaching
+  without the checklist entry moving with it, the profile surface losing the expiry it displays, the selector reaching
   a surface, or the session being minted after the row is retired rather than before.
+
+## D11 — Authority over other identities re-proves the caller's password
+
+*Amendment (2026-11-05, closing #602.)* D7–D10 gave the owner a way back and made it survive a stolen session
+racing it. They left the other half of a stolen **administrator** session: before it is evicted it can invite an
+address it controls with `ADMIN`, grant `ADMIN`, or suspend, deactivate or demote the owner. None of that is
+undone by evicting the session — the planted administrator holds sessions of its own, and a suspended owner's
+next redemption is refused 403.
+
+**The decision: `POST /backoffice/invitations` (when the set carries `ADMIN`), `PATCH /backoffice/users/{id}/roles`
+and `PATCH /backoffice/users/{id}/status` re-prove the CALLER's current password and spend the one per-identity
+budget D7 and D8 share** (`CurrentPasswordProofThrottle`, then `ProveActorPassword`, both called by the
+controller, after the permission checks so a refused caller spends nothing). The password is the one thing a
+stolen session does not hold, so "whoever has the cookie" becomes "whoever has the cookie and the password".
+
+- **Roles and status ask always, whoever the target is.** Asking only for an administrator target needs the
+  target loaded before the decision — a check-then-act window for a target granted `ADMIN` in between — or the
+  proof moved inside the use case under the target's lock, which holds the active-administrator lock across a
+  password hash. For the invitation there is a second problem: its use case is also driven from the console as
+  the operator (`iam:invitation:create`), so a proof inside it needs an off switch, and a switch is what a
+  stolen session would look for. The roles and status use cases have no other caller today; the proof sits
+  beside the invitation's so the rule has one reading.
+- **The invitation asks only when the set carries `ADMIN`**, decided from the payload alone, so no row is read
+  between the decision and the act. Inviting a lower role stays free: the invitee cannot sign in until the
+  mailbox holder accepts.
+- **The proof is a controller-called collaborator, not a step of the use case** — for the invitation's console caller above.
+  `api/.credential-proof-policy` holds the membership (`credential-affecting`) and the gate checks the call
+  order. It cannot see that the invitation's spend is conditional, so `CreateInvitationControllerTest` holds that
+  in both directions.
+- **Discarded:** a bucket of its own (a second bucket doubles the guesses per window against one password);
+  a role-aware step-up session (new state for the same property).
+
+**What it costs, and what it does not close.** An owner who drained the shared budget waits for the window
+before an admin act, as in D8. A stolen session can still invite identities holding a role below `ADMIN`; an
+attacker who also holds the password is outside what any session-level control reaches. Acts over another
+identity's credentials (unlock, erase, invitation resend and revoke) stay under permissions alone. Erase
+cannot remove the owner: `FulfilIdentityErasure` refuses a subject that still carries `ADMIN` until it is demoted,
+and the demotion is gated. Unlock only reopens a sign-in.
