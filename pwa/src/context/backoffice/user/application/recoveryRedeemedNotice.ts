@@ -12,8 +12,26 @@
  */
 let recoveryRedeemed = false;
 
+/**
+ * Whether THIS document's session was opened by redeeming a recovery secret, for as long as the document
+ * lives. The notice flag above is one-shot and the dashboard clears it on first paint; this one answers a
+ * different question, "was the password involved in getting in?", and has to outlive that clearing.
+ *
+ * The back office reads it to stand down its enrolment step: the secret just redeemed is spent, so the
+ * account holds none, but minting another proves the current password and the owner who came in with a
+ * secret may not have it. Blocking them there would lock the very person the redemption just let in out of
+ * the one place that can repair the account.
+ *
+ * Module memory, like the flag above: it is empty on a server render, survives the client-side hand-over from
+ * `/recovery`, and is never written to storage or a URL. A password sign-in clears it, and a reload empties
+ * it — the owner then meets the enrolment step, whose sign-out and Forgot password route is the way through
+ * for someone who does not know the password. The failure direction is the stricter one, never a bypass.
+ */
+let recoveryRedeemedSession = false;
+
 export function markRecoveryRedeemed(): void {
   recoveryRedeemed = true;
+  recoveryRedeemedSession = true;
 }
 
 export function peekRecoveryRedeemed(): boolean {
@@ -22,4 +40,12 @@ export function peekRecoveryRedeemed(): boolean {
 
 export function clearRecoveryRedeemed(): void {
   recoveryRedeemed = false;
+}
+
+export function isRecoveryRedeemedSession(): boolean {
+  return recoveryRedeemedSession;
+}
+
+export function clearRecoveryRedeemedSession(): void {
+  recoveryRedeemedSession = false;
 }

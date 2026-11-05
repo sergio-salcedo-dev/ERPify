@@ -13,4 +13,17 @@ describe("InviteUser", () => {
 
     expect(invite).toHaveBeenCalledWith(input);
   });
+
+  it("hands the inviter's password through untouched when ADMIN is granted", async () => {
+    const invite = vi.fn().mockResolvedValue(undefined);
+    const input = {
+      email: "newbie@erpify.test",
+      roles: [Role.ADMIN],
+      currentPassword: "inviterPassword1",
+    };
+
+    await new InviteUser({ invite }).run(input);
+
+    expect(invite).toHaveBeenCalledWith(input);
+  });
 });

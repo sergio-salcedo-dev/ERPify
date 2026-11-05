@@ -21,6 +21,7 @@ import {
 } from "@/context/backoffice/user/application/schemas/ChangeUserRolesSchema";
 import { ROLE_LABEL } from "../_lib/userLabels";
 import { isOwnIdentity } from "../_lib/isOwnIdentity";
+import { CurrentPasswordDialog, isInvalidCurrentPassword } from "./CurrentPasswordDialog";
 
 /** `"roles[0]"` / `"roles"` → the base field the violation belongs to. */
 function baseField(field: string): string {
@@ -37,14 +38,20 @@ interface UserRolesControlProps {
  * Role re-grant for an identity, gated by `users.changeRoles`. Offered in every lifecycle status: authorization
  * is orthogonal to the identity lifecycle, so a suspended or invited member's roles stay editable. The checkboxes
  * carry the COMPLETE target set (never a delta), pre-checked from the identity's current roles, so re-saving the
- * same set is a legitimate no-op. A 422 maps onto the `roles` field; every other failure (403 / 409 last-admin)
- * surfaces in the persistent {@link MutationError}.
+ * same set is a legitimate no-op. A 422 maps onto the `roles` field; every other failure (403 / 409 last-admin /
+ * 429 spent proof budget) surfaces in the persistent {@link MutationError}.
+ *
+ * Saving is a two-step act: the form validates the set, then {@link CurrentPasswordDialog} collects the
+ * operator's own password, which travels with the write — re-granting authority is not something a borrowed
+ * session may do alone. A wrong password stays on that dialog's field and keeps it open.
  *
  * On the operator's own identity it offers no form: the API refuses a self-targeted change outright, so the
  * section states that another administrator makes it instead of presenting checkboxes that can only fail.
  */
 export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlProps>) {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  // The validated target set waits here while the operator proves who they are in the dialog.
+  const [pendingRoles, setPendingRoles] = useState<Role[] | null>(null);
   const { session } = useSession();
 
   // Roles this build's vocabulary does not know get no checkbox, and the form's schema would reject them
@@ -85,18 +92,30 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
     setProblem(null);
   };
 
-  const onSubmit = handleSubmit(async (values) => {
+  const onSubmit = handleSubmit((values) => {
+    setPendingRoles(values.roles);
+  });
+
+  // A wrong password is the dialog's to show on its field, so it is handed back; every other failure
+  // is surfaced here and the dialog closes behind it.
+  const confirm = async (currentPassword: string): Promise<void> => {
+    if (pendingRoles === null) return;
     try {
       const useCase = container.get<ChangeUserRoles>("BackOfficeChangeUserRoles");
-      const updated = await useCase.run(user.id, [...values.roles, ...unrenderableRoles]);
+      const updated = await useCase.run(
+        user.id,
+        [...pendingRoles, ...unrenderableRoles],
+        currentPassword,
+      );
       setProblem(null);
       toastNotifier.success("Roles updated", { description: updated.roles.join(", ") });
       onChanged(updated);
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
+      if (isInvalidCurrentPassword(err)) throw err;
       handleHttpError(err);
     }
-  });
+  };
 
   if (isOwnIdentity(session, user.id)) {
     return (
@@ -113,6 +132,8 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
 
   return (
     <Can permission={Permission.USERS_CHANGE_ROLES}>
+      {/* The dialog is a sibling of the form, not a child: React bubbles a portalled submit through the
+          component tree, so the dialog's own form would otherwise submit this one too. */}
       <form
         onSubmit={onSubmit}
         className="user-roles border-border space-y-3 rounded-md border p-4"
@@ -183,6 +204,17 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
           {isSubmitting ? "Saving…" : "Change roles"}
         </button>
       </form>
+      <CurrentPasswordDialog
+        open={pendingRoles !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRoles(null);
+        }}
+        title="Confirm role change"
+        description={`Saving replaces the whole role set of ${user.email} and signs them out of every device. Enter your password to confirm.`}
+        confirmLabel="Change roles"
+        testIdPrefix="user-roles"
+        onConfirm={confirm}
+      />
     </Can>
   );
 }

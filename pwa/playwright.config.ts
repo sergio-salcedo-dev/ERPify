@@ -81,10 +81,23 @@ function playwrightWorkers(): number | undefined {
   return process.env.CI ? 2 : undefined;
 }
 
+const RECOVERY_WALL_SPEC = /recovery-readiness-real-api\.spec\.ts$/;
+
+const chromiumUse = {
+  ...devices["Desktop Chrome"],
+  // Browser fetch() to https://localhost uses the stack’s dev certificate; Playwright’s
+  // ignoreHTTPSErrors only applies to navigation, not in-page fetch. The authenticated session is
+  // provided per Playwright worker by the `authenticatedTest` fixture (a `storageState` override),
+  // so there is no shared setup project or suite-wide storageState to poison.
+  launchOptions: {
+    args: ["--ignore-certificate-errors"],
+  },
+};
+
 export default defineConfig({
   testDir: "./tests/e2e",
-  // Leaves the E2E administrator holding a live recovery secret, so the back office's readiness
-  // warning does not stand in every spec's <main>; see the file for why it reads before it mints.
+  // Leaves the E2E administrator holding a live recovery secret, so the back office's enrolment wall
+  // does not replace every spec's page; see the file for why it reads before it mints.
   globalSetup: "./tests/e2e/global-setup.ts",
   outputDir: "reports/playwright/test-results",
   fullyParallel: true,
@@ -116,16 +129,18 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: {
-        ...devices["Desktop Chrome"],
-        // Browser fetch() to https://localhost uses the stack’s dev certificate; Playwright’s
-        // ignoreHTTPSErrors only applies to navigation, not in-page fetch. The authenticated session is
-        // provided per Playwright worker by the `authenticatedTest` fixture (a `storageState` override),
-        // so there is no shared setup project or suite-wide storageState to poison.
-        launchOptions: {
-          args: ["--ignore-certificate-errors"],
-        },
-      },
+      // The recovery wall spec empties the shared administrator's recovery secret on purpose, and the back
+      // office refuses an administrator holding none, so any spec running beside it on that account would
+      // meet the wall mid-test. It runs alone, in the project below.
+      testIgnore: RECOVERY_WALL_SPEC,
+      use: chromiumUse,
+    },
+    {
+      name: "recovery-wall",
+      testMatch: RECOVERY_WALL_SPEC,
+      // After every other spec has finished, never beside one.
+      dependencies: ["chromium"],
+      use: chromiumUse,
     },
   ],
   ...(useWebServer

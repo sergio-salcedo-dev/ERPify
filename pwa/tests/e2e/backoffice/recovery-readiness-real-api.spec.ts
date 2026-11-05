@@ -12,33 +12,28 @@ import {
 // absorbs that cold compile before the default per-assertion budget applies.
 const COLD_ROUTE_TIMEOUT_MS = 30_000;
 
-function notice(page: Page) {
+function step(page: Page) {
+  return page.getByTestId("recovery-enrolment");
+}
+
+function banner(page: Page) {
   return page.getByRole("complementary", { name: "Account recovery" });
 }
 
-/** The skip link moves the focus to `<main>`, and the warning has to be the first thing there. */
-async function expectNoticeFirstWhereFocusLands(page: Page): Promise<void> {
-  await page.getByRole("link", { name: "Skip to main content" }).focus();
-  await page.keyboard.press("Enter");
-  const main = page.locator("main#main-content");
-  await expect(main).toBeFocused();
-  await expect(main.locator(":scope > aside").first()).toHaveAccessibleName("Account recovery");
-}
-
 /**
- * The readiness warning end to end, against the real API: an administrator with no recovery
- * secret is told so on every back-office route, mints one on the profile page, and the warning
- * leaves the shell at once — from the mint's own answer, with no navigation and no reload.
+ * The recovery enrolment wall end to end, against the real API: an administrator with no recovery secret
+ * cannot use the back office on any route until they mint one, mints it in the step that replaces the page
+ * (the profile's mint form, re-proving the password), reads it once, and the wall is gone from the mint's own
+ * answer — no navigation, no reload.
  *
- * The E2E administrator starts live (`global-setup.ts`) and ends live. The "none" state is built
- * here by revoking through the API, and the test mints through the UI. Mint and revoke share the
- * per-identity password-proof limit (10 per 15 minutes), which is not relaxed for E2E. The worst
- * case for one suite run is 6 proofs: global setup ≤2 (revoke a lapsed secret, mint), this test 2
- * (revoke, mint) and the restore ≤2 if the test fails between them. Any further run of the test
- * would add up to 4 more, so it runs only on the first repetition (`--repeat-each`; the weekly
+ * The E2E administrator starts live (`global-setup.ts`) and ends live. The "none" state is built here by
+ * revoking through the API, and the test mints through the UI. Mint and revoke share the per-identity
+ * password-proof limit (10 per 15 minutes) with the role, status and ADMIN-invitation writes, and it is not
+ * relaxed for E2E. This test spends 2 proofs (revoke, mint) and the restore ≤2 more if it fails between them;
+ * repeating or retrying would add up to 4, so it runs only on the first repetition (`--repeat-each`; the weekly
  * burn-in runs ten) and never on a retry (CI retries twice).
  */
-test.describe("BackOffice - Recovery readiness warning (real API)", () => {
+test.describe("BackOffice - Recovery enrolment wall (real API)", () => {
   test.use({ viewport: VIEWPORT_DESKTOP });
 
   let api: APIRequestContext;
@@ -60,7 +55,7 @@ test.describe("BackOffice - Recovery readiness warning (real API)", () => {
     await api.dispose();
   });
 
-  test("an administrator with no secret is warned on every route until they mint one", async ({
+  test("an administrator with no secret is walled on every route until they mint one", async ({
     page,
   }, testInfo) => {
     testInfo.skip(
@@ -73,25 +68,21 @@ test.describe("BackOffice - Recovery readiness warning (real API)", () => {
     expect((await readRecoverySecret(api)).exists).toBe(false);
 
     await page.goto("/backoffice");
-    await expect(notice(page)).toBeVisible({ timeout: COLD_ROUTE_TIMEOUT_MS });
-    await expect(notice(page)).toContainText("Your account has no recovery secret.");
-    await expectNoticeFirstWhereFocusLands(page);
+    await expect(step(page)).toBeVisible({ timeout: COLD_ROUTE_TIMEOUT_MS });
+    await expect(step(page)).toContainText("Your account has no recovery secret.");
+    await expect(page.getByTestId("recovery-enrolment__title")).toBeFocused();
+    // Instead of the page, not beside it: the dashboard heading is not there, and the standing banner
+    // (which would repeat the same sentence) is not either.
+    await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toHaveCount(0);
+    await expect(banner(page)).toHaveCount(0);
+    // A way out, and no way to skip.
+    await expect(page.getByTestId("recovery-enrolment__signout")).toBeVisible();
+    await expect(step(page).getByRole("link")).toHaveCount(0);
 
-    // A client navigation through the warning's own link: the shell is not remounted, and the
-    // warning is still there on the second route. Activated without focusing it (the focus is left
-    // on <body>, as a trigger that goes away leaves it), so the shell's route-focus correction is
-    // what moves the focus — to <main>, whose first child is the warning.
-    await page.evaluate(() => (globalThis.document.activeElement as HTMLElement | null)?.blur());
-    await notice(page)
-      .getByRole("link", { name: "Create one in Profile → Recovery secret" })
-      .evaluate((link: HTMLElement) => link.click());
-    await expect(page).toHaveURL(/\/backoffice\/profile$/);
-    await expect(page.getByTestId("recovery-secret__empty")).toBeVisible({
-      timeout: COLD_ROUTE_TIMEOUT_MS,
-    });
-    await expect(page.locator("main#main-content")).toBeFocused();
-    await expect(notice(page)).toBeVisible();
-    await expectNoticeFirstWhereFocusLands(page);
+    // Every route: a direct load of the profile page, which hosts the same mint form, is walled too.
+    await page.goto("/backoffice/profile");
+    await expect(step(page)).toBeVisible({ timeout: COLD_ROUTE_TIMEOUT_MS });
+    await expect(page.getByTestId("recovery-secret")).toHaveCount(0);
 
     // A marker on the live document: a reload or a full navigation would discard it.
     await page.evaluate(() => {
@@ -100,18 +91,22 @@ test.describe("BackOffice - Recovery readiness warning (real API)", () => {
     const urlBeforeMint = page.url();
     await page.getByTestId("mint-recovery-secret__current-password").fill(E2E_USER_PASSWORD);
     await page.getByTestId("mint-recovery-secret__submit").click();
-    await expect(page.getByTestId("recovery-secret__minted")).toBeVisible();
 
-    // Gone from the mint's own answer: same document, same URL, no reload.
-    await expect(notice(page)).toHaveCount(0);
+    // The secret is shown once, in place of the page, before the back office opens.
+    await expect(page.getByTestId("recovery-secret__minted")).toBeVisible();
+    await expect(page.getByTestId("recovery-secret__value")).not.toBeEmpty();
+    expect((await readRecoverySecret(api)).live).toBe(true);
+    await page.getByTestId("recovery-secret__acknowledge").click();
+
+    // Gone from the mint's own answer: same document, same URL, no reload, and no banner either.
+    await expect(step(page)).toHaveCount(0);
+    await expect(page.getByTestId("recovery-secret")).toBeVisible();
+    await expect(banner(page)).toHaveCount(0);
     expect(page.url()).toBe(urlBeforeMint);
     expect(
       await page.evaluate(
         () => (globalThis as unknown as { __rr1Document?: boolean }).__rr1Document === true,
       ),
     ).toBe(true);
-    await page.getByTestId("recovery-secret__acknowledge").click();
-
-    expect((await readRecoverySecret(api)).live).toBe(true);
   });
 });

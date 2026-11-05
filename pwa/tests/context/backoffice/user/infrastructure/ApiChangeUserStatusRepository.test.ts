@@ -9,6 +9,7 @@ import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEn
 import type { UserPrimitives } from "@/context/backoffice/user/domain/User";
 
 const USER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
+const PASSWORD = "callerPassword1";
 
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
 // HttpClient method; recover the spy for assertions via `vi.mocked(client.patch)`.
@@ -35,13 +36,19 @@ describe("ApiChangeUserStatusRepository", () => {
     const user = await new ApiChangeUserStatusRepository(client).changeStatus(
       USER_ID,
       UserStatus.SUSPENDED,
+      PASSWORD,
     );
 
+    // The proof rides in the body, beside the status — and nowhere else: the call carries no options
+    // argument for a header, and the URL is the bare endpoint.
     expect(client.patch).toHaveBeenCalledWith(
       API_ENDPOINTS.BACKOFFICE.USERS.CHANGE_STATUS(USER_ID),
-      { status: UserStatus.SUSPENDED },
+      { status: UserStatus.SUSPENDED, currentPassword: PASSWORD },
       expect.any(Function),
     );
+    const call = vi.mocked(client.patch).mock.calls[0];
+    expect(call).toHaveLength(3);
+    expect(String(call[0])).not.toContain(PASSWORD);
     expect(user.id).toBe(USER_ID);
     expect(user.status).toBe(UserStatus.SUSPENDED);
   });
@@ -59,7 +66,11 @@ describe("ApiChangeUserStatusRepository", () => {
     );
 
     await expect(
-      new ApiChangeUserStatusRepository(client).changeStatus(USER_ID, UserStatus.DEACTIVATED),
+      new ApiChangeUserStatusRepository(client).changeStatus(
+        USER_ID,
+        UserStatus.DEACTIVATED,
+        PASSWORD,
+      ),
     ).rejects.toBeInstanceOf(HttpError);
   });
 });

@@ -30,6 +30,10 @@ import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import type { Role } from "@/context/shared/access/domain/Role";
 import type { Session } from "@/context/shared/access/domain/Session";
 import { Routes } from "@/context/shared/routing/domain/Routes";
+import {
+  clearRecoveryRedeemedSession,
+  markRecoveryRedeemed,
+} from "@/context/backoffice/user/application/recoveryRedeemedNotice";
 
 function sessionWith(roles: Role[]): Session {
   return {
@@ -62,15 +66,21 @@ function notice(): HTMLElement | null {
  * The warning an administrator without a live recovery secret sees on every back-office page.
  * Its two gates are read from where they are decided — the session's server-issued roles and the
  * server's `live` verdict — and the second is three-valued: only a KNOWN `not-live` warns.
+ *
+ * A session with NO secret at all is walled by the enrolment step instead of warned, except one opened by
+ * redeeming a secret, which cannot be asked for a password it may not know. Those `none` cases therefore run
+ * as a redeemed session; the wall itself is pinned in `recoveryEnrolmentGate.test.tsx`.
  */
 describe("BackOfficeLayoutClient — recovery readiness notice", () => {
   beforeEach(() => {
     globalThis.localStorage.clear();
     auth.session = sessionWith(["ADMIN"]);
     shell.readiness = { kind: "unknown" };
+    clearRecoveryRedeemedSession();
   });
 
   it("warns an administrator holding no secret, and links to where one is created", () => {
+    markRecoveryRedeemed();
     shell.readiness = { kind: "not-live", reason: "none" };
     renderShell();
 
@@ -118,6 +128,7 @@ describe("BackOfficeLayoutClient — recovery readiness notice", () => {
   });
 
   it("sits first inside <main>, so the focus a navigation moves there reaches it first", () => {
+    markRecoveryRedeemed();
     shell.readiness = { kind: "not-live", reason: "none" };
     renderShell();
 
@@ -126,6 +137,7 @@ describe("BackOfficeLayoutClient — recovery readiness notice", () => {
   });
 
   it("is never a live region and offers no dismiss", () => {
+    markRecoveryRedeemed();
     shell.readiness = { kind: "not-live", reason: "none" };
     renderShell();
 

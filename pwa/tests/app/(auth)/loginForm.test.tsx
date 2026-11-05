@@ -29,6 +29,11 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
 
 import { LoginForm } from "@/app/(auth)/_components/LoginForm";
 import { SIGNED_IN_SESSION } from "./_session";
+import {
+  isRecoveryRedeemedSession,
+  markRecoveryRedeemed,
+  clearRecoveryRedeemedSession,
+} from "@/context/backoffice/user/application/recoveryRedeemedNotice";
 
 const TOGGLE_NAME = "Show/hide password";
 
@@ -70,6 +75,27 @@ describe("LoginForm — authenticated return URL", () => {
     signIn();
     await waitFor(() => expect(push).toHaveBeenCalledWith(target));
     expect(login).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("LoginForm — recovery redemption earlier in the document", () => {
+  it("ends the redemption's excuse from the enrolment step once a password sign-in is confirmed", async () => {
+    markRecoveryRedeemed();
+    render(<LoginForm />);
+    signIn();
+    await waitFor(() => expect(push).toHaveBeenCalled());
+    expect(isRecoveryRedeemedSession()).toBe(false);
+  });
+
+  it("keeps it when the sign-in is not confirmed", async () => {
+    markRecoveryRedeemed();
+    login.mockResolvedValue(null);
+    render(<LoginForm />);
+    signIn();
+    await waitFor(() => expect(login).toHaveBeenCalled());
+    expect(push).not.toHaveBeenCalled();
+    expect(isRecoveryRedeemedSession()).toBe(true);
+    clearRecoveryRedeemedSession();
   });
 });
 

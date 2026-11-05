@@ -184,13 +184,46 @@ describe("InviteUserSchema", () => {
     const all = InviteUserSchema.safeParse({
       email: "a@b.com",
       roles: [Role.VIEWER, Role.EDITOR, Role.MANAGER, Role.ADMIN, Role.AUDIT_READER],
+      currentPassword: "inviterPassword1",
     });
     expect(all.success).toBe(true);
     const stale = InviteUserSchema.safeParse({ email: "a@b.com", roles: ["EMPLOYEE"] });
     expect(stale.success).toBe(false);
   });
   it("carries no status field — an INVITED identity has none yet", () => {
-    const parsed = InviteUserSchema.parse({ email: "a@b.com", roles: [Role.ADMIN] });
+    const parsed = InviteUserSchema.parse({
+      email: "a@b.com",
+      roles: [Role.ADMIN],
+      currentPassword: "inviterPassword1",
+    });
     expect(parsed).not.toHaveProperty("status");
+  });
+  it("needs no password for an invitation that grants no ADMIN", () => {
+    expect(
+      InviteUserSchema.safeParse({ email: "a@b.com", roles: [Role.MANAGER, Role.EDITOR] }).success,
+    ).toBe(true);
+    expect(
+      InviteUserSchema.safeParse({ email: "a@b.com", roles: [Role.VIEWER], currentPassword: "" })
+        .success,
+    ).toBe(true);
+  });
+  it("requires the inviter's current password when ADMIN is granted, on the password field", () => {
+    for (const currentPassword of [undefined, ""]) {
+      const result = InviteUserSchema.safeParse({
+        email: "a@b.com",
+        roles: [Role.VIEWER, Role.ADMIN],
+        currentPassword,
+      });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues.map((issue) => issue.path)).toEqual([["currentPassword"]]);
+    }
+  });
+  it("holds the proof to presence and the API ceiling, never the new-password policy", () => {
+    const invite = (currentPassword: string) =>
+      InviteUserSchema.safeParse({ email: "a@b.com", roles: [Role.ADMIN], currentPassword });
+
+    // Shorter than the 8-character floor for a NEW credential, and still a legitimate existing one.
+    expect(invite("short").success).toBe(true);
+    expect(invite("x".repeat(256)).success).toBe(false);
   });
 });

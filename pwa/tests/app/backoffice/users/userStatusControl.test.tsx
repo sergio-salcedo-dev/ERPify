@@ -33,6 +33,7 @@ import { UserStatus } from "@/context/shared/access/domain/UserStatus";
 import { Permission } from "@/context/shared/access/domain/Permission";
 import { Role } from "@/context/shared/access/domain/Role";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
+import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { Identity } from "@/context/shared/access/domain/Identity";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 
@@ -69,6 +70,37 @@ function problem(): ProblemDetails {
   };
 }
 
+const PASSWORD = "callerPassword1";
+
+function wrongPassword(): HttpError {
+  return new HttpError({
+    type: "invalid-current-password",
+    title: "The current password is incorrect.",
+    status: HttpStatus.FORBIDDEN,
+    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b62",
+    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b63",
+  });
+}
+
+function budgetSpent(): HttpError {
+  return new HttpError({
+    type: "too-many-requests",
+    title: "Too many attempts.",
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b64",
+    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b65",
+  });
+}
+
+/** The button only opens the dialog; the password typed there is what lets the write leave. */
+async function openAndConfirm(password: string = PASSWORD): Promise<void> {
+  fireEvent.click(await screen.findByTestId("user-status__save"));
+  fireEvent.change(await screen.findByTestId("user-status__password"), {
+    target: { value: password },
+  });
+  fireEvent.click(screen.getByTestId("user-status__confirm"));
+}
+
 function renderControl(target: User, onChanged: (u: User) => void = vi.fn()) {
   return render(
     <AuthProvider>
@@ -100,9 +132,11 @@ describe("UserStatusControl", () => {
     changeRun.mockResolvedValueOnce(user(UserStatus.SUSPENDED));
     renderControl(user(UserStatus.ACTIVE), onChanged);
 
-    fireEvent.click(await screen.findByTestId("user-status__save"));
+    await openAndConfirm();
 
-    await waitFor(() => expect(changeRun).toHaveBeenCalledWith(TARGET_ID, UserStatus.SUSPENDED));
+    await waitFor(() =>
+      expect(changeRun).toHaveBeenCalledWith(TARGET_ID, UserStatus.SUSPENDED, PASSWORD),
+    );
     expect(onChanged).toHaveBeenCalledWith(
       expect.objectContaining({ status: UserStatus.SUSPENDED }),
     );
@@ -115,9 +149,11 @@ describe("UserStatusControl", () => {
     fireEvent.change(await screen.findByTestId("user-status__select"), {
       target: { value: UserStatus.DEACTIVATED },
     });
-    fireEvent.click(screen.getByTestId("user-status__save"));
+    await openAndConfirm();
 
-    await waitFor(() => expect(changeRun).toHaveBeenCalledWith(TARGET_ID, UserStatus.DEACTIVATED));
+    await waitFor(() =>
+      expect(changeRun).toHaveBeenCalledWith(TARGET_ID, UserStatus.DEACTIVATED, PASSWORD),
+    );
   });
 
   it("surfaces a server problem in the persistent error surface and does not report success", async () => {
@@ -125,10 +161,82 @@ describe("UserStatusControl", () => {
     changeRun.mockRejectedValueOnce(new HttpError(problem()));
     renderControl(user(UserStatus.ACTIVE), onChanged);
 
-    fireEvent.click(await screen.findByTestId("user-status__save"));
+    await openAndConfirm();
 
     expect(await screen.findByTestId("user-status__error")).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
+    // The failure belongs to the persistent surface, so the dialog closes behind it.
+    expect(screen.queryByTestId("user-status__dialog")).not.toBeInTheDocument();
+  });
+
+  it("asks for the operator's password before any request leaves, and Cancel sends nothing", async () => {
+    renderControl(user(UserStatus.ACTIVE));
+
+    fireEvent.click(await screen.findByTestId("user-status__save"));
+
+    expect(await screen.findByTestId("user-status__dialog")).toBeInTheDocument();
+    expect(changeRun).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("user-status__cancel"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("user-status__dialog")).not.toBeInTheDocument(),
+    );
+    expect(changeRun).not.toHaveBeenCalled();
+  });
+
+  it("never sends a blank password", async () => {
+    renderControl(user(UserStatus.ACTIVE));
+
+    fireEvent.click(await screen.findByTestId("user-status__save"));
+    fireEvent.click(await screen.findByTestId("user-status__confirm"));
+
+    expect(await screen.findByText("Enter your current password.")).toBeInTheDocument();
+    expect(changeRun).not.toHaveBeenCalled();
+  });
+
+  it("answers a wrong password on the field, keeps the dialog open and lets the next try through", async () => {
+    const onChanged = vi.fn();
+    changeRun
+      .mockRejectedValueOnce(wrongPassword())
+      .mockResolvedValueOnce(user(UserStatus.SUSPENDED));
+    renderControl(user(UserStatus.ACTIVE), onChanged);
+
+    await openAndConfirm("wrongPassword1");
+
+    expect(await screen.findByText("The current password is incorrect.")).toBeInTheDocument();
+    // Not a denial: no persistent "you may not do this" surface, and the dialog is still there.
+    expect(screen.queryByTestId("user-status__error")).not.toBeInTheDocument();
+    expect(screen.getByTestId("user-status__dialog")).toBeInTheDocument();
+    expect(onChanged).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByTestId("user-status__password"), {
+      target: { value: PASSWORD },
+    });
+    fireEvent.click(screen.getByTestId("user-status__confirm"));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(changeRun).toHaveBeenNthCalledWith(2, TARGET_ID, UserStatus.SUSPENDED, PASSWORD);
+  });
+
+  it("closes the dialog on a spent proof budget and shows it where the other failures go", async () => {
+    changeRun.mockRejectedValueOnce(budgetSpent());
+    renderControl(user(UserStatus.ACTIVE));
+
+    await openAndConfirm();
+
+    expect(await screen.findByTestId("user-status__error")).toBeInTheDocument();
+    expect(screen.queryByTestId("user-status__dialog")).not.toBeInTheDocument();
+  });
+
+  it("masks the password and declares it a current password", async () => {
+    renderControl(user(UserStatus.ACTIVE));
+
+    fireEvent.click(await screen.findByTestId("user-status__save"));
+    const field = await screen.findByTestId("user-status__password");
+
+    expect(field).toHaveAttribute("type", "password");
+    expect(field).toHaveAttribute("autocomplete", "current-password");
+    expect(globalThis.location.href).not.toContain("password");
   });
 
   it("renders nothing for a non-active user — the lifecycle is unidirectional (no reinstate)", async () => {

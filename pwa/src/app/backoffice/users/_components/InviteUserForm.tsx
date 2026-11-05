@@ -9,6 +9,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { SharedProblemType } from "@/context/shared/error/domain/SharedProblemType";
+import { UserProblemType } from "@/context/backoffice/user/domain/UserProblemType";
 import { useZodForm } from "@/context/shared/validation/infrastructure";
 import {
   InviteUserSchema,
@@ -22,12 +23,13 @@ import { toastNotifier } from "@/context/shared/notification/infrastructure/Toas
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { cn } from "@/components/cn";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import { ROLE_LABEL } from "../_lib/userLabels";
 import { userRoutes } from "../_lib/userRoutes";
 
-const INVITE_FIELD_NAMES = ["email", "roles"] as const;
+const INVITE_FIELD_NAMES = ["email", "roles", "currentPassword"] as const;
 type InviteFieldName = (typeof INVITE_FIELD_NAMES)[number];
 
 /**
@@ -58,6 +60,10 @@ const emptySubscribe = () => () => {};
  * role list — one predicate resolved once, before the `.map()` — where `<Can>` would put a guard component
  * inside every checkbox to answer a question that concerns a single role. Hiding is convenience only: an
  * `ADMIN` value submitted anyway is refused by the API, which remains the authorization control.
+ *
+ * Granting ADMIN also asks for the inviter's own current password, and only then: the field appears with the
+ * checkbox, leaves with it (taking the typed value along), and is sent solely when ADMIN is among the roles.
+ * Minting an administrator is the one authority a stolen session must not be able to plant on its own.
  */
 export function InviteUserForm() {
   const router = useRouter();
@@ -78,12 +84,27 @@ export function InviteUserForm() {
     register,
     handleSubmit,
     setError,
+    watch,
     formState: { errors, isSubmitting },
   } = useZodForm<InviteUserFormValues>(InviteUserSchema, {
-    defaultValues: { email: "", roles: [] },
+    defaultValues: { email: "", roles: [], currentPassword: "" },
   });
 
+  const selectedRoles = watch("roles");
+  const grantsAdmin = Array.isArray(selectedRoles) && selectedRoles.includes(Role.ADMIN);
+
   const handleHttpError = (err: HttpError) => {
+    // A wrong password is a field error, never a denial: the 403 says the proof failed, not that the
+    // inviter may not invite.
+    if (err.problem.type === UserProblemType.INVALID_CURRENT_PASSWORD) {
+      setError(
+        "currentPassword",
+        { type: "server", message: err.problem.detail ?? err.problem.title },
+        { shouldFocus: true },
+      );
+      setProblem(null);
+      return;
+    }
     // The conflict is the one failure whose remedy is a plain resubmit, so it earns both surfaces:
     // the field, because the address is what collided, and the persistent surface, which is where
     // the retry action lives.
@@ -122,7 +143,13 @@ export function InviteUserForm() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       const useCase = container.get<InviteUser>("BackOfficeInviteUser");
-      await useCase.run(values);
+      // The password is the inviter's proof for an ADMIN grant and nothing else: any other invitation
+      // leaves it out of the request entirely, whatever was typed before ADMIN was unchecked.
+      await useCase.run(
+        values.roles.includes(Role.ADMIN)
+          ? { email: values.email, roles: values.roles, currentPassword: values.currentPassword }
+          : { email: values.email, roles: values.roles },
+      );
       setProblem(null);
       toastNotifier.success("Invitation sent", { description: values.email });
       router.push(safeHref(userRoutes.list));
@@ -233,6 +260,24 @@ export function InviteUserForm() {
           </p>
         ) : null}
       </fieldset>
+
+      {grantsAdmin ? (
+        <FormField
+          name="currentPassword"
+          label="Your current password"
+          required
+          error={errors.currentPassword?.message}
+          helper="Inviting an administrator asks for your password, so a borrowed session cannot create one."
+        >
+          <PasswordInput
+            autoComplete="current-password"
+            defaultRevealed={false}
+            toggleTestId="invite-user-form__current-password-toggle"
+            {...register("currentPassword", { shouldUnregister: true })}
+            data-testid="invite-user-form__current-password"
+          />
+        </FormField>
+      ) : null}
 
       <footer className="invite-user-form__footer flex flex-col-reverse items-stretch gap-2 pt-2 sm:flex-row sm:items-center sm:justify-end">
         <Link

@@ -14,7 +14,7 @@ export class ChangeUserStatus {
     private readonly repository: ChangeUserStatusRepository,
   ) {}
 
-  async run(id: string, status: UserStatus): Promise<User> {
-    return this.repository.changeStatus(id, status);
+  async run(id: string, status: UserStatus, currentPassword: string): Promise<User> {
+    return this.repository.changeStatus(id, status, currentPassword);
   }
 }

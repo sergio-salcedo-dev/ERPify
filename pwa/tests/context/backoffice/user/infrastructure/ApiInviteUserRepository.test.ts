@@ -23,6 +23,23 @@ describe("ApiInviteUserRepository", () => {
     expect(client.post).toHaveBeenCalledWith(API_ENDPOINTS.BACKOFFICE.INVITATIONS.CREATE, input);
   });
 
+  it("carries the inviter's password in the body, and only in the body, when ADMIN is granted", async () => {
+    const client = httpClient();
+    vi.mocked(client.post).mockResolvedValue(undefined);
+    const input = {
+      email: "newadmin@erpify.test",
+      roles: [Role.ADMIN],
+      currentPassword: "inviterPassword1",
+    };
+
+    await new ApiInviteUserRepository(client).invite(input);
+
+    expect(client.post).toHaveBeenCalledWith(API_ENDPOINTS.BACKOFFICE.INVITATIONS.CREATE, input);
+    const call = vi.mocked(client.post).mock.calls[0];
+    expect(call).toHaveLength(2);
+    expect(String(call[0])).not.toContain("inviterPassword1");
+  });
+
   it("propagates a typed HttpError (e.g. a 403 for a non-admin) without swallowing it", async () => {
     const client = httpClient();
     vi.mocked(client.post).mockRejectedValue(

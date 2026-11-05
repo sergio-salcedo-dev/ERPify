@@ -30,6 +30,7 @@ import { PlannedModules, isPlannedPath } from "./_lib/plannedModules";
 import { goToDestinations } from "./_lib/goToDestinations";
 import { GoToPalette } from "./_components/GoToPalette";
 import { MobileNavEntry } from "./_components/MobileNavEntry";
+import { RecoveryEnrolmentGate } from "./_components/RecoveryEnrolmentGate";
 import {
   RequireAuth,
   DevSessionSwitcher,
@@ -785,8 +786,13 @@ export default function BackOfficeLayoutClient({
                 {/* First child of <main>, not a sibling before it: navigation moves the focus to
                   <main>, so a screen reader starts reading here and hears the warning first.
                   Outside it, reading would begin after the warning and never reach it. */}
-                <RecoveryReadinessNotice />
-                <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
+                <RecoveryEnrolmentGate
+                  onSignOut={() => handleNavigation(Routes.HOME, "sign-out")}
+                  signingOut={isLeaving}
+                >
+                  <RecoveryReadinessNotice />
+                  <div className="bo-layout__content mx-auto p-4 md:p-8">{children}</div>
+                </RecoveryEnrolmentGate>
               </main>
             </div>
           </div>

@@ -152,6 +152,13 @@ test.describe("BackOffice - Recovery redemption next-step notice (real API)", ()
     }
     await expect(nextStep(page)).toBeVisible({ timeout: COLD_ROUTE_TIMEOUT_MS });
     await expect(nextStep(page)).toContainText("Next: set a new password");
+    // The redemption spent the account's only secret, so it holds none — and it still reaches the back
+    // office: minting another needs the password this owner may not know, so the enrolment step stands
+    // down for a session opened this way and the standing warning stays instead.
+    await expect(page.getByTestId("recovery-enrolment")).toHaveCount(0);
+    await expect(page.getByRole("complementary", { name: "Account recovery" })).toContainText(
+      "Your account has no recovery secret.",
+    );
     expect(
       await page.evaluate(
         () => (globalThis as unknown as { __rr3Document?: boolean }).__rr3Document === true,
@@ -172,14 +179,22 @@ test.describe("BackOffice - Recovery redemption next-step notice (real API)", ()
       ),
     ).toBe(true);
 
-    // And across a reload, which empties the module memory.
+    // And across a reload, which empties the module memory: the notice does not come back. The same
+    // memory held the fact that this session was opened without the password, so the account — which still
+    // holds no secret — now meets the enrolment step, whose sign-out is the way to Forgot password.
     await page.reload();
-    await expect(dashboardHeading(page)).toBeVisible({ timeout: COLD_ROUTE_TIMEOUT_MS });
+    await expect(page.getByTestId("recovery-enrolment")).toBeVisible({
+      timeout: COLD_ROUTE_TIMEOUT_MS,
+    });
     await expect(nextStep(page)).toHaveCount(0);
   });
 
   test("a password sign-in of the same identity shows no next step", async ({ page }, testInfo) => {
     skipRepetitions(testInfo);
+    // The first test spent this identity's only secret. A password sign-in of an administrator holding none
+    // meets the enrolment step, not the dashboard, so the account is given a secret first — which is what
+    // this test is about: a password sign-in carries no redemption, whatever the account's state.
+    await mintSecretForRecoveryUser();
     await page.goto("/login");
     await page.getByTestId("login-form__email").fill(E2E_RECOVERY_USER_EMAIL);
     await page.getByTestId("login-form__password").fill(E2E_RECOVERY_USER_PASSWORD);

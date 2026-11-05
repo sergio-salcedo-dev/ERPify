@@ -1,6 +1,6 @@
 import { request } from "@playwright/test";
 import { test, expect, type APIRequestContext } from "../fixtures/authenticatedTest";
-import { VIEWPORT_DESKTOP } from "../constants";
+import { E2E_USER_PASSWORD, VIEWPORT_DESKTOP } from "../constants";
 import { apiBaseURL } from "../fixtures/api";
 
 /**
@@ -14,6 +14,10 @@ import { apiBaseURL } from "../fixtures/api";
  * the signed-in admin, whose own roles the API refuses to change (409 `self-role-change-forbidden`) and whose
  * detail offers no form. The `make pwa.test.e2e` seed resets its roles to VIEWER before every run, so the
  * re-grant is repeatable. Roles are editable in any lifecycle status, so this spec is order-independent from the suspend smoke that may already have suspended the same member.
+ *
+ * Saving asks for the signed-in administrator's own password, in a confirmation dialog, and the write spends a
+ * unit of the per-identity password-proof budget (10 per 15 minutes, shared with mint, revoke and the other
+ * authority writes, and not relaxed for E2E). So it runs on the first repetition only (`--repeat-each`).
  */
 const TARGET_EMAIL = "e2e-suspendable@erpify.test";
 
@@ -64,7 +68,13 @@ test.describe("BackOffice - Change user roles (real API)", () => {
     await api.dispose();
   });
 
-  test("an admin replaces a member's role set and the detail reflects it", async ({ page }) => {
+  test("an admin replaces a member's role set and the detail reflects it", async ({
+    page,
+  }, testInfo) => {
+    testInfo.skip(
+      testInfo.repeatEachIndex > 0,
+      "each save spends a password proof of the 10 per 15 minutes shared with mint and revoke; repeating would lock out the run",
+    );
     // Derive the swap from whatever the member currently holds rather than from the seeded value, so a
     // Playwright retry — which re-reads a target this spec has already re-granted — still performs a real
     // change instead of asserting a set that is no longer there.
@@ -86,6 +96,10 @@ test.describe("BackOffice - Change user roles (real API)", () => {
     await control.getByTestId(`user-roles__role-${swap.to}`).check();
     await control.getByTestId(`user-roles__role-${swap.from}`).uncheck();
     await control.getByTestId("user-roles__save").click();
+
+    // The save only opens the confirmation; the administrator's own password is what lets it leave.
+    await page.getByTestId("user-roles__password").fill(E2E_USER_PASSWORD);
+    await page.getByTestId("user-roles__confirm").click();
 
     // reload() re-fetches after the mutation, so the detail badges show the re-granted set.
     await expect(page.getByTestId("users-detail__field-roles")).toContainText(swap.toLabel);
