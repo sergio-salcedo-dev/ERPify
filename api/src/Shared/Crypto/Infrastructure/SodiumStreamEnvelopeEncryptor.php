@@ -234,7 +234,9 @@ final readonly class SodiumStreamEnvelopeEncryptor implements StreamEnvelopeEncr
     {
         $length = \strlen($bytes);
 
-        for ($written = 0; $written < $length;) {
+        $written = 0;
+
+        while ($written < $length) {
             $count = \fwrite($stream, \substr($bytes, $written));
 
             if (false === $count || 0 === $count) {
