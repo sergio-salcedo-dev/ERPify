@@ -153,6 +153,17 @@
 # upstream of every guard below, which is why the rule is the interpolation form
 # and not a validation regex.
 #
+# A value handed to awk goes through the environment (`t="$$t" awk 'BEGIN{t=ENVIRON["t"]}…'`),
+# never `awk -v`: -v interprets escape sequences, so a path with a backslash (a registered
+# worktree named `a\tb`) is compared as `a<TAB>b`, matches nothing, and the containment
+# test that refuses to delete a live checkout answers "untracked". Measured with that
+# name: the -v form finds no match in the registry, ENVIRON finds it. The path itself is
+# the whole line after `worktree `, never awk's $2, which stops at the first space: with a
+# registered `zzq bar` and an untracked `zzq`, $2 resolved NAME=zzq to the registered
+# worktree, and the "git dropped the registration" test (a whole-line match) then failed
+# to find the truncated path. Check, from a shell:
+#   grep -n 'awk -v' make/worktree.mk | grep -v ':[[:space:]]*#'      # must print nothing
+#
 # Scope, stated because the obvious wider claim is false: PROJECT_ROOT and ENV are
 # still make-spliced here, and both ARE caller-settable (a command-line assignment
 # beats config.mk's `:=`, and ENV is a `?=`). They are repo-wide make plumbing
@@ -177,13 +188,21 @@
 # config.mk) and runs `docker compose -p erpify-<slug> down --volumes` from the
 # main checkout so the orphaned containers/volumes don't leak.
 #
+# Root-owned residue: worktree stacks write bind-mounted files as root (pwa/.next,
+# node_modules, api/var, …), which makes `git worktree remove` / `rm -rf` fail with
+# "Permission denied" — and the registration is already gone by then. Both arms
+# above hand the directory to scripts/worktree-rm-residue.sh, which clears it as
+# root in a throwaway container mounting only that directory, so a removal
+# finishes without a terminal (the unattended scripts/agent/ automation has none).
+# The script re-derives its own guards; they are listed in its header. On the
+# REGISTERED arm it runs only when git dropped the registration — a failure that
+# leaves the worktree registered is a dirty or locked one, and clearing it would
+# discard work the caller did not ask to discard.
+#
 # worktree.chown: reclaims ownership of the whole .claude/worktrees/ folder.
-#                 Worktree stacks write bind-mounted files as root (pwa/.next,
-#                 node_modules, api/var, …), which makes `git worktree remove` /
-#                 `rm -rf` fail with "Permission denied". Mirrors pwa.chown.next:
-#                 sudo chown -R to the host user, dev/test only. Covers every
-#                 worktree at once, including stale dirs git no longer tracks.
-#                 Run it, then retry worktree.remove.
+#                 Mirrors pwa.chown.next: sudo chown -R to the host user, dev/test
+#                 only, covering every worktree at once. Needs a terminal for
+#                 sudo, which is why worktree.remove does not depend on it.
 
 ## —— Worktrees ————————————————————————————————————————————————————————————
 
@@ -203,7 +222,7 @@ worktree_rm_images = for img in "$$slug-app-php-dev" "$$slug-app-pwa-dev"; do do
 
 worktree.create: ## Create a worktree on a NEW branch BRANCH=<branch> (BASE=main; NAME=<dir-base>); a random suffix keeps branch/dir/stack unique; START=true brings its stack up
 	@if [ -z "$$BRANCH" ]; then echo "✗ BRANCH=<branch> required (e.g. BRANCH=feat/backoffice-foo)"; exit 1; fi
-	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
+	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')"; \
 	sfx="$$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4)"; \
 	branch="$$BRANCH-$$sfx"; \
 	base="$$(printf '%s' "$${NAME:-$$(basename "$$BRANCH")}" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed -E 's/^-+|-+$$//g')"; \
@@ -255,14 +274,14 @@ worktree.list: ## List REGISTERED worktrees (dir name, path or branch all work a
 
 worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes + branch; also sweeps a leftover dir/branch a half-finished run left behind; FORCE=true drops dirty/unmerged (destructive)
 	@if [ -z "$$NAME" ]; then echo "✗ NAME=<worktree-dir-path-or-branch> required (see 'make worktree.list')"; exit 1; fi
-	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
+	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')"; \
 	root="$$main/.claude/worktrees"; \
 	if [ "$$FORCE" = "true" ]; then bdel=-D; wtf=--force; else bdel=-d; wtf=; fi; \
 	t="$$(printf '%s' "$$NAME" | sed -E 's:/+$$::')"; [ -n "$$t" ] || t="$$NAME"; \
 	reg="$$(git -C "$$main" worktree list --porcelain | sed -n 's/^worktree //p')"; \
 	[ -n "$$reg" ] || { echo "✗ could not read the worktree registry — refusing to classify anything as a residue"; exit 1; }; \
-	wt="$$(git -C "$$main" worktree list --porcelain | awk -v t="$$t" '\
-		$$1=="worktree"{p=$$2; b=p; sub(/.*\//,"",b); if (p==t || b==t){print p; exit}} \
+	wt="$$(git -C "$$main" worktree list --porcelain | t="$$t" awk 'BEGIN{t=ENVIRON["t"]} \
+		$$1=="worktree"{p=$$0; sub(/^worktree /,"",p); b=p; sub(/.*\//,"",b); if (p==t || b==t){print p; exit}} \
 		$$1=="branch"{r=$$2; sub(/^refs\/heads\//,"",r); if (r==t){print p; exit}}')"; \
 	incomplete=; \
 	if [ -z "$$wt" ]; then \
@@ -276,7 +295,7 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 			if [ -d "$$root/$$base" ]; then orphan="$$root/$$base"; \
 			elif [ -n "$$bslug" ] && [ -d "$$root/$$bslug" ]; then orphan="$$root/$$bslug"; fi; \
 		fi; \
-		if [ -n "$$orphan" ] && printf '%s\n' "$$reg" | awk -v o="$$orphan" '$$0==o || index($$0, o "/")==1 {f=1} END{exit !f}'; then \
+		if [ -n "$$orphan" ] && printf '%s\n' "$$reg" | o="$$orphan" awk 'BEGIN{o=ENVIRON["o"]} $$0==o || index($$0, o "/")==1 {f=1} END{exit !f}'; then \
 			echo "✗ $$orphan is (or contains) a worktree git still tracks — refusing to delete it"; \
 			echo "  NAME=$$NAME resolved to no registered worktree, so it would have been treated as a residue."; \
 			echo "  Other sessions run out of this directory. Confirm the checkout is yours, then remove it by its own"; \
@@ -286,7 +305,7 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 		if [ -n "$$orphan" ]; then \
 			found=1; \
 			slug="$$(basename "$$orphan" | $(worktree_slugify))"; \
-			if printf '%s\n' "$$reg" | awk -v s="$$slug" '{b=$$0; sub(/.*\//,"",b); print b}' | $(worktree_slugify) | grep -qxF "$$slug"; then \
+			if printf '%s\n' "$$reg" | awk '{b=$$0; sub(/.*\//,"",b); print b}' | $(worktree_slugify) | grep -qxF "$$slug"; then \
 				echo "• a registered worktree slugifies to the same Compose project erpify-$$slug — NOT tearing it down, that stack is not this directory's"; \
 				incomplete=1; \
 			else \
@@ -298,9 +317,8 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 				fi; \
 				$(worktree_rm_images); \
 			fi; \
-			rm -rf "$$orphan" || { echo "✗ could not delete $$orphan — root-owned files ('Permission denied' → run 'make worktree.chown' first)"; exit 1; }; \
+			"$(PROJECT_ROOT)/scripts/worktree-rm-residue.sh" "$$main" "$$orphan" || exit 1; \
 			git -C "$$main" worktree prune; \
-			echo "✓ deleted leftover directory $$orphan"; \
 		fi; \
 		if git -C "$$main" show-ref --verify --quiet "refs/heads/$$t"; then \
 			found=1; \
@@ -317,7 +335,7 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 		if [ -z "$$found" ]; then echo "✗ no worktree, leftover directory or local branch matches NAME=$$t (see 'make worktree.list')"; exit 1; fi; \
 	else \
 		if [ "$$wt" = "$$main" ]; then echo "✗ refusing to remove the main worktree ($$main)"; exit 1; fi; \
-		branch="$$(git -C "$$main" worktree list --porcelain | awk -v p="$$wt" '$$1=="worktree"{w=$$2} $$1=="branch" && w==p {sub("refs/heads/","",$$2); print $$2}')"; \
+		branch="$$(git -C "$$main" worktree list --porcelain | p="$$wt" awk 'BEGIN{p=ENVIRON["p"]} $$1=="worktree"{w=$$0; sub(/^worktree /,"",w)} $$1=="branch" && w==p {sub("refs/heads/","",$$2); print $$2}')"; \
 		slug="$$(printf '%s' "$$(basename "$$wt")" | $(worktree_slugify))"; \
 		if [ -d "$$wt" ]; then \
 			echo "→ tearing down stack for $$wt"; \
@@ -333,7 +351,14 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 			$(worktree_rm_images); \
 		fi; \
 		echo "→ removing worktree $$wt"; \
-		git -C "$$main" worktree remove $$wtf "$$wt" || { echo "✗ worktree remove failed — dirty worktree (re-run with FORCE=true) or root-owned files ('Permission denied' → run 'make worktree.chown' first)"; exit 1; }; \
+		if ! git -C "$$main" worktree remove $$wtf "$$wt"; then \
+			if git -C "$$main" worktree list --porcelain | sed -n 's/^worktree //p' | grep -qxF "$$wt"; then \
+				echo "✗ worktree remove failed and git kept the registration — see its message above (a dirty worktree needs FORCE=true)"; \
+				exit 1; \
+			fi; \
+			echo "→ git dropped the registration but could not delete every file; clearing $$wt"; \
+			"$(PROJECT_ROOT)/scripts/worktree-rm-residue.sh" "$$main" "$$wt" || exit 1; \
+		fi; \
 		git -C "$$main" worktree prune; \
 		if [ -n "$$branch" ]; then \
 			git -C "$$main" branch $$bdel "$$branch" && echo "✓ deleted branch $$branch" \
@@ -351,19 +376,19 @@ worktree.remove: ## Remove worktree NAME=<dir|path|branch> + its stack/volumes +
 	fi; \
 	if [ -n "$$incomplete" ]; then echo "✗ removal incomplete — see the • lines above"; exit 1; fi
 
-worktree.chown: ## Reclaim ownership of root-owned container-written files under .claude/worktrees/; fixes 'Permission denied' on worktree.remove (requires sudo; dev/test only)
+worktree.chown: ## Reclaim ownership of root-owned container-written files under .claude/worktrees/ for the whole folder, other sessions' worktrees included (requires a sudo terminal; dev/test only); worktree.remove does not need it
 	$(call guard_var_writable,worktree.chown)
-	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
+	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')"; \
 	dir="$$main/.claude/worktrees"; \
 	if [ ! -d "$$dir" ]; then echo "✓ nothing to do — $$dir does not exist"; exit 0; fi; \
 	echo "→ sudo chown -R $(shell id -un) $$dir"; \
 	sudo chown -R $(shell id -u):$(shell id -g) "$$dir" \
 		|| { echo "✗ chown failed — sudo could not authenticate (run this from a terminal, not an agent shell)"; exit 1; }; \
-	echo "✓ $$dir now owned by $(shell id -un) — retry 'make worktree.remove NAME=…'"
+	echo "✓ $$dir now owned by $(shell id -un)"
 
 worktree.remove-all: ## Remove every REGISTERED worktree + its stack/volumes + branch (never an untracked directory — clear those one by one); exits non-zero if any did not remove cleanly; FORCE=true drops dirty/unmerged (destructive)
-	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{print $$2; exit}')"; \
-	wts="$$(git -C "$$main" worktree list --porcelain | awk '$$1=="worktree"{c++; if (c>1) print $$2}')"; \
+	@main="$$(git -C "$(PROJECT_ROOT)" worktree list --porcelain | awk '/^worktree /{sub(/^worktree /,""); print; exit}')"; \
+	wts="$$(git -C "$$main" worktree list --porcelain | awk '$$1=="worktree"{c++; if (c>1){sub(/^worktree /,""); print}}')"; \
 	if [ -z "$$wts" ]; then echo "no linked worktrees to remove"; exit 0; fi; \
 	fail="$$(mktemp)"; \
 	printf '%s\n' "$$wts" | while IFS= read -r wt; do \

@@ -70,10 +70,9 @@ Steps:
    make worktree.remove NAME=<dir> FORCE=true
    ```
 
-   On `Permission denied` (root-owned bind-mount residue): confirm `git worktree list` no longer lists the
-   path, remove that **exact** directory with a container — never a glob, never the parent:
-   `docker run --rm -v "$PWD/.claude/worktrees:/w" alpine rm -rf "/w/<dir>"` — then run
-   `make worktree.remove NAME=<branch> FORCE=true` again, which deletes the leftover branch. Finally
+   Root-owned bind-mount residue is cleared by the removal itself (`scripts/worktree-rm-residue.sh`, a
+   container that mounts only that directory); if the run still ends with a `•` or `✗`, re-run
+   `make worktree.remove NAME=<branch> FORCE=true`, which deletes a leftover branch. Finally
    `git update-ref -d refs/tmp/pr<n>`, and check that `git worktree list`, `ls .claude/worktrees/` and
    `git branch --list <branch>` are all clear of it.
 
