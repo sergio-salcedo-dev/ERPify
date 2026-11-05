@@ -99,7 +99,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->suspendActorBeneathItsSession($actorId);
         $this->assertSame(self::TARGET_ID, $this->soleActiveAdministratorId());
 
-        $this->request(self::TARGET_ID, '{"roles":["EDITOR"]}');
+        $this->request(self::TARGET_ID, '{"roles":["EDITOR"],"currentPassword":"functional-password"}');
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
@@ -108,6 +108,34 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->assertSame('last-active-administrator-protected', $this->problemString('type'));
         // The guard runs before the aggregate mutates: the lone admin keeps its ADMIN.
         $this->assertContains('ADMIN', $this->rolesOf(self::TARGET_ID));
+    }
+
+    public function testAWrongCurrentPasswordIsRefusedAndTheRolesStayAsTheyWere(): void
+    {
+        $this->resetTarget();
+        $this->persistTarget();
+        $this->authenticateAdminClient($this->client);
+
+        $this->request(self::TARGET_ID, '{"roles":["ADMIN"],"currentPassword":"not-the-current-password"}');
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        $this->assertSame('invalid-current-password', $this->problemString('type'));
+        // The proof precedes the write: a stolen session that does not know the password plants nobody.
+        $this->assertSame([Role::VIEWER->value], $this->rolesOf(self::TARGET_ID));
+    }
+
+    public function testAMissingCurrentPasswordIsAValidationFailureNotAChange(): void
+    {
+        $this->resetTarget();
+        $this->persistTarget();
+        $this->authenticateAdminClient($this->client);
+
+        $this->request(self::TARGET_ID, '{"roles":["EDITOR"]}');
+
+        self::assertResponseStatusCodeSame(422);
+        $this->assertSame('validation-failed', $this->problemString('type'));
+        $this->assertSame([Role::VIEWER->value], $this->rolesOf(self::TARGET_ID));
     }
 
     /**
@@ -141,7 +169,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $actorId = $this->functionalAdministratorId();
         $held = $this->rolesOf($actorId);
 
-        $this->request($actorId, '{"roles":["ADMIN","EDITOR"]}');
+        $this->request($actorId, '{"roles":["ADMIN","EDITOR"],"currentPassword":"functional-password"}');
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
@@ -156,7 +184,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         // functional (MANAGER + AUDIT_READER) holds no users.changeRoles — users opts out of tier auto-grant.
         $this->authenticateClient($this->client);
 
-        $this->request(self::TARGET_ID, '{"roles":["EDITOR"]}');
+        $this->request(self::TARGET_ID, '{"roles":["EDITOR"],"currentPassword":"functional-password"}');
 
         self::assertResponseStatusCodeSame(403);
     }
@@ -171,7 +199,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->withholdTheDelegationPermission();
         $this->authenticateAdminClient($this->client);
 
-        $this->request(self::TARGET_ID, '{"roles":["ADMIN","EDITOR"]}');
+        $this->request(self::TARGET_ID, '{"roles":["ADMIN","EDITOR"],"currentPassword":"functional-password"}');
 
         self::assertResponseStatusCodeSame(403);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
@@ -205,7 +233,7 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
         $this->persistTarget();
         $this->authenticateAdminClient($this->client);
 
-        $this->request(self::TARGET_ID, '{"roles":[]}');
+        $this->request(self::TARGET_ID, '{"roles":[],"currentPassword":"functional-password"}');
 
         self::assertResponseStatusCodeSame(422);
         $this->assertSame([Role::VIEWER->value], $this->rolesOf(self::TARGET_ID));
@@ -265,7 +293,10 @@ final class UserPatchRolesFunctionalTest extends WebTestCase
      */
     private function patchRoles(string $id, array $roles, int $expectedStatusCode): array
     {
-        $this->request($id, \json_encode(['roles' => $roles], JSON_THROW_ON_ERROR));
+        $this->request(
+            $id,
+            \json_encode(['roles' => $roles, 'currentPassword' => 'functional-password'], JSON_THROW_ON_ERROR),
+        );
 
         self::assertResponseStatusCodeSame($expectedStatusCode);
 

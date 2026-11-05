@@ -793,9 +793,9 @@ you change anything here.
       second, credential-independent path into one's own account, defeating the lockout it exists to recover
       from. **The residual this left — an installation with a single administrator has nobody to invoke the lever —
       is closed by the recovery secret below**, which is the edge that depends on no peer. The
-      detection/notification half (`NotifyLockedIdentities`) shipped in #683 and #857; #602 stays open on the
-      stolen-session composition recorded in §7 (*A stolen session can deny the owner a credential rotation,
-      but not an eviction*).
+      detection/notification half (`NotifyLockedIdentities`) shipped in #683 and #857; the stolen-session
+      composition is recorded in §7 (*A stolen session can deny the owner a credential rotation, but not an
+      eviction*) and #602 closed with it, 2026-11-05.
 - [ ] **The console's invitation levers — resend (`POST /backoffice/users/{userId}/invitation/resend`) and
       revoke (`DELETE /backoffice/users/{userId}/invitation`) — are bounded and attributed.** Both are
       `ADMIN`-only (`users.resendInvitation`, `users.revokeInvitation`). Every resend kills the link the invitee
@@ -847,8 +847,21 @@ you change anything here.
       [`docs/adr/administrative-recovery-channel.md`](docs/adr/administrative-recovery-channel.md) D7.
       **Four residuals, each accepted rather than closed:**
       **(a)** the secret is valid for **ten years** — `SingleUseToken` makes "no expiry" unrepresentable and a
-      short window would silently destroy the channel of somebody with no shell to notice; tracked as an
-      accepted risk with an open issue ([#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870)).
+      short window would silently destroy the channel of somebody with no shell to notice.
+      **Accepted for good 2026-11-05 (Sergio), and #870 closed with it.** A year with re-minting, or 90 days,
+      was declined because each reproduces on a timer the failure the design rejected when it let a secret
+      survive a password change — a channel dead the day it is needed, for a customer with no shell and no
+      second human to notice — and a reminder would have to ride the vendor's mail relay, which I-2
+      disqualifies for this channel. Rotating the secret inside the redeem response was declined because a
+      lost response spends the only secret and turns a one-time theft into a permanent, undetectable one. An
+      in-app expiry notice reaches only somebody who can sign in, so it cannot protect the owner who needs
+      the secret because they cannot. **What no observer here sees**: the audit row carries no selector (I-1's
+      corollary), so a redemption cannot be tied to a minted secret, and the customer's custody of the
+      written-down copy is invisible to the system entirely. **Reopen when** a second bearer credential adopts
+      a multi-year lifetime (two share a root cause: write a product-wide credential-lifetime policy rather
+      than a second ten years), the deployment model changes so the customer has a shell or console or a
+      second administrator the software can rely on, or a redemption arrives for a secret minted years
+      earlier.
       **(b)** possessing it equals possessing a recovery credential until redemption, revocation, expiry or
       subject erasure — it survives a password rotation by design, and the profile screen listing it with both
       instants and a credential-gated revoke is the whole of what makes that governable. Possession is also an
@@ -1218,7 +1231,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       the notice is unsolicited, so no recipient reports its absence — the `warning` its best-effort
       wrapper logs on every failed tick is the only signal, and it is a log line, with the
       Monolog→Sentry bridge deliberately unwired. Closing this means an alert on that line.
-- [ ] **The lockout notice's single-delivery property rests on a replica pin, not on a lock.**
+- [x] **The lockout notice's single-delivery property rests on a replica pin, not on a lock — accepted
+      for good 2026-11-05.**
       The five-minute sweep sends before it stamps (stamping first would turn a mailer outage into a
       day of silence about a live lock), and `IdentityMaintenanceSchedule` is `->stateful()` but not
       `->lock()`ed. Two scheduler replicas would therefore race send-then-stamp and deliver the notice
@@ -1230,9 +1244,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       _committed to the repository_ is a red build. It cannot see one asked for at the command line:
       measured, `docker compose up -d --scale <svc>=2` leaves two containers running for a service
       declaring `replicas: 1`, exit 0, exactly as for one declaring none. Compose treats the value as a
-      default, never a ceiling. Closing this therefore still means a scheduler lock (`symfony/lock`,
-      declined in #261 with that asymmetry as the recorded cost) or a deployment-side check that
-      refuses to scale the service.
+      default, never a ceiling.
+      **Accepted 2026-11-05 (Sergio), and #864 closed with it.** The supported topology is ONE consumer of
+      `scheduler_identity_maintenance`; a second one is unsupported, and the consequence of running it is that
+      the notice **and** its `ACCOUNT_LOCKOUT_NOTIFIED` audit row are delivered twice (no erasure interaction:
+      both rows name an identity that is still live). What a deployment-side count would have bought was
+      weighed and is not buildable here — nothing in the repository can see a `--scale`. A scheduler lock
+      (`symfony/lock`) stays declined for the reasons recorded in #261. A claim-before-send (an atomic
+      conditional stamp ahead of the SMTP exchange) was weighed and declined: it replaces a duplicate with a
+      lost notice when the process dies between the claim and the send, and the notice's whole job is to
+      tell a person about a live lock. **Reopen when** a duplicate is observed — more than one
+      `ACCOUNT_LOCKOUT_NOTIFIED` row for one `resource_id` within one day (a re-notification after a fresh
+      lock comes a day later, so two rows a day apart are not one) — or a deployment scales that consumer past
+      one, or the send-then-stamp race this rides on is picked up for a fix, which closes the audit duplicate
+      with it.
 - [ ] **`api/storage-test/` is outside `.gitignore`.** It is a Flysystem test-storage directory the
       suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
       repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes
@@ -1339,7 +1364,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       (`INVITATION_RESENT`, `security`). **Revisit when** an operator reports a resend refused with 429 that they
       did not cause, or the console surfaces invitation resend to a role other than `ADMIN`. **Accepted:** not
       recorded (opened 2026-10-25; narrowed 2026-10-26 by the per-caller share).
-- [ ] **A stolen session can deny the owner a credential _rotation_, but not an _eviction_.** Both budgets a
+- [x] **A stolen session can deny the owner a credential _rotation_, but not an _eviction_ — closed 2026-11-05 (#602).** Both budgets a
       session holder can reach are keyed by something they already have: `password_change_per_identity`
       (10 / 15 min, a visible 429) by the identity itself, and `password_recovery_per_email` (5 / hour, whose
       exhaustion is **silent by contract**, so the owner meets the uniform 202 and no email arrives) by the
@@ -1384,30 +1409,28 @@ mitigated state. Accepting one means recording who accepted it and against which
       recovery reopens this window until the owner re-mints — and the re-mint spends the shared
       `password_change_per_identity` budget, which the evicted session may have drained before it died, so it
       can wait up to one window.
-      **(ii) An administrator's stolen session acts before it is evicted — or while its request is in
-      flight.** It can mint its own re-entry — invite an address it controls and grant it `ADMIN`
-      (`users.invite`, `users.grantAdmin`) — which evicting the owner's _other sessions_ does not reach, and it
-      can suspend, demote or re-role every **other** administrator (only the last active one is protected),
-      each of whom loses their live sessions. **What it can no longer do is aim either write at its own
-      identity.** `PATCH /backoffice/users/{id}/roles` and `PATCH /backoffice/users/{id}/status` refuse a
-      target that is the acting administrator (409 `self-role-change-forbidden` / `self-status-change-forbidden`,
-      compared case-insensitively against the session's actor), before any lock is taken or row touched — the
-      shape unlock and erasure already had. That closes the race in which such a write, admitted before the
-      eviction and queued on the user row, committed after the redemption and its post-commit teardown revoked
-      the redeemed session — secret spent, owner holding nothing. It is closed by the refusal, not by a
-      re-check: neither write re-verifies its caller's session under a lock (only `revoke-others` does), and
-      from the stolen session itself neither needs to, because its own identity is the one target it could aim
-      them at whose teardown reaches the redeemed session. The attempt is not silent either: each of the four
-      self-refusals writes a resource-less `SELF_TARGETED_ACT_REFUSED` row at `security` level (`metadata` holds
-      the problem `type` and the route), where a 409 would otherwise reach no `audit_log` row at all — the
-      generic hook records successful reads only. **What still survives is everything aimed at
-      somebody else, and one path of it comes back to the owner**: the identities and grants the intruder
-      created, and the administrators it demoted or suspended, none of which an eviction reaches — and an
-      administrator it planted holds sessions the owner's redemption does not evict, so that administrator can
-      still suspend or demote the owner afterwards: a role or status change revokes the redeemed session, and a
-      suspended owner's next redemption is the identified 403 and consumes nothing. A recovery ends the
-      intruder's session, not what it did; after recovering, an administrator has to read the users register
-      and the audit trail for exactly that, and first of all for administrators they did not create.
+      **(ii) What an administrator's stolen session does to OTHER identities now costs the caller's password.**
+      Handing out `ADMIN` (`POST /backoffice/invitations` with the role in the set) and every role or status
+      change (`PATCH /backoffice/users/{id}/roles`, `…/status`) re-prove the caller's current password and spend
+      the one per-identity budget the credential routes share, in the controller and before the use case
+      (`ProveActorPassword`; ADR `administrative-recovery-channel.md` D11). A stolen session does not hold the
+      password, so it can no longer plant an administrator or suspend, deactivate or demote the owner, and a
+      wrong, missing or over-budget proof writes nothing. Roles and status ask whoever the target is — deciding
+      that the target is an administrator means loading it first, a check-then-act window — and the invitation
+      asks only when the set carries `ADMIN`, decided from the payload alone. The three routes are
+      `credential-affecting` in `api/.credential-proof-policy`, pinned by name. **What survives**: (1) an
+      attacker who also holds the password; (2) a stolen session can still invite identities holding a role
+      **below** `ADMIN` (a planted `MANAGER` is a foothold the owner has to find in the users register); (3)
+      the console, which drives the same use cases as the operator and so is outside the proof by design; (4)
+      the shared budget — a stolen session can spend it and delay the owner's own admin acts by up to one
+      window, as in §6 (b). Self-targeted role and status writes stay refused (409
+      `self-role-change-forbidden` / `self-status-change-forbidden`), which closes the race in which such a
+      write, admitted before the eviction and queued on the user row, committed after the redemption and its
+      post-commit teardown revoked the redeemed session. Each of the four self-refusals writes a resource-less
+      `SELF_TARGETED_ACT_REFUSED` row at `security` level (`metadata` holds the problem `type` and the route),
+      where a 409 would otherwise reach no `audit_log` row at all — the generic hook records successful reads
+      only. There is no deployment yet, so there are no administrators planted or demoted before the proof
+      existed to go and look for.
       **(iii) A leaked secret is an eviction weapon as well as a way in.** Whoever redeems it signs out every
       session of the identity, the owner's included, and the owner's way back is the password — shut for as
       long as the same attacker keeps the email-keyed lockout sealed. The trade is deliberate: an owner who kept
@@ -1421,26 +1444,36 @@ mitigated state. Accepting one means recording who accepted it and against which
       (iii) does not fire — the secret never disappears — and only `RECOVERY_SECRET_REDEMPTION_INTERRUPTED` audit
       rows attest it. Accepted by Sergio on 2026-09-28 as a variant of (iii), which already presupposes the leak;
       ADR `administrative-recovery-channel.md` D10.
-      Until #602 closes, what the product owes is **(1) getting every administrator to mint a recovery secret,
-      re-mint after every redemption, and warning while none is live**, and **(2) ordering guidance for an
-      owner who can still sign in — evict first, rotate second** — in the UI copy and the password-changed
-      mail; the redemption flow needs none, because it evicts on its own. The warning half of (1) exists: every
-      back-office page tells an `ADMIN` session whose secret is not live (none, spent or lapsed — the server's
-      `live`, never a client clock) so, in a non-dismissible `<aside>` that leaves the moment a mint answers. It
-      warns; it does not close (i). (2) exists too: the password-changed mail tells a reader who did not make the
-      change to redeem their recovery secret or reset from the sign-in page — either one signs every other device
-      out — and only then set a new password, with the security mailbox as the fallback; the change-password form
-      opens with the same order and a link to *Active sessions*. A redemption whose session is confirmed says the
-      second half itself: its toast states the other sessions were signed out, and the dashboard it lands on says
-      once what is still owed — a new password, since redemption changes none, and a new secret, since the used one
-      is spent — never that the account is now safe. A redemption whose session probe fails gets neither: its copy
-      says only that the secret is spent and to open the back office. That notice lives in the tab's memory until a
-      dashboard mounts, and it is consumed by that mount: a reload loses it, so does a session probe that fails
+      **What the product delivers for (i):** every `ADMIN` session that has never minted a secret is held at a
+      blocking step in the back office until it does (`RecoveryEnrolmentGate`): the explanation, the existing
+      mint form unchanged — the secret is shown once and held until the owner confirms it is saved — and a way to
+      sign out, with no skip. It blocks only an ACTIVE administrator whose readiness is `not-live` / `none`, never
+      `unknown` or `expired` (a lapsed row occupies the slot and a mint over it can only answer 409), and never a
+      session opened by REDEEMING a secret, because that secret was just spent and minting needs the password the
+      owner may not hold. The redeemed state lives in the tab's memory, so **a reload after a redemption meets the
+      step**: the owner then signs out and uses *Forgot password*, which the redemption notice already names. A
+      redeemed owner who reloads and has lost the password is stopped until a reset mail arrives — a narrow case
+      accepted because the stricter direction is the one a stale flag fails toward. What the block does not
+      close: the window after a redemption until the owner re-mints (the banner warns; the owner has a live
+      session meanwhile), an administrator whose secret has lapsed (banner only), and an owner who never signs
+      in again. (2), ordering guidance for an owner who can still sign in — evict first, rotate second — exists in
+      the UI copy and the password-changed mail: the mail tells a reader who did not make the change to redeem
+      their recovery secret or reset from the sign-in page — either one signs every other device out — and only
+      then set a new password, with the security mailbox as the fallback; the change-password form opens with
+      the same order and a link to *Active sessions*. A redemption whose session is confirmed says the second
+      half itself: its toast states the other sessions were signed out, and the dashboard it lands on says once
+      what is still owed — a new password, since redemption changes none, and a new secret, since the used one is
+      spent — never that the account is now safe. A redemption whose session probe fails gets neither: its copy
+      says only that the secret is spent and to open the back office. That notice lives in the tab's memory until
+      a dashboard mounts, and it is consumed by that mount: a reload loses it, so does a session probe that fails
       while the dashboard is showing it (the page unmounts and comes back without it), and if the redirect lands
-      elsewhere it waits and shows at that tab's next dashboard visit. Only the back-office "no live recovery
-      secret" banner — administrators only, and only about the secret — repeats any of it; nothing else restates
-      that redemption changed no password. The sign-in page links the recovery page, so the mail's "use your
-      recovery secret … from the sign-in page" names a reachable step.
+      elsewhere it waits and shows at that tab's next dashboard visit. The sign-in page links the recovery page,
+      so the mail's "use your recovery secret … from the sign-in page" names a reachable step.
+      **Accepted 2026-11-05 (Sergio), and #602 closed with it:** the residuals (i) as bounded above, (iii) and
+      (iv) — the last two were accepted earlier (2026-09-25, 2026-09-28) and are unchanged — and the three
+      survivors of (ii). **Reopen when** a lockout is observed on an identity with no live secret, an
+      administrator's recovery finds identities or grants they did not create, or a role below `ADMIN` is found
+      to be enough to hold the owner out.
       `revoke-others` carrying no limiter is deliberate and load-bearing: it is the one edge an adversary
       cannot spend. **Do not "harden" it.**
 - [x] **A failed login no longer carries an existence signal shaped like a transaction, a seed cost or an
@@ -2435,10 +2468,9 @@ mitigated state. Accepting one means recording who accepted it and against which
 
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
-      artefact that holds the revisit trigger. One of them (#870) carries an `@accepted-risk` tag under
-      `api/src` and #872 two in `docs/adr/image-deletion-signal-transport.md`, and
-      `.github/workflows/accepted-risk-live-state.yml` requires every such tag to point at an open issue, so
-      closing either while its tag stands reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
+      artefact that holds the revisit trigger. #872 carries two `@accepted-risk` tags in
+      `docs/adr/image-deletion-signal-transport.md`, and `.github/workflows/accepted-risk-live-state.yml`
+      requires every such tag to point at an open issue, so closing it while they stand reds that job. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
@@ -2447,10 +2479,7 @@ mitigated state. Accepting one means recording who accepted it and against which
   | Issue | Accepted risk | Revisit when | Accepted |
   |---|---|---|---|
   | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of `EnvelopeEncryptor::decrypt()` outside `api/src/Shared/Crypto/` | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
-  | [#602](https://github.com/sergio-salcedo-dev/ERPify/issues/602) | An identity whose lockout an attacker holding a stolen session keeps re-driving cannot get the session eviction requires unless it holds a **live recovery secret**; redeeming one evicts every other session in the transaction that consumes it, so the stolen session no longer out-races it — but the secret is then spent until re-minted, `users.unlock` holds only until ten more failures re-seal the lock, a **sole administrator** without a secret has not even that, an administrator's stolen session can plant identities and grants and demote or suspend other administrators, none of which an eviction reaches, and an administrator it planted can still suspend or demote the owner after the recovery (the stolen session can no longer change its own roles or status, so it cannot revoke the redeemed session that way itself), and a **leaked** secret now signs the owner out as well (see *A stolen session can deny the owner a credential rotation* above), and can do so repeatedly **without being spent**, through two concurrent redemptions that interrupt each other (§7 (iv)) | Before the first customer: the product gets every administrator to mint (and re-mint after redemption) a recovery secret and warns while none is live; or a lockout is observed on an identity with no live secret; or an administrator's recovery finds identities or grants they did not create, or administrators demoted or suspended | Sergio, 2026-09-28 (accepts that a leaked secret can also evict repeatedly without being spent); Sergio, 2026-09-25 (accepts that a leaked recovery secret also signs the owner out); earlier: accepted as-is 2026-07-29 naming nobody, narrowed 2026-09-24 (opened 2026-07-28) |
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
-  | [#864](https://github.com/sergio-salcedo-dev/ERPify/issues/864) | A second `scheduler_identity_maintenance` replica duplicates the lockout notice **and** its audit row (no `->lock()`) | Two `ACCOUNT_LOCKOUT_NOTIFIED` rows for one resource within one day, or any deploy scaling that consumer past 1; closes with a fix of the email-duplication race it rides on | not recorded (opened 2026-08-27) |
-  | [#870](https://github.com/sergio-salcedo-dev/ERPify/issues/870) | The administrative recovery secret is a bearer credential valid for ten years (residual (a) of the recovery-secret item in §6) | A `RECOVERY_SECRET_REDEEMED` for a secret minted years earlier, or a live secret nearing expiry never redeemed nor revoked; a second bearer credential adopting a multi-year lifetime; or customers gaining shell/console access, or a second administrator the software can rely on | no person named; approved by the second external spec review on condition of this record (opened 2026-08-28) |
   | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | `async`'s after-commit guarantee holds only while `MESSENGER_TRANSPORT_DSN` resolves to Doctrine on the writing connection — a deploy-time env value no repository gate can pin; each service now refuses to boot on a DSN that drops it, so what remains is a process started outside the entrypoint (`--entrypoint`), and that the assertion proves where `async` writes, not that every publisher calls `EventBus::publish()` inside a transaction | A deployment setting its own `MESSENGER_TRANSPORT_DSN`, or the first real publisher of `ImageDeletionRequested` (none in `api/src` today) — the first `async` consumer whose effect cannot be undone, since it destroys stored bytes. The Bank and BankAccount events already publish to `async` inside the writer's transaction, so the guarantee is already relied on, but a message escaping a rollback there costs a stray email or realtime refresh. The boot-time assertion is adopted (`event:transport:assert-transactional`, run by the container entrypoint of every service, gated by `AsyncTransportBootAssertionGateTest`); the deploy-time smoke check and a §8 verification step are not | not recorded (opened 2026-08-28) |
 
 

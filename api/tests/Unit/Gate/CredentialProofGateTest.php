@@ -57,6 +57,22 @@ final class CredentialProofGateTest extends TestCase
         }
     }
 
+    /**
+     * The three routes through which a stolen administrator session could plant or remove an administrator
+     * stay under the proof. Reclassifying one as `ordinary` passes every other assertion here, so the
+     * classification itself is pinned.
+     */
+    public function testTheAdministrativeAuthorityActsStayClassifiedAsCredentialAffecting(): void
+    {
+        $registry = $this->policy()->registry();
+
+        foreach (
+            ['backoffice_invitation_create', 'backoffice_user_change_roles', 'backoffice_user_change_status'] as $route
+        ) {
+            $this->assertSame(CredentialProofRules::CREDENTIAL_AFFECTING, $registry[$route]['class'] ?? null, $route);
+        }
+    }
+
     public function testEveryRouteIsClassifiedAndEveryClassificationStillNamesARoute(): void
     {
         $policy = $this->policy();

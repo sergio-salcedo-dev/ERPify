@@ -45,9 +45,18 @@ final class ChangeUserRolesRequestTest extends TestCase
     #[Test]
     public function aWellFormedSetPassesValidation(): void
     {
-        $request = new ChangeUserRolesRequest([Role::EDITOR->value, Role::AUDIT_READER->value]);
+        $request = new ChangeUserRolesRequest([Role::EDITOR->value, Role::AUDIT_READER->value], 'the-current-password');
 
         $this->assertCount(0, $this->validator->validate($request));
+    }
+
+    #[Test]
+    public function aBlankCurrentPasswordIsRejectedWhateverTheSet(): void
+    {
+        $violations = $this->validator->validate(new ChangeUserRolesRequest([Role::EDITOR->value], ''));
+
+        $this->assertCount(1, $violations);
+        $this->assertSame('currentPassword', $violations->get(0)->getPropertyPath());
     }
 
     #[Test]
@@ -69,7 +78,7 @@ final class ChangeUserRolesRequestTest extends TestCase
     #[Test]
     public function aDuplicatedRoleIsAcceptedAndLeftForTheAggregateToCollapse(): void
     {
-        $request = new ChangeUserRolesRequest([Role::MANAGER->value, Role::MANAGER->value]);
+        $request = new ChangeUserRolesRequest([Role::MANAGER->value, Role::MANAGER->value], 'the-current-password');
 
         $this->assertCount(0, $this->validator->validate($request));
     }

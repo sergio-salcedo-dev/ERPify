@@ -96,7 +96,7 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
             Request::METHOD_PATCH,
             self::ENDPOINT . '/' . $actorId . '/status',
             server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
-            content: '{"status":"SUSPENDED"}',
+            content: '{"status":"SUSPENDED","currentPassword":"functional-password"}',
         );
 
         self::assertResponseStatusCodeSame(409);
@@ -122,13 +122,51 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
             Request::METHOD_PATCH,
             self::ENDPOINT . '/' . self::TARGET_ID . '/status',
             server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
-            content: '{"status":"DEACTIVATED"}',
+            content: '{"status":"DEACTIVATED","currentPassword":"functional-password"}',
         );
 
         self::assertResponseStatusCodeSame(409);
         self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
         $this->assertSame('last-active-administrator-protected', $this->problemType());
         // The guard runs before the aggregate mutates: the lone admin stays ACTIVE.
+        $this->assertSame('ACTIVE', $this->statusOf(self::TARGET_ID));
+    }
+
+    public function testAWrongCurrentPasswordIsRefusedAndTheStatusStaysActive(): void
+    {
+        $this->resetTarget();
+        $this->persistTarget();
+        $this->authenticateAdminClient($this->client);
+
+        $this->client->request(
+            Request::METHOD_PATCH,
+            self::ENDPOINT . '/' . self::TARGET_ID . '/status',
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: '{"status":"SUSPENDED","currentPassword":"not-the-current-password"}',
+        );
+
+        self::assertResponseStatusCodeSame(403);
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        $this->assertSame('invalid-current-password', $this->problemType());
+        // The proof precedes the write: a stolen session that does not know the password suspends nobody.
+        $this->assertSame('ACTIVE', $this->statusOf(self::TARGET_ID));
+    }
+
+    public function testAMissingCurrentPasswordIsAValidationFailureNotATransition(): void
+    {
+        $this->resetTarget();
+        $this->persistTarget();
+        $this->authenticateAdminClient($this->client);
+
+        $this->client->request(
+            Request::METHOD_PATCH,
+            self::ENDPOINT . '/' . self::TARGET_ID . '/status',
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: '{"status":"SUSPENDED"}',
+        );
+
+        self::assertResponseStatusCodeSame(422);
+        $this->assertSame('validation-failed', $this->problemType());
         $this->assertSame('ACTIVE', $this->statusOf(self::TARGET_ID));
     }
 
@@ -143,7 +181,7 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
             Request::METHOD_PATCH,
             self::ENDPOINT . '/' . self::TARGET_ID . '/status',
             server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
-            content: '{"status":"SUSPENDED"}',
+            content: '{"status":"SUSPENDED","currentPassword":"functional-password"}',
         );
 
         self::assertResponseStatusCodeSame(403);
@@ -160,7 +198,7 @@ final class UserPatchStatusFunctionalTest extends WebTestCase
             Request::METHOD_PATCH,
             self::ENDPOINT . '/' . $id . '/status',
             server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
-            content: \sprintf('{"status":"%s"}', $status),
+            content: \sprintf('{"status":"%s","currentPassword":"functional-password"}', $status),
         );
 
         self::assertResponseStatusCodeSame($expectedStatusCode);

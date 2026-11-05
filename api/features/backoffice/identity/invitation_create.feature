@@ -72,7 +72,8 @@ Feature: Invite a member from the console
     """
     {
       "email": "second-admin@erpify.test",
-      "roles": ["ADMIN"]
+      "roles": ["ADMIN"],
+      "currentPassword": "admin-password"
     }
     """
     Then the response status code should be 201
@@ -146,3 +147,41 @@ Feature: Invite a member from the console
     And the JSON node "violations[0].message" should be equal to "This email is already in use."
     And there should be 0 events stored named "erpify.iam.invitation.created"
     And 0 notification emails were sent
+
+  # Handing out ADMIN re-proves the caller's own password, because a stolen administrator session could
+  # otherwise plant an administrator that evicting the session does not reach. The proof is asked only when the
+  # payload carries ADMIN: the first scenario above invites an EDITOR with none.
+  Scenario: Inviting an administrator with a wrong current password is refused and provisions nothing
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a POST request to "/backoffice/invitations" with body:
+    """
+    {
+      "email": "planted-admin@erpify.test",
+      "roles": ["ADMIN"],
+      "currentPassword": "not-the-admin-password"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "invalid-current-password"
+    And there should be 0 events stored named "erpify.iam.invitation.sent"
+    And 0 notification emails were sent
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'planted-admin@erpify.test'"
+    And there should have 0 records in SQL result
+
+  Scenario: Inviting an administrator without a current password is a 422
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a POST request to "/backoffice/invitations" with body:
+    """
+    {
+      "email": "planted-admin@erpify.test",
+      "roles": ["ADMIN"]
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "currentPassword"
+    And 0 notification emails were sent
+    And I execute the SQL query "SELECT id FROM identity_user WHERE email = 'planted-admin@erpify.test'"
+    And there should have 0 records in SQL result

@@ -127,6 +127,12 @@ src/Iam/Invitation/Application/RevokeInvitation.php => Erpify\Iam\Identity\Appli
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Iam/Invitation/Infrastructure/Http/AcceptInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort
+src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Application\ProveActorPassword
+src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Domain\HashedPassword
+src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
+src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
+src/Iam/Invitation/Infrastructure/Http/CreateInvitationController.php => Erpify\Iam\Identity\Infrastructure\Security\SecurityUser
+src/Iam/Invitation/Infrastructure/Http/InviteUserRequest.php => Erpify\Iam\Identity\Infrastructure\Http\ExistingCredential
 
 # Password reset → revoke every session. RevokeSessionsBestEffort (Iam/Identity Application) consumes the
 # published RevokeAllSessions use case (Iam/Session) to invalidate all of the user's sessions after a credential

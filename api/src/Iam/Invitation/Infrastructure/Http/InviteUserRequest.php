@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Invitation\Infrastructure\Http;
 
+use Erpify\Iam\Identity\Infrastructure\Http\ExistingCredential;
 use Erpify\Shared\Access\Domain\Role;
 use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Request payload for {@see CreateInvitationController}, mapped from the JSON body via `#[StrictRequestPayload]`
  * (any constraint failure is answered 422 `validation-failed` before the use case runs, so a malformed alta
  * never reaches the domain). It carries only what an invitation needs — the invitee email and the org-scoped
  * roles: an `INVITED` identity has no password and no status yet (both are set later, when the invitation is
- * accepted), so neither belongs on this payload.
+ * accepted), so neither belongs on this payload. The one exception is `currentPassword`: the CALLER's own
+ * password, required exactly when `roles` carries `ADMIN` (see {@see CreateInvitationController}) and ignored
+ * otherwise, which is why it is conditional here and not on the routes that always need it.
  *
  * It bounds the set at the wire edge — a JSON array rather than an object, non-empty, no longer than the
  * vocabulary, and every member inside the {@see Role} vocabulary. The list check is what makes the
@@ -59,7 +63,29 @@ final readonly class InviteUserRequest
             multipleMessage: 'Select a valid role.',
         )]
         public array $roles = [],
+        #[Assert\Length(max: ExistingCredential::LENGTH_CEILING)]
+        #[SensitiveParameter]
+        public string $currentPassword = '',
     ) {
+    }
+
+    /**
+     * The proof is owed exactly when the set hands out `ADMIN`, so the requirement depends on a sibling member
+     * and cannot be a constraint on the property alone. A violation is reported on `currentPassword` so a
+     * client can put the message beside the field.
+     */
+    #[Assert\Callback]
+    public function requireTheCurrentPasswordToInviteAnAdministrator(ExecutionContextInterface $context): void
+    {
+        if (!\in_array(Role::ADMIN->value, $this->roles, true) || '' !== \trim($this->currentPassword)) {
+            return;
+        }
+
+        $context
+            ->buildViolation('Enter your current password to invite an administrator.')
+            ->atPath('currentPassword')
+            ->addViolation()
+        ;
     }
 
     /**

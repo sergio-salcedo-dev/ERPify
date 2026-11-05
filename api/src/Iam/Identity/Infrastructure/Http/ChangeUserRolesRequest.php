@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Identity\Infrastructure\Http;
 
 use Erpify\Shared\Access\Domain\Role;
+use SensitiveParameter;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -25,6 +26,9 @@ use Symfony\Component\Validator\Constraints as Assert;
  * {@see roleValues()} duplicates the identical helper the Invitation context's payload owns, on purpose: the
  * two contexts are isolated by design, and sharing it would either couple them or push a method onto a
  * vocabulary enum that deliberately has none.
+ *
+ * `currentPassword` is the CALLER's own password, re-proved before any role change. It carries only
+ * {@see ExistingCredential}'s coarse ceiling: a credential being verified is never held to today's policy.
  */
 final readonly class ChangeUserRolesRequest
 {
@@ -51,6 +55,10 @@ final readonly class ChangeUserRolesRequest
             multipleMessage: 'Select a valid role.',
         )]
         public array $roles = [],
+        #[Assert\NotBlank]
+        #[Assert\Length(max: ExistingCredential::LENGTH_CEILING)]
+        #[SensitiveParameter]
+        public string $currentPassword = '',
     ) {
     }
 

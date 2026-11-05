@@ -21,6 +21,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -47,6 +48,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "DEACTIVATED"
     }
     """
@@ -61,6 +63,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -72,6 +75,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -82,6 +86,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -98,6 +103,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/<id>/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "<status>"
     }
     """
@@ -140,6 +146,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -158,6 +165,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "DEACTIVATED"
     }
     """
@@ -172,6 +180,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "<status>"
     }
     """
@@ -201,17 +210,18 @@ Feature: Change an identity's status (suspend / deactivate)
     And there should be 0 events stored named "erpify.iam.identity.suspended"
 
     Examples:
-      | body                    |
-      | {}                      |
-      | {"status": null}        |
-      | {"status": ""}          |
-      | {"status": "suspended"} |
+      | body                                                         |
+      | {"currentPassword": "admin-password"}                          |
+      | {"status": null, "currentPassword": "admin-password"}        |
+      | {"status": "", "currentPassword": "admin-password"}          |
+      | {"status": "suspended", "currentPassword": "admin-password"} |
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator
     When I send a PATCH request to "/backoffice/users/<id>/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -229,6 +239,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/2e6d865c-17b0-476a-85f2-037bf6d3b3dc/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -252,6 +263,7 @@ Feature: Change an identity's status (suspend / deactivate)
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/status" with body:
     """
     {
+      "currentPassword": "admin-password",
       "status": "SUSPENDED"
     }
     """
@@ -260,3 +272,37 @@ Feature: Change an identity's status (suspend / deactivate)
     And the JSON node "type" should be equal to "last-active-administrator-protected"
     And there should be 0 events stored named "erpify.iam.identity.suspended"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
+
+  # Re-proving the caller's password is what turns "whoever holds the session cookie" into "whoever holds the
+  # cookie AND the password": a suspended owner's next redemption is refused, so evicting the session that did
+  # the suspending does not give the access back. The proof precedes every write.
+  Scenario: A wrong current password is refused before the status is touched
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/status" with body:
+    """
+    {
+      "status": "SUSPENDED",
+      "currentPassword": "not-the-admin-password"
+    }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-current-password"
+    And there should be 0 events stored named "erpify.iam.identity.suspended"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'INVALID_CURRENT_PASSWORD'"
+    And there should have 1 records in SQL result
+
+  Scenario: A status change that carries no current password is a 422, never a transition
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/status" with body:
+    """
+    {
+      "status": "SUSPENDED"
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "currentPassword"
+    And there should be 0 events stored named "erpify.iam.identity.suspended"

@@ -23,6 +23,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR", "AUDIT_READER"]
     }
     """
@@ -70,6 +71,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a61/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["VIEWER"]
     }
     """
@@ -87,6 +89,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a62/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["MANAGER", "MANAGER"]
     }
     """
@@ -112,6 +115,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"]
     }
     """
@@ -123,6 +127,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"]
     }
     """
@@ -133,6 +138,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"]
     }
     """
@@ -150,6 +156,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/<id>/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": <roles>
     }
     """
@@ -194,6 +201,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": <roles>
     }
     """
@@ -220,6 +228,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"],
       "status": "SUSPENDED"
     }
@@ -238,6 +247,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"],
       "status": "SUSPENDED",
       "id": "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a99"
@@ -254,6 +264,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/<id>/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"]
     }
     """
@@ -274,6 +285,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/2e6d865c-17b0-476a-85f2-037bf6d3b3dc/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"]
     }
     """
@@ -300,6 +312,7 @@ Feature: Assign an identity's roles
     When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
     """
     {
+      "currentPassword": "admin-password",
       "roles": ["EDITOR"]
     }
     """
@@ -308,3 +321,38 @@ Feature: Assign an identity's roles
     And the JSON node "type" should be equal to "last-active-administrator-protected"
     And there should be 0 events stored named "erpify.iam.identity.roles-changed"
     And there should be 0 events stored named "erpify.iam.session.all-revoked"
+
+  # Re-proving the caller's password is what turns "whoever holds the session cookie" into "whoever holds the
+  # cookie AND the password": a stolen administrator session can otherwise plant an administrator that
+  # evicting the session does not reach. The proof precedes every write, so the target keeps its roles.
+  Scenario: A wrong current password is refused before the roles are touched
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
+    """
+    {
+      "roles": ["ADMIN"],
+      "currentPassword": "not-the-admin-password"
+    }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-current-password"
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
+    And there should be 0 events stored named "erpify.iam.session.all-revoked"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action = 'INVALID_CURRENT_PASSWORD'"
+    And there should have 1 records in SQL result
+
+  Scenario: A role change that carries no current password is a 422, never a change
+    Given I am logged in as an administrator
+    And the stored events are cleared
+    When I send a PATCH request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e/roles" with body:
+    """
+    {
+      "roles": ["EDITOR"]
+    }
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "currentPassword"
+    And there should be 0 events stored named "erpify.iam.identity.roles-changed"
