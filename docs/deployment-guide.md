@@ -158,9 +158,13 @@ off is warned about in the build log. With the variable empty, nothing is
 associated: the plugin falls back to its `auto` mode, which reads a `.git` the
 build context does not contain and logs that failure only at debug level. It
 cannot be pinned off, because `@sentry/nextjs` does not type `setCommits: false`.
-A repository with no full-SHA release is warned about in the build log. Whether the
-`project:releases` token scope is enough for this call has not been verified
-against Sentry. If Sentry refuses the call, the build log prints the error
+A repository with no full-SHA release is warned about in the build log. A personal
+token with `project:releases` and `org:read` is enough: `sentry-cli releases
+set-commits <sha> --commit <owner>/<name>@<sha>` run with one associated the
+release, and Sentry resolved the repository's history through the GitHub
+integration from that single revision. Whether the call also works without
+`org:read`, and the build's own call with such a token, have not been run. If
+Sentry refuses the call, the build log prints the error
 (`silent: false`), the build still succeeds, and the release is left
 unfinalized. That is loud on purpose, because the plugin's
 `shouldNotThrowOnFailure` would log the refusal only at debug level.
