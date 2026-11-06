@@ -112,6 +112,8 @@ context:
 
 ## Implementation Notes
 
+- The Gone (410) marker is implemented only by exceptions of the upload flow. `DekDestroyed` and `DecryptionFailed` stay marker-less: `PiiDiffSealer` shares them on the write path, where a 4xx marker would silence a real 500. Issue #418 (the read-side `dek-destroyed` status) is owned and closed by doc-5; doc-3 writes no code for it (memlog, 2026-11-06).
+
 ## Spec Change Log
 
 ## Review Triage Log
