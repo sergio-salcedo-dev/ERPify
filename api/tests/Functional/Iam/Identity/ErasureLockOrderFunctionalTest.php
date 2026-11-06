@@ -12,6 +12,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Documents\Document\Application\PurgeUserDocumentReferences;
 use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
+use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Domain\Entity\PasswordResetToken;
@@ -36,6 +38,7 @@ use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
 use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\Documents\Document\PlantsDocumentRows;
+use Erpify\Tests\Functional\Documents\Document\PlantsUploadIntents;
 use Erpify\Tests\Functional\Documents\Document\ProbingDocumentCustodyRepository;
 use Erpify\Tests\Functional\Documents\Document\ProbingDocumentRepository;
 use Erpify\Tests\Functional\ResolvesContainerServices;
@@ -92,6 +95,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 final class ErasureLockOrderFunctionalTest extends KernelTestCase
 {
     use PlantsDocumentRows;
+    use PlantsUploadIntents;
     use ResolvesContainerServices;
 
     private const string ORGANIZATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01';
@@ -227,17 +231,20 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
             'other' => $this->plantCustody($theirDocument, 1, $this->subjectId),
             'subject' => $this->plantCustody($subjectDocument, 1, $this->subjectId),
         ];
+        $intent = $this->plantIntent($this->subjectId, UploadIntentState::Streaming);
 
         $atTheDocuments = [];
         $atTheCustody = [];
 
         $seam = new PurgeUserDocumentReferences(
+            $this->service(UploadIntentRepository::class),
             new ProbingDocumentRepository(
                 $this->service(DocumentRepository::class),
-                function () use (&$atTheDocuments, $subjectDocument, $custodyRows): void {
+                function () use (&$atTheDocuments, $subjectDocument, $custodyRows, $intent): void {
                     $atTheDocuments = [
                         'identity' => $this->identityRowIsGoneOnOurOwnConnection(),
                         'invitation' => $this->isLocked('iam_invitation', $this->invitationId),
+                        'upload intent' => $this->isLocked('upload_intent', $intent->id),
                         'document' => $this->isLocked('document', $subjectDocument),
                         'custody' => $this->isLocked('document_custody', $custodyRows['subject']),
                     ];
@@ -259,12 +266,18 @@ final class ErasureLockOrderFunctionalTest extends KernelTestCase
         $result = $chain->execute($this->subjectId);
 
         // Anti-vacuity: both statements matched rows, so a lock "not held" is an answer and not an absence.
-        $this->assertSame(3, $result->documentReferencesAnonymised, 'one uploader and two custody actors');
+        $this->assertSame(4, $result->documentReferencesAnonymised, 'one intent, one uploader and two custody actors');
         $this->assertSame(
-            ['identity' => true, 'invitation' => true, 'document' => false, 'custody' => false],
+            [
+                'identity' => true,
+                'invitation' => true,
+                'upload intent' => true,
+                'document' => false,
+                'custody' => false,
+            ],
             $atTheDocuments,
-            'When the uploader rewrite runs, the identity and invitation are already taken and no Documents row '
-            . 'is yet: Documents is last in the order every other path agrees on.',
+            "When the uploader rewrite runs, the identity, the invitation and the subject's upload intents are "
+            . 'already taken and no document row is yet: intents, then documents, then custody.',
         );
         $this->assertSame(
             ['document' => true, 'custody of the subject' => false, 'custody on another document' => false],

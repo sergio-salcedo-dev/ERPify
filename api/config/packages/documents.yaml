@@ -1,0 +1,22 @@
+# Documents (evidence-class binaries) runtime switches.
+#
+# `documents.ingest_enabled` opens the declare and PUT routes; while it is false both answer 404 (read per
+# request by `DocumentsIngestGate`). It is independent of `documents.read_enabled` (doc-5). It is false by
+# default and true only in dev and test, and production may set it true here only together with a valid restore
+# proof record whose `mechanism` equals `documents.backup_mechanism` below, under
+# `docs/runbooks/documents-restore-proofs/` — `DocumentsIngestProofGateTest` reads this file and fails otherwise.
+# A deploy-injected value is outside that gate: keep the switch a literal in tracked configuration.
+#
+# `documents.backup_mechanism` names the backup of the `document_storage` volume a restore proof must have
+# exercised. `none` until one exists, which no proof record can match.
+parameters:
+    documents.ingest_enabled: false
+    documents.backup_mechanism: 'none'
+
+when@dev:
+    parameters:
+        documents.ingest_enabled: true
+
+when@test:
+    parameters:
+        documents.ingest_enabled: true

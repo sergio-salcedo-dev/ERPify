@@ -159,11 +159,38 @@ const SEARCH_VALUE_KEY = /^filters\[-?\d*\]\[value\](\[-?\d*\])?$/;
  */
 export const REDACTION_SENTINEL = "REDACTED";
 
-/** True when a query-parameter name is an identity axis or the value axis of the search grammar. */
+/**
+ * Query-parameter names matched as a SUBSTRING of the reduced key, consulted only on URIs: the evidence upload
+ * carries the caller's original filename in its query. Mirrors `RequestUriRedaction::QUERY_KEYS` on the API
+ * side, and `RedactionVocabularyParityTest` holds the two equal.
+ */
+export const QUERY_KEYS = ["filename"] as const;
+
+const QUERY_KEY_FRAGMENTS: readonly string[] = QUERY_KEYS;
+
+/**
+ * The path of the evidence PUT, on which the whole query is withheld rather than matched pair by pair: a
+ * misspelt key the API ignores still travels in the URL. Mirrors `RequestUriRedaction::WHOLE_QUERY_PATH`.
+ */
+const WHOLE_QUERY_PATH = /(?:^|\/\/[^/]*)\/api\/v1\/documents\/uploads\/[^/]+\/content\/?$/i;
+
+/** True when a request to this path keeps no query at all in a sink. */
+export function withholdsWholeQuery(path: string): boolean {
+  return WHOLE_QUERY_PATH.test(path);
+}
+
+/**
+ * True when a query-parameter name is an identity axis, the value axis of the search grammar, or carries one
+ * of the {@link QUERY_KEYS}.
+ */
 export function isIdentityAxisKey(key: string): boolean {
   const reduced: string = reduceKey(key);
 
-  return IDENTITY_AXIS_KEYS.includes(reduced) || SEARCH_VALUE_KEY.test(reduced);
+  return (
+    IDENTITY_AXIS_KEYS.includes(reduced) ||
+    SEARCH_VALUE_KEY.test(reduced) ||
+    QUERY_KEY_FRAGMENTS.some((fragment: string) => reduced.includes(fragment))
+  );
 }
 
 /** Bounds recursion against pathological / cyclic structures. */

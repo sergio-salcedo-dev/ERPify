@@ -34,6 +34,15 @@ services:
       core:
         soft: 0
         hard: 0
+    # PHP spools every request body it is asked to read (`php://input`, a multipart upload) to `upload_tmp_dir`,
+    # and an evidence PUT's body is the plaintext original, up to 100 MiB, kept there until the same worker thread
+    # serves another request (memlog T1-2). It must never reach persistent storage, so the directory is a tmpfs:
+    # its pages count against the container's memory limit, which `memswap_limit` in compose.prod.yaml makes
+    # unswappable. Sized for the spools the worker threads can RETAIN, not for the in-flight cap: 8 worker
+    # threads (compose.prod.yaml) x 100 MiB, plus margin. The entrypoint refuses to start FrankenPHP when the
+    # directory is not a writable tmpfs, because PHP falls back to /tmp — the writable layer — on its own.
+    tmpfs:
+      - /run/php-upload-spool:size=900m,mode=0700,uid=33,gid=33
     depends_on:
       database:
         condition: service_healthy
@@ -186,7 +195,7 @@ services:
       # Same for evidence: the worker is the process that will physically delete the sealed object of an
       # erased document, and against an empty root that deletion reads as done.
       - document_storage:/app/documents
-    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600"]
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "scheduler_documents_maintenance", "--time-limit=3600"]
 
 volumes:
   caddy_data:

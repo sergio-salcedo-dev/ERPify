@@ -8,13 +8,13 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Test-only controller that throws an `HttpException` with an unmapped status (410 Gone) —
+ * Test-only controller that throws an `HttpException` with an unmapped status (418) —
  * exercises the factory's `'http-error'` fallback for statuses not in `HTTP_STATUS_TYPE_MAP`.
  */
-final class ThrowHttpGoneController
+final class ThrowHttpUnmappedStatusController
 {
     public function __invoke(): Response
     {
-        throw new HttpException(410, 'Resource gone.');
+        throw new HttpException(418, "I'm a teapot.");
     }
 }

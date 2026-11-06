@@ -2613,13 +2613,45 @@ mitigated state. Accepting one means recording who accepted it and against which
       once the window closes through `identity:gdpr:reconcile-subject-references`. Idempotency replay
       protection for the erased actor ends with the erasure (accepted: the hash is nulled by the same purge).
       **Open until the upload story writes documents; the detective source is the control meanwhile.**
-- [ ] **The `document_storage` volume has no backup, no restore drill and no read gate.** The volume
-      (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`) holds sealed bytes only after the upload story
-      exists, and a database dump is not a backup of evidence. Nothing writes to it today; the storage port
-      claims no WORM guarantee and its promotion is atomic only for one filesystem, asserted on the adapter test's
-      own temporary filesystem and not yet probed on the deployed volume, which is the upload story's boot
-      probe. **Open — owner: the upload story (doc-3), before any document is
-      served.**
+- [ ] **The `document_storage` volume has no backup and no proven restore yet; ingest stays off in
+      production until one is proven.** The upload story (doc-3) writes sealed bytes to the volume
+      (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`), and a database dump is not a backup of evidence. What
+      is in place: the entrypoint's storage boot probe (stage, promote, delete on the deployed volume, refusing to
+      start on any failure, in `php` and in both workers), the switch `documents.ingest_enabled` (false in
+      production, 404 on both ingest routes), and the proof-record format with its validator
+      (`docs/runbooks/documents-restore-proof.md`; `DocumentsIngestProofGateTest` fails when tracked production
+      configuration opens ingest without a valid restore proof for the declared backup mechanism). What is not:
+      the backup itself and the first proof, which whoever proves a restore commits. The read gate is doc-5's.
+      **Open — owner: whoever provisions the evidence backup; doc-5 keeps `documents.read_enabled` false
+      until then.**
+- [ ] **A sealed original filename names whoever it names, and survives a person's erasure until its document
+      is erased.** The name travels in the evidence PUT's query, is validated and sealed under the document's own
+      scope in the commit transaction, and is never persisted in clear; but it can carry the uploader's name or a
+      third party's, and a person's erasure never erases a document (the uploader is not the subject), so the
+      ciphertext stays until that document is erased (doc-7). Its ciphertext LENGTH also leaks the name's length
+      until then. Kept out of the access log (Caddy strips every query), the Monolog `request_uri` and per-error
+      log line and Sentry's `url`/`query_string`/transaction data (`RequestUriRedaction::QUERY_KEYS`, and the whole
+      query on the upload route), audit metadata and events. **Accepted — the user, 2026-11-04 (SPEC, D7).**
+- [ ] **Idempotency replay protection ends with the actor's erasure.** The person purge nulls the key hash on
+      every upload intent and document of the actor, so a replay of an erased actor's key is a fresh upload.
+      **Accepted — the user, 2026-11-04.**
+- [ ] **Aborted-upload keystore tombstones are never pruned.** Every claimed upload that does not become a
+      document leaves one `dek_keystore` row (`destroy_reason = aborted-upload`), including a claim whose key was
+      never minted — pruning one would let a late writer mint a live key under a scope believed dead. Growth is
+      watched, not bounded: the daily `ReportDocumentStorageMessage` logs the counts and an `error` line above
+      500 a day. **Accepted — the user, 2026-11-04.**
+- [ ] **A slow evidence PUT pins a PHP worker thread for up to its deadline, bounded by the in-flight caps,
+      not eliminated.** 2 streaming uploads per actor and 4 globally, against a production pool fixed at 12
+      threads (8 worker threads), so at most half the worker threads stream; a 100 MiB upload at the minimum
+      accepted 256 KiB/s holds its thread for up to 460 s. Each worker thread that served an upload also RETAINS
+      a spool of up to 100 MiB in the `upload_tmp_dir` tmpfs until it serves another request (memlog T1-2):
+      sized at 900m against a 2g, swap-free container. **Not measured on the production image**: the sizing is
+      derived from the dev-image spike (memlog T1-6) and must be confirmed by running four concurrent
+      maximum-size uploads at the floor on the prod image before ingest is enabled. **Accepted for the thread
+      pin — the user, 2026-11-06 (decision 2); open for the prod-image measurement.**
+- [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
+      `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
+      first UI story that uploads evidence.**
 
 ## 8. Deploy & verify
 

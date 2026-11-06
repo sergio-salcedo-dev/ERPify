@@ -124,16 +124,16 @@ Feature: Erase an identity (GDPR right to erasure)
     # table and the reset tokens — its only fixed constraint is that it follows the identity row. The re-sweep
     # scheduling is the last term, measured at +1: one upsert into identity_erasure_resweep, written through the
     # connection so no flush adds a SAVEPOINT/RELEASE pair, whatever the subject held.
-    # The Documents rewrite is +2, measured: one UPDATE over the subject's documents and one over their custody
-    # rows, each a single statement however many rows it matches.
-    And 26 requests got executed for doctrine connection "default"
+    # The Documents rewrite is +3, measured: one UPDATE over the subject's upload intents, one over their
+    # documents and one over their custody rows, each a single statement however many rows it matches.
+    And 27 requests got executed for doctrine connection "default"
 
   Scenario: Erasure anonymises the subject's document references and never erases the document
     # A document the subject uploaded in the `Erased` state (the one a purge keyed on state would skip), holding
     # an idempotency key hash, and a custody row of theirs: their uploader and actor references are anonymised
     # to the nil UUID and the document itself is never erased.
     Given I execute the SQL query "INSERT INTO identity_user (id, email, password_hash, roles, status, failed_attempts, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fb01', 'documents-subject@erpify.test', 'x', to_json(ARRAY[]::text[]), 'ACTIVE', 0, NOW(), NOW())" on connection "seed"
-    And I execute the SQL query "INSERT INTO document (id, scope_id, series_id, predecessor_id, uploader_id, state, digest, size_bytes, idempotency_key_hash, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000dc01', '5b1f6a58-3f0e-4d5b-9c43-0f6d2a7e9b01', '0190f200-0000-7000-8000-00000000dc01', NULL, '0190f200-0000-7000-8000-00000000fb01', 'erased', repeat('a', 64), 10, repeat('b', 64), NOW(), NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO document (id, scope_id, series_id, predecessor_id, uploader_id, state, digest, size_bytes, idempotency_key_hash, next_scan_at, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000dc01', '5b1f6a58-3f0e-4d5b-9c43-0f6d2a7e9b01', '0190f200-0000-7000-8000-00000000dc01', NULL, '0190f200-0000-7000-8000-00000000fb01', 'erased', repeat('a', 64), 10, repeat('b', 64), NOW(), NOW(), NOW())" on connection "seed"
     And I execute the SQL query "INSERT INTO document_custody (id, document_id, seq, event, actor_id, created_at) VALUES ('0190f200-0000-7000-8000-00000000dc11', '0190f200-0000-7000-8000-00000000dc01', 1, 'received', '0190f200-0000-7000-8000-00000000fb01', NOW())" on connection "seed"
     And I am logged in as an administrator
     When I send a "DELETE" request to "/backoffice/users/0190f200-0000-7000-8000-00000000fb01"

@@ -66,6 +66,38 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		fi
 	fi
 
+	# The document storage boot guard: a container whose storage cannot stage, promote and delete an object must
+	# not start, because every promotion would then fail after its commit (st_dev equality is not proof — a move
+	# fails with EXDEV across two mount points of one filesystem). Run by every container that touches the
+	# volume — php writes it, the workers' sweeps delete from it. Sentry is inert for the probe, like the
+	# database wait below: a refusal here is a boot failure, already loud.
+	if [ -n "${DOCUMENTS_STORAGE_PATH:-}" ]; then
+		if ! SENTRY_DSN='' php bin/console documents:storage:probe --no-interaction; then
+			echo "! The document storage refused the boot probe — refusing to start."
+			exit 1
+		fi
+	fi
+
+	# The upload spool guard: FrankenPHP spools every request body it reads to upload_tmp_dir, and an evidence
+	# PUT's body is a plaintext original. The directory must be a tmpfs (memory, never persistent storage) the
+	# server user can write to; PHP itself would fall back to /tmp on the writable layer with only a notice.
+	if [ "$1" = 'frankenphp' ]; then
+		SPOOL_DIR=$(php -r 'echo ini_get("upload_tmp_dir");')
+		if [ -z "$SPOOL_DIR" ] || [ ! -d "$SPOOL_DIR" ]; then
+			echo "! upload_tmp_dir ($SPOOL_DIR) is not a directory — refusing to start."
+			exit 1
+		fi
+		if [ "$(stat -f -c '%T' "$SPOOL_DIR")" != 'tmpfs' ]; then
+			echo "! upload_tmp_dir ($SPOOL_DIR) is not a tmpfs — plaintext spools would reach disk; refusing to start."
+			exit 1
+		fi
+		SPOOL_PROBE="$SPOOL_DIR/.boot-probe.$$"
+		if ! (: >"$SPOOL_PROBE") 2>/dev/null || ! rm -f "$SPOOL_PROBE"; then
+			echo "! upload_tmp_dir ($SPOOL_DIR) is not writable by $(id -un) — refusing to start."
+			exit 1
+		fi
+	fi
+
 	# Display information about the current project
 	# Or about an error in project initialization
 	php bin/console -V

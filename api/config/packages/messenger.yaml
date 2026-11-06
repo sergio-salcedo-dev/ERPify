@@ -50,6 +50,9 @@ framework:
             # docs/adr/image-deletion-signal-transport.md — and note the after-commit guarantee comes from
             # `async` resolving to the Doctrine transport on the same connection, not from this line.
             Erpify\Shared\Images\Domain\Event\ImageDeletionRequested: async
+            # A wake-up hint carrying a document id only; the obligation is the row (`promoted_at`, `next_scan_at`).
+            # Not a DomainEvent and not about a person, so it owes no line in api/.persistent-transport-policy.
+            Erpify\Documents\Document\Infrastructure\Messenger\ScanDocumentMessage: async
 
         # A queued event outlives the erasure of whoever it is about. Nothing in the erasure chain touches
         # either queue: `async` has no TTL and no prune, and `failed`'s 30-day retention sweep bounds the

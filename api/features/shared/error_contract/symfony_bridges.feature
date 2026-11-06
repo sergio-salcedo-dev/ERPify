@@ -39,12 +39,12 @@ Feature: Symfony framework exceptions surface through the RFC 9457 error contrac
     And 0 requests got executed across all doctrine connections
 
   Scenario: Symfony HttpException with an unmapped status code falls back to the generic http-error type
-    When I send a "GET" request to "http://localhost/api/test/_throw-http-410"
-    Then the response status code should be 410
+    When I send a "GET" request to "http://localhost/api/test/_throw-http-418"
+    Then the response status code should be 418
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "http-error"
-    And the JSON node "status" should be equal to the number 410
-    And the JSON node "title" should be equal to "Resource gone."
+    And the JSON node "status" should be equal to the number 418
+    And the JSON node "title" should be equal to "I'm a teapot."
     And the JSON node "instance" should be a valid UUID
     And the JSON node "correlation-id" should be a valid UUID
     And 0 requests got executed across all doctrine connections

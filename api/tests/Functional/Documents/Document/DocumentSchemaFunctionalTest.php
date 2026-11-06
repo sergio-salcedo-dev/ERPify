@@ -191,8 +191,8 @@ final class DocumentSchemaFunctionalTest extends KernelTestCase
     {
         $scope = RandomUuid::v4()->toRfc4122();
         $insert = 'INSERT INTO document '
-            . '(id, scope_id, series_id, uploader_id, state, digest, size_bytes, created_at, updated_at) '
-            . "VALUES (:id, :scope, :id, :uploader, 'received', :digest, 1, NOW(), NOW())";
+            . '(id, scope_id, series_id, uploader_id, state, digest, size_bytes, next_scan_at, created_at, updated_at) '
+            . "VALUES (:id, :scope, :id, :uploader, 'received', :digest, 1, NOW(), NOW(), NOW())";
         $this->connection()->executeStatement($insert, [
             'id' => Uuid::generate(),
             'scope' => $scope,

@@ -45,4 +45,29 @@ interface DocumentRepository
      * Idempotent: a second pass finds no row naming the subject.
      */
     public function anonymiseUploader(string $subjectId): int;
+
+    public function findById(string $id): ?Document;
+
+    /**
+     * The document holding the actor-scoped idempotency key hash, in whatever state, read without a lock: the
+     * declare step's re-read after it inserted its intent.
+     */
+    public function findByIdempotencyKeyHash(string $keyHash): ?Document;
+
+    public function existsForScope(string $scopeId): bool;
+
+    /**
+     * Sets `promoted_at` to the database clock by compare-and-set — only on a `Received` row whose
+     * `promoted_at` is still NULL — and says whether this call set it. The caller that set it is the one
+     * that dispatches the scan wake-up.
+     */
+    public function markPromoted(string $id): bool;
+
+    /**
+     * Ids of `Received` rows with `promoted_at` NULL created at least `$olderThanSeconds` ago, ascending.
+     * A candidate list: the roll-forward rechecks each under its lock.
+     *
+     * @return list<string>
+     */
+    public function awaitingPromotion(int $olderThanSeconds, int $limit): array;
 }

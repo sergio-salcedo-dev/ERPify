@@ -68,6 +68,10 @@ final class DocumentErasureStatementLockOrderGateTest extends TestCase
             self::DIRECTORY . 'DoctrineDocumentCustodyRepository.php',
             'document_custody',
         ];
+        yield 'the upload-intent actor rewrite' => [
+            self::DIRECTORY . 'DoctrineUploadIntentRepository.php',
+            'upload_intent',
+        ];
     }
 
     #[Test]

@@ -74,6 +74,15 @@ services:
       # receives nothing. Required rather than defaulted for the same reason as on the two workers.
       MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
       MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
+      # The thread pool is the real capacity limit (memlog T1-6): four slow evidence PUTs held the whole default
+      # pool of a 2-CPU container and starved every other request. Explicit, not derived from the CPU count, so
+      # the global Streaming cap (4, `UploadLimits::MAX_STREAMING_GLOBAL`) stays at most half the worker threads,
+      # and `max_threads` equals `num_threads` so the pool never grows past what the spool tmpfs is sized for:
+      # every worker thread can retain one 100 MiB spool. Owner decision 2 of the Documents spec (2026-11-06).
+      FRANKENPHP_CONFIG: |
+        num_threads 12
+        max_threads 12
+      FRANKENPHP_WORKER_CONFIG: num 8
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -81,11 +90,15 @@ services:
     cap_add:
       # FrankenPHP/Caddy binds privileged ports 80/443.
       - NET_BIND_SERVICE
+    # The upload spool tmpfs (compose.yaml) is in memory; a swap limit equal to the memory limit keeps those
+    # pages — plaintext originals — off swap.
+    memswap_limit: ${PHP_MEM_LIMIT:-2g}
     deploy:
       resources:
         limits:
-          cpus: ${PHP_CPU_LIMIT:-2.0}
-          memory: ${PHP_MEM_LIMIT:-1g}
+          cpus: ${PHP_CPU_LIMIT:-4.0}
+          # 900m of retainable spool + the measured ~0.5 GB of four concurrent maximum-size uploads.
+          memory: ${PHP_MEM_LIMIT:-2g}
     networks:
       - frontend
       - backend
@@ -233,8 +246,10 @@ services:
   # (PruneHandledDomainEventsMessage, the failure-transport PruneFailedMessagesMessage, the hourly
   # ReportDeadLetterBacklogMessage, the audit retention PruneAuditLogMessage, ReconcileSubjectErasuresMessage,
   # the person-reference ReconcilePersonReferencesMessage, the stored-identity InspectStoredIdentityMessage,
-  # the session PruneRetiredSessionsMessage, the five-minute NotifyLockedIdentitiesMessage and the five-minute
-  # erasure ResweepErasedSubjectsMessage) from an
+  # the session PruneRetiredSessionsMessage, the five-minute NotifyLockedIdentitiesMessage, the five-minute
+  # erasure ResweepErasedSubjectsMessage, and the Documents upload reaper ReapUploadIntentsMessage, the
+  # RollForwardPromotionsMessage, the SweepStagedOrphansMessage, the PruneCommittedIntentsMessage and the daily
+  # ReportDocumentStorageMessage) from an
   # in-process clock, so running it on the scaled `messenger_worker` pool would emit one tick per replica.
   # This list is prose and nothing recomputes it: the schedule gate reasons by transport NAME, so a tick
   # missing here is invisible to every check. It has drifted twice; add yours when you add the message.
@@ -250,8 +265,8 @@ services:
   # winner's `acquire()` to its `save()`, which happens after the handler returns. The nine idempotent
   # sweeps would mostly collapse in that race; this one holds the window open for an SMTP exchange, which is
   # why it is the tick that decides the pin.
-  # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` + `scheduler_identity_maintenance`
-  # transports on this single instance is what keeps the clock count at one. Every #[AsSchedule] in src/ owes
+  # Isolating the `scheduler_maintenance` + `scheduler_audit_maintenance` + `scheduler_identity_maintenance` +
+  # `scheduler_documents_maintenance` transports on this single instance is what keeps the clock count at one. Every #[AsSchedule] in src/ owes
   # its transport a slot in BOTH consume commands (this one and the dev messenger_worker's) — a schedule whose
   # transport nobody consumes ships dead with every gate green, which is what
   # `make php.lint.schedule-consumption` exists to refuse.
@@ -313,6 +328,12 @@ services:
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      # The Documents reaper and sweeps run here and delete staged objects: they must resolve the same root as
+      # `php`, and the entrypoint's storage boot probe refuses to start this worker when that root cannot stage,
+      # promote and delete. A sweep pointed at an empty root would report every deletion as done.
+      DOCUMENTS_STORAGE_PATH: ${DOCUMENTS_STORAGE_PATH:-/app/documents}
+    volumes:
+      - document_storage:/app/documents
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -332,7 +353,7 @@ services:
     # taken down instead of retired. 224M keeps 32 MiB below the 256M ceiling and stays above the
     # 191 MiB peak the image pipeline measures at its configured ceiling, so an ordinary large upload
     # retires nothing while a genuine leak still does.
-    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600", "--memory-limit=224M"]
+    command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "scheduler_documents_maintenance", "--time-limit=3600", "--memory-limit=224M"]
 
 # Build-time only. The Sentry auth token grants write access to the project, so
 # it rides a BuildKit secret mount rather than a build arg: an arg is recorded in

@@ -418,6 +418,7 @@ final class ResweepErasedSubjectsTest extends TestCase
             [
                 LockOrderJournal::IAM_SESSION,
                 LockOrderJournal::EVENT_STORE,
+                LockOrderJournal::UPLOAD_INTENT,
                 LockOrderJournal::DOCUMENT,
                 LockOrderJournal::DOCUMENT_CUSTODY,
             ],

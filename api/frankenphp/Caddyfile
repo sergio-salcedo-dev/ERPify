@@ -159,14 +159,37 @@
 		rewrite @phpRoute index.php
 
 		@frontController path index.php
-		# Every request PHP serves is bounded here, after the rewrite, rather than by its spelling: Symfony derives
-		# its route from REQUEST_URI, so `/index.php/api/…` reaches the API routes without ever matching an `/api*`
-		# path. Symfony reads a JSON body whole, and an anonymous POST to the login route must not cost a worker
-		# more than this; the largest legitimate payload is a few kilobytes. The PWA and the Sentry tunnel are
-		# proxied above and the hub is its own handler, so they keep their own sizes. The bound is applied as the
-		# body is read, not from Content-Length, so a client past it sees its request fail and is not promised a 413.
-		# A route that comes to accept uploads (`erpify.images.max_input_bytes` is 20 MB) needs its own bound.
-		request_body @frontController {
+		# The evidence PUT is the one route whose body is an original of up to 100 MiB. It is matched on the
+		# ORIGINAL path, because the rewrite above has already replaced the live one with index.php, and by an
+		# anchored pattern on a canonical UUID: a trailing slash, a suffix, another method or the `/index.php/…`
+		# spelling keep the 1MB bound below (measured, memlog T1-3). The bound is in bytes, equal to
+		# `UploadLimits::MAX_ORIGINAL_BYTES` with no framing allowance, since the body IS the original.
+		@documentUpload {
+			path index.php
+			method PUT
+			vars_regexp {http.request.orig_uri.path} ^/api/v1/documents/uploads/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/content$
+		}
+		# Every other request PHP serves is bounded here, after the rewrite, rather than by its spelling: Symfony
+		# derives its route from REQUEST_URI, so `/index.php/api/…` reaches the API routes without ever matching an
+		# `/api*` path. Symfony reads a JSON body whole, and an anonymous POST to the login route must not cost a
+		# worker more than this; the largest legitimate payload is a few kilobytes. The PWA and the Sentry tunnel
+		# are proxied above and the hub is its own handler, so they keep their own sizes.
+		#
+		# Caddy applies a bound as the body is read and promises no 413: a body it cuts reaches PHP as a clean,
+		# shorter end of stream (measured: the app answered 200 over a body cut at exactly 1,000,000 bytes). On the
+		# evidence PUT the mandatory Content-Length and the end-of-stream count are what refuse it; anywhere else,
+		# the JSON decoder does.
+		@boundedBody {
+			path index.php
+			not {
+				method PUT
+				vars_regexp {http.request.orig_uri.path} ^/api/v1/documents/uploads/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/content$
+			}
+		}
+		request_body @documentUpload {
+			max_size 104857600
+		}
+		request_body @boundedBody {
 			max_size 1MB
 		}
 		php @frontController {

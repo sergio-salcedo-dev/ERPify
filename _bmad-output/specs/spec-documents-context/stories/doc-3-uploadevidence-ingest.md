@@ -2,7 +2,7 @@
 title: 'doc-3: UploadEvidence ingest'
 type: 'feature'
 created: '2026-11-06'
-status: 'draft'
+status: 'in-progress'
 baseline_commit: 'e4c35490eda3e180e0fdb51341d9f3688efedac9'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -87,15 +87,15 @@ context:
 ## Tasks & Acceptance
 
 **Execution** (increments, each verified before the next):
-- [ ] `api/src/Shared/ErrorContract/**`, `docs/api-error-contract.md` -- Gone, content-length, aborted-upload and replay-conflict markers/types -- contract first.
-- [ ] `api/migrations/2026/Version2026110*.php`, `api/src/Documents/Document/**` -- `upload_intent` table + `UploadIntent` entity/state machine, `promoted_at`/`next_scan_at` on `document`, `MAX_ORIGINAL_BYTES`, filename value object -- persistence.
-- [ ] `api/src/Documents/**` Application -- `DeclareUpload`, `ClaimUpload`, `CommitUpload`, `ExpireUpload`, extended `ReceiveDocument` -- orchestration; storage port prod alias; boot probe.
-- [ ] `api/src/Documents/**/Infrastructure/Controller`, `Security`, `routes.yaml`, `rate_limiter.yaml` -- declare + PUT routes, voter/permission, limiter, `.route-manifest.json`, `.credential-proof-policy`.
-- [ ] `api/frankenphp/Caddyfile`, `compose*.yaml`, PHP ini -- upload-route body bound, 1MB block excluded, pool/spool per answers 2 and 3; `scheduler_worker` gets `DOCUMENTS_STORAGE_PATH`, the `document_storage` mount and the same boot probe, read by a gate over `compose.prod.yaml`.
-- [ ] `RequestUriRedaction`, `redaction.ts`, Sentry config/scrubber -- `QUERY_KEYS`, whole-query sentinel on the route, `before_send_transaction`, `never`.
-- [ ] Messenger schedules (reaper, roll-forward, staging age sweep, retention sweep), keystore growth line, scan message per answer 5, both compose consume commands.
-- [ ] `PurgeUserDocumentReferences`, `.person-reference-policy`, `PersonReferenceSource`, lock-order tests -- erasure extension.
-- [ ] Gates and tests -- Documents-tree scan + regression, `AuditedEntity` reflection test, parity extension, containment test with real PUTs, interleaving test, functional invalid-name test, acceptance scenarios; registries, ADR D4/D6, cqrs-naming, §7, proof record path/format/validator.
+- [x] `api/src/Shared/ErrorContract/**`, `docs/api-error-contract.md` -- Gone, content-length, aborted-upload and replay-conflict markers/types -- contract first.
+- [x] `api/migrations/2026/Version2026110*.php`, `api/src/Documents/Document/**` -- `upload_intent` table + `UploadIntent` entity/state machine, `promoted_at`/`next_scan_at` on `document`, `MAX_ORIGINAL_BYTES`, filename value object -- persistence.
+- [x] `api/src/Documents/**` Application -- `DeclareUpload`, `ClaimUpload`, `CommitUpload`, `ExpireUpload`, extended `ReceiveDocument` -- orchestration; storage port prod alias; boot probe.
+- [x] `api/src/Documents/**/Infrastructure/Controller`, `Security`, `routes.yaml`, `rate_limiter.yaml` -- declare + PUT routes, voter/permission, limiter, `.route-manifest.json`, `.credential-proof-policy`.
+- [x] `api/frankenphp/Caddyfile`, `compose*.yaml`, PHP ini -- upload-route body bound, 1MB block excluded, pool/spool per answers 2 and 3; `scheduler_worker` gets `DOCUMENTS_STORAGE_PATH`, the `document_storage` mount and the same boot probe, read by a gate over `compose.prod.yaml`.
+- [x] `RequestUriRedaction`, `redaction.ts`, Sentry config/scrubber -- `QUERY_KEYS`, whole-query sentinel on the route, `before_send_transaction`, `never`.
+- [x] Messenger schedules (reaper, roll-forward, staging age sweep, retention sweep), keystore growth line, scan message per answer 5, both compose consume commands.
+- [x] `PurgeUserDocumentReferences`, `.person-reference-policy`, `PersonReferenceSource`, lock-order tests -- erasure extension.
+- [ ] Gates and tests -- Documents-tree scan + regression, `AuditedEntity` reflection test, parity extension, containment test with real PUTs, interleaving test, functional invalid-name test, acceptance scenarios; registries, ADR D4/D6, cqrs-naming, §7, proof record path/format/validator. (All done except Behat acceptance scenarios: the matrix is covered by kernel-level functional tests instead — see Design Notes.)
 
 **Acceptance Criteria:**
 - Given any matrix row, then it is covered by a test that fails when the behaviour is removed.
@@ -125,6 +125,14 @@ Constants proposed from the transport spike (memlog T1-7), fixed here unless an 
 Clarifications from the external review (2026-11-06): an aborted claim with no key minted still tombstones, because `Keystore::destroy` mints a tombstone for a row-less scope so that a late writer cannot mint a live key under it. The declare insert uses DBAL `INSERT ... ON CONFLICT (key_hash) DO NOTHING`, then reads the winner in a new statement (a conflict that vanishes is retried once), because a Doctrine unique violation closes the entity manager. Proof records: one YAML per proof under `docs/runbooks/documents-restore-proofs/` with `kind` (restore or drill), `proved_by`, `proved_at`, `mechanism`, `backup_ref`, `originals_restored`, `metadata_restored`, `digest_set_verified`, `decryption_verified`, `result`; the validator rejects a missing field or a result other than passed. The filename in the query string, and its survival of a person's erasure, are owner decisions of 2026-11-04 and 2026-11-05 (SPEC, D7), not reopened.
 
 Route names are decided here because the Caddy matcher is an anchored regex on the original path: `POST /api/v1/documents/uploads` (declare) and `PUT /api/v1/documents/uploads/{id}/content` (stream).
+
+Implementation decisions (dev, 2026-11-06), none reopening a frozen line:
+- Problem types: `gone` (410, new `Gone` marker), `length-required` (411, new `LengthRequired` marker), `content-length-mismatch` and `aborted-upload` and `invalid-filename` and `declared-size-out-of-range` (422, `InvariantViolation`), `idempotency-key-conflict` and `upload-in-progress` (409, `Conflict`; the latter with `Retry-After`), the caps on `rate-limited` (429, no `Retry-After`). Status 410/411 also join `HTTP_STATUS_TYPE_MAP`; the unmapped-status fixture moved to 418.
+- `next_scan_at` is filed by the application (the commit passes its transaction's `NOW()`), with a literal epoch default for an older image's insert: a `CURRENT_TIMESTAMP` default trips a DBAL deprecation in the schema comparator (`MappedSchemaMatchesMigrationsTest`) and `MigrationColumnDefaultGateTest` refuses a dropped default.
+- The filename is judged at the HTTP edge into a `FilenameSubmission` (valid name or refusal), so no raw caller string reaches `Application`; the use case raises the refusal only on a `Declared` intent.
+- The writer's abort expires its own intent; the reaper tombstones (one place destroys an aborted scope). A sealing fault of the server's own (sink write, database) propagates as 5xx rather than `aborted-upload`.
+- `RetentionReason` (`contract-execution`, `tax-and-accounting`, `technical-file`, `legal-claims`) and `LegalBasis` (the six of GDPR Art. 6(1)) are required at declare; the reason vocabulary is provisional until counsel's matrix.
+- Prod pool fixed at `num_threads 12`, `max_threads 12`, worker `num 8`; `PHP_CPU_LIMIT` 4.0, `PHP_MEM_LIMIT` 2g with `memswap_limit` equal; spool tmpfs 900m. Derived, NOT measured on the prod image (AC 8 and 9 open, recorded in §7).
 
 ## Verification
 

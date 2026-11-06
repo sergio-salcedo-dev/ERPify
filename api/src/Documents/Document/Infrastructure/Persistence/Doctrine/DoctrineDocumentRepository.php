@@ -6,8 +6,10 @@ namespace Erpify\Documents\Document\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\LockMode;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Query;
+use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
@@ -42,6 +44,7 @@ final readonly class DoctrineDocumentRepository implements DocumentRepository
     public function __construct(
         private EntityManagerInterface $entityManager,
         private Connection $connection,
+        private DbalDocumentPromotions $promotions,
     ) {
     }
 
@@ -104,5 +107,71 @@ final readonly class DoctrineDocumentRepository implements DocumentRepository
                 'subject_id' => $subjectId,
             ],
         );
+    }
+
+    #[Override]
+    public function findById(string $id): ?Document
+    {
+        if (!Uuid::isValid($id)) {
+            return null;
+        }
+
+        return $this->readOne('d.id = :value', \strtolower($id));
+    }
+
+    #[Override]
+    public function findByIdempotencyKeyHash(string $keyHash): ?Document
+    {
+        return $this->readOne('d.idempotencyKeyHash = :value', $keyHash);
+    }
+
+    #[Override]
+    public function existsForScope(string $scopeId): bool
+    {
+        return false !== $this->connection->fetchOne(
+            'SELECT 1 FROM document WHERE scope_id = CAST(:scope_id AS UUID)',
+            ['scope_id' => \strtolower($scopeId)],
+        );
+    }
+
+    #[Override]
+    public function markPromoted(string $id): bool
+    {
+        return $this->promotions->markPromoted($id);
+    }
+
+    #[Override]
+    public function awaitingPromotion(int $olderThanSeconds, int $limit): array
+    {
+        /** @var list<string> $ids */
+        $ids = $this->connection->fetchFirstColumn(
+            'SELECT id FROM document WHERE state = :received AND promoted_at IS NULL '
+            // `next_scan_at` is the insert's transaction time on the database clock, and nothing moves it before
+            // promotion.
+            . 'AND next_scan_at <= NOW() - make_interval(secs => :age) ORDER BY id LIMIT :limit',
+            ['received' => DocumentState::Received->value, 'age' => $olderThanSeconds, 'limit' => $limit],
+            ['age' => Types::INTEGER, 'limit' => Types::INTEGER],
+        );
+
+        return $ids;
+    }
+
+    /**
+     * A read that re-hydrates from the row (HINT_REFRESH), so a document an earlier statement rewrote in bulk is
+     * never answered from a stale instance in the identity map.
+     */
+    private function readOne(string $condition, string $value): ?Document
+    {
+        $document = $this->entityManager->createQueryBuilder()
+            ->select('d')
+            ->from(Document::class, 'd')
+            ->where($condition)
+            ->setParameter('value', $value)
+            ->getQuery()
+            ->setHint(Query::HINT_REFRESH, true)
+            ->getOneOrNullResult()
+        ;
+
+        return $document instanceof Document ? $document : null;
     }
 }

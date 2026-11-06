@@ -80,4 +80,42 @@ final class InMemoryDocumentRepository implements DocumentRepository
 
         return $this->uploadersRewritten;
     }
+
+    #[Override]
+    public function findById(string $id): ?Document
+    {
+        return $this->documents[$id] ?? null;
+    }
+
+    #[Override]
+    public function findByIdempotencyKeyHash(string $keyHash): ?Document
+    {
+        foreach ($this->documents as $document) {
+            if ($document->idempotencyKeyHash() === $keyHash) {
+                return $document;
+            }
+        }
+
+        return null;
+    }
+
+    #[Override]
+    public function existsForScope(string $scopeId): bool
+    {
+        return \array_any($this->documents, static fn (Document $document): bool => $document->scopeId() === $scopeId);
+    }
+
+    #[Override]
+    public function markPromoted(string $id): bool
+    {
+        $this->calls[] = 'mark-promoted';
+
+        return isset($this->documents[$id]);
+    }
+
+    #[Override]
+    public function awaitingPromotion(int $olderThanSeconds, int $limit): array
+    {
+        return [];
+    }
 }

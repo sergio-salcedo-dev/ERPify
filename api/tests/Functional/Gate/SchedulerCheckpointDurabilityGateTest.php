@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Gate;
 
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\DocumentsMaintenanceSchedule;
 use Erpify\Iam\Identity\Infrastructure\Messenger\Maintenance\IdentityMaintenanceSchedule;
 use Erpify\Shared\Audit\Infrastructure\Messenger\Maintenance\AuditLogMaintenanceSchedule;
 use Erpify\Shared\Event\Infrastructure\Messenger\Maintenance\HandledDomainEventMaintenanceSchedule;
@@ -41,6 +42,8 @@ use Symfony\Contracts\Cache\CacheInterface;
  * is reachable at boot. It proves where the checkpoint is written, which is the half that was wrong.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") one class per schedule it pins, which grows with the schedules
  */
 #[CoversNothing]
 final class SchedulerCheckpointDurabilityGateTest extends KernelTestCase
@@ -72,6 +75,7 @@ final class SchedulerCheckpointDurabilityGateTest extends KernelTestCase
         // so the set is pinned and a new schedule costs a deliberate edit here.
         $this->assertSame(
             [
+                DocumentsMaintenanceSchedule::class,
                 IdentityMaintenanceSchedule::class,
                 AuditLogMaintenanceSchedule::class,
                 HandledDomainEventMaintenanceSchedule::class,

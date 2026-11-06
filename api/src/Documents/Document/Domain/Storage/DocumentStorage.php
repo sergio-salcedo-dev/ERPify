@@ -23,6 +23,10 @@ namespace Erpify\Documents\Document\Domain\Storage;
  *
  * Failures are typed ({@see DocumentStorageException}) and carry neither the key nor the underlying library's
  * message, both of which derive from the scope id.
+ *
+ * **Durability.** {@see stageWith()} syncs the staged file and its directory before it returns, and
+ * {@see promote()} syncs the final directory after the rename, so an object the caller was told is staged or
+ * final survives a crash of the host.
  */
 interface DocumentStorage
 {
@@ -41,9 +45,42 @@ interface DocumentStorage
     public function stage(string $scopeId, $stream): void;
 
     /**
+     * Opens the staging key of `$scopeId` exclusively and hands its sink to `$writer`, which writes the whole
+     * object; then syncs the file and the staging directory and closes it. The sink is the one way bytes reach
+     * staging as they are produced — a stream sealed as it is read has no readable stream to hand
+     * {@see stage()} without buffering it whole.
+     *
+     * Whatever `$writer` throws, the partial object is removed and the throwable propagates unchanged.
+     *
+     * @param callable(resource): void $writer receives a writable, blocking stream that supports `fflush()`
+     *
+     * @throws ObjectAlreadyExists   when the staging key is taken
+     * @throws DocumentStorageFailed when the substrate refuses, or the object cannot be synced or closed
+     */
+    public function stageWith(string $scopeId, callable $writer): void;
+
+    /**
+     * Whether `$area` holds an object for `$scopeId`. Only a demonstrable absence answers false; a path that
+     * cannot be examined is a failure.
+     *
+     * @throws DocumentStorageFailed
+     */
+    public function has(StorageArea $area, string $scopeId): bool;
+
+    /**
+     * The scope ids of the objects in `$area` last modified at least `$olderThanSeconds` ago, at most `$limit`
+     * of them, in no promised order. What a sweep walks; it says nothing about whether a row owns each one.
+     *
+     * @throws DocumentStorageFailed
+     *
+     * @return list<string>
+     */
+    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds, int $limit): array;
+
+    /**
      * Moves the staged object of `$scopeId` into the final area, creating the destination exclusively: an
      * object already there is left untouched and the call fails. Not idempotent — a second call finds no
-     * staged object — and the staged name is gone once it returns.
+     * staged object — and the staged name is gone once it returns, with the final directory synced.
      *
      * @throws ObjectNotFound        when there is no staged object
      * @throws ObjectAlreadyExists   when the final area already holds an object for the scope

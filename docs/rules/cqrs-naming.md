@@ -23,7 +23,7 @@ boundary it builds on is enforced by `make php.lint.event-bus`.
 | 3 | **Domain-event subscriber** | `<Effect>On<Event>` | `*/Infrastructure/Messenger/` | **Yes** — `#[AsMessageHandler]`, transport-routed (N:M) | `RefreshRealtimeOnBankChanged`, `SendEmailOnBankChanged` |
 | 4 | **Audit / observability subscriber** | `<Effect>On<X>` | `*/Infrastructure/Audit/` | **Yes** — `#[AsMessageHandler]`; message is **not** a `DomainEvent` | _none currently — see note below_ |
 | 5 | **Scheduled / maintenance handler** | `<Verb><Noun>Handler` | `Shared/Infrastructure/Messenger/Maintenance/` | **Yes** — reacts to a Scheduler tick / command-style message (1:1) | `PruneHandledDomainEventsHandler` |
-| 6 | **Upload** (ingestion of untrusted external bytes) | `<Verb><Noun>` | `*/Application/` | No — direct call, same execution plane as a `Creator`/`Finder` | `UploadImage` |
+| 6 | **Upload** (ingestion of untrusted external bytes) | `<Verb><Noun>` | `*/Application/` | No — direct call, same execution plane as a `Creator`/`Finder` | `UploadImage`, `UploadEvidence` |
 
 - Category 3's `On<Event>` may name a concrete event or the change umbrella a subscriber covers —
   `OnBankChanged` is honest because one class carries an `#[AsMessageHandler]` method per lifecycle event

@@ -12,6 +12,7 @@ use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
 use Override;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
@@ -42,9 +43,16 @@ use Throwable;
  * else means the question could not be answered. `file_exists()` answers the same `false` to both and fails
  * toward "deleted", which on `delete` is a confirmed erasure of bytes still present.
  *
- * No fsync of the file or its directory, no boot probe and no reaper: those are the upload flow's. Failures
- * carry fixed sentences, never the path or the library's message, both of which quote the scope id.
+ * **Durability is claimed where the upload flow needs it.** {@see stageWith()} syncs the staged file and the
+ * staging shard directory before it returns, and {@see promote()} syncs the final shard directory after the
+ * link and the staging one after the unlink, so a name the caller was told exists survives a crash of the host.
+ * The boot probe and the sweeps are the upload flow's ({@see StorageBootProbe}). Failures carry fixed
+ * sentences, never the path or the library's message, both of which quote the scope id.
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity") one adapter, every branch an errno the port must translate
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength") the same: the length is the failure handling the port promises
  */
+#[AsAlias(DocumentStorage::class)]
 final readonly class FilesystemDocumentStorage implements DocumentStorage
 {
     private const int SHARD_LENGTH = 2;
@@ -116,6 +124,93 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
     }
 
     #[Override]
+    public function stageWith(string $scopeId, callable $writer): void
+    {
+        $path = $this->pathFor(StorageArea::Staging, $scopeId);
+        $this->guardAreaIsUsable(StorageArea::Staging);
+
+        if ($this->objectExists($path, StorageArea::Staging)) {
+            throw ObjectAlreadyExists::in(StorageArea::Staging);
+        }
+
+        $this->ensureDirectory(\dirname($path), StorageArea::Staging);
+
+        $handle = $this->quietly(static fn () => \fopen($path, 'x'));
+
+        if (false === $handle) {
+            throw $this->objectExists($path, StorageArea::Staging)
+                ? ObjectAlreadyExists::in(StorageArea::Staging)
+                : DocumentStorageFailed::because(StorageArea::Staging, 'the staging object could not be created');
+        }
+
+        try {
+            $writer($handle);
+
+            if (!\fflush($handle) || !\fsync($handle)) {
+                throw DocumentStorageFailed::because(StorageArea::Staging, 'the staging object could not be synced');
+            }
+        } catch (Throwable $throwable) {
+            \fclose($handle);
+            $this->quietly(static fn (): bool => \unlink($path));
+
+            throw $throwable;
+        }
+
+        if (!\fclose($handle)) {
+            $this->quietly(static fn (): bool => \unlink($path));
+
+            throw DocumentStorageFailed::because(StorageArea::Staging, 'the staging object could not be closed');
+        }
+
+        $this->syncDirectory(\dirname($path), StorageArea::Staging);
+    }
+
+    #[Override]
+    public function has(StorageArea $area, string $scopeId): bool
+    {
+        $path = $this->pathFor($area, $scopeId);
+        $this->guardAreaIsReadable($area);
+
+        return $this->objectExists($path, $area);
+    }
+
+    /**
+     * @return lowercase-string[]
+     */
+    #[Override]
+    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds, int $limit): array
+    {
+        $areaDirectory = $this->guardAreaIsReadable($area);
+        $cutoff = \time() - $olderThanSeconds;
+        $scopes = [];
+
+        foreach ($this->shardsOf($areaDirectory, $area) as $first) {
+            foreach ($this->shardsOf($areaDirectory . '/' . $first, $area) as $second) {
+                $shard = $areaDirectory . '/' . $first . '/' . $second;
+
+                foreach ($this->entriesOf($shard, $area) as $name) {
+                    if (\count($scopes) >= $limit) {
+                        return $scopes;
+                    }
+
+                    if (!Uuid::isValid($name) || \strtolower($name) !== $name) {
+                        continue;
+                    }
+
+                    \clearstatcache(true, $shard . '/' . $name);
+                    $modified = $this->quietly(static fn (): false|int => \filemtime($shard . '/' . $name));
+
+                    if (false !== $modified && $modified <= $cutoff) {
+                        $scopes[] = $name;
+                    }
+                }
+            }
+        }
+
+        return $scopes;
+    }
+
+    #[Override]
     public function promote(string $scopeId): void
     {
         $staged = $this->pathFor(StorageArea::Staging, $scopeId);
@@ -144,6 +239,9 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
 
             throw DocumentStorageFailed::because(StorageArea::Staging, 'the staged name could not be removed');
         }
+
+        $this->syncDirectory(\dirname($final), StorageArea::Final);
+        $this->syncDirectory(\dirname($staged), StorageArea::Staging);
     }
 
     #[Override]
@@ -263,6 +361,56 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
         }
 
         throw DocumentStorageFailed::because($area, 'the existence of the object could not be established');
+    }
+
+    /**
+     * A directory entry (a created, linked or unlinked name) is durable only once its directory is synced:
+     * syncing the file makes its bytes durable, not the name that reaches them.
+     */
+    private function syncDirectory(string $directory, StorageArea $area): void
+    {
+        $handle = $this->quietly(static fn () => \fopen($directory, 'r'));
+
+        if (false === $handle) {
+            throw DocumentStorageFailed::because($area, 'the shard directory could not be opened for syncing');
+        }
+
+        try {
+            if (!$this->quietly(static fn (): bool => \fsync($handle))) {
+                throw DocumentStorageFailed::because($area, 'the shard directory could not be synced');
+            }
+        } finally {
+            \fclose($handle);
+        }
+    }
+
+    /**
+     * @return list<string> the names in `$directory`, `.` and `..` excluded
+     */
+    private function entriesOf(string $directory, StorageArea $area): array
+    {
+        $entries = $this->quietly(static fn (): array|false => \scandir($directory));
+
+        if (false === $entries) {
+            throw DocumentStorageFailed::because($area, 'a shard directory could not be listed');
+        }
+
+        return \array_values(\array_filter(
+            $entries,
+            static fn (string $entry): bool => '.' !== $entry && '..' !== $entry,
+        ));
+    }
+
+    /**
+     * @return list<string> the shard directories in `$directory`; anything else at that level is not an object
+     */
+    private function shardsOf(string $directory, StorageArea $area): array
+    {
+        return \array_values(\array_filter(
+            $this->entriesOf($directory, $area),
+            static fn (string $entry): bool => self::SHARD_LENGTH === \strlen($entry)
+                && \is_dir($directory . '/' . $entry),
+        ));
     }
 
     private function ensureDirectory(string $directory, StorageArea $area): void

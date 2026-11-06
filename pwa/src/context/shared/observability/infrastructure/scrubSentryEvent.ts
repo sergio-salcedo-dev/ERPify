@@ -5,6 +5,7 @@ import {
   isIdentityAxisKey,
   REDACTION_SENTINEL,
   scrubDeep,
+  withholdsWholeQuery,
 } from "@/context/shared/observability/domain/redaction";
 
 /** The span `beforeSendSpan` receives, which `@sentry/nextjs` uses without exporting its name. */
@@ -345,6 +346,10 @@ function scrubUrl(url: string): string {
 
   const path = pathAndQuery.slice(0, queryStart);
   const query = pathAndQuery.slice(queryStart + 1);
+
+  if (withholdsWholeQuery(path)) {
+    return `${path}?${REDACTION_SENTINEL}${hash}`;
+  }
 
   const scrubbedQuery = scrubQueryString(query);
   if (scrubbedQuery === query) {
