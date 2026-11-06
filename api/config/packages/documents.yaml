@@ -17,6 +17,9 @@ when@dev:
     parameters:
         documents.ingest_enabled: true
 
+# Test reads the switch from the environment (default on) so an acceptance scenario can close ingest for one
+# request: the kernel reboots between requests and the next container instance re-reads it.
 when@test:
     parameters:
-        documents.ingest_enabled: true
+        env(DOCUMENTS_INGEST_ENABLED): 'true'
+        documents.ingest_enabled: '%env(bool:DOCUMENTS_INGEST_ENABLED)%'

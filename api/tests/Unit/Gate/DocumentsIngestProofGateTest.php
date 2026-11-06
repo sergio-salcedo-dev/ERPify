@@ -62,7 +62,7 @@ final class DocumentsIngestProofGateTest extends TestCase
 
         $this->assertFalse(Dig::value($config, 'parameters', 'documents.ingest_enabled'));
         $this->assertTrue(Dig::value($config, 'when@dev', 'parameters', 'documents.ingest_enabled'));
-        $this->assertTrue(Dig::value($config, 'when@test', 'parameters', 'documents.ingest_enabled'));
+        $this->assertSame('true', Dig::value($config, 'when@test', 'parameters', 'env(DOCUMENTS_INGEST_ENABLED)'));
     }
 
     public function testAValidRecordPasses(): void

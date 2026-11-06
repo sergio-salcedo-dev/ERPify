@@ -67,6 +67,13 @@ final readonly class UploadEvidenceController
             throw new AccessDeniedException();
         }
 
+        // Nothing below writes to the session, and an upload may stream for minutes: release the session's lock
+        // now, or every other request of the same caller waits behind the upload (measured on the prod image: a
+        // GET /me of the uploading session blocked for the whole 400 s stream).
+        if ($request->hasSession() && $request->getSession()->isStarted()) {
+            $request->getSession()->save();
+        }
+
         $command = new UploadEvidenceCommand(
             uploadId: $id,
             actorId: $actor->actorId,

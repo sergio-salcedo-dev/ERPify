@@ -13,17 +13,19 @@ use RuntimeException;
 
 /**
  * The evidence PUT carries the caller's original filename, percent-encoded, in its query — so the access log
- * is the first sink it reaches, before the application has validated anything. This sends REAL PUTs through the
- * running Caddy (the sibling `AccessLogQueryContainmentGateTest` is GET-only) in the three shapes a body can
- * end: completed, aborted mid-body, and past the route's 100 MiB bound. Each carries a distinctive name and the
- * line Caddy wrote is searched for it, encoded and decoded.
+ * and the container log are the first sinks it reaches, before the application has validated anything. This
+ * sends REAL PUTs through the running Caddy (the sibling `AccessLogQueryContainmentGateTest` is GET-only) in
+ * the three shapes a body can end: completed, aborted mid-body, and past the route's 100 MiB bound. Each carries
+ * a distinctive name and the line Caddy wrote is searched for it, encoded and decoded.
  *
  * They go unauthenticated on purpose: Caddy writes its entry whatever the application answers, and the body is
  * sent whole whether or not anything reads it. What the application does with an authenticated PUT is covered
  * by the kernel-level functional test and the Monolog/Sentry unit rows.
  *
- * What this cannot read is the container's own log (stdout/stderr of PID 1): it is not observable from inside
- * the container. That half is checked from the host with `docker logs` and recorded with the story.
+ * Two sinks are read: Caddy's access log, and the container's own log. The latter lives on the host (Docker's
+ * json-file driver), so the dev entrypoint tees everything PID 1 writes into `CONTAINER_LOG_MIRROR`
+ * (compose.dev.yaml) and this reads that copy; it must show the probe arriving (the router records the
+ * route path on stderr in dev) before its silence about the name means anything.
  *
  * @internal
  */
@@ -45,10 +47,20 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
         $name = 'sentinel-' . \bin2hex(\random_bytes(8)) . ' Acta é.pdf';
         $anchor = 'anchor' . \bin2hex(\random_bytes(10));
         $position = $this->accessLogPosition();
+        $mirrorOffset = $this->mirrorSize();
 
         $this->put(self::PATH . '?filename=' . \rawurlencode($name), $anchor, $ending);
 
         $written = $this->accessLogWrittenSince($position, $anchor);
+        $mirrored = $this->mirrorWrittenSince($mirrorOffset);
+
+        $this->assertStringContainsString('documents_upload_content', $mirrored, 'the probe reached the container log');
+        $this->assertStringNotContainsString(
+            \rawurlencode($name),
+            $mirrored,
+            'the container log holds the encoded name',
+        );
+        $this->assertStringNotContainsString(\explode(' ', $name)[0], $mirrored, 'the container log holds the name');
 
         $this->assertStringContainsString('/api/v1/documents/uploads/', $written, 'the probe line arrived');
         $this->assertStringNotContainsString(\rawurlencode($name), $written);
@@ -124,6 +136,48 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
 
         // An abort and a server closing under an oversized body are both expected outcomes here.
         \curl_exec($handle);
+    }
+
+    private function mirrorPath(): string
+    {
+        $path = \getenv('CONTAINER_LOG_MIRROR');
+
+        if (!\is_string($path) || '' === $path || !\is_readable($path)) {
+            throw new RuntimeException(
+                'The container-log mirror (CONTAINER_LOG_MIRROR, compose.dev.yaml) is not readable, so the '
+                    . "container's own log cannot be observed; restore it rather than relaxing this into a skip.",
+            );
+        }
+
+        return $path;
+    }
+
+    private function mirrorSize(): int
+    {
+        \clearstatcache(true, $this->mirrorPath());
+
+        return (int) \filesize($this->mirrorPath());
+    }
+
+    /**
+     * Polls until the mirror shows the probe's route (the dev router logs the matched route on stderr), then
+     * returns what was written since the offset; a probe that never reaches it fails instead of reading empty.
+     */
+    private function mirrorWrittenSince(int $offset): string
+    {
+        for ($waited = 0; $waited < self::FLUSH_TIMEOUT_MICROSECONDS; $waited += self::FLUSH_POLL_MICROSECONDS) {
+            \clearstatcache(true, $this->mirrorPath());
+            $size = (int) \filesize($this->mirrorPath());
+            $written = (string) \file_get_contents($this->mirrorPath(), false, null, $size < $offset ? 0 : $offset);
+
+            if (\str_contains($written, 'documents_upload_content')) {
+                return $written;
+            }
+
+            \usleep(self::FLUSH_POLL_MICROSECONDS);
+        }
+
+        throw new RuntimeException('The probe never reached the container-log mirror.');
     }
 
     private function accessLogPath(): string

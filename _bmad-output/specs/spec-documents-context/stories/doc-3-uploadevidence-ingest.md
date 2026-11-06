@@ -95,7 +95,7 @@ context:
 - [x] `RequestUriRedaction`, `redaction.ts`, Sentry config/scrubber -- `QUERY_KEYS`, whole-query sentinel on the route, `before_send_transaction`, `never`.
 - [x] Messenger schedules (reaper, roll-forward, staging age sweep, retention sweep), keystore growth line, scan message per answer 5, both compose consume commands.
 - [x] `PurgeUserDocumentReferences`, `.person-reference-policy`, `PersonReferenceSource`, lock-order tests -- erasure extension.
-- [ ] Gates and tests -- Documents-tree scan + regression, `AuditedEntity` reflection test, parity extension, containment test with real PUTs, interleaving test, functional invalid-name test, acceptance scenarios; registries, ADR D4/D6, cqrs-naming, §7, proof record path/format/validator. (All done except Behat acceptance scenarios: the matrix is covered by kernel-level functional tests instead — see Design Notes.)
+- [x] Gates and tests -- Documents-tree scan + regression, `AuditedEntity` reflection test, parity extension, containment test with real PUTs, interleaving test, functional invalid-name test, acceptance scenarios; registries, ADR D4/D6, cqrs-naming, §7, proof record path/format/validator.
 
 **Acceptance Criteria:**
 - Given any matrix row, then it is covered by a test that fails when the behaviour is removed.
@@ -132,7 +132,18 @@ Implementation decisions (dev, 2026-11-06), none reopening a frozen line:
 - The filename is judged at the HTTP edge into a `FilenameSubmission` (valid name or refusal), so no raw caller string reaches `Application`; the use case raises the refusal only on a `Declared` intent.
 - The writer's abort expires its own intent; the reaper tombstones (one place destroys an aborted scope). A sealing fault of the server's own (sink write, database) propagates as 5xx rather than `aborted-upload`.
 - `RetentionReason` (`contract-execution`, `tax-and-accounting`, `technical-file`, `legal-claims`) and `LegalBasis` (the six of GDPR Art. 6(1)) are required at declare; the reason vocabulary is provisional until counsel's matrix.
-- Prod pool fixed at `num_threads 12`, `max_threads 12`, worker `num 8`; `PHP_CPU_LIMIT` 4.0, `PHP_MEM_LIMIT` 2g with `memswap_limit` equal; spool tmpfs 900m. Derived, NOT measured on the prod image (AC 8 and 9 open, recorded in §7).
+- Prod pool: `num_threads 4` regular + `num 8` worker threads, `max_threads 12` (FrankenPHP counts workers on top of `num_threads` and refuses a `max_threads` below the sum; the first try, `num_threads 12`, did not boot); `PHP_CPU_LIMIT` 4.0, `PHP_MEM_LIMIT` 2g with `memswap_limit` equal; spool tmpfs 900m.
+- In the test environment `documents.ingest_enabled` reads `DOCUMENTS_INGEST_ENABLED` (default true), so the acceptance scenario "ingest switched off" closes it for the next request (the kernel reboots between requests); dev keeps the literal true and production the literal false the proof gate reads.
+- The container's own log is observable from inside the container in dev: the entrypoint tees PID 1's output into `CONTAINER_LOG_MIRROR` (`/var/log/caddy/container.log`, compose.dev.yaml only) and the containment gate reads it beside `access.log`, requiring the probe's route to appear there first.
+- `UploadEvidence` takes the heartbeat interval as a constructor argument (default 10 s), which the end-to-end heartbeat test sets to 0.
+- The PUT saves (and so unlocks) the PHP session before it streams. Found by the measurement below: with the native file session handler, a `GET /me` from the uploading user's own session blocked for the whole 400 s stream.
+
+Prod-image measurements (2026-11-06, locally built `frankenphp_prod` image with ingest opened for the run only, own compose project `erpify-doc3-measure` on a 22-core host, with the `compose.prod.yaml` defaults: 4 CPUs, 2g, swap 0; torn down afterwards):
+- One 100 MiB upload at 256 KiB/s through the real route (Caddy bound, firewall, session, limiter): 201 in 400.0 s, upload rate 262,140 B/s, stored digest equal to the local sha256.
+- Four concurrent 100 MiB uploads at 256 KiB/s (two per actor, the global cap): all 201 in 400.0 s each. Unrelated `GET /me` (a third user) every 2 s: n=191, avg 6.1 ms, max 15.6 ms, 0 non-200 — at rest n=20, avg 6.7 ms, max 29.9 ms. The uploading user's own session: n=191, avg 5.6 ms, max 39.6 ms (after the session-lock fix; before it, the first probe hung for the whole stream). Container peak during the phase: 977 MB.
+- Sequential 8 × 100 MiB then 3 rounds of 4 concurrent 100 MiB at full speed (0.6–1.06 s each, all 201): retained spools stayed at 4 files / 400 MiB in the tmpfs, `memory.current` climbed to the 2 GiB limit (cgroup `memory.peak` 2,148,020,224) because of page cache from the document volume; `memory.stat` at the end: anon 99 MB, shmem 449 MB, file 1.99 GB of which inactive 1.54 GB; `memory.events` max=3298, oom=0, oom_kill=0; `OOMKilled=false`, 0 restarts.
+- Worst case of retained spools: four synthetic 100 MiB files added to the four real ones (8 spools, 800 MiB of the 900m tmpfs, one per worker thread), then 4 concurrent 100 MiB uploads: all 201; shmem 868 MB, anon 99 MB, kernel 47 MB (~1.0 GB unreclaimable of 2 GB), oom_kill=0, `OOMKilled=false`.
+- No spool on persistent storage: `/tmp` held no `php*` file at any sample; every spool was in `/run/php-upload-spool`. All 29 stored digests equal the uploaded sha256.
 
 ## Verification
 

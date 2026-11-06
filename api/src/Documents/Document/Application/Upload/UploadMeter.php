@@ -53,15 +53,17 @@ final class UploadMeter
     private $monotonicSeconds;
 
     /**
-     * @param resource           $source           the request body
-     * @param callable(): bool   $heartbeat        renews the lease; false when the upload is no longer live
-     * @param ?callable(): float $monotonicSeconds a monotonic clock in seconds, injectable for tests
+     * @param resource           $source                   the request body
+     * @param callable(): bool   $heartbeat                renews the lease; false when the upload is no longer live
+     * @param ?callable(): float $monotonicSeconds         a monotonic clock in seconds, injectable for tests
+     * @param int                $heartbeatIntervalSeconds the least time between two heartbeats
      */
     public function __construct(
         $source,
         private readonly int $declaredSize,
         callable $heartbeat,
         ?callable $monotonicSeconds = null,
+        private readonly int $heartbeatIntervalSeconds = UploadLimits::HEARTBEAT_INTERVAL_SECONDS,
     ) {
         if (!\is_resource($source)) {
             throw new LogicException('The upload body must be an open stream.');
@@ -150,7 +152,7 @@ final class UploadMeter
     {
         $now = ($this->monotonicSeconds)();
 
-        if ($now - $this->lastHeartbeat < UploadLimits::HEARTBEAT_INTERVAL_SECONDS) {
+        if ($now - $this->lastHeartbeat < $this->heartbeatIntervalSeconds) {
             return;
         }
 

@@ -2645,10 +2645,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       threads (8 worker threads), so at most half the worker threads stream; a 100 MiB upload at the minimum
       accepted 256 KiB/s holds its thread for up to 460 s. Each worker thread that served an upload also RETAINS
       a spool of up to 100 MiB in the `upload_tmp_dir` tmpfs until it serves another request (memlog T1-2):
-      sized at 900m against a 2g, swap-free container. **Not measured on the production image**: the sizing is
-      derived from the dev-image spike (memlog T1-6) and must be confirmed by running four concurrent
-      maximum-size uploads at the floor on the prod image before ingest is enabled. **Accepted for the thread
-      pin — the user, 2026-11-06 (decision 2); open for the prod-image measurement.**
+      sized at 900m against a 2g, swap-free container. **Measured on the production image (2026-11-06):** four
+      concurrent 100 MiB uploads at 256 KiB/s took 400.0 s each while unrelated `GET /me` answered in 6.1 ms on
+      average (15.6 ms max; 6.7 ms / 29.9 ms at rest); eight retained spools (four real, four simulated) plus four
+      concurrent maximum-size uploads left ~1.0 GB unreclaimable (shmem 868 MB, anon 99 MB, kernel 47 MB) with
+      no OOM kill and no spool outside the tmpfs, the remaining use being reclaimable page cache of the document
+      volume. **Accepted for the thread pin — the user, 2026-11-06 (decision 2).**
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
       `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
       first UI story that uploads evidence.**

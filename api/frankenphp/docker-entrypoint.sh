@@ -166,4 +166,17 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 	echo 'PHP app ready!'
 fi
 
+# The container log lives on the host (Docker's json-file driver), so nothing inside the container can read what
+# it holds. Where CONTAINER_LOG_MIRROR is set — compose.dev.yaml only, never production — everything the server
+# writes to stdout and stderr is also appended to that file, through a FIFO and `tee`, so a containment gate can
+# assert from inside the container that a value never reached the container log. The mirror is emptied at each
+# start, and FrankenPHP stays PID 1 (the shell execs into it), so signals and the healthcheck are unchanged.
+if [ "$1" = 'frankenphp' ] && [ -n "${CONTAINER_LOG_MIRROR:-}" ]; then
+	: >"$CONTAINER_LOG_MIRROR"
+	MIRROR_FIFO="$(mktemp -u)"
+	mkfifo "$MIRROR_FIFO"
+	tee -a "$CONTAINER_LOG_MIRROR" <"$MIRROR_FIFO" &
+	exec docker-php-entrypoint "$@" >"$MIRROR_FIFO" 2>&1
+fi
+
 exec docker-php-entrypoint "$@"

@@ -63,6 +63,7 @@ final readonly class UploadEvidence
         private UploadIntentRepository $intents,
         private TransactionManager $transactionManager,
         private UploadTimeBudget $timeBudget,
+        private int $heartbeatIntervalSeconds = UploadLimits::HEARTBEAT_INTERVAL_SECONDS,
     ) {
     }
 
@@ -114,7 +115,12 @@ final readonly class UploadEvidence
      */
     private function stream(ClaimedUpload $claimed, $body): string
     {
-        $meter = new UploadMeter($body, $claimed->declaredSize, fn (): bool => $this->heartbeat($claimed->intentId));
+        $meter = new UploadMeter(
+            $body,
+            $claimed->declaredSize,
+            fn (): bool => $this->heartbeat($claimed->intentId),
+            heartbeatIntervalSeconds: $this->heartbeatIntervalSeconds,
+        );
         $source = $meter->open();
 
         try {

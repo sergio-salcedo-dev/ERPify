@@ -64,5 +64,18 @@ No transaction spans the stream: the claim commits, the sealer mints the key aft
 
 The commit asserts under both locks that the intent is `Streaming` with a live lease and deadline and that the scope is `Live` (`Absent` is a snapshot and never passes); actor and key hash come from the locked row. The reaper rechecks expiry and the absence of a document row under the same two locks: a claimed intent with no document gets its staged object deleted and an `aborted-upload` tombstone (minted even with no key), a never-claimed one is deleted with no tombstone, and one whose scope a document holds is deleted alone. `UploadLockOrderFunctionalTest` interleaves the pairs with a second connection and shows the waiter rechecks and stands down. A committed row owns its staged object: only the roll-forward (rechecking under the document lock that the row is still `Received`) moves it, accepting a final object already present and never overwriting it; the staging age sweep deletes only an object older than 20 min that neither a row nor a live intent holds; a final object with no row is alarmed on, never deleted.
 
+**Every pair, interleaved** (`UploadLockOrderFunctionalTest`, `UploadLockOrderPairsFunctionalTest`, a real second connection holding one side mid-transaction). The first lock each flow takes decides the pair: a shared first lock serialises, disjoint lock sets never wait, and no flow takes the other's first lock second, so no pair can close a cycle.
+
+| Pair | Shared first lock | The waiter, once the holder commits |
+|---|---|---|
+| claim / commit | intent row | a claim after a commit answers the document; a commit after a claim files it |
+| claim / reaper | intent row | a claim after the reaper is gone; the reaper after a claim stands down on a live stream |
+| claim / purge | intent row | a claim after the purge is gone (actor rewritten); the purge after a claim expires the stream |
+| commit / reaper | intent row, then keystore row | a commit after the reaper aborts; the reaper after a commit stands down, the key stays live |
+| commit / purge | intent row | a commit after the purge aborts (expired); the purge after a commit rewrites the filed document next |
+| reaper / purge | intent row | the reaper after the purge tombstones the minted scope; the purge after the reaper rewrites nothing |
+| purge / roll-forward | document row | the roll-forward after the purge still promotes; the purge after the roll-forward rewrites the row |
+| roll-forward / claim, commit, reaper | none (document row vs intent and keystore rows; a committing document is invisible until commit) | never waits |
+
 **Discarded:** deleting the intent at commit (the intent keeps holding the key until its 7-day retention sweep, then the document's own `UNIQUE` and the declare's re-read take over); a `NOT EXISTS` guard inside the reaper's `UPDATE` (under `READ COMMITTED` its snapshot predates a row committing while it waits); a pre-allocated document id on the intent (the scope id is enough to join them, and a document id before the document exists invites a dangling reference).
 

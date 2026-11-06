@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\DriverManager;
 use Erpify\Documents\Document\Application\PurgeUserDocumentReferences;
 use Erpify\Documents\Document\Application\Upload\ClaimedUpload;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
@@ -21,7 +20,6 @@ use Erpify\Tests\Support\Dig;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Throwable;
 
 /**
  * The intent row is the one lock the commit and the reaper share, and the person purge takes it first too.
@@ -39,10 +37,9 @@ use Throwable;
 #[CoversClass(PurgeUserDocumentReferences::class)]
 final class UploadLockOrderFunctionalTest extends KernelTestCase
 {
+    use InterleavesWithASecondConnection;
     use PlantsUploadIntents;
     use ResolvesContainerServices;
-
-    private ?Connection $holder = null;
 
     #[Override]
     protected function setUp(): void
@@ -52,12 +49,7 @@ final class UploadLockOrderFunctionalTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        if ($this->holder instanceof Connection && $this->holder->isTransactionActive()) {
-            $this->holder->rollBack();
-        }
-
-        $this->holder?->close();
-        $this->intentConnection()->executeStatement('SET lock_timeout = 0');
+        $this->releaseTheHolder();
         parent::tearDown();
     }
 
@@ -147,53 +139,5 @@ final class UploadLockOrderFunctionalTest extends KernelTestCase
             'SELECT state FROM upload_intent WHERE id = :id',
             ['id' => $intent->id],
         ));
-    }
-
-    /**
-     * Whether `$operation` blocks on a lock held by the other connection, rather than completing or failing for
-     * another reason: it runs under a short lock timeout and must fail with SQLSTATE 55P03 in its chain.
-     */
-    private function waits(callable $operation): bool
-    {
-        $this->intentConnection()->executeStatement("SET lock_timeout = '200ms'");
-
-        try {
-            $operation();
-
-            return false;
-        } catch (Throwable $throwable) {
-            for ($cause = $throwable; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-                if (
-                    \str_contains($cause->getMessage(), '55P03') || \str_contains(
-                        $cause->getMessage(),
-                        'lock timeout',
-                    )
-                ) {
-                    return true;
-                }
-            }
-
-            throw $throwable;
-        } finally {
-            $this->intentConnection()->executeStatement('SET lock_timeout = 0');
-        }
-    }
-
-    private function insertDocumentFor(Connection $connection, string $scopeId): string
-    {
-        $id = Uuid::generate();
-        $connection->executeStatement(
-            'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, next_scan_at, '
-            . 'created_at, updated_at) '
-            . "VALUES (:id, :scope, :id, :uploader, 'received', :digest, 10, NOW(), NOW(), NOW())",
-            ['id' => $id, 'scope' => $scopeId, 'uploader' => Uuid::generate(), 'digest' => \hash('sha256', $id)],
-        );
-
-        return $id;
-    }
-
-    private function holder(): Connection
-    {
-        return $this->holder ??= DriverManager::getConnection($this->intentConnection()->getParams());
     }
 }

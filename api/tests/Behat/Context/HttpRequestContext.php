@@ -352,6 +352,34 @@ class HttpRequestContext extends AbstractContext
     }
 
     /**
+     * The step above with a raw body: the value of a node of the previous response replaces `{value}` in the
+     * URL, and the PyString is sent byte for byte (the evidence PUT, whose body is the original itself).
+     *
+     * @throws JsonException
+     */
+    #[Given('I send a :method request to :url using the JSON node :node from the previous response with body:')]
+    public function iSendARequestUsingJsonNodeFromPreviousResponseWithBody(
+        string $method,
+        string $url,
+        string $node,
+        PyStringNode $pyStringNode,
+    ): void {
+        $value = $this->jsonNodeFromPreviousResponse($node);
+
+        if (!\is_scalar($value)) {
+            throw new UnexpectedValueException(
+                \sprintf('JSON node "%s" is not a scalar (got %s).', $node, \get_debug_type($value)),
+            );
+        }
+
+        $this->iSendARequestTo(
+            $method,
+            \str_replace('{value}', \rawurlencode((string) $value), $url),
+            body: $pyStringNode,
+        );
+    }
+
+    /**
      * Follow a server-supplied navigation link VERBATIM (cursor-only pagination, W11): JSON node
      * `$node` (e.g. `pagination.links.next`) is a complete relative path already carrying the opaque
      * cursor and preserved params — navigated AS-IS, never decoded/re-encoded/rebuilt. It includes
