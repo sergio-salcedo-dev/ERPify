@@ -11,14 +11,40 @@ use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Support\Dig;
+use PHPUnit\Framework\Attributes\After;
 use Symfony\Component\Uid\Uuid as RandomUuid;
 
 /**
  * Plants upload intents through DBAL, in any state and at any point of their clock, so a test can reach the
  * states the HTTP flow passes through in milliseconds. Offsets are seconds from the database's `NOW()`.
+ *
+ * Every planted intent is deleted after its test. The suite shares one database and the streaming caps count
+ * live rows across all actors, so a planted `Streaming` intent left behind would hold a slot of the global cap
+ * for the rest of its lease and refuse the next test's claim.
  */
 trait PlantsUploadIntents
 {
+    /** @var list<string> */
+    private array $plantedIntentIds = [];
+
+    private ?Connection $plantingConnection = null;
+
+    /**
+     * Runs after `tearDown()`, once the kernel is shut down, so it uses the connection the rows were planted
+     * through (which reconnects on use) rather than the container, whose reboot here would break the next test's
+     * `createClient()`.
+     */
+    #[After]
+    protected function forgetPlantedIntents(): void
+    {
+        foreach ($this->plantedIntentIds as $id) {
+            $this->plantingConnection?->executeStatement('DELETE FROM upload_intent WHERE id = :id', ['id' => $id]);
+        }
+
+        $this->plantedIntentIds = [];
+        $this->plantingConnection = null;
+    }
+
     /**
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag") a planting helper names the one fact it varies
      */
@@ -56,6 +82,9 @@ trait PlantsUploadIntents
             ],
             ['claimed' => \Doctrine\DBAL\ParameterType::BOOLEAN, 'lease' => \Doctrine\DBAL\ParameterType::INTEGER],
         );
+
+        $this->plantedIntentIds[] = $id;
+        $this->plantingConnection = $this->intentConnection();
 
         return new PlantedIntent($id, $scope);
     }
