@@ -5,22 +5,31 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Shared\Monitoring;
 
 use CurlHandle;
+use Erpify\Documents\Document\Domain\UploadLimits;
+use Erpify\Tests\Support\Dig;
+use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 
 /**
  * The evidence PUT carries the caller's original filename, percent-encoded, in its query — so the access log
  * and the container log are the first sinks it reaches, before the application has validated anything. This
- * sends REAL PUTs through the running Caddy (the sibling `AccessLogQueryContainmentGateTest` is GET-only) in
- * the three shapes a body can end: completed, aborted mid-body, and past the route's 100 MiB bound. Each carries
- * a distinctive name and the line Caddy wrote is searched for it, encoded and decoded.
+ * sends REAL, AUTHENTICATED PUTs through the running Caddy (the sibling `AccessLogQueryContainmentGateTest` is
+ * GET-only) in the three shapes a body can end, each against an upload it declared first:
+ *  - completed: a body just over 1 MB on the canonical path, which must be filed (201) — so the 1MB bound of
+ *    every other route does not apply here;
+ *  - aborted mid-body: the client stops sending and the application, reading a body shorter than declared,
+ *    aborts the upload (its intent ends `expired`);
+ *  - past the bound: one byte more than the route's cap.
+ * Each carries a distinctive name, and both sinks are searched for it, encoded and decoded.
  *
- * They go unauthenticated on purpose: Caddy writes its entry whatever the application answers, and the body is
- * sent whole whether or not anything reads it. What the application does with an authenticated PUT is covered
- * by the kernel-level functional test and the Monolog/Sentry unit rows.
+ * The session is the e2e administrator's, seeded into the dev stack the way `make pwa.test.e2e` seeds it
+ * (idempotently, through the console) and signed in through Caddy. Every row a probe creates in the dev database
+ * is removed after it, and the completed probe's sealed object with them ({@see DevStackUploadRows}).
  *
  * Two sinks are read: Caddy's access log, and the container's own log. The latter lives on the host (Docker's
  * json-file driver), so the dev entrypoint tees everything PID 1 writes into `CONTAINER_LOG_MIRROR`
@@ -28,78 +37,200 @@ use RuntimeException;
  * route path on stderr in dev) before its silence about the name means anything.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
+ * @SuppressWarnings("PHPMD.TooManyMethods") the probes, their two sinks and the cleanup of the dev rows
  */
 #[CoversNothing]
 final class UploadFilenameAccessLogContainmentGateTest extends TestCase
 {
-    private const string PATH = '/api/v1/documents/uploads/0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c/content';
+    private const string ORIGIN = 'https://localhost';
 
-    private const int BOUND = 104_857_600;
+    private const string EMAIL = 'e2e@erpify.test';
+
+    private const string PASSWORD = 'e2ePassword123';
+
+    private const string ORGANIZATION = 'E2E-Test-Organization';
+
+    /** Over Caddy's `1MB` (10^6) and over a mebibyte, so neither reading of the generic bound could admit it. */
+    private const int OVER_ONE_MEGABYTE = 1_100_000;
+
+    private const int ABORTED_SIZE = 1_000_000;
+
+    private const int ABORT_AFTER_BYTES = 65_536;
 
     private const int FLUSH_TIMEOUT_MICROSECONDS = 10_000_000;
 
     private const int FLUSH_POLL_MICROSECONDS = 100_000;
 
+    /** @var non-empty-string|null */
+    private static ?string $cookieJar = null;
+
+    private DevStackUploadRows $rows;
+
+    /** @var list<string> */
+    private array $intents = [];
+
+    /** @var list<string> */
+    private array $documents = [];
+
+    public static function setUpBeforeClass(): void
+    {
+        foreach (
+            [
+                ['organization:provision', self::ORGANIZATION],
+                ['organization:administrator:create', self::EMAIL, self::PASSWORD],
+            ] as $command
+        ) {
+            // Idempotent like the e2e seed: a second provision or an existing administrator fails, and is fine.
+            (new Process(['php', 'bin/console', ...$command, '--no-interaction'], \dirname(__DIR__, 4), [
+                'APP_ENV' => 'dev',
+            ]))->run();
+        }
+
+        $jar = \tempnam(\sys_get_temp_dir(), 'access-log-probe');
+        self::$cookieJar = \is_string($jar) ? $jar : null;
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (null !== self::$cookieJar && \is_file(self::$cookieJar)) {
+            \unlink(self::$cookieJar);
+        }
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->rows = new DevStackUploadRows();
+        [$status] = $this->request('POST', '/api/v1/backoffice/login', \json_encode([
+            'email' => self::EMAIL,
+            'password' => self::PASSWORD,
+        ]) ?: '');
+        $this->assertSame(204, $status, 'the e2e administrator could not sign in through Caddy');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->rows->remove($this->intents, $this->documents);
+        parent::tearDown();
+    }
+
     #[Test]
-    #[DataProvider('provideTheNameNeverReachesTheAccessLogCases')]
-    public function theNameNeverReachesTheAccessLog(string $ending): void
+    #[DataProvider('provideTheNameNeverReachesEitherSinkCases')]
+    public function theNameNeverReachesEitherSink(string $ending): void
     {
         $name = 'sentinel-' . \bin2hex(\random_bytes(8)) . ' Acta é.pdf';
         $anchor = 'anchor' . \bin2hex(\random_bytes(10));
+        $upload = $this->declare(match ($ending) {
+            'completed' => self::OVER_ONE_MEGABYTE,
+            'aborted' => self::ABORTED_SIZE,
+            default => UploadLimits::MAX_ORIGINAL_BYTES,
+        });
         $position = $this->accessLogPosition();
         $mirrorOffset = $this->mirrorSize();
 
-        $this->put(self::PATH . '?filename=' . \rawurlencode($name), $anchor, $ending);
+        $status = $this->put($upload, $name, $anchor, $ending);
 
         $written = $this->accessLogWrittenSince($position, $anchor);
         $mirrored = $this->mirrorWrittenSince($mirrorOffset);
 
-        $this->assertStringContainsString('documents_upload_content', $mirrored, 'the probe reached the container log');
-        $this->assertStringNotContainsString(
-            \rawurlencode($name),
-            $mirrored,
-            'the container log holds the encoded name',
-        );
-        $this->assertStringNotContainsString(\explode(' ', $name)[0], $mirrored, 'the container log holds the name');
+        if ('completed' === $ending) {
+            $this->assertSame(201, $status, 'a body over 1 MB on the canonical path is filed');
+        }
 
+        if ('aborted' === $ending) {
+            $this->assertSame(
+                'expired',
+                $this->rows->stateOf($upload),
+                'the application aborted the upload whose body ended short',
+            );
+        }
+
+        $this->assertStringContainsString('documents_upload_content', $mirrored, 'the probe reached the container log');
         $this->assertStringContainsString('/api/v1/documents/uploads/', $written, 'the probe line arrived');
-        $this->assertStringNotContainsString(\rawurlencode($name), $written);
-        $this->assertStringNotContainsString(\urlencode($name), $written);
-        $this->assertStringNotContainsString(\explode(' ', $name)[0], $written, 'not even the distinctive prefix');
+
+        foreach (
+            [
+                'the access log' => $written,
+                'the container log' => $mirrored,
+            ] as $sink => $contents
+        ) {
+            $this->assertStringNotContainsString(\rawurlencode($name), $contents, $sink . ' holds the encoded name');
+            $this->assertStringNotContainsString(\urlencode($name), $contents, $sink . ' holds the form-encoded name');
+            $this->assertStringNotContainsString(\explode(' ', $name)[0], $contents, $sink . ' holds the name');
+        }
     }
 
     /**
      * @return iterable<string, array{string}>
      */
-    public static function provideTheNameNeverReachesTheAccessLogCases(): iterable
+    public static function provideTheNameNeverReachesEitherSinkCases(): iterable
     {
         yield 'completed' => ['completed'];
         yield 'aborted mid-body' => ['aborted'];
         yield 'past the bound' => ['oversized'];
     }
 
+    private function declare(int $size): string
+    {
+        [$status, $body] = $this->request('POST', '/api/v1/documents/uploads', \json_encode([
+            'size' => $size,
+            'retentionReason' => 'technical-file',
+            'legalBasis' => 'contract',
+        ]) ?: '');
+        $this->assertSame(201, $status, $body);
+        $decoded = \json_decode($body, true);
+        $this->assertIsArray($decoded);
+        $id = Dig::string($decoded, 'data', 'id');
+        $this->intents[] = $id;
+
+        return $id;
+    }
+
+    /**
+     * @param non-empty-string $method
+     *
+     * @return array{int, string} the status and the body of a JSON request through Caddy, on the probe's session
+     */
+    private function request(string $method, string $path, string $json): array
+    {
+        $handle = $this->handle(self::ORIGIN . $path);
+        \curl_setopt_array($handle, [
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_POSTFIELDS => $json,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Origin: ' . self::ORIGIN],
+        ]);
+        $body = \curl_exec($handle);
+
+        return [\curl_getinfo($handle, CURLINFO_RESPONSE_CODE), \is_string($body) ? $body : ''];
+    }
+
     /**
      * @param non-empty-string $anchor
      *
+     * @return int the status Caddy answered, or 0 when the probe itself ended the exchange
+     *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter") the read callback's signature is curl's
      */
-    private function put(string $uri, string $anchor, string $ending): void
+    private function put(string $upload, string $name, string $anchor, string $ending): int
     {
-        $handle = \curl_init('https://localhost' . $uri);
-
-        if (!$handle instanceof CurlHandle) {
-            throw new RuntimeException('Could not initialise the probe.');
-        }
+        $handle = $this->handle(\sprintf(
+            '%s/api/v1/documents/uploads/%s/content?filename=%s',
+            self::ORIGIN,
+            $upload,
+            \rawurlencode($name),
+        ));
 
         $length = match ($ending) {
-            'completed' => 1024,
-            'aborted' => 1_000_000,
-            default => self::BOUND + 1,
+            'completed' => self::OVER_ONE_MEGABYTE,
+            'aborted' => self::ABORTED_SIZE,
+            default => UploadLimits::MAX_ORIGINAL_BYTES + 1,
         };
-        $abortAfter = 'aborted' === $ending ? 65_536 : PHP_INT_MAX;
-        // `$curl` and `$stream` are the callback's fixed signature.
+        $abortAfter = 'aborted' === $ending ? self::ABORT_AFTER_BYTES : PHP_INT_MAX;
         $sent = 0;
 
+        // `$curl` and `$stream` are the callback's fixed signature.
         $feed = static function (
             CurlHandle $curl,
             mixed $stream,
@@ -124,18 +255,44 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
             CURLOPT_UPLOAD => true,
             CURLOPT_CUSTOMREQUEST => 'PUT',
             CURLOPT_INFILESIZE => $length,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_TIMEOUT => 'aborted' === $ending ? 3 : 60,
+            CURLOPT_TIMEOUT => 'aborted' === $ending ? 3 : 120,
             CURLOPT_USERAGENT => $anchor,
             CURLOPT_HTTPHEADER => ['Content-Type: application/octet-stream', 'Expect:'],
         ]);
-
         \curl_setopt($handle, CURLOPT_READFUNCTION, $feed);
 
         // An abort and a server closing under an oversized body are both expected outcomes here.
-        \curl_exec($handle);
+        $body = \curl_exec($handle);
+        $status = \curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+
+        if (201 === $status && \is_string($body)) {
+            $decoded = \json_decode($body, true);
+
+            if (\is_array($decoded)) {
+                $this->documents[] = Dig::string($decoded, 'data', 'id');
+            }
+        }
+
+        return $status;
+    }
+
+    private function handle(string $url): CurlHandle
+    {
+        $handle = \curl_init($url);
+
+        if (!$handle instanceof CurlHandle || null === self::$cookieJar) {
+            throw new RuntimeException('Could not initialise the probe.');
+        }
+
+        \curl_setopt_array($handle, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_COOKIEFILE => self::$cookieJar,
+            CURLOPT_COOKIEJAR => self::$cookieJar,
+        ]);
+
+        return $handle;
     }
 
     private function mirrorPath(): string

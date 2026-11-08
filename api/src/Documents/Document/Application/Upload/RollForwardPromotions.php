@@ -9,6 +9,8 @@ use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Storage\ObjectNotFound;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Finishes the promotion a writer did not: a `Received` row older than
@@ -21,6 +23,7 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * is already there and never overwrites it; only the run that set `promoted_at` wakes the scan.
  *
  * A row whose object is in neither namespace is left as it is and counted: the scheduled report alarms on it.
+ * A row that fails for any other reason is logged and passed over, so it never stops the rows behind it.
  */
 final readonly class RollForwardPromotions
 {
@@ -29,6 +32,7 @@ final readonly class RollForwardPromotions
         private PromoteDocument $promoteDocument,
         private DocumentScanWakeUp $scanWakeUp,
         private TransactionManager $transactionManager,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -43,6 +47,13 @@ final readonly class RollForwardPromotions
             try {
                 $marked = $this->rollForward($documentId);
             } catch (ObjectNotFound) {
+                continue;
+            } catch (Throwable $throwable) {
+                $this->logger->error('A document could not be rolled forward; the batch goes on.', [
+                    'documentId' => $documentId,
+                    'exceptionClass' => $throwable::class,
+                ]);
+
                 continue;
             }
 

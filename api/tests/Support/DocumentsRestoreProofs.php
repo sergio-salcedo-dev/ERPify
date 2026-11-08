@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Support;
 
+use FilesystemIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -35,6 +39,8 @@ final class DocumentsRestoreProofs
         'decryption_verified',
         'result',
     ];
+
+    private const string SWITCH = 'documents.ingest_enabled';
 
     private const array KINDS = ['restore', 'drill'];
 
@@ -92,6 +98,10 @@ final class DocumentsRestoreProofs
     }
 
     /**
+     * Production keeps ingest closed only with the boolean literal `false`. Anything else — `true`, `'true'`, `1`,
+     * an `%env(…)%` a deploy resolves, an absent parameter — counts as opening it, because what it resolves to is
+     * decided somewhere this gate cannot read.
+     *
      * @param array<array-key, mixed> $config  the parsed `config/packages/documents.yaml`
      * @param list<string>            $records the YAML of every record on disk
      *
@@ -101,7 +111,7 @@ final class DocumentsRestoreProofs
     {
         $production = self::productionParameters($config);
 
-        if (true !== ($production['documents.ingest_enabled'] ?? false)) {
+        if (false === ($production['documents.ingest_enabled'] ?? null)) {
             return [];
         }
 
@@ -125,6 +135,39 @@ final class DocumentsRestoreProofs
         }
 
         return [\sprintf('production opens ingest with no valid restore proof for the mechanism "%s"', $mechanism)];
+    }
+
+    /**
+     * The files under `$configRoot`, other than `$ownFile`, that name the switch other than as a `%…%` reference.
+     * The gate reads one file; a declaration anywhere else — a `config/packages/prod/` override, a `parameters:`
+     * block in services.yaml, a PHP or XML loader — would decide production's value out of its sight.
+     *
+     * @return list<string> the offending paths, relative to `$configRoot`
+     */
+    public static function declarationsOutside(string $configRoot, string $ownFile): array
+    {
+        $offending = [];
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(
+            $configRoot,
+            FilesystemIterator::SKIP_DOTS,
+        ));
+
+        foreach ($files as $file) {
+            if (!$file instanceof SplFileInfo || !$file->isFile() || $file->getRealPath() === \realpath($ownFile)) {
+                continue;
+            }
+
+            $contents = (string) \file_get_contents($file->getPathname());
+            $withoutReferences = \str_replace('%' . self::SWITCH . '%', '', $contents);
+
+            if (\str_contains($withoutReferences, self::SWITCH)) {
+                $offending[] = \substr($file->getPathname(), \strlen(\rtrim($configRoot, '/')) + 1);
+            }
+        }
+
+        \sort($offending);
+
+        return $offending;
     }
 
     /**

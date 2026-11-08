@@ -81,6 +81,49 @@ final class UploadFilenameRedactionTest extends TestCase
 
         yield 'on the route: a misspelt key the controller ignores' => [self::UPLOAD_PATH, 'file_name=SECRET'];
         yield 'on the route: an absolute URI' => ['https://erpify.test' . self::UPLOAD_PATH, 'q=SECRET'];
+
+        foreach (self::uploadRouteSpellings() as $label => $path) {
+            yield 'spelt ' . $label . ': a misspelt key' => [$path, 'file_name=SECRET'];
+        }
+    }
+
+    /**
+     * Every spelling of the upload route reaches the whole-query rule, and keeps nothing of its query in any sink.
+     */
+    #[DataProvider('provideEverySpellingOfTheRouteWithholdsTheWholeQueryCases')]
+    public function testEverySpellingOfTheRouteWithholdsTheWholeQuery(string $path): void
+    {
+        $this->assertTrue(RequestUriRedaction::withholdsWholeQuery($path));
+        $this->assertSame(
+            $path . '?' . RequestUriRedaction::SENTINEL,
+            RequestUriRedaction::redact($path . '?file_name=SECRET'),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideEverySpellingOfTheRouteWithholdsTheWholeQueryCases(): iterable
+    {
+        foreach (self::uploadRouteSpellings() as $label => $path) {
+            yield $label => [$path];
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function uploadRouteSpellings(): array
+    {
+        $id = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
+
+        return [
+            'through the front controller' => '/index.php' . self::UPLOAD_PATH,
+            'absolute, through the front controller' => 'https://erpify.test/index.php' . self::UPLOAD_PATH,
+            'with a percent-encoded segment' => '/api/v1/documents/uploads/' . $id . '/%63ontent',
+            'with an encoded slash' => '/api/v1/documents/uploads%2F' . $id . '/content',
+            'double-encoded' => '/api/v1/documents/uploads/' . $id . '/%2563ontent',
+        ];
     }
 
     public function testTheUploadRouteKeepsNoQueryShapeAtAll(): void
@@ -102,6 +145,8 @@ final class UploadFilenameRedactionTest extends TestCase
     public function testANearMissPathIsNotTheUploadRoute(): void
     {
         $this->assertFalse(RequestUriRedaction::withholdsWholeQuery('/api/v1/documents/uploads/x/content/more'));
+        $this->assertFalse(RequestUriRedaction::withholdsWholeQuery('/index.php/api/v1/documents/uploads/x/contents'));
+        $this->assertFalse(RequestUriRedaction::withholdsWholeQuery('/api/v1/documents/uploads/x/%63ontent%2Fmore'));
         $this->assertTrue(RequestUriRedaction::withholdsWholeQuery('/api/v1/documents/uploads/x/content'));
     }
 

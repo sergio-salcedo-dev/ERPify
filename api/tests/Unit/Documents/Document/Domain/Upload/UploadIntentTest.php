@@ -96,7 +96,7 @@ final class UploadIntentTest extends TestCase
      */
     public static function provideTheClaimFixesTheDeadlineFromTheDeclaredSizeCases(): iterable
     {
-        yield '100 MiB at 256 KiB/s plus the margin' => [104_857_600, 460];
+        yield '100 MiB at 256 KiB/s plus the margin' => [UploadLimits::MAX_ORIGINAL_BYTES, 460];
         yield '5 MiB' => [5 * 1_048_576, 80];
         yield 'one byte rounds up to a second' => [1, 61];
     }

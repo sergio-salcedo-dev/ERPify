@@ -13,8 +13,11 @@ use Erpify\Shared\ErrorContract\Application\RequestUriRedaction;
  */
 final class SpanUriRedaction
 {
-    /** Attributes whose value is a whole URI. */
-    private const array URI_KEYS = ['http.url', 'url.full', 'url'];
+    /** Attributes whose value is a whole URI, or a path with its query (`http.target`). */
+    private const array URI_KEYS = ['http.url', 'url.full', 'url', 'http.target'];
+
+    /** Where a span names its request path, in the order the SDK versions have spelled it. */
+    private const array PATH_KEYS = ['http.url', 'url.full', 'url', 'http.target', 'url.path'];
 
     /** Attributes whose value is a query string alone. */
     private const array QUERY_KEYS = ['http.query', 'url.query'];
@@ -30,7 +33,7 @@ final class SpanUriRedaction
      */
     public static function apply(array $data): array
     {
-        $path = isset($data['http.url']) && \is_string($data['http.url']) ? $data['http.url'] : null;
+        $path = self::uploadRoutePathIn($data);
 
         foreach (self::URI_KEYS as $key) {
             if (isset($data[$key]) && \is_string($data[$key])) {
@@ -45,5 +48,24 @@ final class SpanUriRedaction
         }
 
         return $data;
+    }
+
+    /**
+     * The first path key naming the upload route, or null: any spelling of it withholds the whole query, and the
+     * keys need not agree.
+     *
+     * @param array<array-key, mixed> $data
+     */
+    private static function uploadRoutePathIn(array $data): ?string
+    {
+        foreach (self::PATH_KEYS as $key) {
+            $value = $data[$key] ?? null;
+
+            if (\is_string($value) && RequestUriRedaction::withholdsWholeQuery($value)) {
+                return $value;
+            }
+        }
+
+        return null;
     }
 }

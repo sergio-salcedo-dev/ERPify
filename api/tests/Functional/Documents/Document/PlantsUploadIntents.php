@@ -83,10 +83,18 @@ trait PlantsUploadIntents
             ['claimed' => \Doctrine\DBAL\ParameterType::BOOLEAN, 'lease' => \Doctrine\DBAL\ParameterType::INTEGER],
         );
 
-        $this->plantedIntentIds[] = $id;
-        $this->plantingConnection = $this->intentConnection();
+        $this->forgetAfterTest($id);
 
         return new PlantedIntent($id, $scope);
+    }
+
+    /**
+     * Has an intent this test created some other way removed after it, like a planted one.
+     */
+    private function forgetAfterTest(string $intentId): void
+    {
+        $this->plantedIntentIds[] = $intentId;
+        $this->plantingConnection = $this->intentConnection();
     }
 
     private function mintKey(string $scopeId): void

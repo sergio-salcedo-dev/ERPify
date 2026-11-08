@@ -51,19 +51,21 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 		fi
 	fi
 
-	# The evidence-storage root, provisioned under the same rule and for the same reason as the image root:
-	# only when a volume is genuinely mounted at the path, because a root invented inside the container's
-	# writable layer is one every later deletion would answer "done" against. `staging` and `final` are
-	# created side by side on that volume, since a promotion between them is only a single-filesystem move
-	# while they share one.
+	# The evidence-storage root must be a volume genuinely mounted at the path, or the container refuses to
+	# start: a root on the container's writable layer passes the boot probe below, holds evidence that dies
+	# with the container, and answers "done" to every later deletion of bytes that live elsewhere. A mount
+	# point is a directory on another device than its parent. `staging` and `final` are created side by side
+	# on that volume, since a promotion between them is only a single-filesystem move while they share one.
 	if [ -n "${DOCUMENTS_STORAGE_PATH:-}" ]; then
 		if [ ! -d "$DOCUMENTS_STORAGE_PATH" ]; then
-			echo "! $DOCUMENTS_STORAGE_PATH does not exist — leaving the document storage root unprovisioned."
-		elif [ "$(stat -c '%d' "$DOCUMENTS_STORAGE_PATH")" != "$(stat -c '%d' "$(dirname "$DOCUMENTS_STORAGE_PATH")")" ]; then
-			mkdir -p "$DOCUMENTS_STORAGE_PATH/staging" "$DOCUMENTS_STORAGE_PATH/final"
-		else
-			echo "! $DOCUMENTS_STORAGE_PATH is not a mount point — leaving the document storage root unprovisioned."
+			echo "! $DOCUMENTS_STORAGE_PATH does not exist — refusing to start."
+			exit 1
 		fi
+		if [ "$(stat -c '%d' "$DOCUMENTS_STORAGE_PATH")" = "$(stat -c '%d' "$(dirname "$DOCUMENTS_STORAGE_PATH")")" ]; then
+			echo "! $DOCUMENTS_STORAGE_PATH is not a mount point — refusing to start."
+			exit 1
+		fi
+		mkdir -p "$DOCUMENTS_STORAGE_PATH/staging" "$DOCUMENTS_STORAGE_PATH/final"
 	fi
 
 	# The document storage boot guard: a container whose storage cannot stage, promote and delete an object must

@@ -68,14 +68,16 @@ interface DocumentStorage
     public function has(StorageArea $area, string $scopeId): bool;
 
     /**
-     * The scope ids of the objects in `$area` last modified at least `$olderThanSeconds` ago, at most `$limit`
-     * of them, in no promised order. What a sweep walks; it says nothing about whether a row owns each one.
+     * The scope ids of the objects in `$area` last modified at least `$olderThanSeconds` ago, in no promised
+     * order, produced lazily as the area is walked. What a sweep walks; it says nothing about whether a row owns
+     * each one, so the caller bounds the walk by what it counts — a sweep by what it can delete, a report by
+     * what it checked — rather than by how many names it was handed.
      *
      * @throws DocumentStorageFailed
      *
-     * @return list<string>
+     * @return iterable<string>
      */
-    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds, int $limit): array;
+    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds): iterable;
 
     /**
      * Moves the staged object of `$scopeId` into the final area, creating the destination exclusively: an
@@ -87,6 +89,16 @@ interface DocumentStorage
      * @throws DocumentStorageFailed
      */
     public function promote(string $scopeId): void;
+
+    /**
+     * Makes the final object's name durable by syncing its directory. For a recovery that finds the object
+     * already in the final area — moved by a run that died before its own sync — and must not report it
+     * promoted on a name a power loss could still take back.
+     *
+     * @throws ObjectNotFound        when the final area holds no object for the scope
+     * @throws DocumentStorageFailed
+     */
+    public function syncFinal(string $scopeId): void;
 
     /**
      * Opens the final object of `$scopeId` for reading.

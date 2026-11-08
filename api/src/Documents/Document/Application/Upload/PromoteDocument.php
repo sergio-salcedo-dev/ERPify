@@ -55,12 +55,17 @@ final readonly class PromoteDocument
         try {
             $this->storage->promote($scopeId);
         } catch (ObjectAlreadyExists) {
-            // Linked by an earlier run that died before removing the staged name: the final object stands.
+            // Linked by an earlier run that died before removing the staged name: the final object stands, and its
+            // name is made durable before the staged one — the only other copy — goes.
+            $this->storage->syncFinal($scopeId);
             $this->storage->delete(StorageArea::Staging, $scopeId);
         } catch (ObjectNotFound $notStaged) {
             if (!$this->storage->has(StorageArea::Final, $scopeId)) {
                 throw $notStaged;
             }
+
+            // Moved by an earlier run that died before syncing the final directory.
+            $this->storage->syncFinal($scopeId);
         }
     }
 }

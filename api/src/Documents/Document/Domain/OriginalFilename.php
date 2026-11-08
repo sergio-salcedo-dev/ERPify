@@ -6,9 +6,11 @@ namespace Erpify\Documents\Document\Domain;
 
 use Erpify\Documents\Document\Domain\Exception\InvalidOriginalFilename;
 use IntlChar;
+use LogicException;
 use Normalizer;
 use Override;
 use Stringable;
+use WeakMap;
 
 /**
  * The caller's original filename, validated and held in request memory until the commit transaction seals it
@@ -23,10 +25,13 @@ use Stringable;
  *    zero-width joiner and non-joiner, which real scripts need — so the bidi controls, the other zero-width
  *    characters and the tag characters are refused.
  *
- * It never prints itself: `__toString()` answers a fixed placeholder, so a value that reaches a log context, an
- * exception message or a `var_export` by accident carries no name. {@see value()} is the one way to the bytes.
+ * It never prints itself: `__toString()` and `__debugInfo()` answer a fixed placeholder, so a value that reaches a
+ * log context, an exception message, `var_dump`/`print_r` or a VarDumper dump by accident carries no name. The
+ * bytes are not a property of the instance at all but an entry of a static weak map keyed by it — no dumper,
+ * `var_export` or array cast prints static state, and the entry dies with the instance — and serialising or
+ * cloning the value is refused outright. {@see value()} is the one way to the bytes.
  */
-final readonly class OriginalFilename implements Stringable
+final class OriginalFilename implements Stringable
 {
     public const int MAX_BYTES = 255;
 
@@ -46,8 +51,42 @@ final readonly class OriginalFilename implements Stringable
         IntlChar::CHAR_CATEGORY_PARAGRAPH_SEPARATOR,
     ];
 
-    private function __construct(private string $value)
+    /** @var WeakMap<self, string>|null */
+    private static ?WeakMap $values = null;
+
+    private function __construct(string $value)
     {
+        $this->values()[$this] = $value;
+    }
+
+    private function __clone()
+    {
+    }
+
+    /**
+     * @return array{value: string}
+     */
+    public function __debugInfo(): array
+    {
+        return ['value' => self::PLACEHOLDER];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        throw new LogicException('An original filename is never serialised: it lives in request memory only.');
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @SuppressWarnings("PHPMD.UnusedFormalParameter") the magic method's signature; nothing is ever restored
+     */
+    public function __unserialize(array $data): void
+    {
+        throw new LogicException('An original filename is never unserialised: it lives in request memory only.');
     }
 
     #[Override]
@@ -85,7 +124,15 @@ final readonly class OriginalFilename implements Stringable
 
     public function value(): string
     {
-        return $this->value;
+        return $this->values()[$this] ?? throw new LogicException('An original filename lost its value.');
+    }
+
+    /**
+     * @return WeakMap<self, string>
+     */
+    private function values(): WeakMap
+    {
+        return self::$values ??= new WeakMap();
     }
 
     private static function isRefused(int $codePoint): bool

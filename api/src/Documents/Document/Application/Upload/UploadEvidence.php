@@ -134,9 +134,16 @@ final readonly class UploadEvidence
                 ),
             );
         } catch (Throwable $throwable) {
-            throw $this->isAbortedBody($throwable, $meter) ? UploadAborted::create() : $throwable;
+            throw $meter->heartbeatFailure()
+                ?? ($this->isAbortedBody($throwable, $meter) ? UploadAborted::create() : $throwable);
         } finally {
             \fclose($source);
+        }
+
+        $heartbeatFailure = $meter->heartbeatFailure();
+
+        if ($heartbeatFailure instanceof Throwable) {
+            throw $heartbeatFailure;
         }
 
         $digest = $meter->digest();
@@ -165,26 +172,23 @@ final readonly class UploadEvidence
     }
 
     /**
-     * Renews the lease under the intent row's lock and re-arms the time budget; false when the upload is no
-     * longer live, which makes the meter abort the stream.
+     * Renews the lease under the intent row's lock and re-arms the time budget; false only when the upload is no
+     * longer live, which makes the meter abort the stream. A database fault is not a lost lease: it propagates,
+     * so the upload ends as the server's fault rather than as the caller's aborted upload.
      */
     private function heartbeat(string $intentId): bool
     {
-        try {
-            $alive = $this->transactionManager->transactional(function () use ($intentId): bool {
-                $intent = $this->intents->lockForUpdate($intentId);
+        $alive = $this->transactionManager->transactional(function () use ($intentId): bool {
+            $intent = $this->intents->lockForUpdate($intentId);
 
-                if (!$intent instanceof UploadIntent || !$intent->renewLease($this->intents->now())) {
-                    return false;
-                }
+            if (!$intent instanceof UploadIntent || !$intent->renewLease($this->intents->now())) {
+                return false;
+            }
 
-                $this->intents->save($intent);
+            $this->intents->save($intent);
 
-                return true;
-            });
-        } catch (Throwable) {
-            return false;
-        }
+            return true;
+        });
 
         if ($alive) {
             $this->timeBudget->arm(UploadLimits::STREAM_TIME_LIMIT_SECONDS);

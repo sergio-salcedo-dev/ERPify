@@ -10,6 +10,7 @@ use Erpify\Tests\Support\RepositoryRoot;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -22,6 +23,8 @@ use Symfony\Component\Yaml\Yaml;
  * and the switch rule on planted inputs, including a historical record for another mechanism.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") the tree, the record validator and each planted shape
  */
 #[CoversNothing]
 final class DocumentsIngestProofGateTest extends TestCase
@@ -53,6 +56,106 @@ final class DocumentsIngestProofGateTest extends TestCase
         }
 
         $this->assertSame([], DocumentsRestoreProofs::ingestViolations($config, $records));
+        $this->assertSame(
+            [],
+            DocumentsRestoreProofs::declarationsOutside(
+                \dirname(__DIR__, 3) . '/config',
+                \dirname(__DIR__, 3) . '/config/packages/documents.yaml',
+            ),
+            'documents.ingest_enabled is declared outside config/packages/documents.yaml, which this gate reads',
+        );
+    }
+
+    /**
+     * Any production value but the boolean literal false opens ingest, so each needs the proof a `true` needs.
+     */
+    #[DataProvider('provideANonFalseProductionValueOpensIngestCases')]
+    public function testANonFalseProductionValueOpensIngest(mixed $value): void
+    {
+        $config = $this->withProductionSwitch($this->productionOpening('restic-offsite'), $value);
+
+        $this->assertNotSame([], DocumentsRestoreProofs::ingestViolations($config, []), 'opens without a proof');
+        $this->assertSame([], DocumentsRestoreProofs::ingestViolations($config, [self::VALID]), 'opens with one');
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function provideANonFalseProductionValueOpensIngestCases(): iterable
+    {
+        yield 'an env placeholder' => ['%env(bool:DOCUMENTS_INGEST_ENABLED)%'];
+        yield 'the string true' => ['true'];
+        yield 'the integer one' => [1];
+        yield 'the string one' => ['1'];
+        yield 'null' => [null];
+    }
+
+    public function testAnAbsentProductionSwitchOpensIngest(): void
+    {
+        $this->assertNotSame(
+            [],
+            DocumentsRestoreProofs::ingestViolations(['parameters' => ['documents.backup_mechanism' => 'r']], []),
+        );
+    }
+
+    public function testTheLiteralFalseKeepsIngestClosedWithoutAProof(): void
+    {
+        $config = $this->withProductionSwitch($this->productionOpening('none'), false);
+
+        $this->assertSame([], DocumentsRestoreProofs::ingestViolations($config, []));
+    }
+
+    /**
+     * @param array<string, string> $planted relative path => contents, beside the gate's own file
+     */
+    #[DataProvider('provideADeclarationOutsideTheReadFileIsRefusedCases')]
+    public function testADeclarationOutsideTheReadFileIsRefused(array $planted, bool $refused): void
+    {
+        $root = \sys_get_temp_dir() . '/ingest-proof-' . \bin2hex(\random_bytes(6));
+        $own = $root . '/packages/documents.yaml';
+        $files = ['packages/documents.yaml' => "parameters:\n    documents.ingest_enabled: false\n"] + $planted;
+
+        $filesystem = new Filesystem();
+
+        try {
+            foreach ($files as $path => $contents) {
+                $filesystem->dumpFile($root . '/' . $path, $contents);
+            }
+
+            $this->assertSame(
+                $refused ? \array_keys($planted) : [],
+                DocumentsRestoreProofs::declarationsOutside($root, $own),
+            );
+        } finally {
+            $filesystem->remove($root);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{array<string, string>, bool}>
+     */
+    public static function provideADeclarationOutsideTheReadFileIsRefusedCases(): iterable
+    {
+        yield 'a prod override file' => [
+            ['packages/prod/documents.yaml' => "parameters:\n    documents.ingest_enabled: true\n"],
+            true,
+        ];
+        yield 'services.yaml parameters' => [
+            ['services.yaml' => "parameters:\n    'documents.ingest_enabled': true\n"],
+            true,
+        ];
+        yield 'a PHP loader' => [
+            ['services.php' => "<?php\n\$parameters->set('documents.ingest_enabled', true);\n"],
+            true,
+        ];
+        yield 'an XML loader' => [
+            ['services.xml' => '<parameter key="documents.ingest_enabled">true</parameter>'],
+            true,
+        ];
+        yield 'a reference is not a declaration' => [
+            ['services.yaml' => "services:\n    x:\n        arguments: ['%documents.ingest_enabled%']\n"],
+            false,
+        ];
     }
 
     public function testDevAndTestOpenIngestAndProductionDoesNotByDefault(): void
@@ -150,6 +253,22 @@ final class DocumentsIngestProofGateTest extends TestCase
                 'documents.backup_mechanism' => $mechanism,
             ]],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, mixed>
+     */
+    private function withProductionSwitch(array $config, mixed $value): array
+    {
+        $prod = \is_array($config['when@prod'] ?? null) ? $config['when@prod'] : [];
+        $parameters = \is_array($prod['parameters'] ?? null) ? $prod['parameters'] : [];
+        $parameters['documents.ingest_enabled'] = $value;
+        $prod['parameters'] = $parameters;
+        $config['when@prod'] = $prod;
+
+        return $config;
     }
 
     private function proofDirectory(): string

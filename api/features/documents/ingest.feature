@@ -154,6 +154,28 @@ Feature: File an evidence-class original through a declare step and a raw-body P
     And there should have 1 records in SQL result
     And I execute the SQL query "SELECT id FROM document"
     And there should have 0 records in SQL result
+    And no expired upload has a staged object left
+    And the upload reaper runs
+    And the scope of every reaped upload is tombstoned as an aborted upload
+
+  Scenario: A viewer may neither declare nor send an upload, and nothing is created
+    Given I am logged in as a viewer
+    When I send a "POST" request to "/documents/uploads" with body:
+    """
+    {"size": 5, "retentionReason": "technical-file", "legalBasis": "contract"}
+    """
+    Then the response status code should be 403
+    And I add "Content-Type" header equal to "application/octet-stream"
+    And I add "Content-Length" header equal to "5"
+    And I send a "PUT" request to "/documents/uploads/0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c/content?filename=a.pdf" with body:
+    """
+    hello
+    """
+    And the response status code should be 403
+    And I execute the SQL query "SELECT id FROM upload_intent"
+    And there should have 0 records in SQL result
+    And I execute the SQL query "SELECT id FROM document"
+    And there should have 0 records in SQL result
 
   Scenario: An invalid filename is refused without being quoted and leaves the upload declared
     Given I am logged in as an editor

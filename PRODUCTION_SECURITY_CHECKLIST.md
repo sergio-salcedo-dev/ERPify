@@ -2592,7 +2592,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       reconciler.** `DbalSubjectErasureReconciler` excludes Document scopes by construction (a Document's
       erasure is recorded in its own custody, not as a `GDPR_SUBJECT_ERASED` entry) and no other reader takes
       them, so a Document scope destroyed without its custody record raises no alarm. **Open — owner: the
-      Documents erasure story (doc-7 in the Documents spec); it does not go live before that reconciler exists.**
+      Documents erasure story; it does not go live before that reconciler exists.**
 - [ ] **A code rollback past the `dek_keystore.destroy_reason` migration breaks `destroy()`.** The migration's
       `down()` is not run by a code rollback, and the previous release's `destroy()` then violates
       `dek_keystore_destroy_reason_check` and fails. **Accepted — basis: no deployment is live, so there is no
@@ -2605,33 +2605,40 @@ mitigated state. Accepting one means recording who accepted it and against which
       — or a PostgreSQL administrator — can still rewrite or delete a custody row, and the gate sees neither
       a migration nor runtime-built SQL. Custody is not claimed cryptographically immutable; hash-chaining or
       a restricted role are separate decisions (`docs/adr/documents-custody-log.md` D3). **Accepted — basis:
-      no deployment is live and no document is filed before the upload story; revisit with the first one.**
+      no deployment is live, and ingest stays off in production until a restore proof exists, so no production
+      document is filed yet; revisit with the first deploy that opens ingest.**
 - [ ] **A document or custody row committed by an in-flight action of an erased person, after the purge
-      statement's snapshot, keeps the person's id until the re-sweep.** The two `UPDATE`s match rows that
-      exist when they run. `ResweepErasedSubjects` repeats them for one window and
-      `DbalDocumentUploaderPersonReferences` / `DbalDocumentCustodyActorPersonReferences` report any id left
-      once the window closes through `identity:gdpr:reconcile-subject-references`. Idempotency replay
-      protection for the erased actor ends with the erasure (accepted: the hash is nulled by the same purge).
-      **Open until the upload story writes documents; the detective source is the control meanwhile.**
+      statement's snapshot, keeps the person's id until the re-sweep.** The purge's `UPDATE`s match rows that
+      exist when they run. For a document filed through ingest the window is closed by the lock order
+      (`docs/adr/documents-custody-log.md` D6, every pair interleaved by `UploadLockOrderPairsFunctionalTest`):
+      the purge takes the person's intent rows before their documents, so a commit either finished first and
+      its document is rewritten by the next statement, or waits on the purge and aborts on an expired intent. It
+      stays open for any later writer of a document or custody row that does not pass through the intent row.
+      `ResweepErasedSubjects` repeats the statements for one window, and `DbalUploadIntentActorPersonReferences`,
+      `DbalDocumentUploaderPersonReferences` and `DbalDocumentCustodyActorPersonReferences` report any id left
+      once it closes, through `identity:gdpr:reconcile-subject-references`. Idempotency replay protection for the
+      erased actor ends with the erasure (accepted: the hash is nulled by the same purge). **Open — owner: each
+      later story that writes a document or custody row on a person's behalf outside the intent lock; the
+      detective sources are the control meanwhile.**
 - [ ] **The `document_storage` volume has no backup and no proven restore yet; ingest stays off in
-      production until one is proven.** The upload story (doc-3) writes sealed bytes to the volume
+      production until one is proven.** Evidence ingest writes sealed bytes to the volume
       (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`), and a database dump is not a backup of evidence. What
       is in place: the entrypoint's storage boot probe (stage, promote, delete on the deployed volume, refusing to
       start on any failure, in `php` and in both workers), the switch `documents.ingest_enabled` (false in
       production, 404 on both ingest routes), and the proof-record format with its validator
       (`docs/runbooks/documents-restore-proof.md`; `DocumentsIngestProofGateTest` fails when tracked production
       configuration opens ingest without a valid restore proof for the declared backup mechanism). What is not:
-      the backup itself and the first proof, which whoever proves a restore commits. The read gate is doc-5's.
-      **Open — owner: whoever provisions the evidence backup; doc-5 keeps `documents.read_enabled` false
-      until then.**
+      the backup itself and the first proof, which whoever proves a restore commits. A read route, when one
+      exists, brings its own switch. **Open — owner: whoever provisions the evidence backup; any read route
+      stays switched off until then.**
 - [ ] **A sealed original filename names whoever it names, and survives a person's erasure until its document
       is erased.** The name travels in the evidence PUT's query, is validated and sealed under the document's own
       scope in the commit transaction, and is never persisted in clear; but it can carry the uploader's name or a
       third party's, and a person's erasure never erases a document (the uploader is not the subject), so the
-      ciphertext stays until that document is erased (doc-7). Its ciphertext LENGTH also leaks the name's length
+      ciphertext stays until that document is erased. Its ciphertext LENGTH also leaks the name's length
       until then. Kept out of the access log (Caddy strips every query), the Monolog `request_uri` and per-error
       log line and Sentry's `url`/`query_string`/transaction data (`RequestUriRedaction::QUERY_KEYS`, and the whole
-      query on the upload route), audit metadata and events. **Accepted — the user, 2026-11-04 (SPEC, D7).**
+      query on the upload route), audit metadata and events. **Accepted — the user, 2026-11-04.**
 - [ ] **Idempotency replay protection ends with the actor's erasure.** The person purge nulls the key hash on
       every upload intent and document of the actor, so a replay of an erased actor's key is a fresh upload.
       **Accepted — the user, 2026-11-04.**
@@ -2644,13 +2651,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       not eliminated.** 2 streaming uploads per actor and 4 globally, against a production pool fixed at 12
       threads (8 worker threads), so at most half the worker threads stream; a 100 MiB upload at the minimum
       accepted 256 KiB/s holds its thread for up to 460 s. Each worker thread that served an upload also RETAINS
-      a spool of up to 100 MiB in the `upload_tmp_dir` tmpfs until it serves another request (memlog T1-2):
+      a spool of up to 100 MiB in the `upload_tmp_dir` tmpfs until it serves another request:
       sized at 900m against a 2g, swap-free container. **Measured on the production image (2026-11-06):** four
       concurrent 100 MiB uploads at 256 KiB/s took 400.0 s each while unrelated `GET /me` answered in 6.1 ms on
       average (15.6 ms max; 6.7 ms / 29.9 ms at rest); eight retained spools (four real, four simulated) plus four
       concurrent maximum-size uploads left ~1.0 GB unreclaimable (shmem 868 MB, anon 99 MB, kernel 47 MB) with
       no OOM kill and no spool outside the tmpfs, the remaining use being reclaimable page cache of the document
-      volume. **Accepted for the thread pin — the user, 2026-11-06 (decision 2).**
+      volume. **Accepted for the thread pin — the user, 2026-11-06.**
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
       `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
       first UI story that uploads evidence.**

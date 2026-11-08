@@ -9,6 +9,7 @@ use Erpify\Documents\Document\Application\Upload\ReapUploadIntents;
 use Erpify\Documents\Document\Application\Upload\UploadEvidence;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
+use Erpify\Documents\Document\Domain\UploadLimits;
 use Erpify\Documents\Document\Infrastructure\Controller\DeclareUploadController;
 use Erpify\Documents\Document\Infrastructure\Controller\UploadEvidenceController;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
@@ -174,15 +175,15 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
         $this->assertStringNotContainsString($name, $this->body());
         $this->assertStringNotContainsString($sentinel, $this->body());
 
-        foreach ($sinks as $sink) {
-            foreach ($sink->getRecords() as $record) {
-                $serialised = (string) \json_encode([$record->message, $record->context, $record->extra]);
-                $this->assertStringNotContainsString($name, $serialised, 'a log record quoted the name');
-                $this->assertStringNotContainsString($sentinel, $serialised, 'a log record quoted the encoded name');
-            }
-        }
+        $this->assertNoRecordQuotes($sinks, $name);
 
         $this->assertSame('declared', $this->intentState($upload));
+        $row = (string) \json_encode($this->connection()->fetchAssociative(
+            'SELECT * FROM upload_intent WHERE id = :id',
+            ['id' => $upload],
+        ));
+        $this->assertStringNotContainsString($name, $row, 'the intent row holds the name');
+        $this->assertStringNotContainsString($sentinel, $row, 'the intent row holds the encoded name');
     }
 
     /**
@@ -198,21 +199,27 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
     #[Test]
     public function aPutWithoutContentLengthIsRefusedAndLeavesTheUploadDeclared(): void
     {
+        $sinks = $this->attachLogSinks();
+        $name = 'length-sentinel-' . \bin2hex(\random_bytes(6)) . '.txt';
         $upload = $this->declare(10, null);
 
-        $this->put($upload, '0123456789', 'a.txt', contentLength: null);
+        $this->put($upload, '0123456789', $name, contentLength: null);
 
         $this->assertSame(Response::HTTP_LENGTH_REQUIRED, $this->client->getResponse()->getStatusCode(), $this->body());
         $this->assertSame('length-required', $this->problemType());
         $this->assertSame('declared', $this->intentState($upload));
+        $this->assertStringNotContainsString($name, $this->body());
+        $this->assertNoRecordQuotes($sinks, $name);
     }
 
     #[Test]
     public function aPutWhoseContentLengthIsNotTheDeclaredSizeIsRefusedAndLeavesTheUploadDeclared(): void
     {
+        $sinks = $this->attachLogSinks();
+        $name = 'length-sentinel-' . \bin2hex(\random_bytes(6)) . '.txt';
         $upload = $this->declare(10, null);
 
-        $this->put($upload, '012345678', 'a.txt', contentLength: 9);
+        $this->put($upload, '012345678', $name, contentLength: 9);
 
         $this->assertSame(
             Response::HTTP_UNPROCESSABLE_ENTITY,
@@ -221,6 +228,8 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
         );
         $this->assertSame('content-length-mismatch', $this->problemType());
         $this->assertSame('declared', $this->intentState($upload));
+        $this->assertStringNotContainsString($name, $this->body());
+        $this->assertNoRecordQuotes($sinks, $name);
     }
 
     #[Test]
@@ -282,7 +291,8 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
     public function aShortBodyAbortsTheUpload(): void
     {
         $upload = $this->declare(10, null);
-        $this->scopes[] = $this->stringOf('SELECT scope_id FROM upload_intent WHERE id = :id', ['id' => $upload]);
+        $scope = $this->stringOf('SELECT scope_id FROM upload_intent WHERE id = :id', ['id' => $upload]);
+        $this->scopes[] = $scope;
 
         // The transport cut the body: the declared length arrived, fewer bytes did.
         $this->put($upload, '01234', 'a.txt', contentLength: 10);
@@ -294,6 +304,16 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
         );
         $this->assertSame('aborted-upload', $this->problemType());
         $this->assertSame('expired', $this->intentState($upload));
+        $this->assertFalse($this->service(DocumentStorage::class)->has(StorageArea::Staging, $scope));
+
+        $this->assertTrue($this->service(ReapUploadIntents::class)->reapOne($upload));
+
+        $this->assertSame(
+            'aborted-upload',
+            $this->connection()->fetchOne('SELECT destroy_reason FROM dek_keystore WHERE encryption_scope_id = :s', [
+                's' => EncryptionScopeId::forDocument($scope)->toString(),
+            ]),
+        );
     }
 
     #[Test]
@@ -320,14 +340,14 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
     public static function provideADeclaredSizeOutsideTheRangeCreatesNothingCases(): iterable
     {
         yield 'zero' => [0];
-        yield 'one byte past the cap' => [104_857_601];
+        yield 'one byte past the cap' => [UploadLimits::MAX_ORIGINAL_BYTES + 1];
     }
 
     #[Test]
     public function exactlyTheCapIsAccepted(): void
     {
         $this->postDeclare([
-            'size' => 104_857_600,
+            'size' => UploadLimits::MAX_ORIGINAL_BYTES,
             'retentionReason' => 'contract-execution',
             'legalBasis' => 'contract',
         ]);
@@ -402,6 +422,22 @@ final class UploadEvidenceFunctionalTest extends WebTestCase
         \rewind($plaintext);
 
         return (string) \stream_get_contents($plaintext);
+    }
+
+    /**
+     * @param list<TestHandler> $sinks
+     */
+    private function assertNoRecordQuotes(array $sinks, string $name): void
+    {
+        $sentinel = \rawurlencode($name);
+
+        foreach ($sinks as $sink) {
+            foreach ($sink->getRecords() as $record) {
+                $serialised = (string) \json_encode([$record->message, $record->context, $record->extra]);
+                $this->assertStringNotContainsString($name, $serialised, 'a log record quoted the name');
+                $this->assertStringNotContainsString($sentinel, $serialised, 'a log record quoted the encoded name');
+            }
+        }
     }
 
     /**

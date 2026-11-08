@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\ReceiveDocument;
+use Erpify\Documents\Document\Application\Upload\DocumentScanWakeUp;
 use Erpify\Documents\Document\Application\Upload\PromoteDocument;
 use Erpify\Documents\Document\Application\Upload\ReapUploadIntents;
 use Erpify\Documents\Document\Application\Upload\RollForwardPromotions;
@@ -23,6 +24,8 @@ use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Support\Dig;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid as RandomUuid;
 
@@ -54,6 +57,8 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
 
     /** @var array<int, string> */
     private array $wakeUps = [];
+
+    private ?ScriptedDocumentStorage $promoting = null;
 
     #[Override]
     protected function setUp(): void
@@ -104,6 +109,11 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
         $this->rollForward();
 
         $this->assertPromotedOnce($document, 'sealed');
+        $this->assertSame(
+            [$document->scopeId()],
+            $this->promoting?->synced,
+            'the final name is made durable before the staged one goes',
+        );
     }
 
     public function testAFinalObjectAlreadyPresentIsAcceptedAndNeverOverwritten(): void
@@ -124,13 +134,32 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
         $this->rollForward();
 
         $this->assertPromotedOnce($document, 'sealed');
+        $this->assertSame(
+            [$document->scopeId()],
+            $this->promoting?->synced,
+            'a final object found already moved is synced before it is reported promoted',
+        );
     }
 
     public function testACrashAfterPromotedAtAndBeforeTheMessageLeavesTheRowAsTheObligation(): void
     {
         $document = $this->committedWithStagedObject('sealed');
-        $this->storage()->promote($document->scopeId());
-        $this->service(DocumentRepository::class)->markPromoted($document->documentId());
+        $crashBeforeTheMessage = new class implements DocumentScanWakeUp {
+            #[Override]
+            public function wake(string $documentId): void
+            {
+                throw new RuntimeException(\sprintf('the writer died before waking the scan of %s', $documentId));
+            }
+        };
+
+        try {
+            (new PromoteDocument($this->storage(), $this->service(DocumentRepository::class), $crashBeforeTheMessage))
+                ->promote($document->documentId(), $document->scopeId())
+            ;
+            $this->fail('The simulated crash did not happen.');
+        } catch (RuntimeException) {
+            // The writer's own promotion moved the object and set promoted_at, then died.
+        }
 
         $this->rollForward();
 
@@ -141,6 +170,7 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
         $this->assertIsArray($row);
         $this->assertNotNull(Dig::value($row, 'promoted_at'));
         $this->assertTrue((bool) Dig::value($row, 'due'), 'the scan sweep finds it by the row, with no message needed');
+        $this->assertSame([], $this->wakeUps, 'the writer already set promoted_at: the roll-forward has nothing to do');
     }
 
     public function testTheStagingSweepNeverDeletesAnObjectARowOwnsAndTheRollForwardStillPromotesIt(): void
@@ -228,12 +258,14 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
     {
         $wakeUp = new RecordingScanWakeUp();
         $documents = $this->service(DocumentRepository::class);
+        $this->promoting = new ScriptedDocumentStorage($this->storage());
 
         (new RollForwardPromotions(
             $documents,
-            new PromoteDocument($this->storage(), $documents, $wakeUp),
+            new PromoteDocument($this->promoting, $documents, $wakeUp),
             $wakeUp,
             $this->service(TransactionManager::class),
+            new NullLogger(),
         ))->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 10_000);
 
         $this->wakeUps = $wakeUp->woken;

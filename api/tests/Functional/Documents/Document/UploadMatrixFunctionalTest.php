@@ -270,6 +270,44 @@ final class UploadMatrixFunctionalTest extends WebTestCase
         $this->assertNull(Dig::value($this->data(), 'documentId'), "the erased actor's document is not answered");
     }
 
+    /**
+     * `review_at` carries no zone, so an offset kept to the column would be written as a wall clock off by its
+     * offset, and an identical replay would then fail to match it.
+     */
+    #[Test]
+    public function aReviewDateWithAnOffsetIsStoredAsItsInstantAndAnIdenticalReplayMatches(): void
+    {
+        $payload = ['reviewAt' => '2027-03-01T10:00:00+02:00'] + $this->keyedPayload();
+        $upload = $this->declaredWith($payload);
+
+        $this->assertSame(
+            '2027-03-01 08:00:00',
+            $this->connection()->fetchOne('SELECT review_at FROM upload_intent WHERE id = :id', ['id' => $upload]),
+        );
+
+        $this->postDeclare($payload);
+
+        $this->assertSame(Response::HTTP_OK, $this->client->getResponse()->getStatusCode(), $this->body());
+        $this->assertSame($upload, Dig::value($this->data(), 'id'));
+
+        $this->postDeclare(['reviewAt' => '2027-03-01T08:00:00Z'] + $payload);
+
+        $this->assertSame(
+            Response::HTTP_OK,
+            $this->client->getResponse()->getStatusCode(),
+            'the same instant spelt in UTC is the same declaration',
+        );
+    }
+
+    #[Test]
+    public function aMalformedUploadIdIsARequestTargetErrorBeforeAnyLookup(): void
+    {
+        $this->put('not-a-uuid', '0123456789', 'a.txt');
+
+        $this->assertSame(Response::HTTP_BAD_REQUEST, $this->client->getResponse()->getStatusCode(), $this->body());
+        $this->assertSame('invalid-uuid', $this->problemType());
+    }
+
     #[Test]
     public function aPutOnAStreamingUploadConflictsAndTouchesNothing(): void
     {

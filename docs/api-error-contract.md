@@ -294,6 +294,7 @@ The re-login that follows a successful change is [`ReauthenticateDeviceBestEffor
 | Key's upload streaming right now, or a PUT on a streaming upload | **409 `upload-in-progress`** (`Conflict`) with `Retry-After` = the remaining lease, rendered by `UploadRetryAfter` rather than carried in the body | `UploadInProgress` |
 | Per-actor declare budget spent | **429 `rate-limited`** with `Retry-After` (`document_upload_declare_per_actor`) | `DeclareUploadThrottle` |
 | Live declared intents per actor (10) or streaming uploads per actor (2) / globally (4) at their cap | **429 `rate-limited`** **without** `Retry-After`: a cap has no window to wait out | `UploadCapacityExhausted` |
+| PUT on an upload id that is not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in `UploadEvidenceController` |
 | PUT on an upload that does not exist, is another actor's, or has expired | **410 `gone`**, identical in all three cases | `UploadGone` |
 | PUT without `Content-Length` | **411 `length-required`**; the upload stays `Declared` | `ContentLengthRequired` |
 | `Content-Length` not equal to the declared size | **422 `content-length-mismatch`** (`InvariantViolation`); the upload stays `Declared` | `ContentLengthMismatch` |
@@ -301,7 +302,7 @@ The re-login that follows a successful change is [`ReauthenticateDeviceBestEffor
 | Body short of or past its declared size, digest mismatch, lease or deadline lost, commit refused | **422 `aborted-upload`** (`InvariantViolation`); the staged object is deleted, the upload expired, the scope tombstoned by the reaper | `UploadAborted` |
 | Ingest switched off (`documents.ingest_enabled` false) | **404 `not-found`** on both routes, before authentication | `DocumentsIngestGate` |
 
-No exception above carries a context, so no problem body names an id, a parameter, a filename or a key. A sink fault while sealing (a disk that refuses the write) and a database error are not an aborted upload: they propagate as themselves (5xx), since the caller could not have avoided them, and the upload is expired all the same.
+No exception above carries a context, so no problem body names an id, a parameter, a filename or a key. A sink fault while sealing (a disk that refuses the write) and a database error — one raised while renewing the lease mid-stream included — are not an aborted upload: they propagate as themselves (5xx), since the caller could not have avoided them, and the upload is expired all the same.
 
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 

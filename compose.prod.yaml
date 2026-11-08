@@ -74,13 +74,13 @@ services:
       # receives nothing. Required rather than defaulted for the same reason as on the two workers.
       MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
       MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
-      # The thread pool is the real capacity limit (memlog T1-6): four slow evidence PUTs held the whole default
+      # The thread pool is the real capacity limit (measured): four slow evidence PUTs held the whole default
       # pool of a 2-CPU container and starved every other request. Explicit, not derived from the CPU count, so
       # the global Streaming cap (4, `UploadLimits::MAX_STREAMING_GLOBAL`) stays at most half the worker threads,
       # and `max_threads` is exactly the regular threads plus the worker ones, so the pool never grows past what
       # the spool tmpfs is sized for: every worker thread can retain one 100 MiB spool. `num_threads` counts the
-      # regular threads only; FrankenPHP refuses a `max_threads` below it plus the workers. Owner decision 2 of
-      # the Documents spec (2026-11-06).
+      # regular threads only; FrankenPHP refuses a `max_threads` below it plus the workers. The pin is the
+      # product owner's decision (2026-11-06), recorded in PRODUCTION_SECURITY_CHECKLIST.md §7.
       FRANKENPHP_CONFIG: |
         num_threads 4
         max_threads 12
@@ -99,7 +99,7 @@ services:
       resources:
         limits:
           cpus: ${PHP_CPU_LIMIT:-4.0}
-          # Measured on this image (doc-3, 2026-11-06): eight retained 100 MiB spools plus four concurrent
+          # Measured on this image (2026-11-06): eight retained 100 MiB spools plus four concurrent
           # maximum-size uploads left 868 MB of shmem, 99 MB anon and 47 MB kernel unreclaimable, no OOM; the rest
           # of the cgroup's use is page cache of the document volume, which the kernel reclaims at the limit.
           memory: ${PHP_MEM_LIMIT:-2g}
@@ -335,7 +335,7 @@ services:
       # The Documents reaper and sweeps run here and delete staged objects: they must resolve the same root as
       # `php`, and the entrypoint's storage boot probe refuses to start this worker when that root cannot stage,
       # promote and delete. A sweep pointed at an empty root would report every deletion as done.
-      DOCUMENTS_STORAGE_PATH: ${DOCUMENTS_STORAGE_PATH:-/app/documents}
+      DOCUMENTS_STORAGE_PATH: /app/documents
     volumes:
       - document_storage:/app/documents
     security_opt:

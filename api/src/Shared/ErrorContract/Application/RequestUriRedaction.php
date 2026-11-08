@@ -77,9 +77,12 @@ enum RequestUriRedaction
 
     /**
      * The path of the evidence PUT, on which the whole query is redacted. Anchored at the end and permissive
-     * before it (a scheme and host, any id segment, any case): over-matching a log is the safe direction.
+     * before it (a scheme and host, the front controller's `/index.php` spelling, any id segment, any case):
+     * over-matching a log is the safe direction. Matched against the path as written and as the router
+     * decodes it, so a percent-encoded segment cannot spell the route past the rule.
      */
-    private const string WHOLE_QUERY_PATH = '~(?:^|//[^/]*)/api/v1/documents/uploads/[^/]+/content/?$~i';
+    private const string WHOLE_QUERY_PATH
+        = '~(?:^|//[^/]*)(?:/index\.php)?/api/v1/documents/uploads/[^/]+/content/?$~i';
 
     /**
      * The value axis of the positional search grammar. The index is permissive — empty, negative, any
@@ -152,8 +155,23 @@ enum RequestUriRedaction
         $separator = \strpos($pathOrUri, '?');
         $path = false === $separator ? $pathOrUri : \substr($pathOrUri, 0, $separator);
         $fragment = \strpos($path, '#');
+        $candidate = false === $fragment ? $path : \substr($path, 0, $fragment);
 
-        return 1 === \preg_match(self::WHOLE_QUERY_PATH, false === $fragment ? $path : \substr($path, 0, $fragment));
+        for ($pass = 0; $pass <= self::MAX_DECODE_PASSES; ++$pass) {
+            if (1 === \preg_match(self::WHOLE_QUERY_PATH, $candidate)) {
+                return true;
+            }
+
+            $decoded = \rawurldecode($candidate);
+
+            if ($decoded === $candidate) {
+                return false;
+            }
+
+            $candidate = $decoded;
+        }
+
+        return false;
     }
 
     private static function redactQueryOnPath(string $query, ?string $path): string

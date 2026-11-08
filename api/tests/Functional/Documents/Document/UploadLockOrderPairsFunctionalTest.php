@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Documents\Document;
 
+use Doctrine\DBAL\Exception\DriverException;
 use Erpify\Documents\Document\Application\PurgeUserDocumentReferences;
 use Erpify\Documents\Document\Application\ReceiveDocument;
 use Erpify\Documents\Document\Application\Upload\ClaimedUpload;
 use Erpify\Documents\Document\Application\Upload\ClaimUpload;
 use Erpify\Documents\Document\Application\Upload\Command\UploadEvidenceCommand;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
+use Erpify\Documents\Document\Application\Upload\DocumentScanWakeUp;
+use Erpify\Documents\Document\Application\Upload\PromoteDocument;
 use Erpify\Documents\Document\Application\Upload\ReapUploadIntents;
 use Erpify\Documents\Document\Application\Upload\RollForwardPromotions;
 use Erpify\Documents\Document\Domain\Entity\Document;
@@ -18,6 +21,7 @@ use Erpify\Documents\Document\Domain\Exception\UploadAborted;
 use Erpify\Documents\Document\Domain\Exception\UploadGone;
 use Erpify\Documents\Document\Domain\FilenameSubmission;
 use Erpify\Documents\Document\Domain\OriginalFilename;
+use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
@@ -26,8 +30,11 @@ use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid as RandomUuid;
 
@@ -361,9 +368,34 @@ final class UploadLockOrderPairsFunctionalTest extends KernelTestCase
         );
     }
 
+    /**
+     * The roll-forward logs a row it cannot process and goes on, so a lock wait the probe cut short arrives as a
+     * log record rather than an exception; it is raised again here, for {@see waits()} to read. The record names
+     * only the exception class, and DBAL reports PostgreSQL's 55P03 as a plain driver exception, so a driver error
+     * logged while the probe's 200 ms lock timeout is set is read as that timeout — the only fault these tests
+     * provoke.
+     */
     private function rollForward(): int
     {
-        return $this->service(RollForwardPromotions::class)->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 10_000);
+        $log = new TestHandler();
+        $documents = $this->service(DocumentRepository::class);
+        $promoted = (new RollForwardPromotions(
+            $documents,
+            $this->service(PromoteDocument::class),
+            $this->service(DocumentScanWakeUp::class),
+            $this->service(TransactionManager::class),
+            new Logger('observability', [$log]),
+        ))->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 10_000);
+
+        foreach ($log->getRecords() as $record) {
+            $class = $record->context['exceptionClass'] ?? null;
+
+            throw new RuntimeException(\is_string($class) && \is_a($class, DriverException::class, true)
+                ? 'lock timeout while rolling forward'
+                : \sprintf('the roll-forward logged %s', \is_string($class) ? $class : 'a failure'));
+        }
+
+        return $promoted;
     }
 
     private function lockIntentOn(string $intentId): void

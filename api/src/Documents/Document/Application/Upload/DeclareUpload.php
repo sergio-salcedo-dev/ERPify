@@ -82,7 +82,7 @@ final readonly class DeclareUpload
             $keyHash,
             $command->retentionReason,
             $command->legalBasis,
-            $command->reviewAt,
+            $command->normalisedReviewAt(),
         );
 
         try {
@@ -205,7 +205,7 @@ final readonly class DeclareUpload
             && $document->digest() === $declaration->sha256
             && $document->retentionReason() === $declaration->retentionReason->value
             && $document->legalBasis() === $declaration->legalBasis->value
-            && $document->reviewAt()?->format(DATE_ATOM) === $declaration->reviewAt?->format(DATE_ATOM);
+            && $document->reviewAt()?->getTimestamp() === $declaration->reviewAt?->getTimestamp();
 
         if (!$same) {
             throw IdempotencyKeyConflict::create();

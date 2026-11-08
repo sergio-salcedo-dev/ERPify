@@ -249,7 +249,7 @@ final class UploadIntent
             && $this->declaredSha256 === $declaredSha256
             && $this->retentionReason === $retentionReason
             && $this->legalBasis === $legalBasis
-            && $reviewAt?->format(DATE_ATOM) === $this->reviewAt?->format(DATE_ATOM);
+            && $reviewAt?->getTimestamp() === $this->reviewAt?->getTimestamp();
     }
 
     public function secondsLeftOnLease(DateTimeImmutable $now): int

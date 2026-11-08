@@ -13,6 +13,8 @@ use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * The reaper: ends every upload intent that can no longer become a document, one intent per transaction.
@@ -32,6 +34,9 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *
  * A committed row's staged object is never deleted here and its scope never destroyed: the reaper acts on
  * intents, never on documents. Aborted-upload tombstones are never pruned.
+ *
+ * One intent that cannot be reaped is logged and passed over, never the end of the batch: a candidate that
+ * throws would otherwise head every tick's batch and stop all the others behind it.
  */
 final readonly class ReapUploadIntents
 {
@@ -41,6 +46,7 @@ final readonly class ReapUploadIntents
         private Keystore $keystore,
         private DocumentStorage $storage,
         private TransactionManager $transactionManager,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -52,8 +58,15 @@ final readonly class ReapUploadIntents
         $reaped = 0;
 
         foreach ($this->intents->reapCandidates($limit) as $intentId) {
-            if ($this->reapOne($intentId)) {
-                ++$reaped;
+            try {
+                if ($this->reapOne($intentId)) {
+                    ++$reaped;
+                }
+            } catch (Throwable $throwable) {
+                $this->logger->error('An upload intent could not be reaped; the batch goes on.', [
+                    'intentId' => $intentId,
+                    'exceptionClass' => $throwable::class,
+                ]);
             }
         }
 

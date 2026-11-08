@@ -31,14 +31,17 @@ final class DocumentsSchedulerStorageGateTest extends TestCase
 
         $definition = Dig::array($compose, 'services', $service);
         $path = Dig::string($definition, 'environment', 'DOCUMENTS_STORAGE_PATH');
-        $this->assertStringContainsString('/app/documents', $path);
 
         $volumes = $definition['volumes'] ?? [];
         $this->assertIsArray($volumes);
-        $this->assertContains(
-            'document_storage:/app/documents',
-            $volumes,
-            \sprintf('%s of %s does not mount the volume', $service, $file),
+        $target = $this->documentStorageTarget($volumes);
+        $this->assertNotNull($target, \sprintf('%s of %s does not mount the document_storage volume', $service, $file));
+
+        // Equal, not merely similar: a root resolved anywhere but the mount target is the writable layer.
+        $this->assertSame(
+            $target,
+            $path,
+            \sprintf('%s of %s resolves DOCUMENTS_STORAGE_PATH off its document_storage mount', $service, $file),
         );
 
         if ('compose.prod.yaml' === $file) {
@@ -58,5 +61,31 @@ final class DocumentsSchedulerStorageGateTest extends TestCase
         yield 'prod scheduler_worker' => ['compose.prod.yaml', 'scheduler_worker'];
         yield 'dev messenger_worker' => ['compose.yaml', 'messenger_worker'];
         yield 'php' => ['compose.yaml', 'php'];
+    }
+
+    /**
+     * Where the service mounts `document_storage`, in the short (`source:target[:mode]`) or the long syntax.
+     *
+     * @param array<array-key, mixed> $volumes
+     */
+    private function documentStorageTarget(array $volumes): ?string
+    {
+        foreach ($volumes as $volume) {
+            if (\is_string($volume)) {
+                $parts = \explode(':', $volume);
+
+                if ('document_storage' === $parts[0] && isset($parts[1])) {
+                    return $parts[1];
+                }
+            }
+
+            if (\is_array($volume) && 'document_storage' === ($volume['source'] ?? null)) {
+                $target = $volume['target'] ?? null;
+
+                return \is_string($target) ? $target : null;
+            }
+        }
+
+        return null;
     }
 }

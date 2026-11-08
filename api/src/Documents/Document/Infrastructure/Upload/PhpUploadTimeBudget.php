@@ -12,7 +12,7 @@ use const PHP_SAPI;
 
 /**
  * `set_time_limit()`, which restarts PHP's counter from zero with the new value. Under FrankenPHP's threads the
- * limit is wall-clock time, blocked reads included (memlog T1-4), so a stream that heartbeats re-arms it and one
+ * limit is wall-clock time, blocked reads included (measured), so a stream that heartbeats re-arms it and one
  * that stalls for longer than the limit dies — after its lease has already lapsed, so the reaper owns it.
  *
  * Inert on the CLI, where `max_execution_time` is 0: a test or a console command must never acquire a limit

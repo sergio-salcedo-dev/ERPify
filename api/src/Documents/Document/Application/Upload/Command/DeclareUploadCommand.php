@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Documents\Document\Application\Upload\Command;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Erpify\Documents\Document\Domain\Upload\LegalBasis;
 use Erpify\Documents\Document\Domain\Upload\RetentionReason;
 use Erpify\Documents\Document\Domain\UploadLimits;
@@ -56,6 +57,22 @@ final readonly class DeclareUploadCommand
                 ->addViolation()
             ;
         }
+    }
+
+    /**
+     * The review date as the intent stores and compares it: an instant in UTC at the second, the precision of a
+     * `review_at` column that carries no zone — stored with its offset, a `+02:00` value would be written two
+     * hours off, and an identical replay would then no longer match it.
+     */
+    public function normalisedReviewAt(): ?DateTimeImmutable
+    {
+        if (!$this->reviewAt instanceof DateTimeImmutable) {
+            return null;
+        }
+
+        return (new DateTimeImmutable('@' . $this->reviewAt->getTimestamp()))
+            ->setTimezone(new DateTimeZone('UTC'))
+        ;
     }
 
     /** The digest as the intent stores and compares it. */

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Erpify\Documents\Document\Infrastructure\Http;
 
 /**
- * The two ingest route names and the public path of the content route. The path is spelled here once because
- * three readers outside the router need it — the Caddy body bound, the URI redaction that replaces the whole
- * query on this route, and the ingest gate — and an anchored pattern drifting from the route is a bound or a
- * redaction that silently stops matching.
+ * The two ingest route names. The content route's public path is the router's, and four patterns outside it
+ * recognise that path on their own — the two Caddyfile matchers lifting its body bound, the API's whole-query
+ * redaction and its PWA mirror — so each is held to the path the router serves by
+ * `UploadRoutePathAgreementGateTest`, which reads it from `api/.route-manifest.json`.
  */
 final class UploadRoutes
 {

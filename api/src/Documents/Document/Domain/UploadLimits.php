@@ -10,7 +10,7 @@ namespace Erpify\Documents\Document\Domain;
  * staging age-sweep margin from the deadline, the lease and the reaper cadence together. Retuning one without
  * the others is how a sweep comes to delete a staged object a live upload is still writing.
  *
- * Values and their sources (spec `spec-documents-context`, memlog T1-1 to T1-7, owner decisions of 2026-11-06):
+ * Values and their sources (measured on the FrankenPHP transport, or decided by the product owner):
  *  - {@see MAX_ORIGINAL_BYTES}: 100 MiB, decided; exactly that many bytes are accepted.
  *  - {@see MIN_THROUGHPUT_BYTES_PER_SECOND}: 256 KiB/s, decided; with {@see DEADLINE_MARGIN_SECONDS} a
  *    100 MiB upload gets 460 s.

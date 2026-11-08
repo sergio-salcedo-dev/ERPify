@@ -9,7 +9,8 @@ use Erpify\Shared\ErrorContract\Domain\Exception\LengthRequired;
 
 /**
  * The evidence PUT arrived without a `Content-Length`. A body with no declared length that the transport cut
- * short reads as a complete shorter one (memlog T1-1), so it is refused before the intent is claimed.
+ * short reads as a complete shorter one (measured on the transport), so it is refused before the intent is
+ * claimed.
  */
 final class ContentLengthRequired extends DomainException implements LengthRequired
 {

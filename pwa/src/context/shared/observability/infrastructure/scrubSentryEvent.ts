@@ -168,14 +168,38 @@ function scrubUrlLikeValues(value: unknown, depth: number): unknown {
     return value;
   }
 
+  const record = value as Record<string, unknown>;
+  const uploadRoute: boolean = namesUploadRoute(record);
   const scrubbed: Record<string, unknown> = {};
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, nested] of Object.entries(record)) {
     scrubbed[key] =
       typeof nested === "string" && QUERY_KEY.test(key)
-        ? scrubBareQuery(nested)
+        ? scrubBareQuery(nested, uploadRoute)
         : scrubUrlLikeValues(nested, depth + 1);
   }
   return scrubbed;
+}
+
+/** Where a span or a breadcrumb names its request, under the spellings the SDK versions have used. */
+const URL_KEYS = ["url", "http.url", "url.full", "url.path", "http.target"] as const;
+
+/**
+ * Whether a structure names the upload route under any of {@link URL_KEYS}: its detached query keys — which
+ * carry no path of their own — are then withheld whole, as the route's URL is.
+ */
+function namesUploadRoute(record: Record<string, unknown>): boolean {
+  return URL_KEYS.some((key) => {
+    const candidate: unknown = record[key];
+
+    return typeof candidate === "string" && withholdsWholeQuery(pathOf(candidate));
+  });
+}
+
+/** A URL or path with its query and fragment cut off. */
+function pathOf(url: string): string {
+  const cut: number = url.search(/[?#]/);
+
+  return cut === -1 ? url : url.slice(0, cut);
 }
 
 /**
@@ -186,8 +210,15 @@ function scrubUrlLikeValues(value: unknown, depth: number): unknown {
  */
 const QUERY_KEY = /(?:^|[._])query(?:_string)?$/i;
 
-/** A query string with or without its leading `?`, scrubbed param by param. */
-function scrubBareQuery(value: string): string {
+/**
+ * A query string with or without its leading `?`, scrubbed param by param — or withheld whole when the
+ * structure it sits in names the upload route.
+ */
+function scrubBareQuery(value: string, uploadRoute: boolean): string {
+  if (uploadRoute && value !== "" && value !== "?") {
+    return value.startsWith("?") ? `?${REDACTION_SENTINEL}` : REDACTION_SENTINEL;
+  }
+
   return value.startsWith("?") ? scrubUrlLikeValue(value) : scrubQueryString(value);
 }
 
@@ -219,7 +250,10 @@ function scrubRequest(request: NonNullable<Event["request"]>): void {
   }
 
   if (typeof qs === "string" && qs !== "") {
-    request.query_string = scrubQueryString(qs);
+    request.query_string =
+      typeof url === "string" && withholdsWholeQuery(pathOf(url))
+        ? REDACTION_SENTINEL
+        : scrubQueryString(qs);
   }
 
   if (typeof url === "string") {

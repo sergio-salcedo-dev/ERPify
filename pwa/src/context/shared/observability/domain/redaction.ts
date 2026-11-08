@@ -170,13 +170,39 @@ const QUERY_KEY_FRAGMENTS: readonly string[] = QUERY_KEYS;
 
 /**
  * The path of the evidence PUT, on which the whole query is withheld rather than matched pair by pair: a
- * misspelt key the API ignores still travels in the URL. Mirrors `RequestUriRedaction::WHOLE_QUERY_PATH`.
+ * misspelt key the API ignores still travels in the URL. Admits the front controller's `/index.php` spelling.
+ * Mirrors `RequestUriRedaction::WHOLE_QUERY_PATH`.
  */
-const WHOLE_QUERY_PATH = /(?:^|\/\/[^/]*)\/api\/v1\/documents\/uploads\/[^/]+\/content\/?$/i;
+const WHOLE_QUERY_PATH =
+  /(?:^|\/\/[^/]*)(?:\/index\.php)?\/api\/v1\/documents\/uploads\/[^/]+\/content\/?$/i;
 
-/** True when a request to this path keeps no query at all in a sink. */
+/**
+ * True when a request to this path keeps no query at all in a sink. Matched as written and as the router
+ * decodes it, so a percent-encoded segment cannot spell the route past the rule.
+ */
 export function withholdsWholeQuery(path: string): boolean {
-  return WHOLE_QUERY_PATH.test(path);
+  let candidate: string = path;
+
+  for (let pass = 0; pass <= MAX_DECODE_PASSES; pass += 1) {
+    if (WHOLE_QUERY_PATH.test(candidate)) {
+      return true;
+    }
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(candidate);
+    } catch {
+      return false;
+    }
+
+    if (decoded === candidate) {
+      return false;
+    }
+
+    candidate = decoded;
+  }
+
+  return false;
 }
 
 /**

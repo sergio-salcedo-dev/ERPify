@@ -19,6 +19,7 @@ use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\UploadLimits;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use LogicException;
 
@@ -50,6 +51,7 @@ final readonly class ClaimUpload
     }
 
     /**
+     * @throws InvalidUuidException    when the upload id is not a UUID
      * @throws UploadGone              when the intent is absent, someone else's or expired
      * @throws UploadInProgress        when another request is streaming it
      * @throws ContentLengthRequired   when the PUT declares no length
@@ -59,9 +61,7 @@ final readonly class ClaimUpload
      */
     public function claim(UploadEvidenceCommand $command): ClaimedUpload|Document
     {
-        if (!Uuid::isValid($command->uploadId)) {
-            throw UploadGone::create();
-        }
+        Uuid::ensure($command->uploadId);
 
         return $this->transactionManager->transactional(
             fn (): ClaimedUpload|Document => $this->claimWithin($command),

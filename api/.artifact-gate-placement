@@ -215,11 +215,17 @@ tests/Unit/Gate/StackedDocblockRulesGateTest.php :: home
 tests/Unit/Gate/StatelessCsrfTokenIdGateTest.php :: home
 tests/Unit/Gate/StepVocabularyRegistryTest.php :: home
 tests/Unit/Gate/StrictRequestPayloadGateTest.php :: home
+tests/Unit/Gate/UploadRoutePathAgreementGateTest.php :: home
+tests/Unit/Gate/UploadSpoolConfinementGateTest.php :: home
 
 # Reads no repository artifact: it puts candidate separators through `Assert\Iban` at runtime and requires
 # the canonical form to absorb whatever the validator accepts. Whether the category covers a contract test
 # against a dependency is open, and nothing is moved on an open question.
 tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validator at runtime rather than reading an artifact
+
+# Matched by the shape heuristic (kernel-free, reaching files outside its directory), but its subject is the
+# running Caddy and the dev application behind it, not an artifact read as data.
+tests/Functional/Shared/Monitoring/UploadFilenameAccessLogContainmentGateTest.php :: functional :: the running stack's Caddy, its access log and the container-log mirror
 
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context

@@ -10,6 +10,7 @@ use Erpify\Documents\Document\Domain\Storage\ObjectAlreadyExists;
 use Erpify\Documents\Document\Domain\Storage\ObjectNotFound;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Generator;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -175,24 +176,27 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
     }
 
     /**
-     * @return lowercase-string[]
+     * @return iterable<string>
      */
     #[Override]
-    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds, int $limit): array
+    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds): iterable
     {
         $areaDirectory = $this->guardAreaIsReadable($area);
         $cutoff = \time() - $olderThanSeconds;
-        $scopes = [];
 
+        return $this->walkOlderThan($areaDirectory, $area, $cutoff);
+    }
+
+    /**
+     * @return Generator<int, string>
+     */
+    private function walkOlderThan(string $areaDirectory, StorageArea $area, int $cutoff): iterable
+    {
         foreach ($this->shardsOf($areaDirectory, $area) as $first) {
             foreach ($this->shardsOf($areaDirectory . '/' . $first, $area) as $second) {
                 $shard = $areaDirectory . '/' . $first . '/' . $second;
 
                 foreach ($this->entriesOf($shard, $area) as $name) {
-                    if (\count($scopes) >= $limit) {
-                        return $scopes;
-                    }
-
                     if (!Uuid::isValid($name) || \strtolower($name) !== $name) {
                         continue;
                     }
@@ -201,13 +205,11 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
                     $modified = $this->quietly(static fn (): false|int => \filemtime($shard . '/' . $name));
 
                     if (false !== $modified && $modified <= $cutoff) {
-                        $scopes[] = $name;
+                        yield $name;
                     }
                 }
             }
         }
-
-        return $scopes;
     }
 
     #[Override]
@@ -242,6 +244,19 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
 
         $this->syncDirectory(\dirname($final), StorageArea::Final);
         $this->syncDirectory(\dirname($staged), StorageArea::Staging);
+    }
+
+    #[Override]
+    public function syncFinal(string $scopeId): void
+    {
+        $final = $this->pathFor(StorageArea::Final, $scopeId);
+        $this->guardAreaIsUsable(StorageArea::Final);
+
+        if (!$this->objectExists($final, StorageArea::Final)) {
+            throw ObjectNotFound::in(StorageArea::Final);
+        }
+
+        $this->syncDirectory(\dirname($final), StorageArea::Final);
     }
 
     #[Override]

@@ -162,7 +162,7 @@
 		# The evidence PUT is the one route whose body is an original of up to 100 MiB. It is matched on the
 		# ORIGINAL path, because the rewrite above has already replaced the live one with index.php, and by an
 		# anchored pattern on a canonical UUID: a trailing slash, a suffix, another method or the `/index.php/…`
-		# spelling keep the 1MB bound below (measured, memlog T1-3). The bound is in bytes, equal to
+		# spelling keep the 1MB bound below (measured). The bound is in bytes, equal to
 		# `UploadLimits::MAX_ORIGINAL_BYTES` with no framing allowance, since the body IS the original.
 		@documentUpload {
 			path index.php
