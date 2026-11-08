@@ -226,6 +226,7 @@ tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validat
 # Matched by the shape heuristic (kernel-free, reaching files outside its directory), but its subject is the
 # running Caddy and the dev application behind it, not an artifact read as data.
 tests/Functional/Shared/Monitoring/UploadFilenameAccessLogContainmentGateTest.php :: functional :: the running stack's Caddy, its access log and the container-log mirror
+tests/Functional/Shared/Monitoring/UploadSpoolConcurrencyGateTest.php :: functional :: the running stack's Caddy and two concurrent uploads through it
 
 # Filed on the module whose contract they enforce.
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context

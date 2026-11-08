@@ -94,6 +94,8 @@ final class BestEffortReportChannelGateTest extends TestCase
         'InspectStoredIdentityHandler.php',
         'InterventionImageProcessor.php',
         'LeakedTransactionContainment.php',
+        'PhpUploadBodySpool.php',
+        'ReapUploadIntents.php',
         'ReauthenticateDeviceBestEffort.php',
         'ReconcilePersonReferencesHandler.php',
         'ReadFailureReporter.php',
@@ -108,12 +110,14 @@ final class BestEffortReportChannelGateTest extends TestCase
         'RevokeCurrentSessionBestEffort.php',
         'RevokeCurrentSessionController.php',
         'RevokeSessionsBestEffort.php',
+        'RollForwardPromotions.php',
         'SearchObservabilityListener.php',
         'SendAccountLockedEmailBestEffort.php',
         'SendEmailOnBankChanged.php',
         'SendInvitationEmailBestEffort.php',
         'SendPasswordChangedEmailBestEffort.php',
         'SendPasswordResetEmailBestEffort.php',
+        'SweepStagedOrphans.php',
         'SymfonyAuditLogger.php',
     ];
 

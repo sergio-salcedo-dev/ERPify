@@ -13,7 +13,6 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\Process\Process;
 
 /**
  * The evidence PUT carries the caller's original filename, percent-encoded, in its query — so the access log
@@ -25,7 +24,8 @@ use Symfony\Component\Process\Process;
  *  - aborted mid-body: the client stops sending and the application, reading a body shorter than declared,
  *    aborts the upload (its intent ends `expired`);
  *  - past the bound: one byte more than the route's cap.
- * Each carries a distinctive name, and both sinks are searched for it, encoded and decoded.
+ * Each carries a distinctive name, and both sinks are searched for it, encoded and decoded; and once the request
+ * has ended, no spool of its body remains in `upload_tmp_dir`.
  *
  * The session is the e2e administrator's, seeded into the dev stack the way `make pwa.test.e2e` seeds it
  * (idempotently, through the console) and signed in through Caddy. Every row a probe creates in the dev database
@@ -45,12 +45,6 @@ use Symfony\Component\Process\Process;
 final class UploadFilenameAccessLogContainmentGateTest extends TestCase
 {
     private const string ORIGIN = 'https://localhost';
-
-    private const string EMAIL = 'e2e@erpify.test';
-
-    private const string PASSWORD = 'e2ePassword123';
-
-    private const string ORGANIZATION = 'E2E-Test-Organization';
 
     /** Over Caddy's `1MB` (10^6) and over a mebibyte, so neither reading of the generic bound could admit it. */
     private const int OVER_ONE_MEGABYTE = 1_100_000;
@@ -76,17 +70,7 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
 
     public static function setUpBeforeClass(): void
     {
-        foreach (
-            [
-                ['organization:provision', self::ORGANIZATION],
-                ['organization:administrator:create', self::EMAIL, self::PASSWORD],
-            ] as $command
-        ) {
-            // Idempotent like the e2e seed: a second provision or an existing administrator fails, and is fine.
-            (new Process(['php', 'bin/console', ...$command, '--no-interaction'], \dirname(__DIR__, 4), [
-                'APP_ENV' => 'dev',
-            ]))->run();
-        }
+        DevStackUploadRows::prepare();
 
         $jar = \tempnam(\sys_get_temp_dir(), 'access-log-probe');
         self::$cookieJar = \is_string($jar) ? $jar : null;
@@ -104,8 +88,8 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
     {
         $this->rows = new DevStackUploadRows();
         [$status] = $this->request('POST', '/api/v1/backoffice/login', \json_encode([
-            'email' => self::EMAIL,
-            'password' => self::PASSWORD,
+            'email' => DevStackUploadRows::EMAIL,
+            'password' => DevStackUploadRows::PASSWORD,
         ]) ?: '');
         $this->assertSame(204, $status, 'the e2e administrator could not sign in through Caddy');
     }
@@ -130,10 +114,12 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
         $position = $this->accessLogPosition();
         $mirrorOffset = $this->mirrorSize();
 
-        $status = $this->put($upload, $name, $anchor, $ending);
+        $token = \random_bytes(16);
+        $status = $this->put($upload, $name, $anchor, $ending, $token);
 
         $written = $this->accessLogWrittenSince($position, $anchor);
         $mirrored = $this->mirrorWrittenSince($mirrorOffset);
+        $this->assertNoSpoolHolds($token);
 
         if ('completed' === $ending) {
             $this->assertSame(201, $status, 'a body over 1 MB on the canonical path is filed');
@@ -213,7 +199,7 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
      *
      * @SuppressWarnings("PHPMD.UnusedFormalParameter") the read callback's signature is curl's
      */
-    private function put(string $upload, string $name, string $anchor, string $ending): int
+    private function put(string $upload, string $name, string $anchor, string $ending, string $token): int
     {
         $handle = $this->handle(\sprintf(
             '%s/api/v1/documents/uploads/%s/content?filename=%s',
@@ -239,16 +225,19 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
             &$sent,
             $length,
             $abortAfter,
+            $token,
         ): string {
             // Stop feeding the declared length: the client times out below and closes mid-body.
             if ($sent >= $abortAfter) {
                 return '';
             }
 
-            $chunk = \min($want, $length - $sent);
+            $chunk = \max(0, \min($want, $length - $sent));
+            $offset = $sent % \strlen($token);
             $sent += $chunk;
 
-            return \str_repeat('a', \max(0, $chunk));
+            // The probe's own token, repeated: a spool of this request is recognisable by its first bytes.
+            return \substr(\str_repeat($token, \intdiv($offset + $chunk, \strlen($token)) + 1), $offset, $chunk);
         };
 
         \curl_setopt_array($handle, [
@@ -293,6 +282,24 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
         ]);
 
         return $handle;
+    }
+
+    /**
+     * The request has ended once its access-log line exists, so no spool of it may remain in `upload_tmp_dir`: the
+     * application destroys its plaintext copy of the body as soon as it stops reading it, whatever the outcome.
+     */
+    private function assertNoSpoolHolds(string $token): void
+    {
+        $directory = (string) \ini_get('upload_tmp_dir');
+        $this->assertDirectoryExists($directory);
+
+        foreach (\glob($directory . '/php*') ?: [] as $spool) {
+            $this->assertNotSame(
+                $token,
+                \file_get_contents($spool, false, null, 0, \strlen($token)),
+                "the request's plaintext body is still spooled",
+            );
+        }
     }
 
     private function mirrorPath(): string

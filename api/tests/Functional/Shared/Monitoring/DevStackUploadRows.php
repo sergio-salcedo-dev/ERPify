@@ -9,6 +9,7 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Tools\DsnParser;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use RuntimeException;
+use Symfony\Component\Process\Process;
 
 /**
  * The rows and objects a probe through Caddy leaves in the running stack — which serves the dev database, not the
@@ -17,7 +18,33 @@ use RuntimeException;
  */
 final class DevStackUploadRows
 {
+    public const string EMAIL = 'e2e@erpify.test';
+
+    public const string PASSWORD = 'e2ePassword123';
+
+    private const string ORGANIZATION = 'E2E-Test-Organization';
+
     private ?Connection $connection = null;
+
+    /**
+     * Seeds the e2e administrator the way `make pwa.test.e2e` does — idempotently: a second provision or an existing
+     * administrator fails, and is fine — and empties the dev application's rate-limiter pool, since the declare
+     * budget is per identity and outlives a run.
+     */
+    public static function prepare(): void
+    {
+        foreach (
+            [
+                ['organization:provision', self::ORGANIZATION],
+                ['organization:administrator:create', self::EMAIL, self::PASSWORD],
+                ['cache:pool:clear', 'cache.rate_limiter'],
+            ] as $command
+        ) {
+            (new Process(['php', 'bin/console', ...$command, '--no-interaction'], \dirname(__DIR__, 4), [
+                'APP_ENV' => 'dev',
+            ]))->run();
+        }
+    }
 
     public function stateOf(string $intentId): mixed
     {

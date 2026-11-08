@@ -35,8 +35,9 @@ services:
         soft: 0
         hard: 0
     # PHP spools every request body it is asked to read (`php://input`, a multipart upload) to `upload_tmp_dir`,
-    # and an evidence PUT's body is the plaintext original, up to 100 MiB, kept there until the same worker thread
-    # serves another request (measured). It must never reach persistent storage, so the directory is a tmpfs:
+    # and an evidence PUT's body is the plaintext original, up to 100 MiB, held open by the worker thread until it
+    # serves another request (measured); the upload route destroys its own spool when its response leaves. It must
+    # never reach persistent storage, so the directory is a tmpfs:
     # its pages count against the container's memory limit, which `memswap_limit` in compose.prod.yaml makes
     # unswappable. Sized for the spools the worker threads can RETAIN, not for the in-flight cap: 8 worker
     # threads (compose.prod.yaml) x 100 MiB, plus margin. The entrypoint refuses to start FrankenPHP when the

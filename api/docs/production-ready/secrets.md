@@ -123,3 +123,7 @@ If a secret is accidentally committed to git:
 4. Purge the secret from git history using `git filter-repo` or GitHub's
    "Secret scanning" remediation flow.
 5. Revoke any tokens or sessions that may have used the exposed value.
+
+Rotating `APP_SECRET` also unmatches every stored evidence idempotency key (HMAC-SHA256 under `kernel.secret`): a
+client retrying an upload across the rotation files the same evidence twice — a duplicate, never a loss — and
+nothing reports it. Accepted (`PRODUCTION_SECURITY_CHECKLIST.md` §7).
