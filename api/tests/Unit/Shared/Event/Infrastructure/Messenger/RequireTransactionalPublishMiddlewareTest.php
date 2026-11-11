@@ -108,6 +108,7 @@ final class RequireTransactionalPublishMiddlewareTest extends TestCase
         $this->expectExceptionMessageIsOrContains(stdClass::class);
 
         $this->middleware($this->connection(inTransaction: false), true, new InMemoryTransport())
-            ->handle(new Envelope(new stdClass()), $this->refusingStack());
+            ->handle(new Envelope(new stdClass()), $this->refusingStack())
+        ;
     }
 }
