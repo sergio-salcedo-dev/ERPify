@@ -366,7 +366,11 @@
     marker, DekDestroyed answering the gone problem type (410, the Gone marker doc-3 introduces)
     and DecryptionFailed staying 5xx so it reaches Sentry; neither crypto exception gets a marker,
     because PiiDiffSealer shares them on the write path, where 500 is right; the type-to-status
-    mapping goes into docs/api-error-contract.md in the same PR.
+    mapping goes into docs/api-error-contract.md in the same PR. The same PR removes the #418 row
+    from the accepted-risks table in section 7 of PRODUCTION_SECURITY_CHECKLIST.md, so that register
+    never points at a closed issue; that row's revisit trigger names only
+    EnvelopeEncryptor::decrypt(), while a document read decrypts through
+    StreamEnvelopeEncryptor::unseal().
   done_checkpoint: true
   invoke_dev_with: >-
     Mirror the hardening of ImageGetController (nosniff, locked-down CSP, no media type taken on
