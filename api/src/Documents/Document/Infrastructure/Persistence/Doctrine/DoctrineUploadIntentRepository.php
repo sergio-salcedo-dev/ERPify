@@ -194,8 +194,8 @@ final readonly class DoctrineUploadIntentRepository implements UploadIntentRepos
     #[Override]
     public function reapCandidates(int $limit, ?string $afterId = null): array
     {
-        /** @var list<string> $ids */
-        $ids = $this->connection->fetchFirstColumn(
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
             'SELECT id FROM upload_intent WHERE ('
             . '(state = :declared AND ttl_expires_at <= NOW()) '
             . 'OR (state = :streaming AND (lease_expires_at <= NOW() OR upload_deadline_at <= NOW())) '
@@ -211,8 +211,6 @@ final readonly class DoctrineUploadIntentRepository implements UploadIntentRepos
             ],
             ['limit' => Types::INTEGER],
         );
-
-        return $ids;
     }
 
     #[Override]

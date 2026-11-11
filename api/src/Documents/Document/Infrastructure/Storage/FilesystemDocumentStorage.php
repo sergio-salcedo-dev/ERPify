@@ -197,19 +197,27 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
                 $shard = $areaDirectory . '/' . $first . '/' . $second;
 
                 foreach ($this->entriesOf($shard, $area) as $name) {
-                    if (!Uuid::isValid($name) || \strtolower($name) !== $name) {
-                        continue;
-                    }
-
-                    \clearstatcache(true, $shard . '/' . $name);
-                    $modified = $this->quietly(static fn (): false|int => \filemtime($shard . '/' . $name));
-
-                    if (false !== $modified && $modified <= $cutoff) {
+                    if ($this->isScopeModifiedBy($shard . '/' . $name, $name, $cutoff)) {
                         yield $name;
                     }
                 }
             }
         }
+    }
+
+    /**
+     * Whether the entry is a scope object (a lower-case UUID) last modified at or before the cutoff.
+     */
+    private function isScopeModifiedBy(string $path, string $name, int $cutoff): bool
+    {
+        if (!Uuid::isValid($name) || \strtolower($name) !== $name) {
+            return false;
+        }
+
+        \clearstatcache(true, $path);
+        $modified = $this->quietly(static fn (): false|int => \filemtime($path));
+
+        return false !== $modified && $modified <= $cutoff;
     }
 
     #[Override]

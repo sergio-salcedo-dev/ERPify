@@ -183,7 +183,7 @@ const WHOLE_QUERY_PATH =
  */
 function rawUrlDecode(value: string): string {
   return value.replace(/%([0-9A-Fa-f]{2})/g, (_triplet: string, hex: string) =>
-    String.fromCharCode(Number.parseInt(hex, 16)),
+    String.fromCodePoint(Number.parseInt(hex, 16)),
   );
 }
 

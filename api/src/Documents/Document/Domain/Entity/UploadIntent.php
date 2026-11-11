@@ -51,6 +51,8 @@ use LogicException;
 #[ORM\Index(name: 'idx_upload_intent_state', columns: ['state'])]
 final class UploadIntent
 {
+    private const string MODIFY_SECONDS = '+%d seconds';
+
     public const string SCOPE_ID_CONSTRAINT = 'uniq_upload_intent_scope_id';
 
     public const string KEY_HASH_CONSTRAINT = 'uniq_upload_intent_key_hash';
@@ -108,7 +110,9 @@ final class UploadIntent
         private DateTimeImmutable $createdAt,
     ) {
         $this->keyHash = $keyHash;
-        $this->ttlExpiresAt = $this->createdAt->modify(\sprintf('+%d seconds', UploadLimits::DECLARED_TTL_SECONDS));
+        $this->ttlExpiresAt = $this->createdAt->modify(
+            \sprintf(self::MODIFY_SECONDS, UploadLimits::DECLARED_TTL_SECONDS),
+        );
     }
 
     /**
@@ -177,7 +181,7 @@ final class UploadIntent
         $this->state = UploadIntentState::Streaming;
         $this->claimedAt = $now;
         $this->uploadDeadlineAt = $now->modify(
-            \sprintf('+%d seconds', UploadLimits::deadlineSecondsFor($this->declaredSize)),
+            \sprintf(self::MODIFY_SECONDS, UploadLimits::deadlineSecondsFor($this->declaredSize)),
         );
         $this->leaseExpiresAt = $this->leaseFrom($now);
     }
@@ -409,7 +413,7 @@ final class UploadIntent
 
     private function leaseFrom(DateTimeImmutable $now): DateTimeImmutable
     {
-        $lease = $now->modify(\sprintf('+%d seconds', UploadLimits::LEASE_SECONDS));
+        $lease = $now->modify(\sprintf(self::MODIFY_SECONDS, UploadLimits::LEASE_SECONDS));
 
         if ($this->uploadDeadlineAt instanceof DateTimeImmutable && $lease > $this->uploadDeadlineAt) {
             return $this->uploadDeadlineAt;

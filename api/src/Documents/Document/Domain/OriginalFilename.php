@@ -59,6 +59,9 @@ final class OriginalFilename implements Stringable
         $this->values()[$this] = $value;
     }
 
+    /**
+     * A copy would carry no entry in the value map, which is keyed by this instance: cloning is refused.
+     */
     private function __clone()
     {
     }

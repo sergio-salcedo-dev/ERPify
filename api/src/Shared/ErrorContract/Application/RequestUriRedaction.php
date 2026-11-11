@@ -329,22 +329,13 @@ enum RequestUriRedaction
      */
     private static function namesASensitiveAxis(string $key): bool
     {
-        if (\in_array($key, self::IDENTITY_KEYS, true)) {
-            return true;
-        }
-
-        if (1 === \preg_match(self::SEARCH_VALUE_KEY, $key)) {
-            return true;
-        }
-
-        if (\array_any(self::QUERY_KEYS, static fn (string $queryKey): bool => \str_contains($key, $queryKey))) {
-            return true;
-        }
-
-        return \array_any(
-            RedactionDenylist::KEYS,
-            static fn (string $deniedKey): bool => \str_contains($key, $deniedKey),
-        );
+        return \in_array($key, self::IDENTITY_KEYS, true)
+            || 1 === \preg_match(self::SEARCH_VALUE_KEY, $key)
+            || \array_any(self::QUERY_KEYS, static fn (string $queryKey): bool => \str_contains($key, $queryKey))
+            || \array_any(
+                RedactionDenylist::KEYS,
+                static fn (string $deniedKey): bool => \str_contains($key, $deniedKey),
+            );
     }
 
     /**

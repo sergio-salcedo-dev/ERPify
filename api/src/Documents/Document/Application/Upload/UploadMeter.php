@@ -96,16 +96,15 @@ final class UploadMeter
      */
     public function read(int $length): false|string
     {
-        if (null !== $this->abortReason) {
-            return false;
+        if (null === $this->abortReason) {
+            $this->beatIfDue();
         }
 
-        $this->beatIfDue();
+        return null === $this->abortReason ? $this->readChunk($length) : false;
+    }
 
-        if (null !== $this->abortReason) {
-            return false;
-        }
-
+    private function readChunk(int $length): false|string
+    {
         $chunk = \fread($this->source, \max(1, \min($length, UploadLimits::READ_CHUNK_BYTES)));
 
         if (false === $chunk) {

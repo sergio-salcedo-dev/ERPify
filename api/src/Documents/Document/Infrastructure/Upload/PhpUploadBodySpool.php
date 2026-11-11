@@ -114,9 +114,9 @@ final readonly class PhpUploadBodySpool
         }
 
         try {
-            $head = \fread($handle, \max(1, \min($bytesRead, self::HEAD_BYTES)));
+            $head = $this->headMatching($handle, $bytesRead, $headSha256);
 
-            if (false === $head || !\hash_equals($headSha256, \hash('sha256', $head))) {
+            if (null === $head) {
                 return null;
             }
 
@@ -127,6 +127,18 @@ final readonly class PhpUploadBodySpool
         } finally {
             \fclose($handle);
         }
+    }
+
+    /**
+     * The candidate's leading bytes when they hash to what the request read first, else null.
+     *
+     * @param resource $handle
+     */
+    private function headMatching(mixed $handle, int $bytesRead, string $headSha256): ?string
+    {
+        $head = \fread($handle, \max(1, \min($bytesRead, self::HEAD_BYTES)));
+
+        return false !== $head && \hash_equals($headSha256, \hash('sha256', $head)) ? $head : null;
     }
 
     private function sizeWithinWindow(string $path, int $bytesRead): bool
