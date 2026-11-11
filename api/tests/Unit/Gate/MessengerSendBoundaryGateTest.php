@@ -25,10 +25,7 @@ use PHPUnit\Framework\TestCase;
  *    hint. A third caller is a decision, and the edit here is where it is made;
  *  - **who may name a sender, a transport or a transport locator** — the plumbing. The guard and the validator
  *    inspect transports and the Sentry filter names the PostgreSQL bridge to recognise its exception. None
- *    sends. A fifth file naming one is where a direct `send()` would appear. `MessengerDeadLetterReader` is in
- *    the set for a weaker reason, stated plainly: it takes a read-only `ReceiverInterface` and names no
- *    transport in code — the set holds it because its docblock spells the container id the failure transport
- *    is wired by (`config/services.yaml`, outside this sweep). Editing that docblock is an edit here.
+ *    sends. A fourth file naming one is where a direct `send()` would appear.
  *
  * The `Receiver` and `Serialization` namespaces are deliberately not part of the transport match: a receiver
  * can only read and a serializer only encodes. Every other type under `Messenger\Transport\` is, so a
@@ -90,9 +87,8 @@ final class MessengerSendBoundaryGateTest extends TestCase
     /**
      * Whatever can put an envelope on a transport, or resolve the object that can: the whole Bridge root (the
      * Doctrine transport and its connection live there), the container ids that hand any of them out, and the
-     * stamp that picks a transport at dispatch. The
-     * `Transport` namespace is matched by {@see self::TRANSPORT_NAMESPACE} instead, since it is a prefix with
-     * two exclusions.
+     * stamp that picks a transport at dispatch. The `Transport` namespace is matched by
+     * {@see self::TRANSPORT_NAMESPACE} instead, since it is a prefix with two exclusions.
      *
      * @var list<string>
      */
@@ -124,7 +120,6 @@ final class MessengerSendBoundaryGateTest extends TestCase
      */
     private const array TRANSPORT_SITES = [
         'Shared/Event/Infrastructure/Messenger/AsyncTransportValidator.php',
-        'Shared/Event/Infrastructure/Messenger/MessengerDeadLetterReader.php',
         'Shared/Event/Infrastructure/Messenger/RequireTransactionalPublishMiddleware.php',
         'Shared/Monitoring/Infrastructure/Sentry/SentryEventFilter.php',
     ];
