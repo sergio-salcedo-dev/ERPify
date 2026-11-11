@@ -1,33 +1,60 @@
 name: Accepted-risk live state
 
-# Structural validity (grammar, paragraph co-location, the content floor) is checked offline by
-# `make php.lint.accepted-risk` (api/tests/Unit/Gate/AcceptedRiskTagGateTest.php), wired into `php.quality`,
-# with zero network access. This job checks the one thing that gate cannot: whether the issue a tag
-# references is STILL OPEN. A syntactically valid `@accepted-risk #<issue>` tag pointing at a
-# silently-closed issue is exactly the failure #863 exists to catch.
+# Structural validity of `@accepted-risk #<issue>` tags (grammar, paragraph co-location, the content floor) is
+# checked offline by `make php.lint.accepted-risk` (api/tests/Unit/Gate/AcceptedRiskTagGateTest.php), wired
+# into `php.quality`, with zero network access. This job checks the one thing that gate cannot: whether each
+# watched issue is STILL OPEN. A watched issue is one an `@accepted-risk` tag names, or one a row of the
+# register in section 7 of PRODUCTION_SECURITY_CHECKLIST.md names ("Accepted risks watched by an open issue
+# -- the register"). A record still pointing at a silently-closed issue is exactly the failure #863 exists to
+# catch.
 #
-# Deliberately NOT scoped to the pull request's own diff: an issue can close well after the pull request
-# that introduced its tag has already merged, and the count is tiny (2 known references at introduction) --
-# the whole tree is scanned on every run instead. It is the first workflow in this repo to call the GitHub
-# API for live state -- no other workflow calls `gh issue`/`gh api`/`gh pr`/Octokit/github-script.
+# The register is read as well as the tags because a row is not a tag: most of those risks carry no tag
+# anywhere, so a row whose issue was closed went on reading as "accepted and watched" with nothing red. The
+# register is read in full, never sampled. It is the list item that opens with the register's bold lead-in,
+# up to the next top-level list item or heading. Its table starts at the first `|` line and runs to the
+# first blank line. Every line of that table after the header and separator must be a row opening with
+# `[#N](https://github.com/<repo>/issues/N)`, and nothing but blank lines may follow the table inside the
+# item. Each of these is a GATE ERROR, never a row skipped:
+#   - a missing lead-in, or a missing `Issue`-headed table;
+#   - a pipe-less or comment line inside the table, which GitHub still renders as part of it;
+#   - a row split off the table by a blank line, which GitHub renders as stray text.
+# Any of those would otherwise drop rows out of the check with this job still green. An empty register
+# (header and separator only) is legitimate and checks nothing.
 #
-# Also runs on a daily `schedule`, not `pull_request` alone: an issue can close with no new pull request
-# ever touching the tree again, which `pull_request`-only would never notice -- the exact failure mode
-# #863 exists to catch. Cheap at today's count (2 known tags); revisit the cadence if that count grows
-# enough for `gh issue view` to matter for rate limits.
+# Deliberately NOT scoped to the pull request's own diff: an issue can close well after the change that
+# introduced its record has merged, and the count is tiny (three issues at the last count: two tags naming
+# one of them, three register rows), so the whole tree is read on every run instead. It is the first
+# workflow in this repo to call the GitHub API for live state -- no other workflow calls
+# `gh issue`/`gh api`/`gh pr`/Octokit/github-script.
 #
-# v1 does not discriminate GitHub's shared issue/PR number namespace: a tag referencing a PR number is
-# resolved by `gh issue view` as-is, and whatever that command does with a PR number (accept it, or refuse
-# it) is treated as this job's answer -- a refusal surfaces as a GATE ERROR below, never a silent pass.
+# When it runs, and why each trigger:
+#   - Daily `schedule`: an issue can close with no new change ever touching the tree again, which
+#     `pull_request` alone would never notice.
+#   - `push` to `main`: the closing keywords GitHub honours on merge ("closes #N", "fixes #N" ...) close
+#     the issue AFTER the pull request's own run, so without this the first red would wait for the next
+#     schedule.
+#   - `pull_request`, `edited` included: GitHub resolves a keyword in the body (or a link from the sidebar)
+#     to `closingIssuesReferences`, so a pull request that would close a watched issue on merge, while its
+#     tag or row still stands at the head, is refused before it merges. `edited` re-runs the job when the
+#     body changes.
+#   - Limits of that pull-request check: a keyword in a commit message is not read, so `push` is the
+#     backstop. A pull request that closes the issue AND removes its record passes, which is the intended
+#     way to retire an acceptance.
+#
+# v1 does not discriminate GitHub's shared issue/PR number namespace: a tag or row naming a PR number is
+# resolved by `gh issue view` as-is. An open PR reads OPEN and passes, a closed one reads CLOSED (red), and
+# a merged one returns an unrecognised state (a GATE ERROR) -- never a silent pass once it stops being open.
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened, synchronize, edited]
+  push:
+    branches: [main]
   schedule:
     - cron: '17 6 * * *'
 
 concurrency:
-  group: accepted-risk-live-state-${{ github.event.pull_request.number || 'scheduled' }}
+  group: accepted-risk-live-state-${{ github.event.pull_request.number || github.event_name }}
   cancel-in-progress: true
 
 permissions:
@@ -41,6 +68,7 @@ jobs:
     permissions:
       contents: read
       issues: read
+      pull-requests: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -52,6 +80,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           set -uo pipefail
 
@@ -121,20 +150,105 @@ jobs:
             find docs/adr -maxdepth 1 -type f -name '*.md' -print0
           )
 
-          unique_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
+          tag_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
 
-          if [ -z "$unique_issues" ]; then
-            echo "No @accepted-risk tags found in the tree -- nothing to check."
+          # The section 7 register, read as the whole list item its lead-in opens (see the header).
+          checklist=PRODUCTION_SECURITY_CHECKLIST.md
+          register_marker='**Accepted risks watched by an open issue — the register.**'
+          if [ ! -f "$checklist" ] || ! grep -qF -- "$register_marker" "$checklist"; then
+            echo "::error::GATE ERROR -- the accepted-risk register lead-in '$register_marker' is missing from $checklist; a check that quietly skipped the register would report the same green as a real pass."
+            exit 1
+          fi
+
+          # TABLE: every line from the first `|` line to the first blank line. AFTER: any non-blank line
+          # between that blank line and the end of the item (the next top-level list item or heading).
+          register_lines="$(awk -v marker="$register_marker" '
+            !inregister { if (index($0, marker)) { inregister = 1 }; next }
+            /^- \[/ || /^#/ { exit }
+            !intable { if ($0 ~ /^[[:space:]]*\|/) { intable = 1; print "TABLE " $0 }; next }
+            !ended { if ($0 ~ /^[[:space:]]*$/) { ended = 1 } else { print "TABLE " $0 }; next }
+            $0 !~ /^[[:space:]]*$/ { print "AFTER " $0 }
+          ' "$checklist")"
+
+          after="$(printf '%s\n' "$register_lines" | sed -n 's/^AFTER //p' | sed -n '1p')"
+          if [ -n "$after" ]; then
+            echo "::error::GATE ERROR -- text follows the accepted-risk register table in $checklist inside the register item; a row split off by a blank line is not part of the table and would go unchecked: $after"
+            exit 1
+          fi
+
+          register_table="$(printf '%s\n' "$register_lines" | sed -n 's/^TABLE //p')"
+          header="$(printf '%s\n' "$register_table" | sed -n '1p')"
+          separator="$(printf '%s\n' "$register_table" | sed -n '2p')"
+          if ! printf '%s\n' "$header" | grep -qE '^[[:space:]]*\|[[:space:]]*Issue[[:space:]]*\|' \
+            || ! printf '%s\n' "$separator" | grep -qE '^[[:space:]]*\|[-:| ]+\|[[:space:]]*$'; then
+            echo "::error::GATE ERROR -- no table whose first column is 'Issue' follows the accepted-risk register lead-in in $checklist."
+            exit 1
+          fi
+
+          repo_re="$(printf '%s' "$REPO" | sed 's/[.]/\\./g')"
+          register_issues=""
+          while IFS= read -r row; do
+            cells="$(printf '%s\n' "$row" \
+              | sed -nE 's,^[[:space:]]*\|[[:space:]]*\[#([1-9][0-9]*)\]\(https://github\.com/'"$repo_re"'/issues/([1-9][0-9]*)\)[[:space:]]*\|.*,\1 \2,p')"
+            text_n="${cells% *}"
+            link_n="${cells#* }"
+            if [ -z "$cells" ] || [ "$text_n" != "$link_n" ]; then
+              echo "::error::GATE ERROR -- a line of the accepted-risk register table in $checklist does not open with | [#N](https://github.com/$REPO/issues/N) |, so its issue cannot be checked: $row"
+              exit 1
+            fi
+            register_issues="${register_issues}${link_n}"$'\n'
+          done < <(printf '%s\n' "$register_table" | sed -n '3,$p')
+
+          # Which record names issue $1, and what retiring it means, for the failure messages.
+          sources_of() {
+            local in_tag="" in_register=""
+            if printf '%s\n' "$tag_issues" | grep -qx "$1"; then in_tag=1; fi
+            if printf '%s\n' "$register_issues" | grep -qx "$1"; then in_register=1; fi
+            if [ -n "$in_tag" ] && [ -n "$in_register" ]; then
+              where="an @accepted-risk tag and the section 7 register of $checklist"
+              remedy="remove the tag and the register row"
+            elif [ -n "$in_tag" ]; then
+              where="an @accepted-risk tag"
+              remedy="remove the tag"
+            else
+              where="the section 7 register of $checklist"
+              remedy="remove the register row"
+            fi
+          }
+
+          failures=0
+
+          # On a pull request: the issues GitHub will close when it merges. Merging closes them after this
+          # job has run, so this is the only point at which that closure can still be refused.
+          if [ -n "${PR:-}" ]; then
+            if ! closing="$(gh pr view "$PR" --repo "$REPO" --json closingIssuesReferences --jq '.closingIssuesReferences[].number' 2>/tmp/gh-err.log)"; then
+              echo "::error::GATE ERROR -- the issues pull request #$PR closes on merge could not be read ($(cat /tmp/gh-err.log 2>/dev/null))."
+              exit 1
+            fi
+            for n in $closing; do
+              if printf '%s\n%s\n' "$tag_issues" "$register_issues" | grep -qx "$n"; then
+                sources_of "$n"
+                echo "::error::This pull request closes #$n on merge (a closing keyword in its body, or a link from its sidebar), but $where still names it -- reword the reference, or $remedy in this same change."
+                failures=$((failures + 1))
+              fi
+            done
+          fi
+
+          unique_issues="$(printf '%s\n%s\n' "$tag_issues" "$register_issues" | grep -E '^[0-9]+$' | sort -un)" || true
+
+          if [ -z "$unique_issues" ] && [ "$failures" -eq 0 ]; then
+            echo "No @accepted-risk tags in the tree and no rows in the $checklist register -- nothing to check."
             exit 0
           fi
 
-          failures=0
           for n in $unique_issues; do
+            sources_of "$n"
+
             if state_json="$(gh issue view "$n" --repo "$REPO" --json state 2>/tmp/gh-err.log)"; then
               state="$(printf '%s' "$state_json" | jq -r '.state // empty')"
 
               if [ "$state" = "CLOSED" ]; then
-                echo "::error::Accepted-risk tag references issue #$n, which is CLOSED -- resolve the tag or reopen the issue."
+                echo "::error::Issue #$n is named by $where but is CLOSED -- $remedy (the risk was fixed or re-decided), or reopen the issue."
                 failures=$((failures + 1))
               elif [ "$state" != "OPEN" ]; then
                 echo "::error::GATE ERROR -- issue #$n returned an unrecognised state ('$state')."
