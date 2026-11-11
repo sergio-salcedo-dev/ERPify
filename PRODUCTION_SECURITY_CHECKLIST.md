@@ -2478,14 +2478,18 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **Accepted risks watched by an open issue — the register.** Each row is a residual deliberately
       accepted rather than fixed, and each issue stays **open** for as long as the acceptance stands: it is the
       artefact that holds the revisit trigger. `.github/workflows/accepted-risk-live-state.yml` reads every
-      row of the table below, on each pull request and daily, and reds when a row's issue is closed — so a
-      closed issue means removing its row in the same change. It also refuses a row it cannot read: the
-      first cell stays `[#N](https://github.com/<owner>/<repo>/issues/N)`, and the bold lead-in above and the
-      `Issue` header are how it finds the table. Independently, #872 carries two `@accepted-risk` tags in
-      `docs/adr/image-deletion-signal-transport.md`, which the same job requires to point at an open issue.
-      Beware of GitHub's closing keywords: a pull request or commit saying "closes #N" or "fixes #N" closes
-      that issue on merge, which is how #418 was once closed by a change that only documented who would
-      close it. Closing one means either fixing the risk or re-deciding it — never tidying the
+      row of the table below — on each pull request, on each push to `main` and daily — and reds when a row's
+      issue is closed, so a closed issue means removing its row in the same change. It also refuses a
+      register it cannot read in full: the first cell stays `[#N](https://github.com/<owner>/<repo>/issues/N)`,
+      the bold lead-in above and the `Issue` header are how it finds the table, and the table stays one
+      unbroken block, with no blank line, comment or other text inside it or after it within this item.
+      Independently, #872 carries two `@accepted-risk` tags in `docs/adr/image-deletion-signal-transport.md`,
+      which the same job requires to point at an open issue. Beware of GitHub's closing keywords: a pull
+      request or commit saying "closes #N" or "fixes #N" closes that issue on merge — after the pull request's
+      checks have run — which is how #418 was once closed by a change that only documented who would close
+      it. The job therefore also refuses a pull request whose body (or sidebar link) will close a watched
+      issue while its row or tag still stands; a keyword in a commit message is caught only after the merge,
+      by the `main` run. Closing one means either fixing the risk or re-deciding it — never tidying the
       backlog. The reasoning lives in each issue; this list exists so a reader of §7 sees every watched
       acceptance in one place. **Accepted** states who accepted it and when **only where the issue records it**;
       `not recorded` is a gap in the record to close, never an acceptance by default. No row is accepted against
