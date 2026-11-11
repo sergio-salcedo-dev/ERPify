@@ -19,6 +19,16 @@ name: Accepted-risk live state
 # v1 does not discriminate GitHub's shared issue/PR number namespace: a tag referencing a PR number is
 # resolved by `gh issue view` as-is, and whatever that command does with a PR number (accept it, or refuse
 # it) is treated as this job's answer -- a refusal surfaces as a GATE ERROR below, never a silent pass.
+#
+# A tag is not the only record of a watched acceptance. The register in section 7 of
+# PRODUCTION_SECURITY_CHECKLIST.md ("Accepted risks watched by an open issue -- the register") lists one
+# issue per row and states that each one stays open while its acceptance stands, and a row is not a tag:
+# most of those risks carry no tag anywhere, so a row whose issue was closed went on reading as "accepted
+# and watched" with nothing red. Every row of that table is therefore checked here too. The table is located
+# by the register's bold lead-in and must be read in full: a missing lead-in, a missing table or a row whose
+# first cell is not `[#N](https://github.com/<repo>/issues/N)` is a GATE ERROR, never a row skipped, because
+# a reformatted table would otherwise drop out of the check with this job still green. An empty register
+# (header and separator only) is legitimate and checks nothing.
 
 on:
   pull_request:
@@ -121,20 +131,67 @@ jobs:
             find docs/adr -maxdepth 1 -type f -name '*.md' -print0
           )
 
-          unique_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
+          tag_issues="$(printf '%s\n' "$issues" | grep -E '^[0-9]+$' | sort -un)" || true
+
+          # The section 7 register: the table that follows the register's bold lead-in, read row by row.
+          checklist=PRODUCTION_SECURITY_CHECKLIST.md
+          register_marker='**Accepted risks watched by an open issue — the register.**'
+          if [ ! -f "$checklist" ] || ! grep -qF -- "$register_marker" "$checklist"; then
+            echo "::error::GATE ERROR -- the accepted-risk register lead-in '$register_marker' is missing from $checklist; a check that quietly skipped the register would report the same green as a real pass."
+            exit 1
+          fi
+
+          register_table="$(awk -v marker="$register_marker" '
+            index($0, marker) { inregister = 1; next }
+            inregister && /^[[:space:]]*\|/ { intable = 1; print; next }
+            intable { exit }
+          ' "$checklist")"
+
+          header="$(printf '%s\n' "$register_table" | sed -n '1p')"
+          separator="$(printf '%s\n' "$register_table" | sed -n '2p')"
+          if ! printf '%s\n' "$header" | grep -qE '^[[:space:]]*\|[[:space:]]*Issue[[:space:]]*\|' \
+            || ! printf '%s\n' "$separator" | grep -qE '^[[:space:]]*\|[-:| ]+\|[[:space:]]*$'; then
+            echo "::error::GATE ERROR -- no table whose first column is 'Issue' follows the accepted-risk register lead-in in $checklist."
+            exit 1
+          fi
+
+          repo_re="$(printf '%s' "$REPO" | sed 's/[.]/\\./g')"
+          register_issues=""
+          while IFS= read -r row; do
+            [ -n "$row" ] || continue
+            cells="$(printf '%s\n' "$row" \
+              | sed -nE 's,^[[:space:]]*\|[[:space:]]*\[#([1-9][0-9]*)\]\(https://github\.com/'"$repo_re"'/issues/([1-9][0-9]*)\)[[:space:]]*\|.*,\1 \2,p')"
+            text_n="${cells% *}"
+            link_n="${cells#* }"
+            if [ -z "$cells" ] || [ "$text_n" != "$link_n" ]; then
+              echo "::error::GATE ERROR -- a row of the accepted-risk register in $checklist does not open with [#N](https://github.com/$REPO/issues/N), so its issue cannot be checked: $row"
+              exit 1
+            fi
+            register_issues="${register_issues}${link_n}"$'\n'
+          done < <(printf '%s\n' "$register_table" | sed -n '3,$p')
+
+          unique_issues="$(printf '%s\n%s\n' "$tag_issues" "$register_issues" | grep -E '^[0-9]+$' | sort -un)" || true
 
           if [ -z "$unique_issues" ]; then
-            echo "No @accepted-risk tags found in the tree -- nothing to check."
+            echo "No @accepted-risk tags in the tree and no rows in the $checklist register -- nothing to check."
             exit 0
           fi
 
           failures=0
           for n in $unique_issues; do
+            where=""
+            if printf '%s\n' "$tag_issues" | grep -qx "$n"; then
+              where="an @accepted-risk tag"
+            fi
+            if printf '%s\n' "$register_issues" | grep -qx "$n"; then
+              where="${where:+$where and }the section 7 register of $checklist"
+            fi
+
             if state_json="$(gh issue view "$n" --repo "$REPO" --json state 2>/tmp/gh-err.log)"; then
               state="$(printf '%s' "$state_json" | jq -r '.state // empty')"
 
               if [ "$state" = "CLOSED" ]; then
-                echo "::error::Accepted-risk tag references issue #$n, which is CLOSED -- resolve the tag or reopen the issue."
+                echo "::error::Issue #$n is referenced by $where but is CLOSED -- remove the tag or the register row (the risk was fixed or re-decided), or reopen the issue."
                 failures=$((failures + 1))
               elif [ "$state" != "OPEN" ]; then
                 echo "::error::GATE ERROR -- issue #$n returned an unrecognised state ('$state')."
