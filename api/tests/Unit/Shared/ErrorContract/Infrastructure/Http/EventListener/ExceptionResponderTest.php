@@ -605,17 +605,17 @@ final class ExceptionResponderTest extends TestCase
         $exceptionResponder = $this->makeListener($bufferingLogger);
         $exceptionEvent = $this->makeEvent(
             '/api/v1/anything',
-            new HttpException(410, 'gone'),
+            new HttpException(418, 'teapot'),
         );
 
         $exceptionResponder($exceptionEvent);
 
         $logRecord = $this->singleLogRecord($bufferingLogger);
         $this->assertSame(LogLevel::WARNING, $logRecord['level']);
-        $this->assertSame(410, $logRecord['context']['status']);
+        $this->assertSame(418, $logRecord['context']['status']);
         $this->assertSame('http-error', $logRecord['context']['type']);
         $this->assertSame(HttpException::class, $logRecord['context']['exception_class']);
-        $this->assertSame('gone', $logRecord['context']['exception_message']);
+        $this->assertSame('teapot', $logRecord['context']['exception_message']);
     }
 
     public function testNoLogRecordIsEmittedWhenResponseAlreadySetByEarlierListener(): void

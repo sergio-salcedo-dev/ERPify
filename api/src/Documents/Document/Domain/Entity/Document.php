@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -58,6 +59,8 @@ final class Document extends AggregateRoot
 
     private const int DIGEST_HEX_LENGTH = 64;
 
+    private const string NEXT_SCAN_AT_FALLBACK = '1970-01-01 00:00:00+00';
+
     #[ORM\Column(name: 'scope_id', type: Types::GUID, updatable: false)]
     private string $scopeId;
 
@@ -103,6 +106,21 @@ final class Document extends AggregateRoot
     #[ORM\Column(name: 'review_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $reviewAt;
 
+    /**
+     * Set once the sealed object is in the final namespace and its directory synced, by the writer after the
+     * commit or by the roll-forward sweep, through a compare-and-set statement; the scan claim requires it.
+     * Never written through the ORM.
+     */
+    #[ORM\Column(
+        name: 'promoted_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
+    private ?DateTimeImmutable $promotedAt = null;
+
     private function __construct(
         string $id,
         string $scopeId,
@@ -111,6 +129,18 @@ final class Document extends AggregateRoot
         int $sizeBytes,
         ?string $idempotencyKeyHash,
         IntakeMetadata $intake,
+        /**
+         * When the scan sweep may next claim the document. Filed as the instant the document was received — the
+         * upload commit passes its transaction's database time — so one sweep also re-drives a lost first message.
+         * The column keeps a literal default (the epoch, due at once) only so an image that predates it can still
+         * insert a row; every writer here names it.
+         */
+        #[ORM\Column(
+            name: 'next_scan_at',
+            type: Types::DATETIMETZ_IMMUTABLE,
+            options: ['default' => self::NEXT_SCAN_AT_FALLBACK],
+        )]
+        private DateTimeImmutable $nextScanAt,
     ) {
         parent::__construct();
 
@@ -142,6 +172,7 @@ final class Document extends AggregateRoot
         int $sizeBytes,
         ?string $idempotencyKeyHash = null,
         ?IntakeMetadata $intake = null,
+        ?DateTimeImmutable $receivedAt = null,
     ): self {
         return new self(
             $id,
@@ -151,7 +182,14 @@ final class Document extends AggregateRoot
             $sizeBytes,
             $idempotencyKeyHash,
             $intake ?? new IntakeMetadata(),
+            $receivedAt ?? SystemClock::now(),
         );
+    }
+
+    /** The id as a non-null string: a filed document always has one. */
+    public function documentId(): string
+    {
+        return $this->id();
     }
 
     public function scopeId(): string
@@ -212,6 +250,16 @@ final class Document extends AggregateRoot
     public function reviewAt(): ?DateTimeImmutable
     {
         return $this->reviewAt;
+    }
+
+    public function promotedAt(): ?DateTimeImmutable
+    {
+        return $this->promotedAt;
+    }
+
+    public function nextScanAt(): DateTimeImmutable
+    {
+        return $this->nextScanAt;
     }
 
     /**

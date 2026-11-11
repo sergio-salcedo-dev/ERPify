@@ -44,6 +44,11 @@ namespace Erpify\Shared\ErrorContract\Application;
  * That leaves this rule as the one that has to be a pattern rather than a list, because its sink keeps the
  * query: no index can outgrow it, the `[]` and `[N]` sub-index spellings are both covered, and a value is
  * decoded repeatedly before it is matched.
+ *
+ * **One route keeps no query at all.** The evidence PUT carries the caller's original filename in its query
+ * (`filename`, see {@see QUERY_KEYS}), and on that route's path the whole query is replaced by {@see SENTINEL}
+ * rather than matched pair by pair: a misspelt key the controller ignores (`file_name=`) is still logged by the
+ * router, and no list of spellings can be complete. The cost is the query's shape on that one route only.
  */
 enum RequestUriRedaction
 {
@@ -59,6 +64,25 @@ enum RequestUriRedaction
      * trail of one reconstructs a session.
      */
     public const array IDENTITY_KEYS = ['actorid', 'resourceid', 'correlationid'];
+
+    /**
+     * Matched as a SUBSTRING of the reduced key (so `filename[]`, `filename[0]` and `x-filename` are caught),
+     * after the same padding and decoding reduction as every other rule here. Consulted only by the URI paths —
+     * not folded into {@see RedactionDenylist::KEYS}, which also strips response-body extension keys, and not
+     * into {@see IDENTITY_KEYS}, which is matched whole. Mirrored by the PWA vocabulary
+     * (`pwa/src/context/shared/observability/domain/redaction.ts`), which `RedactionVocabularyParityTest` holds
+     * equal.
+     */
+    public const array QUERY_KEYS = ['filename'];
+
+    /**
+     * The path of the evidence PUT, on which the whole query is redacted. Anchored at the end and permissive
+     * before it (a scheme and host, the front controller's `/index.php` spelling, any id segment, any case):
+     * over-matching a log is the safe direction. Matched against the path as written and as the router
+     * decodes it, so a percent-encoded segment cannot spell the route past the rule.
+     */
+    private const string WHOLE_QUERY_PATH
+        = '~(?:^|//[^/]*)(?:/index\.php)?/api/v1/documents/uploads/[^/]+/content/?$~i';
 
     /**
      * The value axis of the positional search grammar. The index is permissive — empty, negative, any
@@ -103,7 +127,9 @@ enum RequestUriRedaction
             return $requestUri;
         }
 
-        return \substr($requestUri, 0, $separator + 1) . self::redactQueryAtDepth($query, 0);
+        $path = \substr($requestUri, 0, $separator);
+
+        return $path . '?' . self::redactQueryOnPath($query, $path);
     }
 
     /**
@@ -116,8 +142,44 @@ enum RequestUriRedaction
      * positional grammar would pass straight through — and would show an operator a query the caller never
      * sent.
      */
-    public static function redactQuery(string $query): string
+    public static function redactQuery(string $query, ?string $path = null): string
     {
+        return '' === $query ? $query : self::redactQueryOnPath($query, $path);
+    }
+
+    /**
+     * Whether the whole query of a request to `$pathOrUri` is withheld. A URI is reduced to its path first.
+     */
+    public static function withholdsWholeQuery(string $pathOrUri): bool
+    {
+        $separator = \strpos($pathOrUri, '?');
+        $path = false === $separator ? $pathOrUri : \substr($pathOrUri, 0, $separator);
+        $fragment = \strpos($path, '#');
+        $candidate = false === $fragment ? $path : \substr($path, 0, $fragment);
+
+        for ($pass = 0; $pass <= self::MAX_DECODE_PASSES; ++$pass) {
+            if (1 === \preg_match(self::WHOLE_QUERY_PATH, $candidate)) {
+                return true;
+            }
+
+            $decoded = \rawurldecode($candidate);
+
+            if ($decoded === $candidate) {
+                return false;
+            }
+
+            $candidate = $decoded;
+        }
+
+        return false;
+    }
+
+    private static function redactQueryOnPath(string $query, ?string $path): string
+    {
+        if (null !== $path && self::withholdsWholeQuery($path)) {
+            return self::SENTINEL;
+        }
+
         return self::redactQueryAtDepth($query, 0);
     }
 
@@ -267,18 +329,13 @@ enum RequestUriRedaction
      */
     private static function namesASensitiveAxis(string $key): bool
     {
-        if (\in_array($key, self::IDENTITY_KEYS, true)) {
-            return true;
-        }
-
-        if (1 === \preg_match(self::SEARCH_VALUE_KEY, $key)) {
-            return true;
-        }
-
-        return \array_any(
-            RedactionDenylist::KEYS,
-            static fn (string $deniedKey): bool => \str_contains($key, $deniedKey),
-        );
+        return \in_array($key, self::IDENTITY_KEYS, true)
+            || 1 === \preg_match(self::SEARCH_VALUE_KEY, $key)
+            || \array_any(self::QUERY_KEYS, static fn (string $queryKey): bool => \str_contains($key, $queryKey))
+            || \array_any(
+                RedactionDenylist::KEYS,
+                static fn (string $deniedKey): bool => \str_contains($key, $deniedKey),
+            );
     }
 
     /**

@@ -93,6 +93,36 @@ final class SentryEventScrubber
     }
 
     /**
+     * The transaction hook's half: a transaction event carries the request URI in three places the error path
+     * does not use — `request`, the trace context's data and each span's data — and none of them passes through
+     * {@see __invoke()}, which is wired to `before_send` only.
+     */
+    public function scrubTransaction(Event $event): Event
+    {
+        $request = $event->getRequest();
+
+        if ([] !== $request) {
+            $event->setRequest($this->scrubRequest($request));
+        }
+
+        $contexts = $event->getContexts();
+        $trace = $contexts['trace'] ?? null;
+
+        if (\is_array($trace) && isset($trace['data']) && \is_array($trace['data'])) {
+            $trace['data'] = SpanUriRedaction::apply($trace['data']);
+            $event->setContext('trace', $trace);
+        }
+
+        foreach ($event->getSpans() as $span) {
+            /** @var array<string, mixed> $data the span's own data, keys preserved */
+            $data = SpanUriRedaction::apply($span->getData());
+            $span->setData($data);
+        }
+
+        return $event;
+    }
+
+    /**
      * A vendor exception message is a general carrier of caller data, and this is the sink where that costs
      * the most: an address here outlives the erasure the application confirmed to its subject, in a retention
      * this application does not own. The bag is mutated in place and written back, so the write is explicit
@@ -148,6 +178,13 @@ final class SentryEventScrubber
      */
     private function scrubRequest(array $request): array
     {
+        // A body the SDK captured as a raw string is a body no key-name rule can read: on the evidence PUT it is
+        // the original itself. `max_request_body_size: never` keeps the SDK from capturing one; this is the
+        // second line, for a body that arrives some other way.
+        if (isset($request['data']) && \is_string($request['data'])) {
+            unset($request['data']);
+        }
+
         foreach (self::REQUEST_KEYS as $key) {
             if (isset($request[$key]) && \is_array($request[$key])) {
                 $request[$key] = $this->scrub($request[$key]);
@@ -174,7 +211,10 @@ final class SentryEventScrubber
     private function redactUrisIn(array $request): array
     {
         if (isset($request['query_string']) && \is_string($request['query_string'])) {
-            $request['query_string'] = RequestUriRedaction::redactQuery($request['query_string']);
+            $request['query_string'] = RequestUriRedaction::redactQuery(
+                $request['query_string'],
+                isset($request['url']) && \is_string($request['url']) ? $request['url'] : null,
+            );
         }
 
         if (isset($request['url']) && \is_string($request['url'])) {

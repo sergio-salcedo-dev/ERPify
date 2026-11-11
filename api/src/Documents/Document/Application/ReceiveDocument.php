@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Erpify\Documents\Document\Application;
 
+use DateTimeImmutable;
 use Erpify\Documents\Document\Domain\CustodyEvent;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
+use Erpify\Documents\Document\Domain\IntakeMetadata;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
@@ -37,6 +39,8 @@ final readonly class ReceiveDocument
     }
 
     /**
+     * Files the document in a transaction of its own.
+     *
      * @throws ConcurrentUniqueWrite when another document already holds the idempotency key hash
      */
     public function receive(
@@ -45,10 +49,48 @@ final readonly class ReceiveDocument
         string $digest,
         int $sizeBytes,
         ?string $idempotencyKeyHash = null,
+        ?IntakeMetadata $intake = null,
+    ): Document {
+        return $this->transactionManager->transactional(
+            fn (): Document => $this->receiveWithin(
+                $scopeId,
+                $uploaderId,
+                $digest,
+                $sizeBytes,
+                $idempotencyKeyHash,
+                $intake,
+            ),
+        );
+    }
+
+    /**
+     * Files the document inside the caller's transaction, for a flow that must decide something else under the
+     * same locks — the upload commit, which moves its intent to `Committed` in the same unit of work and passes
+     * its transaction's database time as `$receivedAt`.
+     *
+     * @throws ConcurrentUniqueWrite when another document already holds the idempotency key hash
+     */
+    public function receiveWithin(
+        string $scopeId,
+        string $uploaderId,
+        string $digest,
+        int $sizeBytes,
+        ?string $idempotencyKeyHash = null,
+        ?IntakeMetadata $intake = null,
+        ?DateTimeImmutable $receivedAt = null,
     ): Document {
         $documentId = Uuid::generate();
 
-        $document = Document::receive($documentId, $scopeId, $uploaderId, $digest, $sizeBytes, $idempotencyKeyHash);
+        $document = Document::receive(
+            $documentId,
+            $scopeId,
+            $uploaderId,
+            $digest,
+            $sizeBytes,
+            $idempotencyKeyHash,
+            $intake,
+            $receivedAt,
+        );
         $received = DocumentCustody::record(
             Uuid::generate(),
             $documentId,
@@ -57,9 +99,7 @@ final readonly class ReceiveDocument
             $uploaderId,
         );
 
-        $this->transactionManager->transactional(function () use ($document, $received): void {
-            $this->documents->add($document, $received);
-        });
+        $this->documents->add($document, $received);
 
         return $document;
     }

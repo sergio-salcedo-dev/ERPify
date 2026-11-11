@@ -244,6 +244,34 @@ php.lint.document-custody: ## Document custody log append-only gate
 	@$(PHP_TEST) bin/phpunit --filter=DocumentCustodyMutationRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentCustodyMutationBlindSpotGateTest
 
+## —— Documents ingest gate —————————————————————————————————————————————————
+
+# Six classes, each selected BY NAME in its own run (a common prefix goes green on a strict subset):
+#  - DocumentsTransportBoundaryGateTest: ADR invariant 6 over src/Documents — no HTTP transport type and no
+#    caller-supplied location past Infrastructure; the sealed filename value is the one exclusion. Asserts its own
+#    universe and falsifies its engine on planted sources.
+#  - DocumentsNotAuditedGateTest: Document, UploadIntent and DocumentCustody stay out of #[AuditedEntity], and
+#    the audit metadata vocabulary names no filename.
+#  - DocumentsIngestProofGateTest: production may open `documents.ingest_enabled` — any value but the literal
+#    false counts as opening it — only with a valid restore-proof record for the backup mechanism it declares
+#    (docs/runbooks/documents-restore-proof.md); the switch may be declared only in config/packages/documents.yaml,
+#    the value is also read from the compiled prod container (hence the prod-container prerequisite, which keeps
+#    var/cache/prod warm and unwritten under it), and DocumentsIngestGate must read exactly that parameter.
+#  - DocumentsSchedulerStorageGateTest: every service that runs the Documents sweeps resolves and mounts the same
+#    document storage as php.
+#  - UploadRoutePathAgreementGateTest: the content route's path from api/.route-manifest.json is matched by the
+#    API whole-query rule, its PWA mirror and both Caddyfile upload matchers, and a near miss by none of them.
+#  - UploadSpoolConfinementGateTest: upload_tmp_dir in 10-app.ini is a tmpfs in compose.yaml, prod's swap limit
+#    equals its memory limit, and the entrypoint refuses to start over a spool that is not a tmpfs.
+# All but the first two read root files through the read-only `./` bind mount at /app/repo, and FAIL without it.
+php.lint.documents-ingest: php.lint.prod-container ## Documents ingest gates (boundary, not audited, proof, storage, route path, spool)
+	@$(PHP_TEST) bin/phpunit --filter=DocumentsTransportBoundaryGateTest
+	@$(PHP_TEST) bin/phpunit --filter=DocumentsNotAuditedGateTest
+	@$(PHP_TEST) bin/phpunit --filter=DocumentsIngestProofGateTest
+	@$(PHP_TEST) bin/phpunit --filter=DocumentsSchedulerStorageGateTest
+	@$(PHP_TEST) bin/phpunit --filter=UploadRoutePathAgreementGateTest
+	@$(PHP_TEST) bin/phpunit --filter=UploadSpoolConfinementGateTest
+
 ## —— Schedule-consumption gate —————————————————————————————————————————————
 
 # Fails CI when an #[AsSchedule] in api/src has no `messenger:consume` command naming its derived
@@ -655,7 +683,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -680,7 +708,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
@@ -689,7 +717,7 @@ php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence \
-        php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.schedule-consumption php.lint.step-vocabulary \
+        php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access php.lint.credential-proof \
         php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention \
         php.lint.accepted-risk php.lint.stacked-docblock \

@@ -1,6 +1,6 @@
 import type { init } from "@sentry/nextjs";
 import { AppEnv } from "@/context/shared/environment/domain/AppEnv";
-import { IDENTITY_AXES } from "@/context/shared/observability/domain/redaction";
+import { IDENTITY_AXES, QUERY_KEYS } from "@/context/shared/observability/domain/redaction";
 import { scrubSentryEvent, scrubSentrySpan } from "./scrubSentryEvent";
 
 /** What `Sentry.init` accepts in any of the three runtimes. */
@@ -16,7 +16,12 @@ const IP_AND_IDENTITY_HEADERS = ["forwarded", "-ip", "remote-", "via", "-user"];
  * uses. {@link scrubSentryEvent} and {@link scrubSentrySpan} still run afterwards, because a name
  * list cannot see an identifier carried inside another URL (`?next=<the audit URL>`).
  */
-const SENSITIVE_QUERY_PARAMS = [...IP_AND_IDENTITY_HEADERS, ...IDENTITY_AXES, "[value]"];
+const SENSITIVE_QUERY_PARAMS = [
+  ...IP_AND_IDENTITY_HEADERS,
+  ...IDENTITY_AXES,
+  ...QUERY_KEYS,
+  "[value]",
+];
 
 /**
  * Every collection category, each set explicitly. Leaving `dataCollection` unset, or a category

@@ -21,9 +21,6 @@ final class SealedLayout
     /** A full record: one chunk of plaintext and its authentication tag. */
     public const int RECORD_BYTES = self::CHUNK + self::TAG_BYTES;
 
-    /** The size cap of an original (100 MiB), an exact multiple of the chunk size. */
-    public const int MAX_ORIGINAL_BYTES = 104_857_600;
-
     private function __construct()
     {
     }

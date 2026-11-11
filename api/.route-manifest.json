@@ -28,6 +28,8 @@
   "backoffice_user_invitation_revoke": { "path": "/api/v1/backoffice/users/{userId}/invitation", "methods": ["DELETE"] },
   "backoffice_user_search": { "path": "/api/v1/backoffice/users", "methods": ["GET"] },
   "backoffice_user_unlock": { "path": "/api/v1/backoffice/users/{id}/unlock", "methods": ["POST"] },
+  "documents_upload_content": { "path": "/api/v1/documents/uploads/{id}/content", "methods": ["PUT"] },
+  "documents_upload_declare": { "path": "/api/v1/documents/uploads", "methods": ["POST"] },
   "frontoffice_health": { "path": "/api/v1/health", "methods": ["GET"] },
   "iam_invitation_accept": { "path": "/api/v1/backoffice/invitations/accept", "methods": ["POST"] },
   "iam_me": { "path": "/api/v1/me", "methods": ["GET"] },

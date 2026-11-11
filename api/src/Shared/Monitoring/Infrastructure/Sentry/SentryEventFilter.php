@@ -9,9 +9,11 @@ use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
+use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvalidInput;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
+use Erpify\Shared\ErrorContract\Domain\Exception\LengthRequired;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
@@ -29,7 +31,7 @@ use Throwable;
  * event from leaving the process, keeping error tracking signal-rich.
  *
  * 1. **Expected 4xx business outcomes on an HTTP request** — a {@see DomainException} implementing one
- *    of {@see EXPECTED_OUTCOME_MARKERS} (404, 409, 422, 400: a business outcome or an invalid request
+ *    of {@see EXPECTED_OUTCOME_MARKERS} (404, 409, 410, 411, 422, 400: a business outcome or an invalid request
  *    that needs no technical intervention, e.g. deleting a bank that still has accounts → 409) and
  *    none of {@see SIGNAL_MARKERS}. The security markers — `Unauthenticated` (401), `Forbidden` (403),
  *    `RateLimited` (429) — are reported although they are client errors: a spike of failed proofs,
@@ -95,6 +97,8 @@ final class SentryEventFilter
         InvariantViolation::class,
         InvalidInput::class,
         InvalidSearchCriteria::class,
+        Gone::class,
+        LengthRequired::class,
     ];
 
     /**

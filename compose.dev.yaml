@@ -153,6 +153,10 @@ services:
       PHP_IDE_CONFIG: "serverName=${PHP_IDE_SERVER_NAME:-dev}"
       APP_ENV: "${APP_ENV:-dev}"
       MAILER_DSN: "${MAILER_DSN:-smtp://mailpit:1025}"
+      # A copy of everything the php container writes to its own log, readable from inside the container (the
+      # entrypoint tees PID 1's output into it). The upload-filename containment gate reads it: the container
+      # log proper lives on the host and no test inside the stack can open it.
+      CONTAINER_LOG_MIRROR: /var/log/caddy/container.log
     extra_hosts:
       - host.docker.internal:host-gateway
     tty: true

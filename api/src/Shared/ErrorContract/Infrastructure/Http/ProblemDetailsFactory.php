@@ -10,9 +10,11 @@ use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
+use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvalidInput;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
+use Erpify\Shared\ErrorContract\Domain\Exception\LengthRequired;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
@@ -123,6 +125,8 @@ final readonly class ProblemDetailsFactory
         RateLimited::class => Response::HTTP_TOO_MANY_REQUESTS,
         InvalidSearchCriteria::class => Response::HTTP_UNPROCESSABLE_ENTITY,
         ServiceUnavailable::class => Response::HTTP_SERVICE_UNAVAILABLE,
+        Gone::class => Response::HTTP_GONE,
+        LengthRequired::class => Response::HTTP_LENGTH_REQUIRED,
     ];
 
     private const array MARKER_DEFAULT_TYPE_MAP = [
@@ -135,6 +139,8 @@ final readonly class ProblemDetailsFactory
         RateLimited::class => 'rate-limited',
         InvalidSearchCriteria::class => 'invalid-search-criteria',
         ServiceUnavailable::class => 'service-unavailable',
+        Gone::class => 'gone',
+        LengthRequired::class => 'length-required',
     ];
 
     /**
@@ -157,6 +163,8 @@ final readonly class ProblemDetailsFactory
         Response::HTTP_FORBIDDEN => 'forbidden',
         Response::HTTP_NOT_FOUND => 'not-found',
         Response::HTTP_CONFLICT => 'conflict',
+        Response::HTTP_GONE => 'gone',
+        Response::HTTP_LENGTH_REQUIRED => 'length-required',
         Response::HTTP_UNSUPPORTED_MEDIA_TYPE => 'unsupported-media-type',
         Response::HTTP_UNPROCESSABLE_ENTITY => 'invariant-violation',
         Response::HTTP_TOO_MANY_REQUESTS => 'rate-limited',

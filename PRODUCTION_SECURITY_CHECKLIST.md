@@ -21,7 +21,9 @@ you change anything here.
 - [ ] `make prod.env.check` passes (no missing file, no empty/`CHANGE_ME`
       required key). The deploy script runs this before touching Docker.
 - [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were freshly
-      generated (`openssl rand …`), not reused from dev.
+      generated (`openssl rand …`), not reused from dev. **Rotating `APP_SECRET` later silently unmatches every
+      stored evidence idempotency key** (HMAC-SHA256 under `kernel.secret`): a client retrying an upload across
+      the rotation files the same evidence twice — a duplicate, never a loss. Recorded in §7.
 - [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is used as **raw 32-byte**
       key material — `make prod.env.check` refuses any value that is not exactly 32 bytes,
       and the app throws `InvalidKek` on the first audited write if one gets past it.
@@ -2592,7 +2594,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       reconciler.** `DbalSubjectErasureReconciler` excludes Document scopes by construction (a Document's
       erasure is recorded in its own custody, not as a `GDPR_SUBJECT_ERASED` entry) and no other reader takes
       them, so a Document scope destroyed without its custody record raises no alarm. **Open — owner: the
-      Documents erasure story (doc-7 in the Documents spec); it does not go live before that reconciler exists.**
+      Documents erasure story; it does not go live before that reconciler exists.**
 - [ ] **A code rollback past the `dek_keystore.destroy_reason` migration breaks `destroy()`.** The migration's
       `down()` is not run by a code rollback, and the previous release's `destroy()` then violates
       `dek_keystore_destroy_reason_check` and fails. **Accepted — basis: no deployment is live, so there is no
@@ -2604,22 +2606,115 @@ mitigated state. Accepting one means recording who accepted it and against which
       `GRANT`, `REVOKE` or trigger exists in the tree, so whoever holds the application's database credential
       — or a PostgreSQL administrator — can still rewrite or delete a custody row, and the gate sees neither
       a migration nor runtime-built SQL. Custody is not claimed cryptographically immutable; hash-chaining or
-      a restricted role are separate decisions (`docs/adr/documents-custody-log.md` D3). **Accepted — basis:
-      no deployment is live and no document is filed before the upload story; revisit with the first one.**
+      a restricted role are separate decisions (`docs/adr/documents-custody-log.md` D3). **Accepted — the user,
+      2026-11-11, moving the revisit to the first deploy that opens ingest. Basis (unchanged): no deployment is
+      live, and ingest stays off in production until a restore proof exists, so no production document is filed
+      yet.**
 - [ ] **A document or custody row committed by an in-flight action of an erased person, after the purge
-      statement's snapshot, keeps the person's id until the re-sweep.** The two `UPDATE`s match rows that
-      exist when they run. `ResweepErasedSubjects` repeats them for one window and
-      `DbalDocumentUploaderPersonReferences` / `DbalDocumentCustodyActorPersonReferences` report any id left
-      once the window closes through `identity:gdpr:reconcile-subject-references`. Idempotency replay
-      protection for the erased actor ends with the erasure (accepted: the hash is nulled by the same purge).
-      **Open until the upload story writes documents; the detective source is the control meanwhile.**
-- [ ] **The `document_storage` volume has no backup, no restore drill and no read gate.** The volume
-      (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`) holds sealed bytes only after the upload story
-      exists, and a database dump is not a backup of evidence. Nothing writes to it today; the storage port
-      claims no WORM guarantee and its promotion is atomic only for one filesystem, asserted on the adapter test's
-      own temporary filesystem and not yet probed on the deployed volume, which is the upload story's boot
-      probe. **Open — owner: the upload story (doc-3), before any document is
-      served.**
+      statement's snapshot, keeps the person's id until the re-sweep.** The purge's `UPDATE`s match rows that
+      exist when they run. For a document filed through ingest the window is closed by the lock order
+      (`docs/adr/documents-custody-log.md` D6, every pair interleaved by `UploadLockOrderPairsFunctionalTest`):
+      the purge takes the person's intent rows before their documents, so a commit either finished first and
+      its document is rewritten by the next statement, or waits on the purge and aborts on an expired intent. It
+      stays open for any later writer of a document or custody row that does not pass through the intent row.
+      `ResweepErasedSubjects` repeats the statements for one window, and `DbalUploadIntentActorPersonReferences`,
+      `DbalDocumentUploaderPersonReferences` and `DbalDocumentCustodyActorPersonReferences` report any id left
+      once it closes, through `identity:gdpr:reconcile-subject-references`. Idempotency replay protection for the
+      erased actor ends with the erasure (accepted: the hash is nulled by the same purge). **Open — owner: each
+      later story that writes a document or custody row on a person's behalf outside the intent lock; the
+      detective sources are the control meanwhile.**
+- [ ] **The `document_storage` volume has no backup and no proven restore yet; ingest stays off in
+      production until one is proven.** Evidence ingest writes sealed bytes to the volume
+      (`DOCUMENTS_STORAGE_PATH`, `staging/` and `final/`), and a database dump is not a backup of evidence. What
+      is in place: the entrypoint's storage boot probe (stage, promote, delete on the deployed volume, refusing to
+      start on any failure, in `php` and in both workers), the switch `documents.ingest_enabled` (false in
+      production, 404 on both ingest routes), and the proof-record format with its validator
+      (`docs/runbooks/documents-restore-proof.md`; `DocumentsIngestProofGateTest` fails when tracked production
+      configuration opens ingest without a valid restore proof for the declared backup mechanism). What is not:
+      the backup itself and the first proof, which whoever proves a restore commits. A read route, when one
+      exists, brings its own switch. **Open — owner: whoever provisions the evidence backup; any read route
+      stays switched off until then.**
+- [ ] **A sealed original filename names whoever it names, and survives a person's erasure until its document
+      is erased.** The name travels in the evidence PUT's query, is validated and sealed under the document's own
+      scope in the commit transaction, and is never persisted in clear; but it can carry the uploader's name or a
+      third party's, and a person's erasure never erases a document (the uploader is not the subject), so the
+      ciphertext stays until that document is erased. Its ciphertext LENGTH also leaks the name's length
+      until then. Kept out of the access log (Caddy strips every query), the Monolog `request_uri` and per-error
+      log line and Sentry's `url`/`query_string`/transaction data (`RequestUriRedaction::QUERY_KEYS`, and the whole
+      query on the upload route), audit metadata and events. **Accepted — the user, 2026-11-04.**
+- [ ] **Idempotency replay protection ends with the actor's erasure.** The person purge nulls the key hash on
+      every upload intent and document of the actor, so a replay of an erased actor's key is a fresh upload.
+      **Accepted — the user, 2026-11-04.**
+- [ ] **Aborted-upload keystore tombstones are never pruned.** Every claimed upload that does not become a
+      document leaves one `dek_keystore` row (`destroy_reason = aborted-upload`), including a claim whose key was
+      never minted — pruning one would let a late writer mint a live key under a scope believed dead. Growth is
+      watched, not bounded: the daily `ReportDocumentStorageMessage` logs the counts and an `error` line above
+      500 a day. **Accepted — the user, 2026-11-04.**
+- [ ] **A slow evidence PUT pins a PHP worker thread for up to its deadline, bounded by the in-flight caps,
+      not eliminated.** 2 streaming uploads per actor and 4 globally, against a production pool fixed at 12
+      threads (8 worker threads), so at most half the worker threads stream; a 100 MiB upload at the minimum
+      accepted 256 KiB/s holds its thread for up to 460 s. The `upload_tmp_dir` tmpfs holds each upload's spool
+      while it is read (destroyed when its response leaves — next entry but one) and is sized for a spool
+      retained by every worker thread: 900m against a 2g, swap-free container. **Measured on the production image (2026-11-06):** four
+      concurrent 100 MiB uploads at 256 KiB/s took 400.0 s each while unrelated `GET /me` answered in 6.1 ms on
+      average (15.6 ms max; 6.7 ms / 29.9 ms at rest); eight retained spools (four real, four simulated) plus four
+      concurrent maximum-size uploads left ~1.0 GB unreclaimable (shmem 868 MB, anon 99 MB, kernel 47 MB) with
+      no OOM kill and no spool outside the tmpfs, the remaining use being reclaimable page cache of the document
+      volume. **Accepted for the thread pin — the user, 2026-11-06.**
+- [ ] **Two actors can hold the whole global Streaming cap.** Two actors at the per-actor cap (2) fill the global
+      cap (4) and, trickling at the 256 KiB/s floor, can hold every slot for up to 460 s and repeat within the
+      declare budget, so every other actor's claim is refused with 429 and no `Retry-After` for that long. Only
+      authenticated callers holding `document.write` can do it; it is the consequence of the fixed pool (the
+      thread-pin entry above). **Accepted — the user, 2026-11-08.**
+- [ ] **An evidence PUT's plaintext spool is destroyed when its response leaves, except where it cannot be
+      identified or no response is produced.** PHP caches every byte read from a request body in a `php*` file in
+      `upload_tmp_dir` (from 16 KiB on), held open by the worker thread until its next request; and the server reads
+      the rest of a refused PUT's body after the application returns, into the same cache (measured: an anonymous
+      401, a 410 and a 422 each answered only once the whole body had arrived, and left a spool of it). So it would
+      outlive its upload — filed, aborted, refused, aborted by a person's erasure — and a later crypto-shred.
+      `DiscardUploadSpoolListener` reads the upload route's body to its end in the last response listener, and
+      `PhpUploadBodySpool` truncates (freeing the tmpfs pages although the thread still holds the file) and
+      unlinks the one spool whose size and leading bytes match exactly what was read. **Measured on the dev stack
+      (2026-11-08):** no spool left after a filed 17 KB, 2 MB and 100 MiB upload, an upload aborted mid-body, an
+      anonymous 401, a 410 and a 422 length mismatch, the tmpfs at 0 %; an upload streaming at 256 KiB/s while
+      another completed was filed with its exact digest (`UploadSpoolConcurrencyGateTest`; destroying every spool
+      instead aborts it with 422, measured). What remains: a request ending with no response (a fatal error, a
+      killed worker) keeps its spool until the thread's next request; two in-flight uploads of the same bytes are
+      both left, since either spool could be the other's; a body under 16 KiB never leaves memory; any other
+      route's body (bounded at 1 MB by Caddy) is still spooled until the thread's next request (measured on
+      `/api/v1/health`). **Those four: Accepted — the user, 2026-11-11.** The production image was not re-measured —
+      the mechanism is PHP's own and the image runs the same PHP, but its process user differs; that is a stated
+      fact, not part of the acceptance.
+- [ ] **A PUT to the canonical upload path has its whole body received before its response; only a request
+      carrying a session cookie may send 100 MiB.** Measured on the dev stack (2026-11-08): an unauthenticated PUT
+      (401), a 410 and a 405 elsewhere answered only once the whole body had arrived, at the client's own pace, so
+      a client trickling a body pins a worker thread for as long as it trickles, outside the Streaming caps the
+      thread-pin entry counts on. **Mitigated:** the Caddyfile lifts the 100 MiB bound on that path only for a
+      request carrying the session cookie (`PHPSESSID`); without it the PUT falls to the 1MB bound every other route
+      has — measured, an anonymous 3 MB PUT is read to 1,000,001 bytes and the same PUT with a cookie to 3,000,000
+      (`UploadPathAnonymousBoundGateTest`), while an authenticated 1.1 MB upload is filed
+      (`UploadFilenameAccessLogContainmentGateTest`); `UploadRoutePathAgreementGateTest` pins the condition in both
+      matchers against the cookie name the application issues. **What remains:** Caddy does not judge the cookie, so
+      any request presenting one — an authenticated caller with `document.write` or without it, or anyone who sends
+      the cookie name with a made-up value — keeps the 100 MiB bound until the application refuses it, and that
+      refusal comes only after the body has been received. **Accepted — the user, 2026-11-11.**
+- [ ] **A scan wake-up that cannot be published delays a document's promotion, not only a hint.** The wake-up is
+      published inside the transaction that sets `promoted_at` (the bus refuses an `async`-routed message outside
+      one, `RequireTransactionalPublishMiddleware`), so a down or misconfigured `async` transport, or a failed
+      `messenger_messages` insert, rolls the mark back: the object has moved to `final` and the row stays
+      unpromoted until a roll-forward tick retries it, which the scan keyed on `promoted_at` waits for. The delay is
+      the roll-forward age plus the one-minute tick, and each failing row is logged by its id; the writer logs a
+      warning with the document's id. The sweep stops after five failures in a row and never examines more than ten
+      times its limit per tick, so an outage cannot hold the single-replica scheduler. **Recorded — a consequence of
+      the transactional-publish guard (#872); revisit if the scan stops keying on `promoted_at`.**
+- [ ] **Rotating `APP_SECRET` silently unmatches every stored idempotency key.** The key hashes on upload intents
+      and documents are HMAC-SHA256 under `kernel.secret`, so after a rotation no replay matches its earlier
+      declare: a client retrying across the rotation files the same evidence twice — a duplicate, never a loss —
+      and nothing reports it. No separate secret is introduced. **Recorded — the user chose documentation over a
+      separate secret, 2026-11-08.**
+- [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
+      `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
+      first UI story that uploads evidence.**
 
 ## 8. Deploy & verify
 

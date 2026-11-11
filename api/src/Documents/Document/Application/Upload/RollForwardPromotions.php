@@ -1,0 +1,116 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Documents\Document\Application\Upload;
+
+use DateTimeImmutable;
+use Erpify\Documents\Document\Domain\DocumentState;
+use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Storage\ObjectNotFound;
+use Erpify\Shared\Persistence\Application\TransactionManager;
+use Psr\Log\LoggerInterface;
+use Throwable;
+
+/**
+ * Finishes the promotion a writer did not: a `Received` row older than
+ * {@see \Erpify\Documents\Document\Domain\UploadLimits::ROLL_FORWARD_AGE_SECONDS} whose `promoted_at` is still
+ * NULL had its commit and lost its writer before the rename, the sync or the compare-and-set. A committed row
+ * owns its staged object, so this — never the reaper — is what recovers it.
+ *
+ * Each row is taken under its own lock and rechecked there: still `Received`, still not promoted. An `Erased`
+ * row is skipped, since its object belongs to the erasure's delete step. The move accepts a final object that
+ * is already there and never overwrites it; only the run that set `promoted_at` wakes the scan.
+ *
+ * A row whose object is in neither namespace is left as it is and counted: the scheduled report alarms on it.
+ * A row that fails for any other reason is logged by its id and passed over, and the run pages past such rows by id
+ * until `$limit` rows were promoted or the candidates ran out, so they never starve the rows behind them.
+ */
+final readonly class RollForwardPromotions
+{
+    public function __construct(
+        private DocumentRepository $documents,
+        private PromoteDocument $promoteDocument,
+        private DocumentScanWakeUp $scanWakeUp,
+        private TransactionManager $transactionManager,
+        private LoggerInterface $logger,
+    ) {
+    }
+
+    /**
+     * @return int how many rows this run promoted
+     */
+    public function run(int $olderThanSeconds, int $limit): int
+    {
+        $budget = new SweepBudget($limit);
+        $after = null;
+
+        while (!$budget->exhausted()) {
+            $page = $this->documents->awaitingPromotion($olderThanSeconds, $limit, $after);
+
+            foreach ($page as $documentId) {
+                $after = $documentId;
+                $this->rollForwardWithin($budget, $documentId);
+
+                if ($budget->exhausted()) {
+                    break;
+                }
+            }
+
+            if (\count($page) < $limit) {
+                break;
+            }
+        }
+
+        if ($budget->stoppedOnFailures()) {
+            $this->logger->error('The promotion roll-forward stopped after consecutive failures.', [
+                'failures' => SweepBudget::MAX_CONSECUTIVE_FAILURES,
+                'promoted' => $budget->finishedCount(),
+            ]);
+        }
+
+        return $budget->finishedCount();
+    }
+
+    /**
+     * A row whose object is in neither namespace is left as it is, not counted as a failure; any other fault is
+     * logged by the row's id and counts toward the run of failures that stops the sweep.
+     */
+    private function rollForwardWithin(SweepBudget $budget, string $documentId): void
+    {
+        try {
+            $this->rollForward($documentId) ? $budget->finished() : $budget->passed();
+        } catch (ObjectNotFound) {
+            $budget->passed();
+        } catch (Throwable $throwable) {
+            $this->logger->error('A document could not be rolled forward; the batch goes on.', [
+                'documentId' => $documentId,
+                'exceptionClass' => $throwable::class,
+            ]);
+            $budget->failed();
+        }
+    }
+
+    private function rollForward(string $documentId): bool
+    {
+        return $this->transactionManager->transactional(function () use ($documentId): bool {
+            $document = $this->documents->lockForUpdate($documentId);
+
+            $promoted = $document->promotedAt() instanceof DateTimeImmutable;
+
+            if (DocumentState::Received !== $document->state() || $promoted) {
+                return false;
+            }
+
+            $this->promoteDocument->moveToFinal($document->scopeId());
+
+            if (!$this->documents->markPromoted($documentId)) {
+                return false;
+            }
+
+            $this->scanWakeUp->wake($documentId);
+
+            return true;
+        });
+    }
+}

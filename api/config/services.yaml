@@ -136,6 +136,25 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    # The three upload sweeps log the one item they pass over, so a poisoned row is seen without stopping a batch.
+    Erpify\Documents\Document\Application\Upload\ReapUploadIntents:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Upload\RollForwardPromotions:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Upload\SweepStagedOrphans:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    # The writer's promotion is best effort too: a failure is logged by the document's id and the roll-forward
+    # finishes it.
+    Erpify\Documents\Document\Application\Upload\UploadEvidence:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     Erpify\Iam\Identity\Application\RevokeCurrentSessionBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'

@@ -159,11 +159,71 @@ const SEARCH_VALUE_KEY = /^filters\[-?\d*\]\[value\](\[-?\d*\])?$/;
  */
 export const REDACTION_SENTINEL = "REDACTED";
 
-/** True when a query-parameter name is an identity axis or the value axis of the search grammar. */
+/**
+ * Query-parameter names matched as a SUBSTRING of the reduced key, consulted only on URIs: the evidence upload
+ * carries the caller's original filename in its query. Mirrors `RequestUriRedaction::QUERY_KEYS` on the API
+ * side, and `RedactionVocabularyParityTest` holds the two equal.
+ */
+export const QUERY_KEYS = ["filename"] as const;
+
+const QUERY_KEY_FRAGMENTS: readonly string[] = QUERY_KEYS;
+
+/**
+ * The path of the evidence PUT, on which the whole query is withheld rather than matched pair by pair: a
+ * misspelt key the API ignores still travels in the URL. Admits the front controller's `/index.php` spelling.
+ * Mirrors `RequestUriRedaction::WHOLE_QUERY_PATH`.
+ */
+const WHOLE_QUERY_PATH =
+  /(?:^|\/\/[^/]*)(?:\/index\.php)?\/api\/v1\/documents\/uploads\/[^/]+\/content\/?$/i;
+
+/**
+ * PHP's `rawurldecode()`: every valid `%XX` triplet decoded to its byte (as one code unit), anything else kept as
+ * written. `decodeURIComponent` throws on a triplet that is not UTF-8 (`%E0`) and so cannot decode the rest, where
+ * the API, and the router, decode the valid ones and go on.
+ */
+function rawUrlDecode(value: string): string {
+  return value.replace(/%([0-9A-Fa-f]{2})/g, (_triplet: string, hex: string) =>
+    String.fromCodePoint(Number.parseInt(hex, 16)),
+  );
+}
+
+/**
+ * True when a request to this path keeps no query at all in a sink. Matched as written and as the router
+ * decodes it, so a percent-encoded segment cannot spell the route past the rule. Mirrors
+ * `RequestUriRedaction::withholdsWholeQuery()`, decode for decode.
+ */
+export function withholdsWholeQuery(path: string): boolean {
+  let candidate: string = path;
+
+  for (let pass = 0; pass <= MAX_DECODE_PASSES; pass += 1) {
+    if (WHOLE_QUERY_PATH.test(candidate)) {
+      return true;
+    }
+
+    const decoded: string = rawUrlDecode(candidate);
+
+    if (decoded === candidate) {
+      return false;
+    }
+
+    candidate = decoded;
+  }
+
+  return false;
+}
+
+/**
+ * True when a query-parameter name is an identity axis, the value axis of the search grammar, or carries one
+ * of the {@link QUERY_KEYS}.
+ */
 export function isIdentityAxisKey(key: string): boolean {
   const reduced: string = reduceKey(key);
 
-  return IDENTITY_AXIS_KEYS.includes(reduced) || SEARCH_VALUE_KEY.test(reduced);
+  return (
+    IDENTITY_AXIS_KEYS.includes(reduced) ||
+    SEARCH_VALUE_KEY.test(reduced) ||
+    QUERY_KEY_FRAGMENTS.some((fragment: string) => reduced.includes(fragment))
+  );
 }
 
 /** Bounds recursion against pathological / cyclic structures. */

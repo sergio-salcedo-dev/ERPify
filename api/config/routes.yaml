@@ -61,6 +61,16 @@ api_v1_shared_images:
     defaults:
         _format: json
 
+# Documents ingest surface (declare + raw-body PUT). Scoped to the module's Controller dir, under `/api/v1` so
+# the firewall's `^/api` catch-all covers it. The content route's public path is also spelled by the Caddy body
+# bound and by the URI redaction (see `UploadRoutes`), so moving it is three edits, not one.
+api_v1_documents:
+    resource: ../src/Documents/Document/Infrastructure/Controller/
+    type: attribute
+    prefix: /api/v1
+    defaults:
+        _format: json
+
 api_v1_front_office:
     resource: ../src/Frontoffice/
     type: attribute

@@ -229,6 +229,10 @@ Erpify\Documents\Document\Domain\Entity\Document::$seriesId => non-person
 Erpify\Documents\Document\Domain\Entity\Document::$predecessorId => non-person
 Erpify\Documents\Document\Domain\Entity\DocumentCustody::$id => non-person
 Erpify\Documents\Document\Domain\Entity\DocumentCustody::$documentId => non-person
+Erpify\Documents\Document\Domain\Entity\UploadIntent::$id => non-person
+Erpify\Documents\Document\Domain\Entity\UploadIntent::$scopeId => non-person
+Erpify\Documents\Document\Domain\Entity\UploadIntent::$documentId => non-person
+Erpify\Documents\Document\Domain\Entity\UploadIntent::$predecessorId => non-person
 
 # References between aggregates that are not people.
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
@@ -272,3 +276,4 @@ Erpify\Iam\Invitation\Domain\Entity\Invitation::$invitedUserId => person :: src/
 # through the `Shared\Privacy` seam, so the identity erasure imports nothing from this context.
 Erpify\Documents\Document\Domain\Entity\Document::$uploaderId => person :: src/Documents/Document/Application/PurgeUserDocumentReferences.php
 Erpify\Documents\Document\Domain\Entity\DocumentCustody::$actorId => person :: src/Documents/Document/Application/PurgeUserDocumentReferences.php
+Erpify\Documents\Document\Domain\Entity\UploadIntent::$actorId => person :: src/Documents/Document/Application/PurgeUserDocumentReferences.php

@@ -34,6 +34,16 @@ services:
       core:
         soft: 0
         hard: 0
+    # PHP spools every request body it is asked to read (`php://input`, a multipart upload) to `upload_tmp_dir`,
+    # and an evidence PUT's body is the plaintext original, up to 100 MiB, held open by the worker thread until it
+    # serves another request (measured); the upload route destroys its own spool when its response leaves. It must
+    # never reach persistent storage, so the directory is a tmpfs:
+    # its pages count against the container's memory limit, which `memswap_limit` in compose.prod.yaml makes
+    # unswappable. Sized for the spools the worker threads can RETAIN, not for the in-flight cap: 8 worker
+    # threads (compose.prod.yaml) x 100 MiB, plus margin. The entrypoint refuses to start FrankenPHP when the
+    # directory is not a writable tmpfs, because PHP falls back to /tmp — the writable layer — on its own.
+    tmpfs:
+      - /run/php-upload-spool:size=900m,mode=0700,uid=33,gid=33
     depends_on:
       database:
         condition: service_healthy
@@ -53,8 +63,10 @@ services:
       # `var/` when this is unset (a CLI run outside the stack), which is gitignored but NOT durable —
       # durability is the volume's job, and this variable is what connects the two.
       STORAGE_LOCAL_PATH: ${STORAGE_LOCAL_PATH:-/app/storage}
-      # Evidence has a volume of its own (`document_storage` below), never a directory of the image one.
-      DOCUMENTS_STORAGE_PATH: ${DOCUMENTS_STORAGE_PATH:-/app/documents}
+      # Evidence has a volume of its own (`document_storage` below), never a directory of the image one. A
+      # literal equal to that mount's target, never an interpolation: an env file pointing it elsewhere would
+      # put evidence on the writable layer (DocumentsSchedulerStorageGateTest holds the two equal).
+      DOCUMENTS_STORAGE_PATH: /app/documents
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       # Seconds an SMTP server may hold a caller per socket operation; one send costs round-trips x this.
@@ -166,7 +178,7 @@ services:
       # The worker is what physically deletes bytes, so it must resolve the same root as `php`. A worker
       # pointed elsewhere finds an empty store and reports every deletion as done.
       STORAGE_LOCAL_PATH: ${STORAGE_LOCAL_PATH:-/app/storage}
-      DOCUMENTS_STORAGE_PATH: ${DOCUMENTS_STORAGE_PATH:-/app/documents}
+      DOCUMENTS_STORAGE_PATH: /app/documents
       MAILER_DSN: ${MAILER_DSN:-null://null}
       MAILER_FROM: ${MAILER_FROM:-noreply@erpify.local}
       # Seconds an SMTP server may hold a caller per socket operation; one send costs round-trips x this.
@@ -186,7 +198,7 @@ services:
       # Same for evidence: the worker is the process that will physically delete the sealed object of an
       # erased document, and against an empty root that deletion reads as done.
       - document_storage:/app/documents
-    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "--time-limit=3600"]
+    command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "scheduler_documents_maintenance", "--time-limit=3600"]
 
 volumes:
   caddy_data:

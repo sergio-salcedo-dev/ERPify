@@ -36,6 +36,8 @@ final class LockOrderJournal
 
     public const string EVENT_STORE = 'event_store';
 
+    public const string UPLOAD_INTENT = 'upload_intent';
+
     public const string DOCUMENT = 'document';
 
     public const string DOCUMENT_CUSTODY = 'document_custody';

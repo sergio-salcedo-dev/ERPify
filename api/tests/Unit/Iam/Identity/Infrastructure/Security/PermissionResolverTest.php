@@ -48,6 +48,7 @@ final class PermissionResolverTest extends TestCase
         $managerTier = [
             'bank.read', 'bank.write', 'bank.delete',
             'bankAccount.read', 'bankAccount.write', 'bankAccount.delete',
+            'document.write',
         ];
 
         // The superuser clause short-circuits every permission, opt-out resources included.

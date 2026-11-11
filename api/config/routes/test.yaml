@@ -22,9 +22,9 @@ when@test:
         controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowHttpUnauthorizedController
         methods: [GET]
 
-    test_throw_http_410:
-        path: /api/test/_throw-http-410
-        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowHttpGoneController
+    test_throw_http_418:
+        path: /api/test/_throw-http-418
+        controller: Erpify\Tests\Functional\Shared\ErrorContract\Infrastructure\Http\EventListener\Fixtures\ThrowHttpUnmappedStatusController
         methods: [GET]
 
     test_throw_security_access_denied:

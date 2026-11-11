@@ -361,7 +361,12 @@
     writes an audit row (CAP-9). Depends on doc-4. Does not serve real documents before doc-3's
     backup and restore proof exists and before doc-7 ships. An operator procedure for erasure
     requests is not a substitute: the restore proof must include replaying the erasure ledger, or
-    doc-5 serves no real document.
+    doc-5 serves no real document. doc-5 also owns and closes issue #418: the read handler catches
+    the crypto exception at the read boundary and throws a read-side exception that carries a
+    marker, DekDestroyed answering the gone problem type (410, the Gone marker doc-3 introduces)
+    and DecryptionFailed staying 5xx so it reaches Sentry; neither crypto exception gets a marker,
+    because PiiDiffSealer shares them on the write path, where 500 is right; the type-to-status
+    mapping goes into docs/api-error-contract.md in the same PR.
   done_checkpoint: true
   invoke_dev_with: >-
     Mirror the hardening of ImageGetController (nosniff, locked-down CSP, no media type taken on

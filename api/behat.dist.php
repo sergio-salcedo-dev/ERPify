@@ -13,6 +13,7 @@ use DVDoug\Behat\CodeCoverage\Extension as CodeCoverageExtension;
 use Erpify\Kernel;
 use Erpify\Tests\Support\AcceptanceEntryPoints;
 use Erpify\Tests\Behat\Context\DoctrineContext;
+use Erpify\Tests\Behat\Context\DocumentsIngestContext;
 use Erpify\Tests\Behat\Context\EntityManagerContext;
 use Erpify\Tests\Behat\Context\EventStoreContext;
 use Erpify\Tests\Behat\Context\FixturesContext;
@@ -83,6 +84,7 @@ return (new Config())
                     '%paths.base%/features/backoffice',
                     '%paths.base%/features/frontoffice',
                     '%paths.base%/features/shared',
+                    '%paths.base%/features/documents',
                 )
                 // Registration order = BeforeScenario hook order. FixturesContext
                 // must run BEFORE DoctrineContext so the per-suite fixture load /
@@ -116,6 +118,7 @@ return (new Config())
                     LoggerContext::class,
                     PrivacyContext::class,
                     ImageFixtureContext::class,
+                    DocumentsIngestContext::class,
                 ),
         )
         ->withExtension(new Extension(SymfonyExtension::class, [

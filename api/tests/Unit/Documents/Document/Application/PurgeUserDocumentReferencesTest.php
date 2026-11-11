@@ -30,18 +30,22 @@ final class PurgeUserDocumentReferencesTest extends TestCase
         $custodyRepository = new InMemoryDocumentCustodyRepository(actorsRewritten: 5);
         $custodyRepository->journal = $journal;
 
+        $intentRepository = new InMemoryUploadIntentRepository(actorsRewritten: 2);
+        $intentRepository->journal = $journal;
+
         $subject = Uuid::generate();
 
-        $rewritten = (new PurgeUserDocumentReferences($documentsRepository, $custodyRepository))
+        $rewritten = (new PurgeUserDocumentReferences($intentRepository, $documentsRepository, $custodyRepository))
             ->eraseReferencesTo($subject)
         ;
 
-        $this->assertSame(8, $rewritten);
+        $this->assertSame(10, $rewritten);
         $this->assertSame(
-            ['document', 'document_custody'],
+            ['upload_intent', 'document', 'document_custody'],
             $journal->getArrayCopy(),
-            'the documents are locked and rewritten before the custody rows that travel with them',
+            'the upload intents first, then the documents, then the custody rows that travel with them',
         );
+        $this->assertSame([$subject], $intentRepository->anonymisedSubjects);
         $this->assertSame([$subject], $documentsRepository->anonymisedSubjects);
         $this->assertSame([$subject], $custodyRepository->anonymisedSubjects);
     }
@@ -53,7 +57,11 @@ final class PurgeUserDocumentReferencesTest extends TestCase
         $custodyRepository = new InMemoryDocumentCustodyRepository();
 
         try {
-            (new PurgeUserDocumentReferences($documentsRepository, $custodyRepository))
+            (new PurgeUserDocumentReferences(
+                new InMemoryUploadIntentRepository(),
+                $documentsRepository,
+                $custodyRepository,
+            ))
                 ->eraseReferencesTo('not-a-uuid')
             ;
             $this->fail('Expected InvalidUuidException.');
@@ -69,7 +77,11 @@ final class PurgeUserDocumentReferencesTest extends TestCase
         $documentsRepository = new InMemoryDocumentRepository(uploadersRewritten: 9);
         $custodyRepository = new InMemoryDocumentCustodyRepository(actorsRewritten: 9);
 
-        $rewritten = (new PurgeUserDocumentReferences($documentsRepository, $custodyRepository))
+        $rewritten = (new PurgeUserDocumentReferences(
+            new InMemoryUploadIntentRepository(),
+            $documentsRepository,
+            $custodyRepository,
+        ))
             ->eraseReferencesTo(ErasedPersonMarker::UUID)
         ;
 

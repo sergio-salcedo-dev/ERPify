@@ -188,3 +188,13 @@ framework:
             limit: '%env(int:RATE_LIMIT_INVITATION_RESEND_PER_ACTOR_INVITEE_LIMIT)%'
             interval: '%env(RATE_LIMIT_INVITATION_RESEND_PER_ACTOR_INVITEE_INTERVAL)%'
             lock_factory: null
+
+        # `document_upload_declare_per_actor` — per-actor budget on POST /documents/uploads, keyed by an HMAC of
+        # the actor id. Each declare creates an intent row and reserves a slot of the actor's live-intent cap,
+        # so the budget bounds a caller by time as the cap bounds it by count. Exhaustion is a visible 429 with
+        # `Retry-After`. Consumed by DeclareUploadThrottle at the controller edge.
+        document_upload_declare_per_actor:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_DOCUMENT_UPLOAD_DECLARE_PER_ACTOR_LIMIT)%'
+            interval: '%env(RATE_LIMIT_DOCUMENT_UPLOAD_DECLARE_PER_ACTOR_INTERVAL)%'
+            lock_factory: null

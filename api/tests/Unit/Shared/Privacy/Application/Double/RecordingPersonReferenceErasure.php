@@ -38,6 +38,7 @@ final class RecordingPersonReferenceErasure implements PersonReferenceErasure
     public function eraseReferencesTo(string $subjectId): int
     {
         $this->erasedSubjects[] = $subjectId;
+        $this->lockOrderJournal?->locked(LockOrderJournal::UPLOAD_INTENT);
         $this->lockOrderJournal?->locked(LockOrderJournal::DOCUMENT);
         $this->lockOrderJournal?->locked(LockOrderJournal::DOCUMENT_CUSTODY);
 

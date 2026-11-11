@@ -17,12 +17,6 @@ services:
         # die compiling the container.
         exclude: '../tests/DataFixtures/Purger/EventBackbonePurger.php'
 
-    # Nothing consumes the Documents storage port yet, so the container would drop it before a test could ask
-    # for it; the wiring test resolves what a deployment wires.
-    Erpify\Documents\Document\Domain\Storage\DocumentStorage:
-        alias: Erpify\Documents\Document\Infrastructure\Storage\FilesystemDocumentStorage
-        public: true
-
     Erpify\Tests\Doctrine\TestDebugDataHolder: ~
 
     # Override the service the doctrine-bundle DebugMiddleware actually consumes

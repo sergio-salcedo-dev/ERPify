@@ -10,8 +10,10 @@ use Erpify\Documents\Document\Domain\Storage\ObjectAlreadyExists;
 use Erpify\Documents\Document\Domain\Storage\ObjectNotFound;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Generator;
 use InvalidArgumentException;
 use Override;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
@@ -42,11 +44,20 @@ use Throwable;
  * else means the question could not be answered. `file_exists()` answers the same `false` to both and fails
  * toward "deleted", which on `delete` is a confirmed erasure of bytes still present.
  *
- * No fsync of the file or its directory, no boot probe and no reaper: those are the upload flow's. Failures
- * carry fixed sentences, never the path or the library's message, both of which quote the scope id.
+ * **Durability is claimed where the upload flow needs it.** {@see stageWith()} syncs the staged file and the
+ * staging shard directory before it returns, and {@see promote()} syncs the final shard directory after the
+ * link and the staging one after the unlink, so a name the caller was told exists survives a crash of the host.
+ * The boot probe and the sweeps are the upload flow's ({@see StorageBootProbe}). Failures carry fixed
+ * sentences, never the path or the library's message, both of which quote the scope id.
+ *
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity") one adapter, every branch an errno the port must translate
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength") the same: the length is the failure handling the port promises
  */
+#[AsAlias(DocumentStorage::class)]
 final readonly class FilesystemDocumentStorage implements DocumentStorage
 {
+    use QuietFilesystemCalls;
+
     private const int SHARD_LENGTH = 2;
 
     /**
@@ -116,6 +127,102 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
     }
 
     #[Override]
+    public function stageWith(string $scopeId, callable $writer): void
+    {
+        $path = $this->pathFor(StorageArea::Staging, $scopeId);
+        $this->guardAreaIsUsable(StorageArea::Staging);
+
+        if ($this->objectExists($path, StorageArea::Staging)) {
+            throw ObjectAlreadyExists::in(StorageArea::Staging);
+        }
+
+        $this->ensureDirectory(\dirname($path), StorageArea::Staging);
+
+        $handle = $this->quietly(static fn () => \fopen($path, 'x'));
+
+        if (false === $handle) {
+            throw $this->objectExists($path, StorageArea::Staging)
+                ? ObjectAlreadyExists::in(StorageArea::Staging)
+                : DocumentStorageFailed::because(StorageArea::Staging, 'the staging object could not be created');
+        }
+
+        try {
+            $writer($handle);
+
+            if (!\fflush($handle) || !\fsync($handle)) {
+                throw DocumentStorageFailed::because(StorageArea::Staging, 'the staging object could not be synced');
+            }
+        } catch (Throwable $throwable) {
+            \fclose($handle);
+            $this->quietly(static fn (): bool => \unlink($path));
+
+            throw $throwable;
+        }
+
+        if (!\fclose($handle)) {
+            $this->quietly(static fn (): bool => \unlink($path));
+
+            throw DocumentStorageFailed::because(StorageArea::Staging, 'the staging object could not be closed');
+        }
+
+        $this->syncDirectory(\dirname($path), StorageArea::Staging);
+    }
+
+    #[Override]
+    public function has(StorageArea $area, string $scopeId): bool
+    {
+        $path = $this->pathFor($area, $scopeId);
+        $this->guardAreaIsReadable($area);
+
+        return $this->objectExists($path, $area);
+    }
+
+    /**
+     * @return iterable<string>
+     */
+    #[Override]
+    public function scopesOlderThan(StorageArea $area, int $olderThanSeconds): iterable
+    {
+        $areaDirectory = $this->guardAreaIsReadable($area);
+        $cutoff = \time() - $olderThanSeconds;
+
+        return $this->walkOlderThan($areaDirectory, $area, $cutoff);
+    }
+
+    /**
+     * @return Generator<int, string>
+     */
+    private function walkOlderThan(string $areaDirectory, StorageArea $area, int $cutoff): iterable
+    {
+        foreach ($this->shardsOf($areaDirectory, $area) as $first) {
+            foreach ($this->shardsOf($areaDirectory . '/' . $first, $area) as $second) {
+                $shard = $areaDirectory . '/' . $first . '/' . $second;
+
+                foreach ($this->entriesOf($shard, $area) as $name) {
+                    if ($this->isScopeModifiedBy($shard . '/' . $name, $name, $cutoff)) {
+                        yield $name;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether the entry is a scope object (a lower-case UUID) last modified at or before the cutoff.
+     */
+    private function isScopeModifiedBy(string $path, string $name, int $cutoff): bool
+    {
+        if (!Uuid::isValid($name) || \strtolower($name) !== $name) {
+            return false;
+        }
+
+        \clearstatcache(true, $path);
+        $modified = $this->quietly(static fn (): false|int => \filemtime($path));
+
+        return false !== $modified && $modified <= $cutoff;
+    }
+
+    #[Override]
     public function promote(string $scopeId): void
     {
         $staged = $this->pathFor(StorageArea::Staging, $scopeId);
@@ -144,6 +251,22 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
 
             throw DocumentStorageFailed::because(StorageArea::Staging, 'the staged name could not be removed');
         }
+
+        $this->syncDirectory(\dirname($final), StorageArea::Final);
+        $this->syncDirectory(\dirname($staged), StorageArea::Staging);
+    }
+
+    #[Override]
+    public function syncFinal(string $scopeId): void
+    {
+        $final = $this->pathFor(StorageArea::Final, $scopeId);
+        $this->guardAreaIsUsable(StorageArea::Final);
+
+        if (!$this->objectExists($final, StorageArea::Final)) {
+            throw ObjectNotFound::in(StorageArea::Final);
+        }
+
+        $this->syncDirectory(\dirname($final), StorageArea::Final);
     }
 
     #[Override]
@@ -265,6 +388,27 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
         throw DocumentStorageFailed::because($area, 'the existence of the object could not be established');
     }
 
+    /**
+     * A directory entry (a created, linked or unlinked name) is durable only once its directory is synced:
+     * syncing the file makes its bytes durable, not the name that reaches them.
+     */
+    private function syncDirectory(string $directory, StorageArea $area): void
+    {
+        $handle = $this->quietly(static fn () => \fopen($directory, 'r'));
+
+        if (false === $handle) {
+            throw DocumentStorageFailed::because($area, 'the shard directory could not be opened for syncing');
+        }
+
+        try {
+            if (!$this->quietly(static fn (): bool => \fsync($handle))) {
+                throw DocumentStorageFailed::because($area, 'the shard directory could not be synced');
+            }
+        } finally {
+            \fclose($handle);
+        }
+    }
+
     private function ensureDirectory(string $directory, StorageArea $area): void
     {
         // Tolerating a concurrent creator: `mkdir` fails when the directory appeared meanwhile, which is the
@@ -277,29 +421,6 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
 
         if (!$created && !\is_dir($directory)) {
             throw DocumentStorageFailed::because($area, 'the shard directory could not be created');
-        }
-    }
-
-    /**
-     * Runs a filesystem call whose failure is the answer, not an event: a refused `fopen`, `link` or `mkdir`
-     * raises a PHP warning that the caller turns into a typed outcome, and that warning would otherwise reach
-     * the log with the path in it. A handler that swallows it for the duration of the one call is scoped
-     * (restored in `finally`) where the `@` operator is not.
-     *
-     * @template T
-     *
-     * @param callable(): T $operation
-     *
-     * @return T
-     */
-    private function quietly(callable $operation): mixed
-    {
-        \set_error_handler(static fn (): bool => true);
-
-        try {
-            return $operation();
-        } finally {
-            \restore_error_handler();
         }
     }
 

@@ -10,9 +10,11 @@ use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
+use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvalidInput;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvalidSearchCriteria;
 use Erpify\Shared\ErrorContract\Domain\Exception\InvariantViolation;
+use Erpify\Shared\ErrorContract\Domain\Exception\LengthRequired;
 use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
@@ -37,6 +39,7 @@ use ReflectionNamedType;
 use RuntimeException;
 use stdClass;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\UnsupportedMediaTypeHttpException;
@@ -580,7 +583,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame([], $problemDetails->extensions);
     }
 
-    public function testMarkerStatusMapHasExactlyTheCanonicalNineEntries(): void
+    public function testMarkerStatusMapHasExactlyTheCanonicalElevenEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_STATUS_MAP');
@@ -600,16 +603,18 @@ final class ProblemDetailsFactoryTest extends TestCase
             RateLimited::class => 429,
             InvalidSearchCriteria::class => 422,
             ServiceUnavailable::class => 503,
+            Gone::class => 410,
+            LengthRequired::class => 411,
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_STATUS_MAP must contain exactly the nine canonical marker→status entries in canonical order.',
+            'MARKER_STATUS_MAP must contain exactly the eleven canonical marker→status entries in canonical order.',
         );
     }
 
-    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalNineEntries(): void
+    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalElevenEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_DEFAULT_TYPE_MAP');
@@ -629,12 +634,14 @@ final class ProblemDetailsFactoryTest extends TestCase
             RateLimited::class => 'rate-limited',
             InvalidSearchCriteria::class => 'invalid-search-criteria',
             ServiceUnavailable::class => 'service-unavailable',
+            Gone::class => 'gone',
+            LengthRequired::class => 'length-required',
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_DEFAULT_TYPE_MAP must contain exactly the nine canonical '
+            'MARKER_DEFAULT_TYPE_MAP must contain exactly the eleven canonical '
             . 'marker→default-type entries in canonical order.',
         );
     }
@@ -658,7 +665,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             LogLevel::class,
             LoggerInterface::class,
             \Symfony\Component\DependencyInjection\Attribute\Autowire::class,
-            \Symfony\Component\HttpFoundation\Response::class,
+            Response::class,
             HttpExceptionInterface::class,
             AccessDeniedException::class,
             AuthenticationException::class,
@@ -797,6 +804,8 @@ final class ProblemDetailsFactoryTest extends TestCase
         yield '403' => [403, 'forbidden'];
         yield '404' => [404, 'not-found'];
         yield '409' => [409, 'conflict'];
+        yield '410' => [410, 'gone'];
+        yield '411' => [411, 'length-required'];
         yield '415' => [415, 'unsupported-media-type'];
         yield '422' => [422, 'invariant-violation'];
         yield '429' => [429, 'rate-limited'];
@@ -819,13 +828,13 @@ final class ProblemDetailsFactoryTest extends TestCase
 
     public function testHttpExceptionWithUnmappedStatusFallsBackToHttpError(): void
     {
-        $httpException = new HttpException(410, 'gone');
+        $httpException = new HttpException(418, 'teapot');
 
         $problemDetails = $this->factoryFor()->fromThrowable($httpException, self::CID, self::INSTANCE);
 
-        $this->assertSame(410, $problemDetails->status);
+        $this->assertSame(418, $problemDetails->status);
         $this->assertSame('http-error', $problemDetails->type);
-        $this->assertSame('gone', $problemDetails->title);
+        $this->assertSame('teapot', $problemDetails->title);
     }
 
     public function testHttpExceptionWithEmptyMessageFallsBackToSafeLiteral(): void
@@ -943,7 +952,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame('Bank not found', $problemDetails->title);
     }
 
-    public function testHttpStatusTypeMapHasExactlyTheCanonicalNineEntries(): void
+    public function testHttpStatusTypeMapHasExactlyTheCanonicalElevenEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('HTTP_STATUS_TYPE_MAP');
@@ -959,6 +968,8 @@ final class ProblemDetailsFactoryTest extends TestCase
             403 => 'forbidden',
             404 => 'not-found',
             409 => 'conflict',
+            410 => 'gone',
+            411 => 'length-required',
             415 => 'unsupported-media-type',
             422 => 'invariant-violation',
             429 => 'rate-limited',
@@ -968,7 +979,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame(
             $expected,
             $value,
-            'HTTP_STATUS_TYPE_MAP must contain exactly the nine canonical status→type entries in canonical order.',
+            'HTTP_STATUS_TYPE_MAP must contain exactly the eleven canonical status→type entries in canonical order.',
         );
     }
 

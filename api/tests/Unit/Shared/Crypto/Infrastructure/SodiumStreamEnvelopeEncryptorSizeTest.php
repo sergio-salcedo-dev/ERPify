@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Crypto\Infrastructure;
 
+use Erpify\Documents\Document\Domain\UploadLimits;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Crypto\Infrastructure\ScopeKeyring;
@@ -81,8 +82,8 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
         yield 'exactly two chunks' => [2 * SealedLayout::CHUNK];
         yield 'two chunks and a byte' => [2 * SealedLayout::CHUNK + 1];
         yield '1 MiB' => [1_048_576];
-        yield 'MAX_ORIGINAL_BYTES - 1' => [SealedLayout::MAX_ORIGINAL_BYTES - 1];
-        yield 'MAX_ORIGINAL_BYTES' => [SealedLayout::MAX_ORIGINAL_BYTES];
+        yield 'MAX_ORIGINAL_BYTES - 1' => [UploadLimits::MAX_ORIGINAL_BYTES - 1];
+        yield 'MAX_ORIGINAL_BYTES' => [UploadLimits::MAX_ORIGINAL_BYTES];
     }
 
     #[Test]
@@ -92,7 +93,7 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
         $this->sealedBytes($scope, 'warm-up: loads every class and primes the allocator');
 
         [$sealSmall, $unsealSmall] = $this->peaksOf($scope, 1_048_576);
-        [$sealLarge, $unsealLarge] = $this->peaksOf($scope, SealedLayout::MAX_ORIGINAL_BYTES);
+        [$sealLarge, $unsealLarge] = $this->peaksOf($scope, UploadLimits::MAX_ORIGINAL_BYTES);
 
         $this->assertLessThan(self::PEAK_GROWTH_BOUND_BYTES, \abs($sealLarge - $sealSmall));
         $this->assertLessThan(self::PEAK_GROWTH_BOUND_BYTES, \abs($unsealLarge - $unsealSmall));
@@ -112,7 +113,7 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
         try {
             $this->encryptor->seal(
                 $scope,
-                SyntheticStream::source(SealedLayout::MAX_ORIGINAL_BYTES + 1, SealedLayout::MAX_ORIGINAL_BYTES),
+                SyntheticStream::source(UploadLimits::MAX_ORIGINAL_BYTES + 1, UploadLimits::MAX_ORIGINAL_BYTES),
                 $sealed,
                 self::AAD,
             );
@@ -125,7 +126,7 @@ final class SodiumStreamEnvelopeEncryptorSizeTest extends TestCase
         // chunk was never sealed, let alone marked final, so what was written cannot open as a whole object.
         $this->assertSame(
             SealedLayout::PREFIX_BYTES
-                + (SealedLayout::MAX_ORIGINAL_BYTES / SealedLayout::CHUNK - 1) * SealedLayout::RECORD_BYTES,
+                + (UploadLimits::MAX_ORIGINAL_BYTES / SealedLayout::CHUNK - 1) * SealedLayout::RECORD_BYTES,
             \fstat($sealed)['size'] ?? null,
         );
 

@@ -208,8 +208,7 @@ final class ErasureLockOrderTest extends TestCase
         // and reached Documents last cannot close a cycle with it. Moved ahead of any of them, the erasure
         // would hold a document row while waiting on rows another transaction takes in the opposite order.
         //
-        // The upload-intent rows the order also places ahead of documents do not exist yet, so this asserts
-        // only what the tree can: identity < session < audit < event store < documents, then custody.
+        // Within Documents: upload intents, then documents, then custody rows (ADR documents-custody-log D6).
         $journal = new LockOrderJournal();
         $sessions = new InMemorySessionRepository();
         $sessions->lockOrderJournal = $journal;
@@ -243,6 +242,7 @@ final class ErasureLockOrderTest extends TestCase
             LockOrderJournal::AUDIT_LOG,
             LockOrderJournal::IAM_SESSION,
             LockOrderJournal::EVENT_STORE,
+            LockOrderJournal::UPLOAD_INTENT,
             LockOrderJournal::DOCUMENT,
             LockOrderJournal::DOCUMENT_CUSTODY,
         ];
@@ -260,12 +260,13 @@ final class ErasureLockOrderTest extends TestCase
                 LockOrderJournal::AUDIT_LOG,
                 LockOrderJournal::IAM_SESSION,
                 LockOrderJournal::EVENT_STORE,
+                LockOrderJournal::UPLOAD_INTENT,
                 LockOrderJournal::DOCUMENT,
                 LockOrderJournal::DOCUMENT_CUSTODY,
             ],
             \array_values(\array_intersect($order, \array_keys($positions))),
             'The Documents purge must come after the identity, audit, session and event-store locks, and take '
-            . 'the documents before their custody rows.',
+            . 'the upload intents, then the documents, then their custody rows.',
         );
     }
 

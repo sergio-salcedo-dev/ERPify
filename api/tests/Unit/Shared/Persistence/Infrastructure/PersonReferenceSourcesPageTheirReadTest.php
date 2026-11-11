@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Persistence\Infrastructure;
 use Doctrine\DBAL\Connection;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentCustodyActorPersonReferences;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentUploaderPersonReferences;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalUploadIntentActorPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalErasureResweepPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalRecoverySecretPersonReferences;
@@ -45,6 +46,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DbalPersonResourceReferences::class)]
 #[CoversClass(DbalDocumentUploaderPersonReferences::class)]
 #[CoversClass(DbalDocumentCustodyActorPersonReferences::class)]
+#[CoversClass(DbalUploadIntentActorPersonReferences::class)]
 #[CoversClass(KeysetDistinctIds::class)]
 final class PersonReferenceSourcesPageTheirReadTest extends TestCase
 {
@@ -128,6 +130,12 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
         yield 'document uploader' => [
             DbalDocumentUploaderPersonReferences::class,
             static fn (Connection $connection): array => (new DbalDocumentUploaderPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'upload intent actor' => [
+            DbalUploadIntentActorPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalUploadIntentActorPersonReferences($connection, 1))
                 ->retainedPersonIds(),
         ];
 

@@ -40,7 +40,14 @@ On a VPS with a real domain:
      guards abort the deploy without them. Events are tagged environment `prod`
      (= `APP_ENV`). Wired in `compose.prod.yaml`
      (see [`deployment-guide.md`](deployment-guide.md)).
-   - Optionally tune the `*_CPU_LIMIT` / `*_MEM_LIMIT` knobs to the VPS size.
+   - Optionally tune the `*_CPU_LIMIT` / `*_MEM_LIMIT` knobs to the VPS size — but the prod defaults set a
+     floor: **`php` alone asks for 4.0 CPUs and 2g** (`PHP_CPU_LIMIT`, `PHP_MEM_LIMIT`), and 900m of those 2g are
+     the evidence-upload spool tmpfs, which `memswap_limit` keeps unswappable. Docker refuses to start a container
+     asking for more CPUs than the host has (measured: *range of CPUs is from 0.01 to N.00, as there are only N
+     CPUs available*), so the box needs **at least 4 vCPU and 4 GB** — and the memory limits (4.25 GiB together) are ceilings, so even that minimum overcommits them. Lowering `PHP_CPU_LIMIT`/`PHP_MEM_LIMIT`
+     below that means resizing the FrankenPHP pool and the spool tmpfs with it — the sizing and its measurements
+     are in [`deployment-guide.md`](deployment-guide.md) (evidence upload capacity) and
+     `PRODUCTION_SECURITY_CHECKLIST.md` §7.
 4. **Deploy:** `make deploy.local` (or
    `ENV=prod make docker.up.wait && ENV=prod make db.migrate`). No compose edits
    — the overlay is identical. ACME needs ports 80/443 reachable from the
@@ -69,7 +76,7 @@ was green on `erpify.local` fails on the box. Tracked in #1148; tick each one th
 | **`SENTRY_ENVIRONMENT`** | The rehearsal **requires** `SENTRY_ENVIRONMENT=rehearsal`, and `make prod.env.check` **refuses** a public file that sets it. A file copied from the laptop fails the check. | Start from `.env.prod.example`, not from the laptop's file. Every secret is freshly generated. `AUDIT_KEK` and the env file are backed up under *Disaster-recovery readiness*. |
 | **Outbound SMTP** | Many VPS providers block outbound 25, and some block 587. The relay then times out within `MAILER_SMTP_TIMEOUT` (default 3 s per socket operation). Password resets and lockout notices fail while everything else stays green. | From the VPS, `nc -vz <relay> <port>` succeeds before the deploy. After the deploy, send one forgot-password mail end to end. |
 | **Mercure on a real domain** | `SERVER_NAME` expands to `<domain>, php:80`, so Caddy runs two servers sharing one named hub. Subscribers authorise through the `mercureAuthorization` cookie on the public origin. `tls internal` and ACME differ in the certificate but not in that wiring, which is why the rehearsal is a good predictor yet not a proof. The hub also runs in compatibility mode (`PRODUCTION_SECURITY_CHECKLIST.md` §7). | Open two tabs on Banks, edit in one, and watch the other update. A publish without a token gets `401`. |
-| **Resource limits** | The `*_MEM_LIMIT` defaults in `compose.prod.yaml` add up to 3.25 GiB: php 1g, pwa 512m, database 1g, worker 512m per replica, scheduler 256m. They are ceilings, not reservations, so a smaller box overcommits silently and OOM-kills under load. | Measure real usage with `docker stats` during an e2e run on the laptop, then set the knobs to the VPS size. |
+| **Resource limits** | The `*_MEM_LIMIT` defaults in `compose.prod.yaml` add up to 4.25 GiB: php 2g (900m of it the unswappable upload-spool tmpfs), pwa 512m, database 1g, worker 512m per replica, scheduler 256m; `php` alone asks for 4.0 CPUs, and Docker refuses a container asking for more CPUs than the host has. The box therefore needs at least 4 vCPU and 4 GB. Memory limits are ceilings, not reservations: the 4 GB minimum already overcommits their 4.25 GiB sum, and a smaller box overcommits further and OOM-kills under load. | Confirm the VPS has ≥4 vCPU and ≥4 GB. Measure real usage with `docker stats` during an e2e run on the laptop; lowering `PHP_CPU_LIMIT`/`PHP_MEM_LIMIT` needs the pool and the spool resized with it ([`deployment-guide.md`](deployment-guide.md), `PRODUCTION_SECURITY_CHECKLIST.md` §7). |
 | **Reboot and restart** | Nothing gates that the stack survives a host reboot. The scheduler's checkpoint lives in Postgres (`cache.scheduler_checkpoint`), so a recreated container must keep its daily ticks rather than re-anchor them. | Reboot the VPS once before go-live. Then confirm every service is healthy and `scheduler_worker` logs its next tick on schedule. |
 | **Container log rotation** | Rotation is declared per service as literals (`make php.lint.log-retention`), but it binds only if the daemon honours the `json-file` options. | `docker inspect <container> --format '{{.HostConfig.LogConfig}}'` shows `max-size`/`max-file` on the VPS. |
 

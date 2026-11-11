@@ -54,6 +54,27 @@ final class RedactionVocabularyParityTest extends TestCase
         $this->assertSame(RequestUriRedaction::IDENTITY_KEYS, $axes[1], $drifted);
     }
 
+    #[Test]
+    public function theQueryKeysAreTheSameOnBothDeployables(): void
+    {
+        $declaration = $this->read(
+            $this->repoRoot() . '/pwa/src/context/shared/observability/domain/redaction.ts',
+        );
+
+        $matched = \preg_match('/QUERY_KEYS = \[([^\]]*)\]/', $declaration, $matches);
+
+        $this->assertSame(1, $matched, 'QUERY_KEYS is no longer declared as an array literal.');
+
+        \preg_match_all('/"([^"]+)"/', $matches[1], $keys);
+
+        $this->assertSame(
+            RequestUriRedaction::QUERY_KEYS,
+            $keys[1],
+            'The PWA query keys and the API QUERY_KEYS have drifted apart. A key only one side recognises is an '
+            . 'original filename kept out of one sink and let into the other.',
+        );
+    }
+
     /**
      * The subject sits outside the `./api` build context, so in the container it arrives only through the
      * read-only `./` bind mount at `/app/repo` declared in `compose.dev.yaml`. Missing it is a failure and

@@ -47,8 +47,8 @@ trait PlantsDocumentRows
 
         $this->connection()->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, predecessor_id, uploader_id, state, digest, size_bytes, '
-            . 'idempotency_key_hash, created_at, updated_at) '
-            . 'VALUES (:id, :scope, :id, NULL, :uploader, :state, :digest, 10, :hash, NOW(), NOW())',
+            . 'idempotency_key_hash, next_scan_at, created_at, updated_at) '
+            . 'VALUES (:id, :scope, :id, NULL, :uploader, :state, :digest, 10, :hash, NOW(), NOW(), NOW())',
             [
                 'id' => $id,
                 'scope' => RandomUuid::v4()->toRfc4122(),
