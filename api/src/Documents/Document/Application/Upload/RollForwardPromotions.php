@@ -23,7 +23,8 @@ use Throwable;
  * is already there and never overwrites it; only the run that set `promoted_at` wakes the scan.
  *
  * A row whose object is in neither namespace is left as it is and counted: the scheduled report alarms on it.
- * A row that fails for any other reason is logged and passed over, so it never stops the rows behind it.
+ * A row that fails for any other reason is logged by its id and passed over, and the run pages past such rows by id
+ * until `$limit` rows were promoted or the candidates ran out, so they never starve the rows behind them.
  */
 final readonly class RollForwardPromotions
 {
@@ -42,28 +43,45 @@ final readonly class RollForwardPromotions
     public function run(int $olderThanSeconds, int $limit): int
     {
         $promoted = 0;
+        $after = null;
 
-        foreach ($this->documents->awaitingPromotion($olderThanSeconds, $limit) as $documentId) {
-            try {
-                $marked = $this->rollForward($documentId);
-            } catch (ObjectNotFound) {
-                continue;
-            } catch (Throwable $throwable) {
-                $this->logger->error('A document could not be rolled forward; the batch goes on.', [
-                    'documentId' => $documentId,
-                    'exceptionClass' => $throwable::class,
-                ]);
+        do {
+            $page = $this->documents->awaitingPromotion($olderThanSeconds, $limit, $after);
 
-                continue;
+            foreach ($page as $documentId) {
+                $after = $documentId;
+
+                if ($this->rollForwardOne($documentId)) {
+                    ++$promoted;
+                    $this->scanWakeUp->wake($documentId);
+
+                    if ($promoted >= $limit) {
+                        return $promoted;
+                    }
+                }
             }
-
-            if ($marked) {
-                ++$promoted;
-                $this->scanWakeUp->wake($documentId);
-            }
-        }
+        } while (\count($page) === $limit);
 
         return $promoted;
+    }
+
+    /**
+     * Whether this run promoted the row; a row whose object is in neither namespace, or that fails, is passed over.
+     */
+    private function rollForwardOne(string $documentId): bool
+    {
+        try {
+            return $this->rollForward($documentId);
+        } catch (ObjectNotFound) {
+            return false;
+        } catch (Throwable $throwable) {
+            $this->logger->error('A document could not be rolled forward; the batch goes on.', [
+                'documentId' => $documentId,
+                'exceptionClass' => $throwable::class,
+            ]);
+
+            return false;
+        }
     }
 
     private function rollForward(string $documentId): bool

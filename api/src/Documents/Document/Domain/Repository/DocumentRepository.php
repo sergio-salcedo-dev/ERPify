@@ -64,10 +64,11 @@ interface DocumentRepository
     public function markPromoted(string $id): bool;
 
     /**
-     * Ids of `Received` rows with `promoted_at` NULL created at least `$olderThanSeconds` ago, ascending.
-     * A candidate list: the roll-forward rechecks each under its lock.
+     * Ids of `Received` rows with `promoted_at` NULL created at least `$olderThanSeconds` ago, ascending after
+     * `$afterId` when given. A candidate list: the roll-forward rechecks each under its lock, and pages past the
+     * ones it could not promote.
      *
      * @return list<string>
      */
-    public function awaitingPromotion(int $olderThanSeconds, int $limit): array;
+    public function awaitingPromotion(int $olderThanSeconds, int $limit, ?string $afterId = null): array;
 }

@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Gate;
 
+use Erpify\Documents\Document\Infrastructure\Http\DocumentsIngestGate;
 use Erpify\Tests\Support\Dig;
 use Erpify\Tests\Support\DocumentsRestoreProofs;
 use Erpify\Tests\Support\RepositoryRoot;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -156,6 +160,53 @@ final class DocumentsIngestProofGateTest extends TestCase
             ['services.yaml' => "services:\n    x:\n        arguments: ['%documents.ingest_enabled%']\n"],
             false,
         ];
+    }
+
+    /**
+     * The value production actually runs with, read from the compiled prod container rather than from the file: a
+     * key spelled so the byte scan misses it, a name built in PHP, a value set by the kernel or a compiler pass all
+     * end up here. A value other than the literal false needs the same proof the file does.
+     */
+    public function testTheCompiledProductionContainerHonoursTheRule(): void
+    {
+        $process = new Process(
+            ['php', 'bin/console', 'debug:container', '--parameters', '--format=json', '--no-interaction'],
+            \dirname(__DIR__, 3),
+            ['APP_ENV' => 'prod', 'APP_DEBUG' => '0'],
+        );
+        $process->mustRun();
+
+        $parameters = \json_decode($process->getOutput(), true);
+        $this->assertIsArray($parameters, "the prod container's parameters could not be read");
+        $this->assertArrayHasKey('documents.ingest_enabled', $parameters);
+
+        $records = \array_map(
+            static fn (string $file): string => (string) \file_get_contents($file),
+            \glob($this->proofDirectory() . '/*.y*ml') ?: [],
+        );
+
+        $this->assertSame([], DocumentsRestoreProofs::ingestViolations(['when@prod' => ['parameters' => [
+            'documents.ingest_enabled' => $parameters['documents.ingest_enabled'],
+            'documents.backup_mechanism' => $parameters['documents.backup_mechanism'] ?? null,
+        ]]], $records));
+    }
+
+    /**
+     * The 404 switch is read from exactly the parameter both checks above judge: bound to any other, the gate could
+     * open ingest while the proof rule watched a parameter nothing reads.
+     */
+    public function testTheIngestGateReadsExactlyTheJudgedParameter(): void
+    {
+        $constructor = new ReflectionMethod(DocumentsIngestGate::class, '__construct');
+        $bindings = [];
+
+        foreach ($constructor->getParameters() as $parameter) {
+            foreach ($parameter->getAttributes(Autowire::class) as $attribute) {
+                $bindings[$parameter->getName()] = $attribute->newInstance()->value;
+            }
+        }
+
+        $this->assertSame(['ingestEnabled' => '%documents.ingest_enabled%'], $bindings);
     }
 
     public function testDevAndTestOpenIngestAndProductionDoesNotByDefault(): void

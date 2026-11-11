@@ -81,3 +81,6 @@ The commit asserts under both locks that the intent is `Streaming` with a live l
 
 **Discarded:** deleting the intent at commit (the intent keeps holding the key until its 7-day retention sweep, then the document's own `UNIQUE` and the declare's re-read take over); a `NOT EXISTS` guard inside the reaper's `UPDATE` (under `READ COMMITTED` its snapshot predates a row committing while it waits); a pre-allocated document id on the intent (the scope id is enough to join them, and a document id before the document exists invites a dangling reference).
 
+### D7 — `RetentionReason` is a closed set of four values, accepted by the owner
+
+`contract-execution`, `tax-and-accounting`, `technical-file` and `legal-claims`, required at declare beside the six `LegalBasis` values of GDPR Art. 6(1). The specification fixes a closed enum but not its members; these four were chosen during implementation and accepted by the owner on 2026-11-08. Period, anchor, jurisdiction and enforcement of a retention still wait for counsel's matrix, so the enum names why a document is kept and decides nothing about when it may go. Adding a value is additive; removing one needs a data migration, because the value is stored on the document. **Discarded:** a free-text reason, which cannot be enumerated by a retention report.

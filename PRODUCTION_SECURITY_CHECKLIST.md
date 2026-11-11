@@ -2606,9 +2606,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       `GRANT`, `REVOKE` or trigger exists in the tree, so whoever holds the application's database credential
       — or a PostgreSQL administrator — can still rewrite or delete a custody row, and the gate sees neither
       a migration nor runtime-built SQL. Custody is not claimed cryptographically immutable; hash-chaining or
-      a restricted role are separate decisions (`docs/adr/documents-custody-log.md` D3). **Accepted — basis:
-      no deployment is live, and ingest stays off in production until a restore proof exists, so no production
-      document is filed yet; revisit with the first deploy that opens ingest.**
+      a restricted role are separate decisions (`docs/adr/documents-custody-log.md` D3). **Accepted — the user,
+      2026-11-11, moving the revisit to the first deploy that opens ingest. Basis (unchanged): no deployment is
+      live, and ingest stays off in production until a restore proof exists, so no production document is filed
+      yet.**
 - [ ] **A document or custody row committed by an in-flight action of an erased person, after the purge
       statement's snapshot, keeps the person's id until the re-sweep.** The purge's `UPDATE`s match rows that
       exist when they run. For a document filed through ingest the window is closed by the lock order
@@ -2667,7 +2668,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       thread-pin entry above). **Accepted — the user, 2026-11-08.**
 - [ ] **An evidence PUT's plaintext spool is destroyed when its response leaves, except where it cannot be
       identified or no response is produced.** PHP caches every byte read from a request body in a `php*` file in
-      `upload_tmp_dir` (past 16 KiB), held open by the worker thread until its next request; and the server reads
+      `upload_tmp_dir` (from 16 KiB on), held open by the worker thread until its next request; and the server reads
       the rest of a refused PUT's body after the application returns, into the same cache (measured: an anonymous
       401, a 410 and a 422 each answered only once the whole body had arrived, and left a spool of it). So it would
       outlive its upload — filed, aborted, refused, aborted by a person's erasure — and a later crypto-shred.
@@ -2679,7 +2680,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       another completed was filed with its exact digest (`UploadSpoolConcurrencyGateTest`; destroying every spool
       instead aborts it with 422, measured). What remains: a request ending with no response (a fatal error, a
       killed worker) keeps its spool until the thread's next request; two in-flight uploads of the same bytes are
-      both left, since either spool could be the other's; a body of at most 16 KiB never leaves memory; any other
+      both left, since either spool could be the other's; a body under 16 KiB never leaves memory; any other
       route's body (bounded at 1 MB by Caddy) is still spooled until the thread's next request (measured on
       `/api/v1/health`). **Those four: Accepted — the user, 2026-11-11.** The production image was not re-measured —
       the mechanism is PHP's own and the image runs the same PHP, but its process user differs; that is a stated
@@ -2700,7 +2701,8 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **Rotating `APP_SECRET` silently unmatches every stored idempotency key.** The key hashes on upload intents
       and documents are HMAC-SHA256 under `kernel.secret`, so after a rotation no replay matches its earlier
       declare: a client retrying across the rotation files the same evidence twice — a duplicate, never a loss —
-      and nothing reports it. No separate secret is introduced. **Accepted — the user, 2026-11-08.**
+      and nothing reports it. No separate secret is introduced. **Recorded — the user chose documentation over a
+      separate secret, 2026-11-08.**
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
       `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
       first UI story that uploads evidence.**

@@ -22,10 +22,17 @@ use Throwable;
  * call, and a final object without a row is alarmed on by the scheduled report, never deleted.
  *
  * The limit counts deletions, not names: owned objects are passed over without spending it, so orphans behind
- * a long run of live uploads are still reached. A scope that fails is logged and passed over too.
+ * a long run of live uploads are still reached. A scope that fails is logged and passed over too; a walk that fails,
+ * or a run of failures in a row, ends the run with one line rather than one per remaining object.
  */
 final readonly class SweepStagedOrphans
 {
+    /**
+     * Failures in a row after which the run stops: past a few, the cause is the store or the database rather than
+     * one object, and walking the rest of staging would only log the same failure once per object.
+     */
+    private const int MAX_CONSECUTIVE_FAILURES = 5;
+
     public function __construct(
         private DocumentStorage $storage,
         private DocumentRepository $documents,
@@ -40,29 +47,59 @@ final readonly class SweepStagedOrphans
     public function sweep(int $limit): int
     {
         $deleted = 0;
+        $consecutiveFailures = 0;
 
-        $candidates = $this->storage->scopesOlderThan(StorageArea::Staging, UploadLimits::STAGING_ORPHAN_AGE_SECONDS);
+        try {
+            $candidates = $this->storage->scopesOlderThan(
+                StorageArea::Staging,
+                UploadLimits::STAGING_ORPHAN_AGE_SECONDS,
+            );
 
-        foreach ($candidates as $scopeId) {
-            if ($deleted >= $limit) {
-                break;
-            }
-
-            try {
-                if ($this->documents->existsForScope($scopeId) || $this->intents->hasLiveIntentForScope($scopeId)) {
-                    continue;
+            foreach ($candidates as $scopeId) {
+                if ($deleted >= $limit) {
+                    break;
                 }
 
-                $this->storage->delete(StorageArea::Staging, $scopeId);
-                ++$deleted;
-            } catch (Throwable $throwable) {
-                $this->logger->error('A staged object could not be swept; the sweep goes on.', [
-                    'scopeId' => $scopeId,
-                    'exceptionClass' => $throwable::class,
-                ]);
+                try {
+                    $deleted += $this->sweepOne($scopeId) ? 1 : 0;
+                    $consecutiveFailures = 0;
+                } catch (Throwable $throwable) {
+                    $this->logger->error('A staged object could not be swept; the sweep goes on.', [
+                        'scopeId' => $scopeId,
+                        'exceptionClass' => $throwable::class,
+                    ]);
+
+                    if (++$consecutiveFailures >= self::MAX_CONSECUTIVE_FAILURES) {
+                        $this->logger->error('The staging sweep stopped after consecutive failures.', [
+                            'failures' => $consecutiveFailures,
+                            'deleted' => $deleted,
+                        ]);
+
+                        break;
+                    }
+                }
             }
+        } catch (Throwable $throwable) {
+            $this->logger->error('The staging area could not be walked; the sweep stopped.', [
+                'exceptionClass' => $throwable::class,
+                'deleted' => $deleted,
+            ]);
         }
 
         return $deleted;
+    }
+
+    /**
+     * Whether the scope's staged object was deleted: an owned one — by a document row or a live intent — is not.
+     */
+    private function sweepOne(string $scopeId): bool
+    {
+        if ($this->documents->existsForScope($scopeId) || $this->intents->hasLiveIntentForScope($scopeId)) {
+            return false;
+        }
+
+        $this->storage->delete(StorageArea::Staging, $scopeId);
+
+        return true;
     }
 }

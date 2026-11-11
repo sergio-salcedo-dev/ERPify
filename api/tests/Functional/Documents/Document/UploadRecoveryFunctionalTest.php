@@ -18,6 +18,8 @@ use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\UploadLimits;
 use Erpify\Documents\Document\Infrastructure\Messenger\ScanDocumentHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\ScanDocumentMessage;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentRepository;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
@@ -47,6 +49,8 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
 #[CoversClass(SweepStagedOrphans::class)]
 #[CoversClass(ReapUploadIntents::class)]
 #[CoversClass(ScanDocumentHandler::class)]
+#[CoversClass(DoctrineUploadIntentRepository::class)]
+#[CoversClass(DoctrineDocumentRepository::class)]
 final class UploadRecoveryFunctionalTest extends KernelTestCase
 {
     use PlantsUploadIntents;

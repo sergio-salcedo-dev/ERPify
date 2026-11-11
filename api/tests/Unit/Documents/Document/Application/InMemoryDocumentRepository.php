@@ -114,7 +114,7 @@ final class InMemoryDocumentRepository implements DocumentRepository
     }
 
     #[Override]
-    public function awaitingPromotion(int $olderThanSeconds, int $limit): array
+    public function awaitingPromotion(int $olderThanSeconds, int $limit, ?string $afterId = null): array
     {
         return [];
     }

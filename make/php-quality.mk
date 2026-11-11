@@ -252,8 +252,11 @@ php.lint.document-custody: ## Document custody log append-only gate
 #    universe and falsifies its engine on planted sources.
 #  - DocumentsNotAuditedGateTest: Document, UploadIntent and DocumentCustody stay out of #[AuditedEntity], and
 #    the audit metadata vocabulary names no filename.
-#  - DocumentsIngestProofGateTest: tracked production config may open `documents.ingest_enabled` only with a valid
-#    restore-proof record for the backup mechanism it declares (docs/runbooks/documents-restore-proof.md).
+#  - DocumentsIngestProofGateTest: production may open `documents.ingest_enabled` — any value but the literal
+#    false counts as opening it — only with a valid restore-proof record for the backup mechanism it declares
+#    (docs/runbooks/documents-restore-proof.md); the switch may be declared only in config/packages/documents.yaml,
+#    the value is also read from the compiled prod container (hence the prod-container prerequisite, which keeps
+#    var/cache/prod warm and unwritten under it), and DocumentsIngestGate must read exactly that parameter.
 #  - DocumentsSchedulerStorageGateTest: every service that runs the Documents sweeps resolves and mounts the same
 #    document storage as php.
 #  - UploadRoutePathAgreementGateTest: the content route's path from api/.route-manifest.json is matched by the
@@ -261,7 +264,7 @@ php.lint.document-custody: ## Document custody log append-only gate
 #  - UploadSpoolConfinementGateTest: upload_tmp_dir in 10-app.ini is a tmpfs in compose.yaml, prod's swap limit
 #    equals its memory limit, and the entrypoint refuses to start over a spool that is not a tmpfs.
 # All but the first two read root files through the read-only `./` bind mount at /app/repo, and FAIL without it.
-php.lint.documents-ingest: ## Documents ingest gates (boundary, not audited, proof, storage, route path, spool)
+php.lint.documents-ingest: php.lint.prod-container ## Documents ingest gates (boundary, not audited, proof, storage, route path, spool)
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsTransportBoundaryGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsNotAuditedGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsIngestProofGateTest

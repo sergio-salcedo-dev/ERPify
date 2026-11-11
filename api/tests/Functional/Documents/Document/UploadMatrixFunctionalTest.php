@@ -5,16 +5,24 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\PurgeUserDocumentReferences;
+use Erpify\Documents\Document\Application\Resource\UploadResource;
 use Erpify\Documents\Document\Application\Upload\ClaimUpload;
+use Erpify\Documents\Document\Application\Upload\Command\DeclareUploadCommand;
 use Erpify\Documents\Document\Application\Upload\DeclareUpload;
+use Erpify\Documents\Document\Application\Upload\DeclareUploadOutcome;
 use Erpify\Documents\Document\Application\Upload\ExpireUpload;
+use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
+use Erpify\Documents\Document\Domain\Exception\UploadInProgress;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\UploadLimits;
 use Erpify\Documents\Document\Infrastructure\Controller\DeclareUploadController;
 use Erpify\Documents\Document\Infrastructure\Controller\UploadEvidenceController;
+use Erpify\Documents\Document\Infrastructure\Http\UploadResourceMapper;
+use Erpify\Documents\Document\Infrastructure\Http\UploadRetryAfter;
 use Erpify\Documents\Document\Infrastructure\Security\DeclareUploadThrottle;
+use Erpify\Documents\Document\Infrastructure\Upload\HmacIdempotencyKeyHasher;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Persistence\Application\TransactionManager;
@@ -49,6 +57,14 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversClass(DeclareUpload::class)]
 #[CoversClass(ClaimUpload::class)]
 #[CoversClass(DeclareUploadThrottle::class)]
+#[CoversClass(DeclareUploadCommand::class)]
+#[CoversClass(DeclareUploadOutcome::class)]
+#[CoversClass(UploadResource::class)]
+#[CoversClass(UploadResourceMapper::class)]
+#[CoversClass(UploadInProgress::class)]
+#[CoversClass(UploadRetryAfter::class)]
+#[CoversClass(IdempotencyKeyConflict::class)]
+#[CoversClass(HmacIdempotencyKeyHasher::class)]
 final class UploadMatrixFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;

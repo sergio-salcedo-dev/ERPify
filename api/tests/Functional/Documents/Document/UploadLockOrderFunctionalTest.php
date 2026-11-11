@@ -12,6 +12,8 @@ use Erpify\Documents\Document\Application\Upload\ReapUploadIntents;
 use Erpify\Documents\Document\Domain\Exception\UploadAborted;
 use Erpify\Documents\Document\Domain\OriginalFilename;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentRepository;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -35,6 +37,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(CommitUpload::class)]
 #[CoversClass(ReapUploadIntents::class)]
 #[CoversClass(PurgeUserDocumentReferences::class)]
+#[CoversClass(DoctrineUploadIntentRepository::class)]
+#[CoversClass(DoctrineDocumentRepository::class)]
 final class UploadLockOrderFunctionalTest extends KernelTestCase
 {
     use InterleavesWithASecondConnection;

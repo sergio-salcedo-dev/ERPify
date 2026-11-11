@@ -89,9 +89,9 @@ final readonly class FaultingLockIntentRepository implements UploadIntentReposit
     }
 
     #[Override]
-    public function reapCandidates(int $limit): array
+    public function reapCandidates(int $limit, ?string $afterId = null): array
     {
-        return $this->inner->reapCandidates($limit);
+        return $this->inner->reapCandidates($limit, $afterId);
     }
 
     #[Override]

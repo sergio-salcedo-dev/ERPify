@@ -29,6 +29,14 @@ final class ScriptedDocumentStorage implements DocumentStorage
 
     private bool $everyPromoteFails = false;
 
+    private bool $everyDeleteFails = false;
+
+    private bool $walkFails = false;
+
+    private bool $promotionRaces = false;
+
+    private bool $promotionLanded = false;
+
     /** @var list<string> */
     private array $failingDeletes = [];
 
@@ -54,6 +62,31 @@ final class ScriptedDocumentStorage implements DocumentStorage
     public function failPromoteFor(string $scopeId): self
     {
         $this->failingPromotes[] = $scopeId;
+
+        return $this;
+    }
+
+    public function failEveryDelete(): self
+    {
+        $this->everyDeleteFails = true;
+
+        return $this;
+    }
+
+    /**
+     * The object is promoted into the final area right after the first existence check anyone makes: a reader that
+     * looks in staging first finds it in final, one that looks in final first finds it in neither.
+     */
+    public function promotionLandsAfterTheFirstCheck(): self
+    {
+        $this->promotionRaces = true;
+
+        return $this;
+    }
+
+    public function failWalk(): self
+    {
+        $this->walkFails = true;
 
         return $this;
     }
@@ -108,12 +141,23 @@ final class ScriptedDocumentStorage implements DocumentStorage
     #[Override]
     public function has(StorageArea $area, string $scopeId): bool
     {
+        if ($this->promotionRaces) {
+            $present = $this->promotionLanded && StorageArea::Final === $area;
+            $this->promotionLanded = true;
+
+            return $present;
+        }
+
         return $this->inner->has($area, $scopeId);
     }
 
     #[Override]
     public function scopesOlderThan(StorageArea $area, int $olderThanSeconds): iterable
     {
+        if ($this->walkFails) {
+            throw DocumentStorageFailed::because($area, 'scripted walk failure');
+        }
+
         return $this->walk ?? $this->inner->scopesOlderThan($area, $olderThanSeconds);
     }
 
@@ -143,7 +187,7 @@ final class ScriptedDocumentStorage implements DocumentStorage
     #[Override]
     public function delete(StorageArea $area, string $scopeId): void
     {
-        if (\in_array($scopeId, $this->failingDeletes, true)) {
+        if ($this->everyDeleteFails || \in_array($scopeId, $this->failingDeletes, true)) {
             throw DocumentStorageFailed::because($area, 'scripted delete failure');
         }
 

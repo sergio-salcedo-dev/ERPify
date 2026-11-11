@@ -32,11 +32,20 @@ final readonly class DeclareUploadThrottle
     }
 
     /**
+     * The limiter key of an actor's declare budget: an HMAC of the case-folded id, so the cache pool never holds
+     * the id itself.
+     */
+    public static function keyFor(string $actorId, string $secret): string
+    {
+        return \hash_hmac('sha256', 'documents.upload.declare:' . \strtolower($actorId), $secret);
+    }
+
+    /**
      * @throws RateLimitExceeded when the actor's declare budget is spent for the window
      */
     public function ensureWithinBudget(string $actorId): void
     {
-        $key = \hash_hmac('sha256', 'documents.upload.declare:' . \strtolower($actorId), $this->secret);
+        $key = self::keyFor($actorId, $this->secret);
         $snapshot = RateLimitSnapshot::of($this->perActorLimiter->create($key)->consume(), $key);
 
         if ($snapshot->accepted) {

@@ -123,6 +123,7 @@ final class UploadFilenameRedactionTest extends TestCase
             'with a percent-encoded segment' => '/api/v1/documents/uploads/' . $id . '/%63ontent',
             'with an encoded slash' => '/api/v1/documents/uploads%2F' . $id . '/content',
             'double-encoded' => '/api/v1/documents/uploads/' . $id . '/%2563ontent',
+            'with a triplet that is not UTF-8' => '/api/v1/documents/uploads/%E0/%63ontent',
         ];
     }
 

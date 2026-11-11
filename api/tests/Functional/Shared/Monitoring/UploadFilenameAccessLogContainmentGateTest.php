@@ -53,12 +53,23 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
 
     private const int ABORT_AFTER_BYTES = 65_536;
 
-    private const int FLUSH_TIMEOUT_MICROSECONDS = 10_000_000;
+    /** A body refused only after it arrived, sent slower than PHP's default 30 s limit would allow a drain. */
+    private const int SLOW_REFUSED_SIZE = 1_300_000;
 
-    private const int FLUSH_POLL_MICROSECONDS = 100_000;
+    private const int SLOW_BYTES_PER_SECOND = 35_000;
+
+    /** The answer each ending must get, the aborted one excepted: its client is gone before any answer. */
+    private const array EXPECTED_STATUS = [
+        'completed' => 201,
+        'gone' => 410,
+        'refused slowly' => 410,
+        'oversized' => 422,
+    ];
 
     /** @var non-empty-string|null */
     private static ?string $cookieJar = null;
+
+    private static ?string $session = null;
 
     private DevStackUploadRows $rows;
 
@@ -74,10 +85,15 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
 
         $jar = \tempnam(\sys_get_temp_dir(), 'access-log-probe');
         self::$cookieJar = \is_string($jar) ? $jar : null;
+        self::$session = DevStackUploadRows::signIn((string) self::$cookieJar);
     }
 
     public static function tearDownAfterClass(): void
     {
+        if (null !== self::$session) {
+            DevStackUploadRows::forgetSession(self::$session);
+        }
+
         if (null !== self::$cookieJar && \is_file(self::$cookieJar)) {
             \unlink(self::$cookieJar);
         }
@@ -87,11 +103,6 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
     protected function setUp(): void
     {
         $this->rows = new DevStackUploadRows();
-        [$status] = $this->request('POST', '/api/v1/backoffice/login', \json_encode([
-            'email' => DevStackUploadRows::EMAIL,
-            'password' => DevStackUploadRows::PASSWORD,
-        ]) ?: '');
-        $this->assertSame(204, $status, 'the e2e administrator could not sign in through Caddy');
     }
 
     protected function tearDown(): void
@@ -106,32 +117,18 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
     {
         $name = 'sentinel-' . \bin2hex(\random_bytes(8)) . ' Acta é.pdf';
         $anchor = 'anchor' . \bin2hex(\random_bytes(10));
-        $upload = $this->declare(match ($ending) {
-            'completed' => self::OVER_ONE_MEGABYTE,
-            'aborted' => self::ABORTED_SIZE,
-            default => UploadLimits::MAX_ORIGINAL_BYTES,
-        });
-        $position = $this->accessLogPosition();
-        $mirrorOffset = $this->mirrorSize();
+        $upload = $this->uploadFor($ending);
+        $position = DevStackLogs::accessLogPosition();
+        $mirrorOffset = DevStackLogs::mirrorSize();
 
         $token = \random_bytes(16);
         $status = $this->put($upload, $name, $anchor, $ending, $token);
 
-        $written = $this->accessLogWrittenSince($position, $anchor);
-        $mirrored = $this->mirrorWrittenSince($mirrorOffset);
+        $written = DevStackLogs::accessLogWrittenSince($position, $anchor);
+        $mirrored = DevStackLogs::mirrorWrittenSince($mirrorOffset);
         $this->assertNoSpoolHolds($token);
 
-        if ('completed' === $ending) {
-            $this->assertSame(201, $status, 'a body over 1 MB on the canonical path is filed');
-        }
-
-        if ('aborted' === $ending) {
-            $this->assertSame(
-                'expired',
-                $this->rows->stateOf($upload),
-                'the application aborted the upload whose body ended short',
-            );
-        }
+        $this->assertEnding($ending, $status, $written, $anchor, $upload);
 
         $this->assertStringContainsString('documents_upload_content', $mirrored, 'the probe reached the container log');
         $this->assertStringContainsString('/api/v1/documents/uploads/', $written, 'the probe line arrived');
@@ -156,6 +153,44 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
         yield 'completed' => ['completed'];
         yield 'aborted mid-body' => ['aborted'];
         yield 'past the bound' => ['oversized'];
+        yield 'refused, on a real session' => ['gone'];
+        yield "refused, sent slower than PHP's default limit" => ['refused slowly'];
+    }
+
+    /**
+     * A refused PUT targets an upload that was never declared, so the session is real and the answer is 410.
+     */
+    private function uploadFor(string $ending): string
+    {
+        return match ($ending) {
+            'gone', 'refused slowly' => '0190e9c2-7b5a-7d40-9c8f-' . \bin2hex(\random_bytes(6)),
+            'completed' => $this->declare(self::OVER_ONE_MEGABYTE),
+            'aborted' => $this->declare(self::ABORTED_SIZE),
+            default => $this->declare(UploadLimits::MAX_ORIGINAL_BYTES),
+        };
+    }
+
+    private function assertEnding(string $ending, int $status, string $written, string $anchor, string $upload): void
+    {
+        if (isset(self::EXPECTED_STATUS[$ending])) {
+            $this->assertSame(self::EXPECTED_STATUS[$ending], $status, 'the answer the application owes ' . $ending);
+        }
+
+        if ('oversized' === $ending) {
+            $this->assertLessThanOrEqual(
+                UploadLimits::MAX_ORIGINAL_BYTES + 1,
+                $this->bytesReadBy($written, $anchor),
+                'Caddy read past the upload bound',
+            );
+        }
+
+        if ('aborted' === $ending) {
+            $this->assertSame(
+                'expired',
+                $this->rows->stateOf($upload),
+                'the application aborted the upload whose body ended short',
+            );
+        }
     }
 
     private function declare(int $size): string
@@ -209,8 +244,9 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
         ));
 
         $length = match ($ending) {
-            'completed' => self::OVER_ONE_MEGABYTE,
+            'completed', 'gone' => self::OVER_ONE_MEGABYTE,
             'aborted' => self::ABORTED_SIZE,
+            'refused slowly' => self::SLOW_REFUSED_SIZE,
             default => UploadLimits::MAX_ORIGINAL_BYTES + 1,
         };
         $abortAfter = 'aborted' === $ending ? self::ABORT_AFTER_BYTES : PHP_INT_MAX;
@@ -245,6 +281,7 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
             CURLOPT_CUSTOMREQUEST => 'PUT',
             CURLOPT_INFILESIZE => $length,
             CURLOPT_TIMEOUT => 'aborted' === $ending ? 3 : 120,
+            CURLOPT_MAX_SEND_SPEED_LARGE => 'refused slowly' === $ending ? self::SLOW_BYTES_PER_SECOND : 0,
             CURLOPT_USERAGENT => $anchor,
             CURLOPT_HTTPHEADER => ['Content-Type: application/octet-stream', 'Expect:'],
         ]);
@@ -284,6 +321,17 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
         return $handle;
     }
 
+    private function bytesReadBy(string $written, string $anchor): int
+    {
+        foreach (\explode("\n", $written) as $line) {
+            if (\str_contains($line, $anchor) && 1 === \preg_match('/"bytes_read":(\d+)/', $line, $matches)) {
+                return (int) $matches[1];
+            }
+        }
+
+        $this->fail("The probe's access-log line records no bytes_read.");
+    }
+
     /**
      * The request has ended once its access-log line exists, so no spool of it may remain in `upload_tmp_dir`: the
      * application destroys its plaintext copy of the body as soon as it stops reading it, whatever the outcome.
@@ -300,105 +348,5 @@ final class UploadFilenameAccessLogContainmentGateTest extends TestCase
                 "the request's plaintext body is still spooled",
             );
         }
-    }
-
-    private function mirrorPath(): string
-    {
-        $path = \getenv('CONTAINER_LOG_MIRROR');
-
-        if (!\is_string($path) || '' === $path || !\is_readable($path)) {
-            throw new RuntimeException(
-                'The container-log mirror (CONTAINER_LOG_MIRROR, compose.dev.yaml) is not readable, so the '
-                    . "container's own log cannot be observed; restore it rather than relaxing this into a skip.",
-            );
-        }
-
-        return $path;
-    }
-
-    private function mirrorSize(): int
-    {
-        \clearstatcache(true, $this->mirrorPath());
-
-        return (int) \filesize($this->mirrorPath());
-    }
-
-    /**
-     * Polls until the mirror shows the probe's route (the dev router logs the matched route on stderr), then
-     * returns what was written since the offset; a probe that never reaches it fails instead of reading empty.
-     */
-    private function mirrorWrittenSince(int $offset): string
-    {
-        for ($waited = 0; $waited < self::FLUSH_TIMEOUT_MICROSECONDS; $waited += self::FLUSH_POLL_MICROSECONDS) {
-            \clearstatcache(true, $this->mirrorPath());
-            $size = (int) \filesize($this->mirrorPath());
-            $written = (string) \file_get_contents($this->mirrorPath(), false, null, $size < $offset ? 0 : $offset);
-
-            if (\str_contains($written, 'documents_upload_content')) {
-                return $written;
-            }
-
-            \usleep(self::FLUSH_POLL_MICROSECONDS);
-        }
-
-        throw new RuntimeException('The probe never reached the container-log mirror.');
-    }
-
-    private function accessLogPath(): string
-    {
-        $path = '/var/log/caddy/access.log';
-
-        if (!\is_readable($path)) {
-            throw new RuntimeException(\sprintf(
-                'The access log is not readable at %s, so this gate can observe nothing; run it inside the php '
-                    . 'container rather than relaxing it into a skip.',
-                $path,
-            ));
-        }
-
-        return $path;
-    }
-
-    /**
-     * @return array{inode: int, offset: int}
-     */
-    private function accessLogPosition(): array
-    {
-        \clearstatcache(true, $this->accessLogPath());
-        $path = $this->accessLogPath();
-
-        return ['inode' => (int) \fileinode($path), 'offset' => (int) \filesize($path)];
-    }
-
-    /**
-     * Polls until the probe's own entry (anchored by its user agent) arrives, and fails rather than returning an
-     * empty read, over which every assertion above would pass.
-     *
-     * @param array{inode: int, offset: int} $position
-     */
-    private function accessLogWrittenSince(array $position, string $anchor): string
-    {
-        for ($waited = 0; $waited < self::FLUSH_TIMEOUT_MICROSECONDS; $waited += self::FLUSH_POLL_MICROSECONDS) {
-            \clearstatcache(true, $this->accessLogPath());
-            $handle = \fopen($this->accessLogPath(), 'r');
-
-            if (false === $handle) {
-                throw new RuntimeException('Could not open the access log.');
-            }
-
-            $stat = \fstat($handle);
-            $rolled = false === $stat || $stat['ino'] !== $position['inode'] || $stat['size'] < $position['offset'];
-            \fseek($handle, $rolled ? 0 : $position['offset']);
-            $written = (string) \stream_get_contents($handle);
-            \fclose($handle);
-
-            if (\str_contains($written, $anchor)) {
-                return $written;
-            }
-
-            \usleep(self::FLUSH_POLL_MICROSECONDS);
-        }
-
-        throw new RuntimeException(\sprintf('No access-log entry anchored on "%s" arrived.', $anchor));
     }
 }

@@ -72,8 +72,8 @@ final readonly class ProbingDocumentRepository implements DocumentRepository
     }
 
     #[Override]
-    public function awaitingPromotion(int $olderThanSeconds, int $limit): array
+    public function awaitingPromotion(int $olderThanSeconds, int $limit, ?string $afterId = null): array
     {
-        return $this->inner->awaitingPromotion($olderThanSeconds, $limit);
+        return $this->inner->awaitingPromotion($olderThanSeconds, $limit, $afterId);
     }
 }

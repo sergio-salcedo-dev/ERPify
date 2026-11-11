@@ -177,8 +177,20 @@ const WHOLE_QUERY_PATH =
   /(?:^|\/\/[^/]*)(?:\/index\.php)?\/api\/v1\/documents\/uploads\/[^/]+\/content\/?$/i;
 
 /**
+ * PHP's `rawurldecode()`: every valid `%XX` triplet decoded to its byte (as one code unit), anything else kept as
+ * written. `decodeURIComponent` throws on a triplet that is not UTF-8 (`%E0`) and so cannot decode the rest, where
+ * the API, and the router, decode the valid ones and go on.
+ */
+function rawUrlDecode(value: string): string {
+  return value.replace(/%([0-9A-Fa-f]{2})/g, (_triplet: string, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16)),
+  );
+}
+
+/**
  * True when a request to this path keeps no query at all in a sink. Matched as written and as the router
- * decodes it, so a percent-encoded segment cannot spell the route past the rule.
+ * decodes it, so a percent-encoded segment cannot spell the route past the rule. Mirrors
+ * `RequestUriRedaction::withholdsWholeQuery()`, decode for decode.
  */
 export function withholdsWholeQuery(path: string): boolean {
   let candidate: string = path;
@@ -188,12 +200,7 @@ export function withholdsWholeQuery(path: string): boolean {
       return true;
     }
 
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(candidate);
-    } catch {
-      return false;
-    }
+    const decoded: string = rawUrlDecode(candidate);
 
     if (decoded === candidate) {
       return false;

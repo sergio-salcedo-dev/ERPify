@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Shared\Monitoring;
 
+use CurlHandle;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Tools\DsnParser;
@@ -13,8 +14,10 @@ use Symfony\Component\Process\Process;
 
 /**
  * The rows and objects a probe through Caddy leaves in the running stack — which serves the dev database, not the
- * suite's `_test` one this process's kernel would resolve — read and then removed: the intents it declared, the
- * document a completed upload filed with its custody, its key and its sealed object.
+ * suite's `_test` one this process's kernel would resolve — read and then removed, and only those: the intents it
+ * declared, the document a completed upload filed with its custody, its key and its sealed object, and the one
+ * session it signed in with. The live-stack probes are the one place the suite touches the runtime database, and
+ * they do it through the running application, on their own rows (`docs/rules/testing.md`).
  */
 final class DevStackUploadRows
 {
@@ -24,12 +27,14 @@ final class DevStackUploadRows
 
     private const string ORGANIZATION = 'E2E-Test-Organization';
 
+    private const string ORIGIN = 'https://localhost';
+
     private ?Connection $connection = null;
 
     /**
      * Seeds the e2e administrator the way `make pwa.test.e2e` does — idempotently: a second provision or an existing
-     * administrator fails, and is fine — and empties the dev application's rate-limiter pool, since the declare
-     * budget is per identity and outlives a run.
+     * administrator fails, and is fine — and deletes that identity's own declare budget from the dev application's
+     * rate-limiter pool, since the budget outlives a run. No other bucket is touched.
      */
     public static function prepare(): void
     {
@@ -37,13 +42,99 @@ final class DevStackUploadRows
             [
                 ['organization:provision', self::ORGANIZATION],
                 ['organization:administrator:create', self::EMAIL, self::PASSWORD],
-                ['cache:pool:clear', 'cache.rate_limiter'],
             ] as $command
         ) {
-            (new Process(['php', 'bin/console', ...$command, '--no-interaction'], \dirname(__DIR__, 4), [
-                'APP_ENV' => 'dev',
-            ]))->run();
+            self::console($command);
         }
+
+        $actor = (new self())->connection()->fetchOne('SELECT id FROM identity_user WHERE email = :email', [
+            'email' => self::EMAIL,
+        ]);
+
+        if (!\is_string($actor)) {
+            throw new RuntimeException('The e2e administrator could not be seeded on the dev stack.');
+        }
+
+        $item = new Process(
+            ['php', __DIR__ . '/dev-declare-budget-item.php', $actor],
+            \dirname(__DIR__, 4),
+            ['APP_ENV' => 'dev', 'PHPUNIT_RUNNING' => false],
+        );
+        $item->mustRun();
+        self::console(['cache:pool:delete', 'cache.rate_limiter', \trim($item->getOutput())]);
+    }
+
+    /**
+     * Signs the e2e administrator in through Caddy into the cookie jar and answers the id of the session it opened,
+     * for {@see forgetSession()} to remove once the probe is done.
+     */
+    public static function signIn(string $cookieJar): string
+    {
+        $login = self::curl('/api/v1/backoffice/login', $cookieJar);
+        \curl_setopt_array($login, [
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => (string) \json_encode(['email' => self::EMAIL, 'password' => self::PASSWORD]),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Origin: ' . self::ORIGIN],
+        ]);
+        \curl_exec($login);
+        $status = \curl_getinfo($login, CURLINFO_RESPONSE_CODE);
+        // curl writes the cookie jar when the handle is released, and the next request reads it.
+        unset($login);
+
+        if (204 !== $status) {
+            throw new RuntimeException('The e2e administrator could not sign in through Caddy.');
+        }
+
+        $sessions = \json_decode((string) \curl_exec(self::curl('/api/v1/sessions', $cookieJar)), true);
+        $current = \is_array($sessions) && \is_array($sessions['data'] ?? null) ? $sessions['data'] : [];
+
+        foreach ($current as $session) {
+            if (\is_array($session) && true === ($session['current'] ?? null) && \is_string($session['id'] ?? null)) {
+                return $session['id'];
+            }
+        }
+
+        throw new RuntimeException("The probe's own session is not listed.");
+    }
+
+    /**
+     * Removes the one session row the probe opened. Its `SessionStarted` event stays: `event_store` is append-only.
+     */
+    public static function forgetSession(string $sessionId): void
+    {
+        $rows = new self();
+        $rows->connection()->executeStatement('DELETE FROM iam_session WHERE id = :id', ['id' => $sessionId]);
+        $rows->connection()->close();
+    }
+
+    /**
+     * @param list<string> $command
+     */
+    private static function console(array $command): void
+    {
+        (new Process(['php', 'bin/console', ...$command, '--no-interaction'], \dirname(__DIR__, 4), [
+            'APP_ENV' => 'dev',
+            'PHPUNIT_RUNNING' => false,
+        ]))->run();
+    }
+
+    private static function curl(string $path, string $cookieJar): CurlHandle
+    {
+        $handle = \curl_init(self::ORIGIN . $path);
+
+        if (!$handle instanceof CurlHandle || '' === $cookieJar) {
+            throw new RuntimeException('Could not initialise the probe.');
+        }
+
+        \curl_setopt_array($handle, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_COOKIEFILE => $cookieJar,
+            CURLOPT_COOKIEJAR => $cookieJar,
+        ]);
+
+        return $handle;
     }
 
     public function stateOf(string $intentId): mixed

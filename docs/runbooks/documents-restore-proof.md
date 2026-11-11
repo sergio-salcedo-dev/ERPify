@@ -9,9 +9,10 @@ itself is the operator's.
 
 `documents.ingest_enabled` (`api/config/packages/documents.yaml`) opens the declare and PUT routes; while it is
 false both answer 404. It is false in production. `DocumentsIngestProofGateTest` (`make php.lint.documents-ingest`)
-fails when the tracked production configuration sets it true without a **valid** record of kind `restore` whose
-`mechanism` equals `documents.backup_mechanism` in that same file. A record for another mechanism does not count,
-and a value injected at deploy time is outside the gate — keep the switch a literal in the tracked file.
+fails when production opens it — any value but the literal `false` counts, in the tracked file or in the compiled
+prod container — without a **valid** record of kind `restore` whose `mechanism` equals
+`documents.backup_mechanism` in that same file. A record for another mechanism does not count. The switch may be
+declared only in `documents.yaml`, and a value injected at deploy time is outside the gate — keep it a literal.
 
 ## The record
 
@@ -20,7 +21,7 @@ committed by whoever ran the proof. Every field is required:
 
 | Field | Meaning |
 |---|---|
-| `kind` | `restore` (originals and metadata restored from the backup) or `drill` (the restore drill with ledger replay, doc-7) |
+| `kind` | `restore` (originals and metadata restored from the backup) or `drill` (the restore drill with ledger replay) |
 | `proved_by` | who ran it (a role or a name the team recognises) |
 | `proved_at` | ISO-8601 instant |
 | `mechanism` | the backup mechanism exercised; must equal `documents.backup_mechanism` to unlock ingest |
@@ -39,4 +40,4 @@ committed by whoever ran the proof. Every field is required:
    restored key, recompute the sha256 and compare it with the row's `digest`.
 3. Record the outcome as above and commit it on a branch with the configuration change that names the mechanism.
 
-doc-5's read gate reads the same directory; doc-7 adds its `drill` record here.
+The read route's gate reads the same directory; the restore drill adds its `drill` record here.

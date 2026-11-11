@@ -62,6 +62,25 @@ final class SpanUriRedactionTest extends TestCase
         ];
     }
 
+    /**
+     * The keys of one span describe one request: when `url.path` names the upload route, a `url.full` spelling the
+     * path in a way only that key's own rule would miss still loses its query.
+     */
+    public function testEveryUriKeyOfASpanNamingTheRouteLosesItsQuery(): void
+    {
+        $redacted = SpanUriRedaction::apply([
+            'url.path' => self::UPLOAD_PATH,
+            'url.full' => 'https://erpify.test/some/rewritten/path?file_name=' . self::SECRET,
+            'http.target' => '/other?file_name=' . self::SECRET,
+        ]);
+
+        $this->assertSame(
+            'https://erpify.test/some/rewritten/path?' . RequestUriRedaction::SENTINEL,
+            $redacted['url.full'] ?? null,
+        );
+        $this->assertSame('/other?' . RequestUriRedaction::SENTINEL, $redacted['http.target'] ?? null);
+    }
+
     public function testAnotherRouteKeepsItsHarmlessPairs(): void
     {
         $redacted = SpanUriRedaction::apply(['url.path' => '/api/v1/backoffice/banks', 'url.query' => 'page=2']);

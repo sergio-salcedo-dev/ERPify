@@ -25,6 +25,7 @@ use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Documents\Document\Domain\Upload\LegalBasis;
 use Erpify\Documents\Document\Domain\Upload\RetentionReason;
 use Erpify\Documents\Document\Domain\UploadLimits;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
 use Erpify\Shared\Crypto\Application\StreamEnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
@@ -47,6 +48,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(UploadEvidence::class)]
+#[CoversClass(DoctrineUploadIntentRepository::class)]
 final class UploadHeartbeatFunctionalTest extends KernelTestCase
 {
     use ResolvesContainerServices;

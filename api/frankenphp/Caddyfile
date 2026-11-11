@@ -166,9 +166,8 @@
 		# `UploadLimits::MAX_ORIGINAL_BYTES` with no framing allowance, since the body IS the original.
 		#
 		# It is lifted only for a request carrying a session cookie (PHP's default `PHPSESSID`): the server receives a
-		# body whole before it answers, at the client's pace, so without this an anonymous client trickling 100 MiB
-		# would hold a worker thread until it finished, ahead of authentication. Any cookie value passes here — the
-		# application still refuses an invalid session — so this bounds anonymous callers, not authenticated ones.
+		# body whole before it answers, at the client's pace, so an anonymous client must not be able to trickle
+		# 100 MiB into a worker thread ahead of authentication. The cookie's value is the application's to judge.
 		@documentUpload {
 			path index.php
 			method PUT

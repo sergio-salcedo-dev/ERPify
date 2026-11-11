@@ -53,19 +53,30 @@ if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 
 	# The evidence-storage root must be a volume genuinely mounted at the path, or the container refuses to
 	# start: a root on the container's writable layer passes the boot probe below, holds evidence that dies
-	# with the container, and answers "done" to every later deletion of bytes that live elsewhere. A mount
-	# point is a directory on another device than its parent. `staging` and `final` are created side by side
-	# on that volume, since a promotion between them is only a single-filesystem move while they share one.
+	# with the container, and answers "done" to every later deletion of bytes that live elsewhere. In prod the
+	# variable is required: unset, the application falls back to a directory under var/, the writable layer.
+	# The path is resolved first, so a symlink to a mount is judged by the mount; a mount point is a directory
+	# on another device than its parent, and a tmpfs there is memory, not storage. `staging` and `final` are
+	# created side by side on that volume, since a promotion between them is a single-filesystem move.
+	if [ -z "${DOCUMENTS_STORAGE_PATH:-}" ] && [ "${APP_ENV:-}" = 'prod' ]; then
+		echo "! DOCUMENTS_STORAGE_PATH is unset in prod — refusing to start."
+		exit 1
+	fi
 	if [ -n "${DOCUMENTS_STORAGE_PATH:-}" ]; then
-		if [ ! -d "$DOCUMENTS_STORAGE_PATH" ]; then
+		DOCUMENTS_ROOT=$(readlink -f "$DOCUMENTS_STORAGE_PATH" || true)
+		if [ -z "$DOCUMENTS_ROOT" ] || [ ! -d "$DOCUMENTS_ROOT" ]; then
 			echo "! $DOCUMENTS_STORAGE_PATH does not exist — refusing to start."
 			exit 1
 		fi
-		if [ "$(stat -c '%d' "$DOCUMENTS_STORAGE_PATH")" = "$(stat -c '%d' "$(dirname "$DOCUMENTS_STORAGE_PATH")")" ]; then
+		if [ "$(stat -c '%d' "$DOCUMENTS_ROOT")" = "$(stat -c '%d' "$(dirname "$DOCUMENTS_ROOT")")" ]; then
 			echo "! $DOCUMENTS_STORAGE_PATH is not a mount point — refusing to start."
 			exit 1
 		fi
-		mkdir -p "$DOCUMENTS_STORAGE_PATH/staging" "$DOCUMENTS_STORAGE_PATH/final"
+		if [ "$(stat -f -c '%T' "$DOCUMENTS_ROOT")" = 'tmpfs' ]; then
+			echo "! $DOCUMENTS_STORAGE_PATH is a tmpfs, not storage — refusing to start."
+			exit 1
+		fi
+		mkdir -p "$DOCUMENTS_ROOT/staging" "$DOCUMENTS_ROOT/final"
 	fi
 
 	# The document storage boot guard: a container whose storage cannot stage, promote and delete an object must

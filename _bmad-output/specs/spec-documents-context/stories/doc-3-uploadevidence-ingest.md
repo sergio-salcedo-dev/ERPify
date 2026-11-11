@@ -154,6 +154,28 @@ Four layers ran in parallel on 2026-11-08 as read-only subagents over the diff f
 | ECH: boot probe object can trip the report's final-without-row alarm | low | reject | Requires the daily scan to hit a millisecond window; fix adds a reserved area. |
 | VG other: `ExpireUpload` after a persisted commit | high | patch | Same root cause as the first row. |
 
+### Second round
+
+Three layers ran in parallel on 2026-11-11 as read-only subagents (Blind Hunter, Edge Case Hunter, Acceptance Auditor) over `5c0b0b21..c7a8e500`, the fixes of the first round that nobody but their author had read. Verdicts were re-verified against the tree before routing; the owner's decisions of 2026-11-11 are in §7 of `PRODUCTION_SECURITY_CHECKLIST.md`.
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| The spool drain reads a refused or aborted body at the client's pace under PHP's time limit | high | patch | A slow body ended in a fatal (4xx became 500, `Retry-After` lost, spool kept). `DiscardUploadSpoolListener` arms and re-arms its own budget per chunk, bounded by the upload deadline; a slow cookie-bearing refused PUT goes through Caddy in the containment gate. |
+| `discard()` skips a body of exactly 16,384 bytes though PHP spills there | medium | patch | Measured threshold is `>=`; guard is now `<`, with 16,383 and 16,384 cases and §7 reading "under 16 KiB". A first-chunk hash is compared before a candidate is hashed whole. |
+| Storage guard skipped when `DOCUMENTS_STORAGE_PATH` is unset; symlinks and a tmpfs root pass | high | patch | The entrypoint refuses an unset path in prod, resolves with `readlink -f` and refuses a tmpfs; each refusal is pinned in `DocumentsSchedulerStorageGateTest`. |
+| Reaper and roll-forward re-select the same head each tick, so failing rows starve the rest | medium | patch | Both page by id past failures until the limit of successes is spent and log the failing row id only. |
+| A failing storage walk or a database outage makes the staging sweep abort or log once per object | medium | patch | The walk is wrapped; five consecutive failures end the run with one line. |
+| Span URI redaction judges each key alone | medium | patch | Once any key names the upload route the query of every URI key of the span is withheld. |
+| PWA redaction treats a non-UTF-8 `%XX` as "not withheld" | medium | patch | Decodes valid triplets as `rawurldecode` does; parity case on both deployables. |
+| Route-agreement gate does not pin where the cookie condition sits, the near-miss spellings, the session name sources or Caddy's `max_size` | medium | patch | Cookie inside `not { }` for `@boundedBody` and top level for `@documentUpload`; near-miss lists split; session name read from `when@prod` and the image's ini files; `max_size` equals `UploadLimits::MAX_ORIGINAL_BYTES`. |
+| Ingest proof gate reads only the tracked file | high | patch | The effective value is read from the compiled prod container too, and `DocumentsIngestGate` must bind exactly `documents.ingest_enabled`. |
+| Containment probe lacks cookie-bearing 410 and 422 refusals | medium | patch | Added, each asserting status, bytes read for the over-bound case and no spool left. |
+| Live-stack probes clear all of `cache.rate_limiter` in dev and leave rows | medium | patch | Only the probe identity's declare key is reset; the probe's own session, intents, documents and keys are removed from `tearDown`; the exception is written in `CLAUDE.md` and `docs/rules/testing.md`. |
+| Report storage order and its row-truncation branch untested; profiler guard order untested | low | patch | A promotion landing between the two checks, the 10,001-row scan and the guard's priority over the firewall's are each pinned. |
+| Docs and registers: gate list, restore-proof rule, `APP_SECRET` wording, `RetentionReason` acceptance, VPS overcommit, custody revisit | low | patch | Updated in place; `RetentionReason` is `docs/adr/documents-custody-log.md` D7. |
+| Comment hygiene in `PhpUploadBodySpool` and the Caddyfile | low | patch | The change-relative sentence and the residual were removed; the residual lives in §7. |
+| Storage report's fixed 10,000 window needs a rotating cursor | low | reject | The truncation alarm announces it, and a cursor adds persisted state for a window the alarm already makes visible. |
+
 ## Design Notes
 
 Constants proposed from the transport spike (memlog T1-7), fixed here unless an answer changes them: Declared TTL 24 h; Committed retention 7 d; lease 90 s with heartbeat every 10 s checked per 64 KiB read, never beyond the deadline; PHP time limit re-armed per heartbeat (90) and 60 for the commit; reaper cadence 60 s; staging age sweep on mtime older than 20 min (above deadline 460 s + lease 90 s + reaper 60 s); per-actor Declared cap 10 (the deadline formula and the Streaming caps are owner decisions above). Not measured by the spike and therefore measured here: the prod image and `php.ini`, the real route behind firewall/voter/limiter, the real sealer plus staging in the request loop, Sentry capture of a 100 MiB body. Browser behaviour on an early 422/410 while the body is still sent was not measured: recorded as a section 7 residual, not a gate.
@@ -167,7 +189,7 @@ Implementation decisions (dev, 2026-11-06), none reopening a frozen line:
 - `next_scan_at` is filed by the application (the commit passes its transaction's `NOW()`), with a literal epoch default for an older image's insert: a `CURRENT_TIMESTAMP` default trips a DBAL deprecation in the schema comparator (`MappedSchemaMatchesMigrationsTest`) and `MigrationColumnDefaultGateTest` refuses a dropped default.
 - The filename is judged at the HTTP edge into a `FilenameSubmission` (valid name or refusal), so no raw caller string reaches `Application`; the use case raises the refusal only on a `Declared` intent.
 - The writer's abort expires its own intent; the reaper tombstones (one place destroys an aborted scope). A sealing fault of the server's own (sink write, database) propagates as 5xx rather than `aborted-upload`.
-- `RetentionReason` (`contract-execution`, `tax-and-accounting`, `technical-file`, `legal-claims`) and `LegalBasis` (the six of GDPR Art. 6(1)) are required at declare; the reason vocabulary is provisional until counsel's matrix.
+- `RetentionReason` (`contract-execution`, `tax-and-accounting`, `technical-file`, `legal-claims`) and `LegalBasis` (the six of GDPR Art. 6(1)) are required at declare; the four reasons were accepted by the owner on 2026-11-08 (`docs/adr/documents-custody-log.md` D7), and only period, anchor, jurisdiction and enforcement wait for counsel's matrix.
 - Prod pool: `num_threads 4` regular + `num 8` worker threads, `max_threads 12` (FrankenPHP counts workers on top of `num_threads` and refuses a `max_threads` below the sum; the first try, `num_threads 12`, did not boot); `PHP_CPU_LIMIT` 4.0, `PHP_MEM_LIMIT` 2g with `memswap_limit` equal; spool tmpfs 900m.
 - In the test environment `documents.ingest_enabled` reads `DOCUMENTS_INGEST_ENABLED` (default true), so the acceptance scenario "ingest switched off" closes it for the next request (the kernel reboots between requests); dev keeps the literal true and production the literal false the proof gate reads.
 - The container's own log is observable from inside the container in dev: the entrypoint tees PID 1's output into `CONTAINER_LOG_MIRROR` (`/var/log/caddy/container.log`, compose.dev.yaml only) and the containment gate reads it beside `access.log`, requiring the probe's route to appear there first.

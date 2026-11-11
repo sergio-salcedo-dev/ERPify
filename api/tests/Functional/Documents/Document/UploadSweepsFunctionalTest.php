@@ -16,12 +16,24 @@ use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\UploadLimits;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\PruneCommittedIntentsHandler;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\PruneCommittedIntentsMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReapUploadIntentsHandler;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReapUploadIntentsMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\RollForwardPromotionsHandler;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\RollForwardPromotionsMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\SweepStagedOrphansHandler;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\SweepStagedOrphansMessage;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentPromotions;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentRepository;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
+use Monolog\LogRecord;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -41,6 +53,13 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
 #[CoversClass(PruneCommittedIntents::class)]
 #[CoversClass(RollForwardPromotions::class)]
 #[CoversClass(SweepStagedOrphans::class)]
+#[CoversClass(DoctrineUploadIntentRepository::class)]
+#[CoversClass(DoctrineDocumentRepository::class)]
+#[CoversClass(PruneCommittedIntentsHandler::class)]
+#[CoversClass(ReapUploadIntentsHandler::class)]
+#[CoversClass(RollForwardPromotionsHandler::class)]
+#[CoversClass(SweepStagedOrphansHandler::class)]
+#[CoversClass(DbalDocumentPromotions::class)]
 final class UploadSweepsFunctionalTest extends KernelTestCase
 {
     use PlantsUploadIntents;
@@ -121,6 +140,40 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
         }
     }
 
+    public function testEachTickHandlerRunsItsSweepWithoutHelp(): void
+    {
+        $actor = Uuid::generate();
+        $expired = $this->plantIntent($actor, UploadIntentState::Expired);
+        $old = $this->committedIntent($actor);
+        $this->moveClock($old, \sprintf(
+            "committed_at = NOW() - make_interval(secs => %d) - INTERVAL '1 hour'",
+            UploadLimits::COMMITTED_RETENTION_SECONDS,
+        ));
+
+        $this->service(ReapUploadIntentsHandler::class)(new ReapUploadIntentsMessage());
+        $this->service(PruneCommittedIntentsHandler::class)(new PruneCommittedIntentsMessage());
+        $this->service(RollForwardPromotionsHandler::class)(new RollForwardPromotionsMessage());
+        $this->service(SweepStagedOrphansHandler::class)(new SweepStagedOrphansMessage());
+
+        $this->assertFalse($this->rowOf($expired), 'the reaper tick ended the expired intent');
+        $this->assertFalse($this->rowOf($old), 'the prune tick deleted the committed intent past its retention');
+    }
+
+    public function testThePromotionIsClaimedOnceAndOnlyOnAReceivedRow(): void
+    {
+        $promotions = $this->service(DbalDocumentPromotions::class);
+        $document = $this->service(ReceiveDocument::class)->receive(
+            RandomUuid::v4()->toRfc4122(),
+            Uuid::generate(),
+            \hash('sha256', 'promoted'),
+            8,
+        );
+
+        $this->assertTrue($promotions->markPromoted($document->documentId()), 'the first claim wins');
+        $this->assertFalse($promotions->markPromoted($document->documentId()), 'a second claim finds it promoted');
+        $this->assertFalse($promotions->markPromoted(Uuid::generate()), 'an absent row is never claimed');
+    }
+
     public function testOneIntentThatCannotBeReapedDoesNotStopTheBatch(): void
     {
         $poisoned = $this->plantIntent(Uuid::generate(), UploadIntentState::Expired);
@@ -164,6 +217,67 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
     }
 
     /**
+     * Failing intents at the head of the candidates are paged past within the tick: with room for one success, the
+     * healthy intent behind two that keep failing is still reaped. The real reaper runs first, so no other row of
+     * the shared database is still a candidate that could take that one success.
+     */
+    public function testTheReaperPagesPastFailingIntentsToSpendItsLimitOnSuccesses(): void
+    {
+        $this->service(ReapUploadIntents::class)->reap(10_000);
+        $first = $this->plantIntent(Uuid::generate(), UploadIntentState::Expired);
+        $second = $this->plantIntent(Uuid::generate(), UploadIntentState::Expired);
+        $healthy = $this->plantIntent(Uuid::generate(), UploadIntentState::Expired);
+        $storage = (new ScriptedDocumentStorage($this->storage()))
+            ->failDeleteFor($first->scopeId)
+            ->failDeleteFor($second->scopeId)
+        ;
+
+        $reaped = (new ReapUploadIntents(
+            $this->service(UploadIntentRepository::class),
+            $this->service(DocumentRepository::class),
+            $this->service(Keystore::class),
+            $storage,
+            $this->service(TransactionManager::class),
+            $this->logger(),
+        ))->reap(1);
+
+        $this->assertSame(1, $reaped);
+        $this->assertFalse($this->rowOf($healthy), 'the intent behind two failing ones is reaped');
+        $this->assertNotFalse($this->rowOf($first));
+        $this->assertNotFalse($this->rowOf($second));
+        $this->assertSame([$first->id, $second->id], $this->loggedIds('intentId'), 'each failing row is named');
+    }
+
+    /**
+     * The same for the roll-forward, whose other candidates are cleared the same way.
+     */
+    public function testTheRollForwardPagesPastFailingDocumentsToSpendItsLimitOnSuccesses(): void
+    {
+        $this->service(RollForwardPromotions::class)->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 10_000);
+        $first = $this->receivedWithStagedObject();
+        $second = $this->receivedWithStagedObject();
+        $healthy = $this->receivedWithStagedObject();
+        $storage = (new ScriptedDocumentStorage($this->storage()))
+            ->failPromoteFor($first[1])
+            ->failPromoteFor($second[1])
+        ;
+        $documents = $this->service(DocumentRepository::class);
+        $wakeUp = new RecordingScanWakeUp();
+
+        $promoted = (new RollForwardPromotions(
+            $documents,
+            new PromoteDocument($storage, $documents, $wakeUp),
+            $wakeUp,
+            $this->service(TransactionManager::class),
+            $this->logger(),
+        ))->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 1);
+
+        $this->assertSame(1, $promoted);
+        $this->assertNotNull($this->promotedAtOf($healthy[0]), 'the document behind two failing ones is promoted');
+        $this->assertSame([$first[0], $second[0]], $this->loggedIds('documentId'), 'each failing row is named');
+    }
+
+    /**
      * The limit counts deletions: owned objects at the head of the walk are passed over without spending it, and a
      * scope that fails is logged and passed over too, so the orphans behind both are still reached.
      */
@@ -187,6 +301,42 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
         $this->assertSame(2, $deleted);
         $this->assertSame([$orphanA, $orphanB], $storage->deleted);
         $this->assertTrue($this->log->hasErrorThatContains('could not be swept'));
+    }
+
+    public function testAStagingWalkThatFailsEndsTheSweepWithOneLine(): void
+    {
+        $deleted = $this->sweepWith((new ScriptedDocumentStorage($this->storage()))->failWalk(), 10);
+
+        $this->assertSame(0, $deleted);
+        $this->assertCount(1, $this->log->getRecords());
+        $this->assertTrue($this->log->hasErrorThatContains('could not be walked'));
+    }
+
+    /**
+     * A store or database that fails every object stops the run after a few, rather than logging once per object
+     * of the whole staging area every tick.
+     */
+    public function testARunOfFailuresStopsTheSweep(): void
+    {
+        $scopes = \array_map($this->scope(...), \range(1, 12));
+        $storage = (new ScriptedDocumentStorage($this->storage()))->walkYields($scopes)->failEveryDelete();
+
+        $this->assertSame(0, $this->sweepWith($storage, 10));
+        $this->assertCount(5, \array_filter(
+            $this->log->getRecords(),
+            static fn (LogRecord $record): bool => \str_contains($record->message, 'could not be swept'),
+        ));
+        $this->assertTrue($this->log->hasErrorThatContains('stopped after consecutive failures'));
+    }
+
+    private function sweepWith(ScriptedDocumentStorage $storage, int $limit): int
+    {
+        return (new SweepStagedOrphans(
+            $storage,
+            $this->service(DocumentRepository::class),
+            $this->service(UploadIntentRepository::class),
+            $this->logger(),
+        ))->sweep($limit);
     }
 
     private function committedIntent(string $actor): PlantedIntent
@@ -243,6 +393,20 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
         return $this->intentConnection()->fetchOne(
             'SELECT promoted_at FROM document WHERE id = :id',
             ['id' => $documentId],
+        );
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function loggedIds(string $key): array
+    {
+        return \array_map(
+            static fn (LogRecord $record): mixed => $record->context[$key] ?? null,
+            \array_values(\array_filter(
+                $this->log->getRecords(),
+                static fn (LogRecord $record): bool => \array_key_exists($key, $record->context),
+            )),
         );
     }
 

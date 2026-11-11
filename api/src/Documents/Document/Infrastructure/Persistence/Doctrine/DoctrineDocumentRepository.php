@@ -141,15 +141,21 @@ final readonly class DoctrineDocumentRepository implements DocumentRepository
     }
 
     #[Override]
-    public function awaitingPromotion(int $olderThanSeconds, int $limit): array
+    public function awaitingPromotion(int $olderThanSeconds, int $limit, ?string $afterId = null): array
     {
         /** @var list<string> $ids */
         $ids = $this->connection->fetchFirstColumn(
             'SELECT id FROM document WHERE state = :received AND promoted_at IS NULL '
             // `next_scan_at` is the insert's transaction time on the database clock, and nothing moves it before
             // promotion.
-            . 'AND next_scan_at <= NOW() - make_interval(secs => :age) ORDER BY id LIMIT :limit',
-            ['received' => DocumentState::Received->value, 'age' => $olderThanSeconds, 'limit' => $limit],
+            . 'AND next_scan_at <= NOW() - make_interval(secs => :age) '
+            . 'AND (CAST(:after AS UUID) IS NULL OR id > CAST(:after AS UUID)) ORDER BY id LIMIT :limit',
+            [
+                'received' => DocumentState::Received->value,
+                'age' => $olderThanSeconds,
+                'after' => $afterId,
+                'limit' => $limit,
+            ],
             ['age' => Types::INTEGER, 'limit' => Types::INTEGER],
         );
 

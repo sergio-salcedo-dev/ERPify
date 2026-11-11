@@ -273,6 +273,53 @@ final class FilesystemDocumentStorageTest extends TestCase
         }
     }
 
+    #[Test]
+    public function stageWithHandsTheWriterTheOpenedObjectAndKeepsWhatItWrote(): void
+    {
+        $scope = $this->scope();
+
+        $this->storage->stageWith($scope, static function ($sink): void {
+            \fwrite($sink, 'sealed bytes');
+        });
+
+        $path = $this->find(StorageArea::Staging, $scope);
+        $this->assertNotNull($path);
+        $this->assertSame('sealed bytes', \file_get_contents($path));
+    }
+
+    #[Test]
+    public function stageWithRefusesAnObjectThatAlreadyExists(): void
+    {
+        $scope = $this->scope();
+        $this->storage->stage($scope, $this->streamOf('first'));
+
+        $this->expectException(ObjectAlreadyExists::class);
+
+        $this->storage->stageWith($scope, static function ($sink): void {
+            \fwrite($sink, 'second');
+        });
+    }
+
+    #[Test]
+    public function stageWithRemovesTheObjectWhenTheWriterFails(): void
+    {
+        $scope = $this->scope();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageIsOrContains('the writer failed');
+
+        try {
+            $this->storage->stageWith($scope, static function ($sink): never {
+                \fwrite($sink, 'half');
+
+                throw new InvalidArgumentException('the writer failed');
+            });
+        } finally {
+            $this->assertNull($this->find(StorageArea::Staging, $scope), 'no half-written object is left behind');
+            $this->assertFalse($this->storage->has(StorageArea::Staging, $scope));
+        }
+    }
+
     private function scope(): string
     {
         return Uuid::v4()->toRfc4122();

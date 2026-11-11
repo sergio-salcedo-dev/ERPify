@@ -37,7 +37,9 @@ final class SpanUriRedaction
 
         foreach (self::URI_KEYS as $key) {
             if (isset($data[$key]) && \is_string($data[$key])) {
-                $data[$key] = RequestUriRedaction::redact($data[$key]);
+                $data[$key] = null === $path
+                    ? RequestUriRedaction::redact($data[$key])
+                    : self::withoutQuery($data[$key]);
             }
         }
 
@@ -48,6 +50,23 @@ final class SpanUriRedaction
         }
 
         return $data;
+    }
+
+    /**
+     * The URI with its whole query withheld, whatever its own path says: once any key of the span names the upload
+     * route, every spelling of its URI is that request's. A fragment goes with the query.
+     */
+    private static function withoutQuery(string $uri): string
+    {
+        $separator = \strpos($uri, '?');
+
+        if (false === $separator) {
+            $fragment = \strpos($uri, '#');
+
+            return false === $fragment ? $uri : \substr($uri, 0, $fragment);
+        }
+
+        return \substr($uri, 0, $separator) . '?' . RequestUriRedaction::SENTINEL;
     }
 
     /**

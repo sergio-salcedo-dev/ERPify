@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Documents\Document;
 
 use Doctrine\DBAL\Connection;
 use Erpify\Documents\Document\Application\ReceiveDocument;
+use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentStorageHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentStorageMessage;
@@ -75,12 +76,7 @@ final class ReportDocumentStorageFunctionalTest extends KernelTestCase
 
     public function testARowWithNoObjectIsAlarmed(): void
     {
-        $document = $this->service(ReceiveDocument::class)->receive(
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            \hash('sha256', 'gone'),
-            4,
-        );
+        $document = $this->receiveDocument();
 
         $this->report([]);
 
@@ -105,6 +101,30 @@ final class ReportDocumentStorageFunctionalTest extends KernelTestCase
         $this->assertSame(['Aborted-upload tombstones over threshold.'], $this->errors());
     }
 
+    public function testAPromotionLandingBetweenTheTwoChecksIsNotReportedMissing(): void
+    {
+        $this->receiveDocument();
+
+        $this->reportWith((new ScriptedDocumentStorage($this->service(DocumentStorage::class)))
+            ->walkYields([])
+            ->promotionLandsAfterTheFirstCheck());
+
+        $this->assertSame([], $this->errors(), 'the row is looked for in staging first, then in final');
+    }
+
+    public function testADocumentRowScanThatReachesItsLimitSaysSo(): void
+    {
+        $this->connection()->executeStatement(
+            'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, created_at, '
+            . 'updated_at) SELECT gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '
+            . "'received', repeat('a', 64), 1, NOW(), NOW() FROM generate_series(1, 10001)",
+        );
+
+        $this->report([]);
+
+        $this->assertSame('document rows', $this->errorContext('Document storage scan truncated.', 'scanned'));
+    }
+
     public function testAScanThatReachesItsLimitSaysSo(): void
     {
         $scopes = [];
@@ -118,13 +138,28 @@ final class ReportDocumentStorageFunctionalTest extends KernelTestCase
         $this->assertContains('Document storage scan truncated.', $this->errors());
     }
 
+    private function receiveDocument(): Document
+    {
+        return $this->service(ReceiveDocument::class)->receive(
+            RandomUuid::v4()->toRfc4122(),
+            Uuid::generate(),
+            \hash('sha256', 'gone'),
+            4,
+        );
+    }
+
     /**
      * @param list<string> $finalScopes what the storage walk of the final area yields
      */
     private function report(array $finalScopes): void
     {
-        $storage = (new ScriptedDocumentStorage($this->service(DocumentStorage::class)))->walkYields($finalScopes);
+        $storage = new ScriptedDocumentStorage($this->service(DocumentStorage::class));
 
+        $this->reportWith($storage->walkYields($finalScopes));
+    }
+
+    private function reportWith(DocumentStorage $storage): void
+    {
         (new ReportDocumentStorageHandler($this->connection(), $storage, new Logger('observability', [$this->log])))(
             new ReportDocumentStorageMessage(),
         );

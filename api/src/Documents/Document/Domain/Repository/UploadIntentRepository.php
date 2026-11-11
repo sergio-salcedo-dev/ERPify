@@ -60,12 +60,12 @@ interface UploadIntentRepository
 
     /**
      * Ids of intents the reaper may act on — `Declared` past its TTL, `Streaming` past its lease or deadline,
-     * `Expired` — in ascending id, never a `Committed` one. A candidate list only: the reaper rechecks each under
-     * its lock.
+     * `Expired` — in ascending id after `$afterId` when given, never a `Committed` one. A candidate list only: the
+     * reaper rechecks each under its lock, and pages past the ones it could not end.
      *
      * @return list<string>
      */
-    public function reapCandidates(int $limit): array;
+    public function reapCandidates(int $limit, ?string $afterId = null): array;
 
     /**
      * Deletes up to `$limit` `Committed` intents committed before `$cutoff` and returns how many it deleted.

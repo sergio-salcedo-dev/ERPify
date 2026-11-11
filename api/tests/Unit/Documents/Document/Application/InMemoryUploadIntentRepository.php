@@ -114,9 +114,15 @@ final class InMemoryUploadIntentRepository implements UploadIntentRepository
     }
 
     #[Override]
-    public function reapCandidates(int $limit): array
+    public function reapCandidates(int $limit, ?string $afterId = null): array
     {
-        return \array_keys($this->intents);
+        $ids = \array_map(strval(...), \array_keys($this->intents));
+        \sort($ids);
+
+        return \array_slice(\array_values(\array_filter(
+            $ids,
+            static fn (string $id): bool => null === $afterId || \strcmp($id, $afterId) > 0,
+        )), 0, $limit);
     }
 
     #[Override]

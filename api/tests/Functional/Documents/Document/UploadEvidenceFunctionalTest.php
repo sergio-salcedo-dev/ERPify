@@ -4,14 +4,24 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Documents\Document;
 
+use Erpify\Documents\Document\Application\Resource\DocumentReceiptResource;
+use Erpify\Documents\Document\Application\Upload\Command\UploadEvidenceCommand;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
 use Erpify\Documents\Document\Application\Upload\ReapUploadIntents;
 use Erpify\Documents\Document\Application\Upload\UploadEvidence;
+use Erpify\Documents\Document\Application\Upload\UploadOutcome;
+use Erpify\Documents\Document\Domain\Exception\ContentLengthMismatch;
+use Erpify\Documents\Document\Domain\Exception\ContentLengthRequired;
+use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
+use Erpify\Documents\Document\Domain\Exception\InvalidOriginalFilename;
+use Erpify\Documents\Document\Domain\Exception\UploadAborted;
+use Erpify\Documents\Document\Domain\Exception\UploadGone;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Documents\Document\Domain\UploadLimits;
 use Erpify\Documents\Document\Infrastructure\Controller\DeclareUploadController;
 use Erpify\Documents\Document\Infrastructure\Controller\UploadEvidenceController;
+use Erpify\Documents\Document\Infrastructure\Http\UploadResourceMapper;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Application\StreamEnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
@@ -45,6 +55,16 @@ use Symfony\Component\HttpFoundation\Response;
 #[CoversClass(DeclareUploadController::class)]
 #[CoversClass(UploadEvidenceController::class)]
 #[CoversClass(UploadEvidence::class)]
+#[CoversClass(ContentLengthMismatch::class)]
+#[CoversClass(ContentLengthRequired::class)]
+#[CoversClass(InvalidOriginalFilename::class)]
+#[CoversClass(UploadGone::class)]
+#[CoversClass(UploadAborted::class)]
+#[CoversClass(IdempotencyKeyConflict::class)]
+#[CoversClass(UploadEvidenceCommand::class)]
+#[CoversClass(UploadOutcome::class)]
+#[CoversClass(UploadResourceMapper::class)]
+#[CoversClass(DocumentReceiptResource::class)]
 final class UploadEvidenceFunctionalTest extends WebTestCase
 {
     use AuthenticatesFunctionalRequests;

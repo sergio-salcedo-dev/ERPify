@@ -35,8 +35,9 @@ use Throwable;
  * A committed row's staged object is never deleted here and its scope never destroyed: the reaper acts on
  * intents, never on documents. Aborted-upload tombstones are never pruned.
  *
- * One intent that cannot be reaped is logged and passed over, never the end of the batch: a candidate that
- * throws would otherwise head every tick's batch and stop all the others behind it.
+ * One intent that cannot be reaped is logged by its id and passed over, never the end of the batch, and the run pages
+ * past it by id until `$limit` intents were ended or the candidates ran out — a candidate that keeps failing would
+ * otherwise head every tick's page and, by the hundred, starve all the others behind it.
  */
 final readonly class ReapUploadIntents
 {
@@ -56,19 +57,26 @@ final readonly class ReapUploadIntents
     public function reap(int $limit): int
     {
         $reaped = 0;
+        $after = null;
 
-        foreach ($this->intents->reapCandidates($limit) as $intentId) {
-            try {
-                if ($this->reapOne($intentId)) {
-                    ++$reaped;
+        do {
+            $page = $this->intents->reapCandidates($limit, $after);
+
+            foreach ($page as $intentId) {
+                $after = $intentId;
+
+                try {
+                    if ($this->reapOne($intentId) && ++$reaped >= $limit) {
+                        return $reaped;
+                    }
+                } catch (Throwable $throwable) {
+                    $this->logger->error('An upload intent could not be reaped; the batch goes on.', [
+                        'intentId' => $intentId,
+                        'exceptionClass' => $throwable::class,
+                    ]);
                 }
-            } catch (Throwable $throwable) {
-                $this->logger->error('An upload intent could not be reaped; the batch goes on.', [
-                    'intentId' => $intentId,
-                    'exceptionClass' => $throwable::class,
-                ]);
             }
-        }
+        } while (\count($page) === $limit);
 
         return $reaped;
     }

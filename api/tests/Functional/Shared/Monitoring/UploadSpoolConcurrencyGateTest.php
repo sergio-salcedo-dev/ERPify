@@ -6,7 +6,6 @@ namespace Erpify\Tests\Functional\Shared\Monitoring;
 
 use CurlHandle;
 use Erpify\Tests\Support\Dig;
-use Override;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -31,7 +30,9 @@ final class UploadSpoolConcurrencyGateTest extends TestCase
 
     private const int SLOW_BYTES_PER_SECOND = 262_144;
 
-    private ?string $cookieJar = null;
+    private static ?string $cookieJar = null;
+
+    private static ?string $session = null;
 
     /** @var list<string> */
     private array $intents = [];
@@ -42,34 +43,25 @@ final class UploadSpoolConcurrencyGateTest extends TestCase
     public static function setUpBeforeClass(): void
     {
         DevStackUploadRows::prepare();
+        $jar = \tempnam(\sys_get_temp_dir(), 'spool-concurrency');
+        self::$cookieJar = \is_string($jar) ? $jar : null;
+        self::$session = DevStackUploadRows::signIn((string) self::$cookieJar);
     }
 
-    #[Override]
-    protected function setUp(): void
+    public static function tearDownAfterClass(): void
     {
-        $jar = \tempnam(\sys_get_temp_dir(), 'spool-concurrency');
-        $this->cookieJar = \is_string($jar) ? $jar : null;
-        $login = $this->handle('/api/v1/backoffice/login');
-        \curl_setopt_array($login, [
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => (string) \json_encode([
-                'email' => DevStackUploadRows::EMAIL,
-                'password' => DevStackUploadRows::PASSWORD,
-            ]),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Origin: ' . self::ORIGIN],
-        ]);
-        \curl_exec($login);
-        $this->assertSame(204, \curl_getinfo($login, CURLINFO_RESPONSE_CODE), 'the e2e administrator signs in');
+        if (null !== self::$session) {
+            DevStackUploadRows::forgetSession(self::$session);
+        }
+
+        if (null !== self::$cookieJar && \is_file(self::$cookieJar)) {
+            \unlink(self::$cookieJar);
+        }
     }
 
     protected function tearDown(): void
     {
         (new DevStackUploadRows())->remove($this->intents, $this->documents);
-
-        if (null !== $this->cookieJar && \is_file($this->cookieJar)) {
-            \unlink($this->cookieJar);
-        }
-
         parent::tearDown();
     }
 
@@ -152,7 +144,7 @@ final class UploadSpoolConcurrencyGateTest extends TestCase
     {
         $handle = \curl_init(self::ORIGIN . $path);
 
-        if (!$handle instanceof CurlHandle || null === $this->cookieJar || '' === $this->cookieJar) {
+        if (!$handle instanceof CurlHandle || null === self::$cookieJar || '' === self::$cookieJar) {
             throw new RuntimeException('Could not initialise the probe.');
         }
 
@@ -160,8 +152,8 @@ final class UploadSpoolConcurrencyGateTest extends TestCase
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_COOKIEFILE => $this->cookieJar,
-            CURLOPT_COOKIEJAR => $this->cookieJar,
+            CURLOPT_COOKIEFILE => self::$cookieJar,
+            CURLOPT_COOKIEJAR => self::$cookieJar,
         ]);
 
         return $handle;

@@ -57,6 +57,7 @@ describe("query keys (the evidence filename)", () => {
     ["with a percent-encoded segment", `/api/v1/documents/uploads/${ID}/%63ontent`],
     ["with an encoded slash", `/api/v1/documents/uploads%2F${ID}/content`],
     ["double-encoded", `/api/v1/documents/uploads/${ID}/%2563ontent`],
+    ["with a triplet that is not UTF-8", "/api/v1/documents/uploads/%E0/%63ontent"],
   ];
 
   it.each(SPELLINGS)("withholds the whole query when the route is spelt %s", (_label, path) => {

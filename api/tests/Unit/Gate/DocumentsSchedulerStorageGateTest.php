@@ -64,6 +64,34 @@ final class DocumentsSchedulerStorageGateTest extends TestCase
     }
 
     /**
+     * Each refusal of the entrypoint's storage block ends the boot (`exit 1`), and the path is resolved before it is
+     * judged: a refusal turned into a warning starts a container whose evidence lives on its writable layer.
+     */
+    public function testTheEntrypointRefusesEveryStorageRootThatIsNotAMountedVolume(): void
+    {
+        $entrypoint = (string) \file_get_contents(\dirname(__DIR__, 3) . '/frankenphp/docker-entrypoint.sh');
+
+        $this->assertStringContainsString('readlink -f "$DOCUMENTS_STORAGE_PATH"', $entrypoint);
+        $this->assertStringContainsString('[ "${APP_ENV:-}" = \'prod\' ]', $entrypoint);
+
+        foreach (
+            [
+                'DOCUMENTS_STORAGE_PATH is unset in prod',
+                'does not exist',
+                'is not a mount point',
+                'is a tmpfs, not storage',
+                'The document storage refused the boot probe',
+            ] as $refusal
+        ) {
+            $this->assertMatchesRegularExpression(
+                '/' . \preg_quote($refusal, '/') . '[^\n]*refusing to start\."\n\s*exit 1\n/',
+                $entrypoint,
+                \sprintf('the entrypoint no longer refuses to start when the storage root %s', $refusal),
+            );
+        }
+    }
+
+    /**
      * Where the service mounts `document_storage`, in the short (`source:target[:mode]`) or the long syntax.
      *
      * @param array<array-key, mixed> $volumes

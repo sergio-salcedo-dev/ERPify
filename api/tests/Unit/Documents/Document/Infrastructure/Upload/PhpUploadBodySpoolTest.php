@@ -86,8 +86,35 @@ final class PhpUploadBodySpoolTest extends TestCase
      */
     public function testABodyThatStayedInMemoryTouchesNothing(): void
     {
-        $body = \random_bytes(PhpUploadBodySpool::SPOOL_THRESHOLD_BYTES);
+        $body = \random_bytes(PhpUploadBodySpool::SPOOL_THRESHOLD_BYTES - 1);
         $other = $this->plant('phpOther', $body);
+
+        $this->discard($body);
+
+        $this->assertFileExists($other);
+    }
+
+    /**
+     * PHP spills a body of exactly the threshold to a file (measured), so that one is destroyed.
+     */
+    public function testABodyOfExactlyTheThresholdIsDestroyed(): void
+    {
+        $body = \random_bytes(PhpUploadBodySpool::SPOOL_THRESHOLD_BYTES);
+        $ours = $this->plant('phpOurs', $body);
+
+        $this->discard($body);
+
+        $this->assertFileDoesNotExist($ours);
+    }
+
+    /**
+     * A same-size candidate whose head differs is refused on the head alone, whatever its tail.
+     */
+    public function testACandidateWhoseHeadDiffersIsNotOurs(): void
+    {
+        $body = \random_bytes(200_000);
+        $tail = \substr($body, PhpUploadBodySpool::HEAD_BYTES);
+        $other = $this->plant('phpOther', \random_bytes(PhpUploadBodySpool::HEAD_BYTES) . $tail);
 
         $this->discard($body);
 
@@ -106,6 +133,7 @@ final class PhpUploadBodySpoolTest extends TestCase
         (new PhpUploadBodySpool(new Logger('observability', [$this->log]), $this->directory))->discard(
             \strlen($body),
             \hash('sha256', $body),
+            \hash('sha256', \substr($body, 0, PhpUploadBodySpool::HEAD_BYTES)),
         );
     }
 

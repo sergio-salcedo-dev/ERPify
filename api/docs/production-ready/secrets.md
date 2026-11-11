@@ -126,4 +126,5 @@ If a secret is accidentally committed to git:
 
 Rotating `APP_SECRET` also unmatches every stored evidence idempotency key (HMAC-SHA256 under `kernel.secret`): a
 client retrying an upload across the rotation files the same evidence twice — a duplicate, never a loss — and
-nothing reports it. Accepted (`PRODUCTION_SECURITY_CHECKLIST.md` §7).
+nothing reports it. Recorded, not closed: the user chose documentation over a separate secret, 2026-11-08
+(`PRODUCTION_SECURITY_CHECKLIST.md` §7).
