@@ -1,3 +1,8 @@
+parameters:
+    # `when@test` in messenger.yaml swaps `async` for `in-memory://`, which joins no transaction by design.
+    erpify.messenger.accepted_async_transport_classes:
+        - Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport
+
 services:
     _defaults:
         autowire: true

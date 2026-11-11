@@ -2,7 +2,8 @@
 title: 'gh-872: guarda en runtime — transporte async transaccional y publicación dentro de transacción'
 type: 'bugfix'
 created: '2026-11-11'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '1ddd7bdb8e8bbe2b222a1a7cdd2c10080136049c'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -61,13 +62,13 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `api/src/Shared/Event/Infrastructure/Messenger/` (servicio validador de transporte) -- extraer (a), memoizado; admisión in-memory inyectada -- una única fuente para comando y guarda.
-- [ ] `api/src/Shared/Event/Infrastructure/Cli/AssertTransactionalTransportCommand.php` -- delegar en el validador, mismo contrato de salida y misma severidad.
-- [ ] `api/src/Shared/Event/Infrastructure/Messenger/` (middleware de guarda + excepciones) -- implementar la matriz.
-- [ ] `api/config/packages/messenger.yaml` + config de servicios `when@test` -- registrar la guarda primera; admitir in-memory sólo en test.
-- [ ] Tests unitarios -- cada fila de la matriz, incluida conexión distinta contra la misma BD.
-- [ ] Test funcional (kernel real) -- fuera de transacción: excepción y cero filas nuevas en `event_store` y `messenger_messages` (fija el orden de middlewares por comportamiento); dentro: éxito.
-- [ ] Docs listados en el Code Map -- #872 residuales 1 y 2 cerrados; residual 3 sigue abierto; nuevos puntos ciegos (otro bus, `send()` directo, `isTransactionActive()` no prueba que sea la transacción de la escritura de negocio).
+- [x] `api/src/Shared/Event/Infrastructure/Messenger/` (servicio validador de transporte) -- extraer (a), memoizado; admisión in-memory inyectada -- una única fuente para comando y guarda.
+- [x] `api/src/Shared/Event/Infrastructure/Cli/AssertTransactionalTransportCommand.php` -- delegar en el validador, mismo contrato de salida y misma severidad.
+- [x] `api/src/Shared/Event/Infrastructure/Messenger/` (middleware de guarda + excepciones) -- implementar la matriz.
+- [x] `api/config/packages/messenger.yaml` + config de servicios `when@test` -- registrar la guarda primera; admitir in-memory sólo en test.
+- [x] Tests unitarios -- cada fila de la matriz, incluida conexión distinta contra la misma BD.
+- [x] Test funcional (kernel real) -- fuera de transacción: excepción y cero filas nuevas en `event_store` y `messenger_messages` (fija el orden de middlewares por comportamiento); dentro: éxito.
+- [x] Docs listados en el Code Map -- #872 residuales 1 y 2 cerrados; residual 3 sigue abierto; nuevos puntos ciegos (otro bus, `send()` directo, `isTransactionActive()` no prueba que sea la transacción de la escritura de negocio).
 
 **Acceptance Criteria:**
 - Given un proceso sin entrypoint con `MESSENGER_TRANSPORT_DSN` erróneo, when un caso de uso publica un evento enrutado a `async`, then lanza y no persiste nada.
@@ -79,6 +80,30 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+Capas: Blind Hunter, Edge Case Hunter, Verification Gap y Acceptance Auditor (el `CLAUDE.md` exige esta última). Sin hilos de PR: la PR aún no existe.
+
+| # | Hallazgo (capas) | Veredicto | Ruta | Evidencia |
+|---|------------------|-----------|------|-----------|
+| 1 | Las aserciones sobre `messenger_messages` del test funcional no pueden fallar; docblock y checklist las presentan como prueba del outbox (BH, VG, AA) | low | patch | En `test`, `async` es `in-memory://`: la tabla nunca recibe filas. Muerden `event_store` y `getSent()`. |
+| 2 | Comentario relativo al cambio «used to be checked out of band» en el docblock del middleware (BH) | low | patch | `CLAUDE.md` → Code comments lo prohíbe. |
+| 3 | `isRoutedToAsync()` construye todos los remitentes y un fallo ajeno a `async` se informa como fallo de `async` (BH, EH) | false | rechazado | `routing:` sólo enruta a `async` (`failed` no es destino de enrutado); no es alcanzable hoy y el mensaje dice «a transport it is routed to». |
+| 4 | Memoizar un fallo transitorio deja el proceso rechazando hasta reiniciar (BH, EH) | low | rechazado | La spec fija «memoizado por proceso»; la DSN es fija durante el proceso y el fallo es fail-closed. Cambiarlo añade ramas. |
+| 5 | Veredicto memoizado ligado a una conexión reseteada en modo worker (EH) | false | rechazado | `EntityManager::reset()` no sustituye el objeto `Connection` DBAL; sin ejemplo alcanzable. |
+| 6 | La memoización del resultado `null` (el de producción) no tiene test (BH, VG) | medium | patch | `itInspectsTheTransportOncePerProcess` sólo cubre un resultado no nulo. |
+| 7 | El parámetro `erpify.messenger.accepted_async_transport_classes` de producción no está fijado por ningún gate (BH, VG, AA-F1) | medium | patch | Añadir `InMemoryTransport` a `services.yaml` desactiva el control en prod con todo en verde. |
+| 8 | Docs: «500 naming the message class and the cause» (BH, EH, AA) | low | patch | `docs/api-error-contract.md`: en prod el `title` es «An unexpected error occurred.»; clase y causa sólo llegan al log. |
+| 9 | Docs: «rolls back / before anything is written» sin transacción abierta (BH) | low | patch | Sin transacción no hay nada que revertir; la escritura de negocio autocommiteada permanece. Residual no listado en §7. |
+| 10 | Punto ciego sin listar: evento enrutado a otro alias distinto de `async` sólo recibe (b) (AA-F3, EH) | low | patch | Hoy no existe; es una línea en la fila §7. |
+| 11 | Enrutado por interfaz y `TransportNamesStamp` sin test contra el `SendersLocator` real (VG, EH) | low | patch | El docblock lo promete; los dobles sólo devuelven `async` o vacío. Un test con el localizador real lo fija. |
+| 12 | Frase obsoleta en el ADR de borrado de imágenes, línea 29 (AA-F4) | low | patch | Contradice el párrafo 44 ya actualizado. |
+| 13 | «Primero en el bus»: `DispatchAfterCurrentBus` puede reenviar fuera de la transacción (EH) | false | rechazado | Nada en `api/src`, `config` ni `tests` usa `DispatchAfterCurrentBusStamp`. |
+| 14 | Fila #872 narrada como cerrada antes de la revisión; columna de dueño «not recorded» (BH) | false | rechazado | La spec pedía la actualización; la revisión ha corrido antes de publicar. «not recorded» es anterior al cambio. |
+| 15 | Sin test del comando bajo `APP_ENV=test` (BH) | low | rechazado | El cableado del parámetro lo ejerce el test funcional; el comando sólo delega. |
+| 16 | Doble negación, resultado `?string` como texto libre, ids de servicio internos (BH) | low | rechazado | Cosmético; el enum añade superficie pública sin segundo consumidor. |
+| 17 | No hay evidencia de que los publicadores existentes sobrevivan (BH) | false | rechazado | `make php.test` verde (4996 + 527 Behat); AA recorrió los 34 `publish` de `src`, todos dentro de `transactional()`. |
+| 18 | §8 sobrevende la guarda como sustituto de la detección en arranque (EH) | low | rechazado | La redacción actual dice «early, loud reading»; no afirma sustitución. |
+| 19 | Import sólo de docblock y `BooleanArgumentFlag` de PHPMD (AA-F5/F6) | maybe-false | comprobar | Se resuelve con `make php.quality` final; si rojo, patch. |
 
 ## Verification
 

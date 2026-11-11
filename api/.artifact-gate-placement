@@ -111,6 +111,7 @@
 # engines move, which is the placement PhpSourceTest already has.
 # ---------------------------------------------------------------------------------------------------------
 
+tests/Unit/Gate/AcceptedAsyncTransportClassesGateTest.php :: home
 tests/Unit/Gate/AcceptedRiskTagGateTest.php :: home
 tests/Unit/Gate/AsyncTransportBootAssertionGateTest.php :: home
 tests/Unit/Gate/ConfigReferenceGateReadsHeadGateTest.php :: home
