@@ -77,7 +77,7 @@ context:
 - [x] `make/php-quality.mk`, `api/.artifact-gate-placement` -- cablear y clasificar el gate
 - [x] `PRODUCTION_SECURITY_CHECKLIST.md` -- reducir la fila de #872 a riesgo, disparador más receta y aceptado. Quitar B de los puntos ciegos y llevar el detalle de lo ya cerrado a D3 del ADR, si no está ya allí
 - [x] `docs/adr/image-deletion-signal-transport.md` -- D3: recoger el detalle movido, el invariante de senders y el gate. Las etiquetas se mantienen
-- [ ] Después de las tres capas de revisión: reescribir el cuerpo de #872 con el estado actual, dejando la historia en los comentarios
+- [x] Después de las tres capas de revisión: reescribir el cuerpo de #872 con el estado actual, dejando la historia en los comentarios
 
 **Revisión 1 (patches y enmiendas):**
 - [x] Guard y excepción: admitir `sync` según la matriz. El texto de `MessageRoutedOffTransactionalTransport`, el docblock del middleware y el de `RequireTransactionalPublishSendersTest` dicen que `async` y `sync` son los senders **admitidos**, no que sean los únicos transaccionales (`failed` es Doctrine sobre la misma conexión).
