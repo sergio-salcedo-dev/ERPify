@@ -56,6 +56,8 @@ use Throwable;
 #[AsAlias(DocumentStorage::class)]
 final readonly class FilesystemDocumentStorage implements DocumentStorage
 {
+    use QuietFilesystemCalls;
+
     private const int SHARD_LENGTH = 2;
 
     /**
@@ -407,35 +409,6 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
         }
     }
 
-    /**
-     * @return list<string> the names in `$directory`, `.` and `..` excluded
-     */
-    private function entriesOf(string $directory, StorageArea $area): array
-    {
-        $entries = $this->quietly(static fn (): array|false => \scandir($directory));
-
-        if (false === $entries) {
-            throw DocumentStorageFailed::because($area, 'a shard directory could not be listed');
-        }
-
-        return \array_values(\array_filter(
-            $entries,
-            static fn (string $entry): bool => '.' !== $entry && '..' !== $entry,
-        ));
-    }
-
-    /**
-     * @return list<string> the shard directories in `$directory`; anything else at that level is not an object
-     */
-    private function shardsOf(string $directory, StorageArea $area): array
-    {
-        return \array_values(\array_filter(
-            $this->entriesOf($directory, $area),
-            static fn (string $entry): bool => self::SHARD_LENGTH === \strlen($entry)
-                && \is_dir($directory . '/' . $entry),
-        ));
-    }
-
     private function ensureDirectory(string $directory, StorageArea $area): void
     {
         // Tolerating a concurrent creator: `mkdir` fails when the directory appeared meanwhile, which is the
@@ -448,29 +421,6 @@ final readonly class FilesystemDocumentStorage implements DocumentStorage
 
         if (!$created && !\is_dir($directory)) {
             throw DocumentStorageFailed::because($area, 'the shard directory could not be created');
-        }
-    }
-
-    /**
-     * Runs a filesystem call whose failure is the answer, not an event: a refused `fopen`, `link` or `mkdir`
-     * raises a PHP warning that the caller turns into a typed outcome, and that warning would otherwise reach
-     * the log with the path in it. A handler that swallows it for the duration of the one call is scoped
-     * (restored in `finally`) where the `@` operator is not.
-     *
-     * @template T
-     *
-     * @param callable(): T $operation
-     *
-     * @return T
-     */
-    private function quietly(callable $operation): mixed
-    {
-        \set_error_handler(static fn (): bool => true);
-
-        try {
-            return $operation();
-        } finally {
-            \restore_error_handler();
         }
     }
 

@@ -103,11 +103,7 @@ final readonly class PhpUploadBodySpool
      */
     private function hashOfPrefix(string $path, int $bytesRead, string $headSha256): ?string
     {
-        if (!$this->sizeWithinWindow($path, $bytesRead)) {
-            return null;
-        }
-
-        $handle = \fopen($path, 'r');
+        $handle = $this->sizeWithinWindow($path, $bytesRead) ? \fopen($path, 'r') : false;
 
         if (false === $handle) {
             return null;
