@@ -89,7 +89,8 @@ final class MessengerSendBoundaryGateTest extends TestCase
 
     /**
      * Whatever can put an envelope on a transport, or resolve the object that can: the whole Bridge root (the
-     * Doctrine transport and its connection live there) and the container ids that hand any of them out. The
+     * Doctrine transport and its connection live there), the container ids that hand any of them out, and the
+     * stamp that picks a transport at dispatch. The
      * `Transport` namespace is matched by {@see self::TRANSPORT_NAMESPACE} instead, since it is a prefix with
      * two exclusions.
      *
@@ -102,6 +103,8 @@ final class MessengerSendBoundaryGateTest extends TestCase
         'messenger.failure_transports',
         'messenger.senders_locator',
         'messenger.receiver_locator',
+        // Addresses an envelope to transports at dispatch, past every routing key the build-time checks read.
+        \Symfony\Component\Messenger\Stamp\TransportNamesStamp::class,
     ];
 
     /**
