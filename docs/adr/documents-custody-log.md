@@ -50,6 +50,8 @@ The first adapter uses `fopen(…, 'x')` and `link(2)` + `unlink(2)` rather than
 
 `upload_intent` (`UploadIntent`) is created by the declare step and moves `Declared` → `Streaming` (the PUT's claim, before a byte is read or a key minted) → `Committed` (the commit, with the document id), or to `Expired` (the writer's own abort, the person purge, or implicitly by time: a `Declared` intent past `ttl_expires_at`, a `Streaming` one past `lease_expires_at` or `upload_deadline_at`). Every judgement of time uses the database clock read inside the transaction holding the row. Every transition to `Expired` nulls the key hash and sets the lease to now. The deadline is fixed at the claim (`ceil(size / 256 KiB) s + 60 s`); the heartbeat renews the lease (90 s, every 10 s of reading) and never past it. The constants live in `UploadLimits`.
 
+The edge bounds the body before any of this: Caddy admits up to `MAX_ORIGINAL_BYTES` only on the canonical PUT path and only for a request carrying the session cookie, and 1MB otherwise, because the server receives a refused request's body whole before it answers — an anonymous client must not be able to trickle 100 MiB into a worker thread ahead of authentication. The cookie's value is the application's to judge.
+
 No transaction spans the stream: the claim commits, the sealer mints the key after the first chunk and commits on its own, then one short transaction files the document. **Lock order, each class in ascending id:**
 
 | Flow | Takes, in order |

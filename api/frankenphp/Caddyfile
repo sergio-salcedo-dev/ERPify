@@ -164,10 +164,16 @@
 		# anchored pattern on a canonical UUID: a trailing slash, a suffix, another method or the `/index.php/…`
 		# spelling keep the 1MB bound below (measured). The bound is in bytes, equal to
 		# `UploadLimits::MAX_ORIGINAL_BYTES` with no framing allowance, since the body IS the original.
+		#
+		# It is lifted only for a request carrying a session cookie (PHP's default `PHPSESSID`): the server receives a
+		# body whole before it answers, at the client's pace, so without this an anonymous client trickling 100 MiB
+		# would hold a worker thread until it finished, ahead of authentication. Any cookie value passes here — the
+		# application still refuses an invalid session — so this bounds anonymous callers, not authenticated ones.
 		@documentUpload {
 			path index.php
 			method PUT
 			vars_regexp {http.request.orig_uri.path} ^/api/v1/documents/uploads/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/content$
+			header_regexp Cookie (?:^|;\s*)PHPSESSID=[^;\s]+
 		}
 		# Every other request PHP serves is bounded here, after the rewrite, rather than by its spelling: Symfony
 		# derives its route from REQUEST_URI, so `/index.php/api/…` reaches the API routes without ever matching an
@@ -184,6 +190,7 @@
 			not {
 				method PUT
 				vars_regexp {http.request.orig_uri.path} ^/api/v1/documents/uploads/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/content$
+				header_regexp Cookie (?:^|;\s*)PHPSESSID=[^;\s]+
 			}
 		}
 		request_body @documentUpload {

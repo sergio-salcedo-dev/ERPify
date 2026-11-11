@@ -2681,14 +2681,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       killed worker) keeps its spool until the thread's next request; two in-flight uploads of the same bytes are
       both left, since either spool could be the other's; a body of at most 16 KiB never leaves memory; any other
       route's body (bounded at 1 MB by Caddy) is still spooled until the thread's next request (measured on
-      `/api/v1/health`); and the production image was not re-measured — the mechanism is PHP's own and the image
-      runs the same PHP, but its process user differs. **Open — owner: the user (whether these residuals are
-      accepted).**
-- [ ] **Any PUT to the canonical upload path has its whole body received before its response, anonymous
-      included.** Measured on the dev stack (2026-11-08): an unauthenticated PUT (401), a 410 and a 405 elsewhere
-      answered only once the whole body had arrived, at the client's own pace. Caddy admits 100 MiB on that path
-      whoever sends it, so a client trickling a body pins a worker thread for as long as it trickles, outside the
-      authentication and outside the Streaming caps the thread-pin entry counts on. **Open — owner: the user.**
+      `/api/v1/health`). **Those four: Accepted — the user, 2026-11-11.** The production image was not re-measured —
+      the mechanism is PHP's own and the image runs the same PHP, but its process user differs; that is a stated
+      fact, not part of the acceptance.
+- [ ] **A PUT to the canonical upload path has its whole body received before its response; only a request
+      carrying a session cookie may send 100 MiB.** Measured on the dev stack (2026-11-08): an unauthenticated PUT
+      (401), a 410 and a 405 elsewhere answered only once the whole body had arrived, at the client's own pace, so
+      a client trickling a body pins a worker thread for as long as it trickles, outside the Streaming caps the
+      thread-pin entry counts on. **Mitigated:** the Caddyfile lifts the 100 MiB bound on that path only for a
+      request carrying the session cookie (`PHPSESSID`); without it the PUT falls to the 1MB bound every other route
+      has — measured, an anonymous 3 MB PUT is read to 1,000,001 bytes and the same PUT with a cookie to 3,000,000
+      (`UploadPathAnonymousBoundGateTest`), while an authenticated 1.1 MB upload is filed
+      (`UploadFilenameAccessLogContainmentGateTest`); `UploadRoutePathAgreementGateTest` pins the condition in both
+      matchers against the cookie name the application issues. **What remains:** Caddy does not judge the cookie, so
+      any request presenting one — an authenticated caller with `document.write` or without it, or anyone who sends
+      the cookie name with a made-up value — keeps the 100 MiB bound until the application refuses it, and that
+      refusal comes only after the body has been received. **Accepted — the user, 2026-11-11.**
 - [ ] **Rotating `APP_SECRET` silently unmatches every stored idempotency key.** The key hashes on upload intents
       and documents are HMAC-SHA256 under `kernel.secret`, so after a rotation no replay matches its earlier
       declare: a client retrying across the rotation files the same evidence twice — a duplicate, never a loss —
