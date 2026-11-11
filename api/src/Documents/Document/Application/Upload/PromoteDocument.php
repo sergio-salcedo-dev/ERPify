@@ -21,8 +21,8 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *    the staged name) and never overwrites it — the stale staged name is removed instead;
  *  - a staged object that is gone with the final one present is a move that already happened;
  *  - `promoted_at` is a compare-and-set, and only the call that set it publishes the wake-up, in the same
- *    transaction, so the mark and the message commit together or not at all; the message is a hint the scan sweep
- *    does not need, and the row stays the obligation.
+ *    transaction, so the mark and the message commit together or not at all: a message that cannot be published
+ *    leaves the row unpromoted for the roll-forward to retry.
  *
  * A row with no object in either namespace is not repaired here: it raises {@see ObjectNotFound} and the
  * scheduled report alarms on it.

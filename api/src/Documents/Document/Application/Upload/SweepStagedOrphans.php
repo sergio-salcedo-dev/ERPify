@@ -27,12 +27,6 @@ use Throwable;
  */
 final readonly class SweepStagedOrphans
 {
-    /**
-     * Failures in a row after which the run stops: past a few, the cause is the store or the database rather than
-     * one object, and walking the rest of staging would only log the same failure once per object.
-     */
-    private const int MAX_CONSECUTIVE_FAILURES = 5;
-
     public function __construct(
         private DocumentStorage $storage,
         private DocumentRepository $documents,
@@ -61,15 +55,17 @@ final readonly class SweepStagedOrphans
                 }
 
                 try {
-                    $deleted += $this->sweepOne($scopeId) ? 1 : 0;
-                    $consecutiveFailures = 0;
+                    if ($this->sweepOne($scopeId)) {
+                        ++$deleted;
+                        $consecutiveFailures = 0;
+                    }
                 } catch (Throwable $throwable) {
                     $this->logger->error('A staged object could not be swept; the sweep goes on.', [
                         'scopeId' => $scopeId,
                         'exceptionClass' => $throwable::class,
                     ]);
 
-                    if (++$consecutiveFailures >= self::MAX_CONSECUTIVE_FAILURES) {
+                    if (++$consecutiveFailures >= SweepBudget::MAX_CONSECUTIVE_FAILURES) {
                         $this->logger->error('The staging sweep stopped after consecutive failures.', [
                             'failures' => $consecutiveFailures,
                             'deleted' => $deleted,

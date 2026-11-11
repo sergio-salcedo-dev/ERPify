@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Documents\Document;
 
+use Doctrine\DBAL\Connection;
 use Erpify\Documents\Document\Application\ReceiveDocument;
 use Erpify\Documents\Document\Application\Upload\DocumentScanWakeUp;
 use Erpify\Documents\Document\Application\Upload\PromoteDocument;
@@ -23,8 +24,11 @@ use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUpload
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -36,7 +40,7 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
  * and nothing a committed row owns is ever deleted.
  *
  * The points, in order: before the commit; after it and before the rename; after the rename and before the
- * directory sync (both names on one inode); before `promoted_at`; after `promoted_at` and before the message.
+ * directory sync (both names on one inode); before `promoted_at`; while waking the scan, which rolls the mark back.
  *
  * @internal
  *
@@ -60,6 +64,9 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
 
     /** @var array<int, string> */
     private array $wakeUps = [];
+
+    /** @var list<bool> */
+    private array $wakeInTransaction = [];
 
     private ?ScriptedDocumentStorage $promoting = null;
 
@@ -180,6 +187,44 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
         $this->assertPromotedOnce($document, 'sealed');
     }
 
+    public function testTheRollForwardWakesTheScanInsideItsTransaction(): void
+    {
+        $document = $this->committedWithStagedObject('sealed');
+
+        $this->rollForward();
+
+        $this->assertSame([$document->documentId()], $this->wakeUps);
+        $this->assertSame([true], $this->wakeInTransaction, 'the message commits with the mark or not at all');
+    }
+
+    public function testAWakeUpThatFailsInTheRollForwardRollsTheMarkBackAndIsLoggedByTheDocumentId(): void
+    {
+        $document = $this->committedWithStagedObject('sealed');
+        $failing = new class implements DocumentScanWakeUp {
+            #[Override]
+            public function wake(string $documentId): void
+            {
+                throw new RuntimeException('the outbox refused ' . $documentId);
+            }
+        };
+        $log = new TestHandler();
+
+        $promoted = $this->rollForward($failing, new Logger('observability', [$log]));
+
+        $this->assertSame(0, $promoted, 'a row whose message could not be published is not counted as promoted');
+        $this->assertNull(
+            $this->intentConnection()->fetchOne(
+                'SELECT promoted_at FROM document WHERE id = :id',
+                ['id' => $document->documentId()],
+            ),
+            'the mark is undone with the message',
+        );
+        $this->assertTrue($log->hasErrorThatContains('could not be rolled forward'));
+        $context = \array_first($log->getRecords())->context ?? [];
+        $this->assertSame($document->documentId(), $context['documentId'] ?? null);
+        $this->assertStringNotContainsString('refused', \json_encode($context) ?: '', 'the cause stays out');
+    }
+
     public function testTheStagingSweepNeverDeletesAnObjectARowOwnsAndTheRollForwardStillPromotesIt(): void
     {
         $document = $this->committedWithStagedObject('sealed');
@@ -261,21 +306,28 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
         return $document;
     }
 
-    private function rollForward(): void
+    /**
+     * @return int how many rows the run promoted
+     */
+    private function rollForward(?DocumentScanWakeUp $wakeUp = null, ?LoggerInterface $logger = null): int
     {
-        $wakeUp = new RecordingScanWakeUp();
+        $recording = new RecordingScanWakeUp($this->service(Connection::class));
+        $wakeUp ??= $recording;
         $documents = $this->service(DocumentRepository::class);
         $this->promoting = new ScriptedDocumentStorage($this->storage());
 
-        (new RollForwardPromotions(
+        $promoted = (new RollForwardPromotions(
             $documents,
             new PromoteDocument($this->promoting, $documents, $wakeUp, $this->service(TransactionManager::class)),
             $wakeUp,
             $this->service(TransactionManager::class),
-            new NullLogger(),
+            $logger ?? new NullLogger(),
         ))->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 10_000);
 
-        $this->wakeUps = $wakeUp->woken;
+        $this->wakeUps = $recording->woken;
+        $this->wakeInTransaction = $recording->insideTransaction;
+
+        return $promoted;
     }
 
     private function assertPromotedOnce(Document $document, string $finalBytes): void

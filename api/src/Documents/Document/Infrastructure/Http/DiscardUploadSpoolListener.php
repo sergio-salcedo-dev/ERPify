@@ -25,7 +25,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * The rest of the body arrives at the client's pace, so the drain arms its own time budget — the upload deadline
  * for the largest original — and re-arms it with what is left at every chunk: a refused or aborted body read under
  * whatever limit was armed before would end in a fatal error, turning the answer into a 500 and keeping the spool.
- * Past that deadline it stops reading; a spool it did not read to its end matches nothing and is left alone.
+ * Past that deadline it stops reading, and a spool read only in part is matched on the prefix that was read. Once
+ * the drain ends the limit is re-armed to {@see AFTER_DRAIN_SECONDS}, for the matching and for every listener after
+ * this one, instead of being left at whatever the last chunk armed.
  */
 final readonly class DiscardUploadSpoolListener
 {
@@ -33,6 +35,9 @@ final readonly class DiscardUploadSpoolListener
 
     /** Seconds the time limit is armed past the drain's own deadline, so the drain stops before PHP does. */
     private const int LIMIT_MARGIN_SECONDS = 5;
+
+    /** The time limit once the body is drained: room to match a spool and for the listeners that run after. */
+    private const int AFTER_DRAIN_SECONDS = 60;
 
     public function __construct(
         private PhpUploadBodySpool $spool,
@@ -84,6 +89,7 @@ final readonly class DiscardUploadSpoolListener
             \fclose($body);
         }
 
+        $this->timeBudget->arm(self::AFTER_DRAIN_SECONDS);
         $this->spool->discard($bytes, \hash_final($hash), \hash('sha256', $head));
     }
 }

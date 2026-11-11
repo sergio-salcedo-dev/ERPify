@@ -59,7 +59,7 @@ interface DocumentRepository
     /**
      * Sets `promoted_at` to the database clock by compare-and-set — only on a `Received` row whose
      * `promoted_at` is still NULL — and says whether this call set it. The caller that set it is the one
-     * that dispatches the scan wake-up.
+     * that publishes the scan wake-up, in the same transaction as this call.
      */
     public function markPromoted(string $id): bool;
 

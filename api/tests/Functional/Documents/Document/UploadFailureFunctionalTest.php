@@ -29,8 +29,12 @@ use Erpify\Shared\Crypto\Application\StreamEnvelopeEncryptor;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid as RandomUuid;
@@ -143,8 +147,16 @@ final class UploadFailureFunctionalTest extends KernelTestCase
             $this->service(TransactionManager::class),
         );
 
-        $outcome = $this->useCase(promote: $promote)->upload($this->command($actor, $upload));
+        $log = new TestHandler();
+        $outcome = $this->useCase(promote: $promote, logger: new Logger('observability', [$log]))
+            ->upload($this->command($actor, $upload))
+        ;
 
+        $this->assertTrue($log->hasWarningThatContains('could not be promoted'), 'the failure is seen by its document');
+        $this->assertSame(
+            $outcome->document->documentId(),
+            $log->getRecords()[0]->context['documentId'] ?? null,
+        );
         $this->assertTrue($outcome->created, 'answered as filed (201)');
         $this->assertSame(DocumentState::Received, $outcome->document->state());
         $this->assertNull($this->intentConnection()->fetchOne(
@@ -210,6 +222,7 @@ final class UploadFailureFunctionalTest extends KernelTestCase
         ?UploadIntentRepository $intents = null,
         ?DocumentStorage $storage = null,
         ?PromoteDocument $promote = null,
+        ?LoggerInterface $logger = null,
     ): UploadEvidence {
         return new UploadEvidence(
             $this->service(ClaimUpload::class),
@@ -221,6 +234,7 @@ final class UploadFailureFunctionalTest extends KernelTestCase
             $intents ?? $this->service(UploadIntentRepository::class),
             $this->service(TransactionManager::class),
             $this->service(UploadTimeBudget::class),
+            $logger ?? new NullLogger(),
             heartbeatIntervalSeconds: 0,
         );
     }

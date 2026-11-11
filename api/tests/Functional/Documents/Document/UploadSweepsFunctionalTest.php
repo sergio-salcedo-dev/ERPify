@@ -277,66 +277,76 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
         $this->assertSame([$first[0], $second[0]], $this->loggedIds('documentId'), 'each failing row is named');
     }
 
-    /**
-     * The limit counts deletions: owned objects at the head of the walk are passed over without spending it, and a
-     * scope that fails is logged and passed over too, so the orphans behind both are still reached.
-     */
-    public function testTheStagingSweepReachesOrphansBehindOwnedAndFailingScopes(): void
+    public function testASweepWithNoLimitNeitherLoopsNorWorks(): void
     {
-        $ownedA = $this->plantIntent(Uuid::generate(), UploadIntentState::Declared, claimed: false)->scopeId;
-        $ownedB = $this->plantIntent(Uuid::generate(), UploadIntentState::Declared, claimed: false)->scopeId;
-        [$orphanA, $poisoned, $orphanB] = [$this->scope(), $this->scope(), $this->scope()];
-        $storage = (new ScriptedDocumentStorage($this->storage()))
-            ->walkYields([$ownedA, $ownedB, $orphanA, $poisoned, $orphanB])
-            ->failDeleteFor($poisoned)
-        ;
+        $this->assertSame(0, $this->service(ReapUploadIntents::class)->reap(0));
+        $rollForward = $this->service(RollForwardPromotions::class);
 
-        $deleted = (new SweepStagedOrphans(
-            $storage,
-            $this->service(DocumentRepository::class),
+        $this->assertSame(0, $rollForward->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 0));
+    }
+
+    /**
+     * A store or database that fails every item stops the reaper after a few, instead of one error line and one
+     * transaction per candidate of the whole backlog every tick.
+     */
+    public function testTheReaperStopsAfterAFewFailuresInARow(): void
+    {
+        $this->service(ReapUploadIntents::class)->reap(10_000);
+        $planted = [];
+
+        for ($index = 0; $index < 8; ++$index) {
+            $planted[] = $this->plantIntent(Uuid::generate(), UploadIntentState::Expired);
+        }
+
+        $reaped = (new ReapUploadIntents(
             $this->service(UploadIntentRepository::class),
+            $this->service(DocumentRepository::class),
+            $this->service(Keystore::class),
+            (new ScriptedDocumentStorage($this->storage()))->failEveryDelete(),
+            $this->service(TransactionManager::class),
             $this->logger(),
-        ))->sweep(2);
+        ))->reap(100);
 
-        $this->assertSame(2, $deleted);
-        $this->assertSame([$orphanA, $orphanB], $storage->deleted);
-        $this->assertTrue($this->log->hasErrorThatContains('could not be swept'));
+        $this->assertSame(0, $reaped);
+        $this->assertSame(5, $this->logged('could not be reaped'));
+        $this->assertSame(1, $this->logged('stopped after consecutive failures'));
+
+        foreach ($planted as $intent) {
+            $this->assertNotFalse($this->rowOf($intent), 'what was not reaped stays for the next tick');
+        }
     }
 
-    public function testAStagingWalkThatFailsEndsTheSweepWithOneLine(): void
+    public function testTheRollForwardStopsAfterAFewFailuresInARow(): void
     {
-        $deleted = $this->sweepWith((new ScriptedDocumentStorage($this->storage()))->failWalk(), 10);
+        $this->service(RollForwardPromotions::class)->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 10_000);
+        $received = \array_map($this->receivedWithStagedObject(...), \range(1, 8));
+        $storage = (new ScriptedDocumentStorage($this->storage()))->failEveryPromote();
+        $documents = $this->service(DocumentRepository::class);
+        $wakeUp = new RecordingScanWakeUp();
 
-        $this->assertSame(0, $deleted);
-        $this->assertCount(1, $this->log->getRecords());
-        $this->assertTrue($this->log->hasErrorThatContains('could not be walked'));
+        $promoted = (new RollForwardPromotions(
+            $documents,
+            new PromoteDocument($storage, $documents, $wakeUp, $this->service(TransactionManager::class)),
+            $wakeUp,
+            $this->service(TransactionManager::class),
+            $this->logger(),
+        ))->run(UploadLimits::ROLL_FORWARD_AGE_SECONDS, 100);
+
+        $this->assertSame(0, $promoted);
+        $this->assertSame(5, $this->logged('could not be rolled forward'));
+        $this->assertSame(1, $this->logged('stopped after consecutive failures'));
+
+        foreach ($received as [$documentId]) {
+            $this->assertNull($this->promotedAtOf($documentId));
+        }
     }
 
-    /**
-     * A store or database that fails every object stops the run after a few, rather than logging once per object
-     * of the whole staging area every tick.
-     */
-    public function testARunOfFailuresStopsTheSweep(): void
+    private function logged(string $fragment): int
     {
-        $scopes = \array_map($this->scope(...), \range(1, 12));
-        $storage = (new ScriptedDocumentStorage($this->storage()))->walkYields($scopes)->failEveryDelete();
-
-        $this->assertSame(0, $this->sweepWith($storage, 10));
-        $this->assertCount(5, \array_filter(
+        return \count(\array_filter(
             $this->log->getRecords(),
-            static fn (LogRecord $record): bool => \str_contains($record->message, 'could not be swept'),
+            static fn (LogRecord $record): bool => \str_contains($record->message, $fragment),
         ));
-        $this->assertTrue($this->log->hasErrorThatContains('stopped after consecutive failures'));
-    }
-
-    private function sweepWith(ScriptedDocumentStorage $storage, int $limit): int
-    {
-        return (new SweepStagedOrphans(
-            $storage,
-            $this->service(DocumentRepository::class),
-            $this->service(UploadIntentRepository::class),
-            $this->logger(),
-        ))->sweep($limit);
     }
 
     private function committedIntent(string $actor): PlantedIntent

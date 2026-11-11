@@ -34,6 +34,7 @@ use Erpify\Tests\Functional\ResolvesContainerServices;
 use Erpify\Tests\Support\Dig;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
@@ -215,6 +216,7 @@ final class UploadHeartbeatFunctionalTest extends KernelTestCase
             $this->service(UploadIntentRepository::class),
             $this->service(TransactionManager::class),
             $this->service(UploadTimeBudget::class),
+            new NullLogger(),
             heartbeatIntervalSeconds: 0,
         );
     }

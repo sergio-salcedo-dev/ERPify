@@ -37,7 +37,8 @@ use Throwable;
  *
  * One intent that cannot be reaped is logged by its id and passed over, never the end of the batch, and the run pages
  * past it by id until `$limit` intents were ended or the candidates ran out — a candidate that keeps failing would
- * otherwise head every tick's page and, by the hundred, starve all the others behind it.
+ * otherwise head every tick's page and, by the hundred, starve all the others behind it. {@see SweepBudget} bounds
+ * how many candidates a run looks at and stops it after a run of failures in a row.
  */
 final readonly class ReapUploadIntents
 {
@@ -56,29 +57,47 @@ final readonly class ReapUploadIntents
      */
     public function reap(int $limit): int
     {
-        $reaped = 0;
+        $budget = new SweepBudget($limit);
         $after = null;
 
-        do {
+        while (!$budget->exhausted()) {
             $page = $this->intents->reapCandidates($limit, $after);
 
             foreach ($page as $intentId) {
                 $after = $intentId;
+                $this->reapWithin($budget, $intentId);
 
-                try {
-                    if ($this->reapOne($intentId) && ++$reaped >= $limit) {
-                        return $reaped;
-                    }
-                } catch (Throwable $throwable) {
-                    $this->logger->error('An upload intent could not be reaped; the batch goes on.', [
-                        'intentId' => $intentId,
-                        'exceptionClass' => $throwable::class,
-                    ]);
+                if ($budget->exhausted()) {
+                    break;
                 }
             }
-        } while (\count($page) === $limit);
 
-        return $reaped;
+            if (\count($page) < $limit) {
+                break;
+            }
+        }
+
+        if ($budget->stoppedOnFailures()) {
+            $this->logger->error('The upload reaper stopped after consecutive failures.', [
+                'failures' => SweepBudget::MAX_CONSECUTIVE_FAILURES,
+                'reaped' => $budget->finishedCount(),
+            ]);
+        }
+
+        return $budget->finishedCount();
+    }
+
+    private function reapWithin(SweepBudget $budget, string $intentId): void
+    {
+        try {
+            $this->reapOne($intentId) ? $budget->finished() : $budget->passed();
+        } catch (Throwable $throwable) {
+            $this->logger->error('An upload intent could not be reaped; the batch goes on.', [
+                'intentId' => $intentId,
+                'exceptionClass' => $throwable::class,
+            ]);
+            $budget->failed();
+        }
     }
 
     public function reapOne(string $intentId): bool

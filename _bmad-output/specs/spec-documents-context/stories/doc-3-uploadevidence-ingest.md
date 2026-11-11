@@ -33,7 +33,7 @@ context:
 - Redaction: `filename` joins a new `QUERY_KEYS` set of `RequestUriRedaction` (substring, after the same padding and decoding reduction; URI paths only, never `RedactionDenylist::KEYS` or `IDENTITY_KEYS`); on the upload route those paths replace the whole query with the sentinel; the PWA mirror and `RedactionVocabularyParityTest` follow. Both Sentry bypasses close: `before_send_transaction` (dev and prod) and `max_request_body_size: never`.
 - Key hash is nulled whenever an intent becomes Expired and by the person purge; the actor is a registered person reference with a detective source; the purge never deletes an intent row. An aborted upload writes an `aborted-upload` tombstone exactly when `claimed_at` is set and no Document holds the scope; tombstones are never pruned.
 - Schedules: the transport of each new schedule is named in BOTH compose consume commands, `->stateful()` on `cache.scheduler_checkpoint`, one `scheduler_worker` replica. A final object with no row is alarmed on, never deleted. No sweep (the reaper and the staging age sweep alike) deletes a staged object whose scope has a `Document` row or a live intent: the age sweep deletes only an object older than its margin with neither, and a regression scenario keeps a `Received` row with `promoted_at` NULL and a staged object older than that margin, runs the sweep and expects the object to remain and the roll-forward to promote it. Every sweep is idempotent and safe under a duplicate tick; the single replica is an operating policy, never a correctness dependency.
-- The scan message is a wake-up hint, never the obligation: the durable obligation is the row (`promoted_at` set, `next_scan_at`), which doc-4's sweep reads. A delivery to the no-op handler therefore loses nothing, and a test proves the handler leaves the row untouched.
+- The scan message is a wake-up hint, never the obligation: the durable obligation is the row (`promoted_at` set, `next_scan_at`), which doc-4's sweep reads. A committed delivery to the no-op handler therefore loses nothing, and a test proves the handler leaves the row untouched. The message is published inside the transaction that sets `promoted_at` (the bus refuses an async-routed message outside one), so a message that cannot be published leaves the row unpromoted for the roll-forward to retry.
 - Hexagonal layering holds; no `UploadedFile`, transport type or caller-supplied path past Infrastructure (the Documents-tree scan excludes only the validated filename value object).
 - Commits, PRs, code, docs in English.
 
@@ -103,7 +103,7 @@ context:
 - Given `?filename=SECRET` on a transaction event and an error event on a 5-byte PUT body, then neither survives the Sentry hooks.
 - Given the running Caddy, when PUTs are completed, aborted mid-body and past the bound, then neither `access.log` nor the container log holds the encoded name.
 - Given each new schedule transport, then `make php.lint.schedule-consumption` is green and removing it from either compose file reds it.
-- Given a crash at each point (before the commit; after it and before the rename; after the rename and before the directory sync; before `promoted_at`; after `promoted_at` and before the message), then recovery completes with no duplicate or lost object and a final object already present is accepted, never overwritten (one test per point).
+- Given a crash at each point (before the commit; after it and before the rename; after the rename and before the directory sync; before `promoted_at`; while waking the scan, where the mark and the message share one transaction and roll back together), then recovery completes with no duplicate or lost object and a final object already present is accepted, never overwritten (one test per point).
 - Given a claim, a commit, the reaper, the person purge and the roll-forward interleaved in pairs, then no deadlock and exactly one outcome per pair; ADR D6 carries the full lock-order table.
 - Given the prod image with the raised pool, when four maximum-size uploads stream at the floor, then unrelated API requests answer inside their normal budget; the 100 MiB upload at 256 KiB/s through the real route is measured once and recorded in the PR (not a CI gate).
 - Given repeated and concurrent maximum-size uploads on the prod image, when the worker threads retain and later release their spool files, then container memory stays within its limit, no spool falls back to persistent storage and no OOM occurs.
@@ -175,6 +175,22 @@ Three layers ran in parallel on 2026-11-11 as read-only subagents (Blind Hunter,
 | Docs and registers: gate list, restore-proof rule, `APP_SECRET` wording, `RetentionReason` acceptance, VPS overcommit, custody revisit | low | patch | Updated in place; `RetentionReason` is `docs/adr/documents-custody-log.md` D7. |
 | Comment hygiene in `PhpUploadBodySpool` and the Caddyfile | low | patch | The change-relative sentence and the residual were removed; the residual lives in §7. |
 | Storage report's fixed 10,000 window needs a rotating cursor | low | reject | The truncation alarm announces it, and a cursor adds persisted state for a window the alarm already makes visible. |
+
+### Third round
+
+Three layers ran in parallel on 2026-11-11 as read-only subagents (Blind Hunter, Edge Case Hunter, Acceptance Auditor) over `37578531..bd26f070`: the second round's patches, the Sonar refactors, the trait extraction, and the change of the scan wake-up to be published inside the transaction that sets `promoted_at` (forced by the transactional-publish guard of #1228 merged into the branch). No GRAVE or high finding; each of the following was verified and patched.
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| BH/ECH: reaper and roll-forward paging has no ceiling on rows examined, nor a breaker on failures | medium | patch | A lost volume or an unpublishable wake-up made every tick walk every candidate, one transaction and one error line each. `SweepBudget` bounds the run: the limit, ten times the limit examined, five failures in a row; `SweepStagedOrphans` shares the constant. |
+| ECH: a non-positive limit loops for ever in `reap` and `run` | low | patch | `count($page) === $limit` held at 0 with an unchanged cursor. A limit below 1 now does nothing; pinned by `testASweepWithNoLimitNeitherLoopsNorWorks`. |
+| ECH: the staging sweep's failure counter reset on every skipped owned scope | low | patch | It resets only on a real deletion now; `testOwnedScopesBetweenFailuresDoNotKeepTheStagingSweepGoing`. |
+| ECH/BH: the drain leaves the time limit at the last chunk's value and `discard()` runs under what is left of it | low | patch | The limit is re-armed to 60 s once the drain ends, for the matching and for every listener after it. |
+| BH: the writer swallows a failed promotion with no log | low | patch | A warning names the document id; pinned in `UploadFailureFunctionalTest`. |
+| BH: the listener docblock says a partly read spool matches nothing | low | patch | A prefix of what was read matches; docblock corrected. |
+| AA: AC list, test docblock, `DocumentRepository::markPromoted`, `PromoteDocument`, `DocumentScanWakeUp` and the Design Note still describe the post-commit wake-up or call the message a hint whose failure loses nothing | medium | patch | Rewritten; ADR D6 carries the decision and its cost; §7 records that an unpublishable wake-up delays the promotion. |
+| AA: nothing pins that the roll-forward wakes inside its transaction, or what a failing wake-up does there | medium | patch | `testTheRollForwardWakesTheScanInsideItsTransaction`, `testAWakeUpThatFailsInTheRollForwardRollsTheMarkBackAndIsLoggedByTheDocumentId`. |
+| ECH (design note): a permanently failing wake-up blocks `promoted_at` | n/a | record | Inherent to the atomic outbox the guard enforces; recorded in §7 and ADR D6 rather than caught inside the closure, since a failed statement leaves the Postgres transaction aborted. |
 
 ## Design Notes
 

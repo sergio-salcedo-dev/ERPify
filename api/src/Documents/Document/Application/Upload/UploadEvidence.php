@@ -23,6 +23,7 @@ use Erpify\Shared\Crypto\Domain\Exception\CannotSealEmptyStream;
 use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use Erpify\Shared\Crypto\Domain\Exception\StreamTransferFailed;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
@@ -63,6 +64,7 @@ final readonly class UploadEvidence
         private UploadIntentRepository $intents,
         private TransactionManager $transactionManager,
         private UploadTimeBudget $timeBudget,
+        private LoggerInterface $logger,
         private int $heartbeatIntervalSeconds = UploadLimits::HEARTBEAT_INTERVAL_SECONDS,
     ) {
     }
@@ -100,8 +102,12 @@ final readonly class UploadEvidence
 
         try {
             $this->promoteDocument->promote($document->documentId(), $document->scopeId());
-        } catch (Throwable) {
+        } catch (Throwable $throwable) {
             // Filed and owned by its row: the roll-forward sweep finishes the promotion.
+            $this->logger->warning('A filed document could not be promoted; the roll-forward finishes it.', [
+                'documentId' => $document->documentId(),
+                'exceptionClass' => $throwable::class,
+            ]);
         }
 
         return UploadOutcome::filed($document);

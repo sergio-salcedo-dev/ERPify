@@ -2698,6 +2698,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       any request presenting one — an authenticated caller with `document.write` or without it, or anyone who sends
       the cookie name with a made-up value — keeps the 100 MiB bound until the application refuses it, and that
       refusal comes only after the body has been received. **Accepted — the user, 2026-11-11.**
+- [ ] **A scan wake-up that cannot be published delays a document's promotion, not only a hint.** The wake-up is
+      published inside the transaction that sets `promoted_at` (the bus refuses an `async`-routed message outside
+      one, `RequireTransactionalPublishMiddleware`), so a down or misconfigured `async` transport, or a failed
+      `messenger_messages` insert, rolls the mark back: the object has moved to `final` and the row stays
+      unpromoted until a roll-forward tick retries it, which the scan keyed on `promoted_at` waits for. The delay is
+      the roll-forward age plus the one-minute tick, and each failing row is logged by its id; the writer logs a
+      warning with the document's id. The sweep stops after five failures in a row and never examines more than ten
+      times its limit per tick, so an outage cannot hold the single-replica scheduler. **Recorded — a consequence of
+      the transactional-publish guard (#872); revisit if the scan stops keying on `promoted_at`.**
 - [ ] **Rotating `APP_SECRET` silently unmatches every stored idempotency key.** The key hashes on upload intents
       and documents are HMAC-SHA256 under `kernel.secret`, so after a rotation no replay matches its earlier
       declare: a client retrying across the rotation files the same evidence twice — a duplicate, never a loss —

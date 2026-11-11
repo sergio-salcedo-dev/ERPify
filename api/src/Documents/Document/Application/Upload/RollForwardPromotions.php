@@ -42,44 +42,52 @@ final readonly class RollForwardPromotions
      */
     public function run(int $olderThanSeconds, int $limit): int
     {
-        $promoted = 0;
+        $budget = new SweepBudget($limit);
         $after = null;
 
-        do {
+        while (!$budget->exhausted()) {
             $page = $this->documents->awaitingPromotion($olderThanSeconds, $limit, $after);
 
             foreach ($page as $documentId) {
                 $after = $documentId;
+                $this->rollForwardWithin($budget, $documentId);
 
-                if ($this->rollForwardOne($documentId)) {
-                    ++$promoted;
-
-                    if ($promoted >= $limit) {
-                        return $promoted;
-                    }
+                if ($budget->exhausted()) {
+                    break;
                 }
             }
-        } while (\count($page) === $limit);
 
-        return $promoted;
+            if (\count($page) < $limit) {
+                break;
+            }
+        }
+
+        if ($budget->stoppedOnFailures()) {
+            $this->logger->error('The promotion roll-forward stopped after consecutive failures.', [
+                'failures' => SweepBudget::MAX_CONSECUTIVE_FAILURES,
+                'promoted' => $budget->finishedCount(),
+            ]);
+        }
+
+        return $budget->finishedCount();
     }
 
     /**
-     * Whether this run promoted the row; a row whose object is in neither namespace, or that fails, is passed over.
+     * A row whose object is in neither namespace is left as it is, not counted as a failure; any other fault is
+     * logged by the row's id and counts toward the run of failures that stops the sweep.
      */
-    private function rollForwardOne(string $documentId): bool
+    private function rollForwardWithin(SweepBudget $budget, string $documentId): void
     {
         try {
-            return $this->rollForward($documentId);
+            $this->rollForward($documentId) ? $budget->finished() : $budget->passed();
         } catch (ObjectNotFound) {
-            return false;
+            $budget->passed();
         } catch (Throwable $throwable) {
             $this->logger->error('A document could not be rolled forward; the batch goes on.', [
                 'documentId' => $documentId,
                 'exceptionClass' => $throwable::class,
             ]);
-
-            return false;
+            $budget->failed();
         }
     }
 
