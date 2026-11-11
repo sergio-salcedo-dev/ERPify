@@ -74,6 +74,9 @@ framework:
         buses:
             messenger.bus.default:
                 middleware:
+                    # First, and before the append: a publication outside a transaction must be refused
+                    # before PersistDomainEventMiddleware leaves an autocommitted event_store row behind.
+                    - Erpify\Shared\Event\Infrastructure\Messenger\RequireTransactionalPublishMiddleware
                     - Erpify\Shared\Event\Infrastructure\Messenger\PersistDomainEventMiddleware
 
 # Test env: in-memory queues. serialize=true runs messages through the Messenger serializer
