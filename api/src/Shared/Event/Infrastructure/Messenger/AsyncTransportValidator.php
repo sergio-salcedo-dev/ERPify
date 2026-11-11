@@ -77,10 +77,13 @@ final class AsyncTransportValidator
             return \sprintf('The "%s" transport cannot be built (%s).', self::TRANSPORT, $throwable::class);
         }
 
-        foreach ($this->acceptedTransportClasses as $acceptedClass) {
-            if ($transport instanceof $acceptedClass) {
-                return null;
-            }
+        return $this->problemWith($transport);
+    }
+
+    private function problemWith(mixed $transport): ?string
+    {
+        if ($this->isAdmitted($transport)) {
+            return null;
         }
 
         if (!$transport instanceof DoctrineTransport) {
@@ -91,18 +94,31 @@ final class AsyncTransportValidator
             );
         }
 
+        return $this->livesOnApplicationConnection($transport)
+            ? null
+            : \sprintf(
+                'The "%s" transport is a Doctrine transport on a different connection '
+                . 'than the application writes through.',
+                self::TRANSPORT,
+            );
+    }
+
+    private function isAdmitted(mixed $transport): bool
+    {
+        return \array_any(
+            $this->acceptedTransportClasses,
+            static fn (string $acceptedClass): bool => $transport instanceof $acceptedClass,
+        );
+    }
+
+    private function livesOnApplicationConnection(DoctrineTransport $transport): bool
+    {
         $schema = $transport->configureSchema(
             new Schema(),
             $this->entityManager->getConnection(),
             static fn (): bool => false,
         );
 
-        return [] === $schema->getTables()
-            ? \sprintf(
-                'The "%s" transport is a Doctrine transport on a different connection '
-                . 'than the application writes through.',
-                self::TRANSPORT,
-            )
-            : null;
+        return [] !== $schema->getTables();
     }
 }
