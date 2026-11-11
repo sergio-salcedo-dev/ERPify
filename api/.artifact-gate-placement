@@ -169,6 +169,7 @@ tests/Unit/Gate/DomainPresentationSeparationGateTest.php :: home
 tests/Unit/Gate/EnumWireContractGateTest.php :: home
 tests/Unit/Gate/EventDispatchGateTest.php :: home
 tests/Unit/Gate/FailedMessagePruneStatementGateTest.php :: home
+tests/Unit/Gate/ImageDeletionRequestedPublisherGateTest.php :: home
 tests/Unit/Gate/IntNarrowingConfinementGateTest.php :: home
 tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Gate/MessengerSendBoundaryGateTest.php :: home

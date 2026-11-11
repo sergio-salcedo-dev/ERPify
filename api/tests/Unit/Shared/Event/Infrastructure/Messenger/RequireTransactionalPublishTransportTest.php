@@ -18,8 +18,9 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Transport\Sender\SendersLocatorInterface;
 
 /**
- * What the guard demands of `async` once a message is routed to it. The routing and transaction half is
- * {@see RequireTransactionalPublishMiddlewareTest}.
+ * What the guard demands of `async` once a message is routed to it. The transaction half is
+ * {@see RequireTransactionalPublishMiddlewareTest}; which senders a guarded message may have is
+ * {@see RequireTransactionalPublishSendersTest}.
  *
  * @internal
  */

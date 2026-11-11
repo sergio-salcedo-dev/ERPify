@@ -21,24 +21,42 @@ use Throwable;
  *
  * Two facts make `event_store` and the outbox atomic with the aggregate: the publication happens inside a
  * transaction, and `async` is the Doctrine transport on that transaction's connection. This middleware checks
- * both at the point of publication, for every original dispatch:
+ * both at the point of publication, for every original dispatch of a guarded message — a {@see DomainEvent},
+ * or any message Messenger routes to `async` — in this order:
  *
- *  - a {@see DomainEvent}, or any message Messenger routes to `async`, needs a transaction active on the ORM
- *    connection — {@see PublishedOutsideTransaction};
- *  - a message routed to `async` also needs `async` to be the transactional transport —
- *    {@see AsyncTransportNotTransactional}.
+ *  - every sender the message is routed to can be built: resolving one builds its transport, and a transport
+ *    that cannot be built is refused first, as {@see AsyncTransportNotTransactional} naming the failure's class
+ *    and never its message, which can quote a DSN;
+ *  - a transaction is active on the ORM connection — {@see PublishedOutsideTransaction};
+ *  - every transport the message is routed to is one of the two admitted: `async`, or `sync`, which dispatches
+ *    the message again in process, inside the caller's transaction. Any other sender, alone or beside an
+ *    admitted one, is refused — {@see MessageRoutedOffTransactionalTransport}. The set is closed by name, not
+ *    by what a transport happens to be: `failed` is Doctrine on the same connection and is still refused,
+ *    because it is the failure queue, not a routing destination. `sync` is trusted by its name, and that name
+ *    is held to `sync://` at build time by `MessengerRoutingConfig::misdeclaredNonPersistedTransports()`
+ *    (`PersistentTransportRoutingShapeGateTest`);
+ *  - when it is routed to `async`, `async` is the transactional transport — {@see AsyncTransportNotTransactional}.
+ *
+ * A guarded message with no sender at all is valid: an unrouted domain event is handled in process, inside the
+ * caller's transaction, on purpose.
  *
  * It must precede {@see PersistDomainEventMiddleware}: that middleware appends to `event_store` on whatever
  * connection state it finds, so a publication outside a transaction would autocommit a row before the refusal.
  * A received envelope (worker, retry, `messenger:failed:retry`) is a delivery, not a publication, and passes
  * untouched.
  *
- * "Routed to `async`" is read from Messenger's own senders locator, so routing by class, interface, wildcard
- * or `TransportNamesStamp` is honoured without a list kept here. `isTransactionActive()` proves a transaction
- * is open on the connection, not that it is the one carrying the business write.
+ * The senders are read from Messenger's own senders locator, so routing by class, interface, wildcard or
+ * `TransportNamesStamp` is honoured without a list kept here. `isTransactionActive()` proves a transaction is
+ * open on the connection, not that it is the one carrying the business write.
  */
 final readonly class RequireTransactionalPublishMiddleware implements MiddlewareInterface
 {
+    /**
+     * The transports a guarded message may be sent to: `async`, which the validator then inspects, and `sync`,
+     * which never leaves the process.
+     */
+    private const array ADMITTED_SENDERS = [AsyncTransportValidator::TRANSPORT, 'sync'];
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         #[Autowire(service: 'messenger.senders_locator')]
@@ -60,7 +78,8 @@ final readonly class RequireTransactionalPublishMiddleware implements Middleware
     private function guard(Envelope $envelope): void
     {
         $messageClass = $envelope->getMessage()::class;
-        $routedToAsync = $this->isRoutedToAsync($envelope, $messageClass);
+        $aliases = $this->senderAliases($envelope, $messageClass);
+        $routedToAsync = \in_array(AsyncTransportValidator::TRANSPORT, $aliases, true);
 
         if (!$routedToAsync && !$envelope->getMessage() instanceof DomainEvent) {
             return;
@@ -68,6 +87,12 @@ final readonly class RequireTransactionalPublishMiddleware implements Middleware
 
         if (!$this->entityManager->getConnection()->isTransactionActive()) {
             throw new PublishedOutsideTransaction($messageClass);
+        }
+
+        $offTransport = \array_values(\array_diff($aliases, self::ADMITTED_SENDERS));
+
+        if ([] !== $offTransport) {
+            throw new MessageRoutedOffTransactionalTransport($messageClass, $offTransport);
         }
 
         if (!$routedToAsync) {
@@ -81,12 +106,18 @@ final readonly class RequireTransactionalPublishMiddleware implements Middleware
         }
     }
 
-    private function isRoutedToAsync(Envelope $envelope, string $messageClass): bool
+    /**
+     * @return list<string> the alias of every transport the envelope would be sent to
+     */
+    private function senderAliases(Envelope $envelope, string $messageClass): array
     {
         try {
-            $senders = $this->sendersLocator->getSenders($envelope);
+            $senders = \iterator_to_array($this->sendersLocator->getSenders($envelope));
 
-            return \array_key_exists(AsyncTransportValidator::TRANSPORT, \iterator_to_array($senders));
+            return \array_map(
+                static fn (int|string $alias): string => (string) $alias,
+                \array_keys($senders),
+            );
         } catch (Throwable $throwable) {
             // Resolving a sender builds its transport. The class only, for the reason the validator gives:
             // a factory's message can quote a DSN.

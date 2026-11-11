@@ -12,18 +12,16 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use stdClass;
-use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Stamp\TransportNamesStamp;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
-use Symfony\Component\Messenger\Transport\Sender\SenderInterface;
-use Symfony\Component\Messenger\Transport\Sender\SendersLocator;
 
 /**
- * Drives the guard through Messenger's real {@see SendersLocator}, so "routed to `async`" is whatever the
+ * Drives the guard through Messenger's real `SendersLocator`, so "routed to `async`" is whatever the
  * framework's routing says: by interface, by wildcard and by `TransportNamesStamp`, and not by a sender
  * alias that merely resembles it. Outside a transaction a message that is not a `DomainEvent` is refused
- * only when it is routed to `async`, which makes the refusal the observable.
+ * only when it is routed to `async`, which makes the refusal the observable. What the guard does with a sender
+ * other than `async` is {@see RequireTransactionalPublishSendersTest}.
  *
  * @internal
  */
@@ -79,16 +77,6 @@ final class RequireTransactionalPublishRoutingTest extends TestCase
      */
     private function middlewareRoutedBy(array $sendersMap): RequireTransactionalPublishMiddleware
     {
-        $connection = $this->connection(inTransaction: false);
-        $sender = $this->createStub(SenderInterface::class);
-
-        return new RequireTransactionalPublishMiddleware(
-            $this->entityManager($connection),
-            new SendersLocator($sendersMap, new ServiceLocator([
-                'async' => static fn (): SenderInterface => $sender,
-                'failed' => static fn (): SenderInterface => $sender,
-            ])),
-            $this->validator($connection, new InMemoryTransport(), []),
-        );
+        return $this->guardRoutedBy($sendersMap, $this->connection(inTransaction: false), new InMemoryTransport());
     }
 }

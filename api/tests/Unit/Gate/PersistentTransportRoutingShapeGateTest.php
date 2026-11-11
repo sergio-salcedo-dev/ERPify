@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Shared\Event\Domain\DomainEvent;
+use Erpify\Shared\Event\Infrastructure\Messenger\RequireTransactionalPublishMiddleware;
 use Erpify\Tests\Support\PersistentTransportPolicy;
+use Erpify\Tests\Support\PublishSenderPolicy;
 use Erpify\Tests\Unit\Gate\Fixture\AsMessageInheritedFixtureEvent;
 use Erpify\Tests\Unit\Gate\Fixture\AsMessageRoutedFixtureEvent;
 use Erpify\Tests\Unit\Gate\Fixture\PersonAggregateFixtureEvent;
@@ -14,6 +16,8 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use ReflectionClassConstant;
+use stdClass;
 
 /**
  * Half of the persistent-transport gate: that it sees every way Messenger can put a message on a transport.
@@ -27,6 +31,14 @@ use PHPUnit\Framework\TestCase;
  * inherit attributes, so a reader that takes the simple path is blind to all of them while looking complete.
  * Each shape gets its own fixture: a mechanism certified by a test covering only its easy case is worse than
  * a documented gap, because the green tick stops anyone looking.
+ *
+ * The same resolution also checks, at build time, the sender invariant `RequireTransactionalPublishMiddleware`
+ * enforces at runtime: every `DomainEvent` in `src`, and every class the repository routes to `async` by a
+ * routing key or an `#[AsMessage]`, reaches only `async` or `sync`, under the routing of every environment. It
+ * does not see a `TransportNamesStamp` (one in `api/src` is pinned by `MessengerSendBoundaryGateTest`; one
+ * outside it is caught by the guard at runtime only), a message routed through an interface or a wildcard key
+ * that is not a `DomainEvent`, nor a message that is not a `DomainEvent` and is not routed to `async`, which the
+ * guard does not watch at all.
  *
  * @internal
  *
@@ -64,6 +76,108 @@ final class PersistentTransportRoutingShapeGateTest extends TestCase
         yield 'implemented interface' => [[PersonScopedFixtureEvent::class => ['async']]];
         yield 'namespace wildcard' => [['Erpify\Tests\Unit\Gate\Fixture\*' => ['async']]];
         yield 'bare catch-all' => [['*' => ['async']]];
+    }
+
+    #[Test]
+    public function everyDomainEventInSourceReachesOnlyTheAdmittedSenders(): void
+    {
+        $policy = $this->policy();
+        $senders = new PublishSenderPolicy($policy);
+        $events = \array_keys($policy->eventsInSource());
+
+        $this->assertNotSame([], $events, 'Precondition: the sweep found no domain event in src.');
+        $this->assertSame(
+            [],
+            $senders->eventsRoutedOutsideTheAdmittedSenders($policy->config()->configuredRoutes(), $events),
+            'A domain event is routed to a transport the publish guard refuses, so its first publication fails.',
+        );
+    }
+
+    #[Test]
+    public function everyMessageRoutedToAsyncReachesOnlyTheAdmittedSenders(): void
+    {
+        $policy = $this->policy();
+        $senders = new PublishSenderPolicy($policy);
+        $attributed = $senders->attributedMessagesInSource();
+
+        $this->assertSame(
+            [],
+            $senders->asyncRoutedMessagesOutsideTheAdmittedSenders($policy->config()->configuredRoutes(), $attributed),
+            'A message routed to async is also routed to a transport the publish guard refuses.',
+        );
+    }
+
+    #[Test]
+    public function aMessageThatIsNotAnEventIsCheckedOnlyOnceRoutedToAsync(): void
+    {
+        $senders = $this->senderPolicy();
+
+        $this->assertNotSame([], $senders->asyncRoutedMessagesOutsideTheAdmittedSenders(
+            [stdClass::class => ['async', 'failed']],
+            [],
+        ));
+        $this->assertSame([], $senders->asyncRoutedMessagesOutsideTheAdmittedSenders(
+            [stdClass::class => ['failed']],
+            [],
+        ));
+        $this->assertNotSame([], $senders->asyncRoutedMessagesOutsideTheAdmittedSenders(
+            [],
+            [AsMessageInheritedFixtureEvent::class],
+        ));
+    }
+
+    #[Test]
+    public function theBuildTimeSetIsTheSetTheGuardAdmits(): void
+    {
+        $guard = new ReflectionClassConstant(RequireTransactionalPublishMiddleware::class, 'ADMITTED_SENDERS');
+        $admitted = $guard->getValue();
+        $this->assertIsArray($admitted);
+        \sort($admitted);
+
+        $policy = PublishSenderPolicy::ADMITTED_SENDERS;
+        \sort($policy);
+
+        $this->assertSame($policy, $admitted, 'The guard and the build-time check admit different senders.');
+    }
+
+    /**
+     * @param array<string, list<string>> $routes
+     */
+    #[DataProvider('provideTheSenderInvariantRefusesATransportOutsideTheAdmittedSetCases')]
+    #[Test]
+    public function theSenderInvariantRefusesATransportOutsideTheAdmittedSet(array $routes, string $event): void
+    {
+        $this->assertNotSame([], $this->senderPolicy()->eventsRoutedOutsideTheAdmittedSenders($routes, [$event]));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, list<string>>, string}>
+     */
+    public static function provideTheSenderInvariantRefusesATransportOutsideTheAdmittedSetCases(): iterable
+    {
+        yield 'failed alone' => [
+            [PersonAggregateFixtureEvent::class => ['failed']],
+            PersonAggregateFixtureEvent::class,
+        ];
+        yield 'async beside failed' => [
+            [PersonAggregateFixtureEvent::class => ['async', 'failed']],
+            PersonAggregateFixtureEvent::class,
+        ];
+        yield 'failed by wildcard' => [['*' => ['failed']], PersonAggregateFixtureEvent::class];
+        yield 'failed by an inherited attribute' => [[], AsMessageInheritedFixtureEvent::class];
+    }
+
+    #[Test]
+    public function theSenderInvariantAdmitsAsyncSyncAndNoSender(): void
+    {
+        $senders = $this->senderPolicy();
+        $event = [PersonAggregateFixtureEvent::class];
+
+        $this->assertSame([], $senders->eventsRoutedOutsideTheAdmittedSenders(
+            [PersonAggregateFixtureEvent::class => ['async', 'sync']],
+            $event,
+        ));
+        $this->assertSame([], $senders->eventsRoutedOutsideTheAdmittedSenders([], $event));
     }
 
     #[Test]
@@ -209,5 +323,10 @@ final class PersistentTransportRoutingShapeGateTest extends TestCase
     private function policy(): PersistentTransportPolicy
     {
         return PersistentTransportPolicy::fromGateLocation(__DIR__);
+    }
+
+    private function senderPolicy(): PublishSenderPolicy
+    {
+        return new PublishSenderPolicy($this->policy());
     }
 }

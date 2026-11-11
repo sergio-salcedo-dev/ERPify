@@ -47,8 +47,9 @@ The `event_store` axis. Five aggregate types emit today — **Backoffice.Bank**,
 published by its use case through the `EventBus` port inside the write transaction (atomic with the aggregate
 row — no dual-write).
 
-**Routing is per event, and most events are not routed.** Only the seven `Backoffice.*` events go to the
-**`async`** transport (Doctrine outbox → `messenger_worker`, at-least-once). The rest are unrouted, which
+**Routing is per event, and most events are not routed.** Only eight events go to the **`async`** transport
+(Doctrine outbox → `messenger_worker`, at-least-once): the seven `Backoffice.*` events and
+`ImageDeletionRequested`, the argued exception of `docs/adr/image-deletion-signal-transport.md`. The rest are unrouted, which
 means `SendMessageMiddleware` hands them straight to their handlers *in the caller*, inside the write
 transaction. Whether an event may be routed at all is governed by the persisted-transport rule below.
 
@@ -379,7 +380,9 @@ To keep this catalog true:
    in the caller, inside the write transaction, which is how most events in this app already live. Route to
    `async` only for a non-person aggregate that needs the work off the request. `allow_no_handlers: false`
    is not a reason to route: `RunProjectionsOnDomainEvent` handles every `DomainEvent`, so an unrouted event
-   always has a handler.
+   always has a handler. A routed event may reach only `async` and/or `sync`:
+   `RequireTransactionalPublishMiddleware` refuses any other sender at the first publication, and
+   `make php.lint.persistent-transport` refuses a routing key or an `#[AsMessage]` naming one at build time.
 4. **Wire consumers** — reactors as `<Effect>On<Event>` (`#[AsMessageHandler]`); projectors implementing
    `Projector` with their `subscribedTo()` and a read model. An unrouted event gets no at-least-once
    redelivery, so a reactor on one needs no dedup claim — and a blocking or failing effect on one belongs in
