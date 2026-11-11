@@ -14,6 +14,7 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Middleware\MiddlewareInterface;
 use Symfony\Component\Messenger\Middleware\StackInterface;
 use Symfony\Component\Messenger\Transport\Sender\SenderInterface;
+use Symfony\Component\Messenger\Transport\Sender\SendersLocator;
 use Symfony\Component\Messenger\Transport\Sender\SendersLocatorInterface;
 use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
 
@@ -43,6 +44,32 @@ trait BuildsPublishGuard
             $this->entityManager($connection),
             $locator,
             $this->validator($connection, $async, $acceptedTransportClasses),
+        );
+    }
+
+    /**
+     * The guard behind Messenger's real {@see SendersLocator}, so which transports a message reaches is whatever
+     * the framework's routing says. `async`, `failed`, `sync` and `broker` (a stand-in for any other transport)
+     * all resolve to one sender stub: the guard reads the aliases, never the sender.
+     *
+     * @param array<string, list<string>> $sendersMap
+     */
+    private function guardRoutedBy(
+        array $sendersMap,
+        DbalConnection $connection,
+        object $async,
+    ): RequireTransactionalPublishMiddleware {
+        $sender = $this->createStub(SenderInterface::class);
+
+        return new RequireTransactionalPublishMiddleware(
+            $this->entityManager($connection),
+            new SendersLocator($sendersMap, new ServiceLocator([
+                'async' => static fn (): SenderInterface => $sender,
+                'failed' => static fn (): SenderInterface => $sender,
+                'sync' => static fn (): SenderInterface => $sender,
+                'broker' => static fn (): SenderInterface => $sender,
+            ])),
+            $this->validator($connection, $async, []),
         );
     }
 

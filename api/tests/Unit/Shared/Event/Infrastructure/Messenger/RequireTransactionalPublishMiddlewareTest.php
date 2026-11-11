@@ -17,7 +17,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 /**
  * Which dispatches are publications that need a transaction, and which pass untouched. The transport half of
- * the guard is {@see RequireTransactionalPublishTransportTest}.
+ * the guard is {@see RequireTransactionalPublishTransportTest}, and which senders a guarded message may have is
+ * {@see RequireTransactionalPublishSendersTest}.
  *
  * @internal
  */
