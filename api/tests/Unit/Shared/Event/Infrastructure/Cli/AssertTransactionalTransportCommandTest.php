@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Shared\Event\Infrastructure\Cli;
 use Doctrine\DBAL\Connection as DbalConnection;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Event\Infrastructure\Cli\AssertTransactionalTransportCommand;
+use Erpify\Shared\Event\Infrastructure\Messenger\AsyncTransportValidator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -26,6 +27,7 @@ use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
  * @internal
  */
 #[CoversClass(AssertTransactionalTransportCommand::class)]
+#[CoversClass(AsyncTransportValidator::class)]
 final class AssertTransactionalTransportCommandTest extends TestCase
 {
     #[Test]
@@ -98,7 +100,8 @@ final class AssertTransactionalTransportCommandTest extends TestCase
         $entityManager = $this->createStub(EntityManagerInterface::class);
         $entityManager->method('getConnection')->willReturn($applicationConnection);
 
-        $tester = new CommandTester(new AssertTransactionalTransportCommand($transports, $entityManager));
+        $validator = new AsyncTransportValidator($transports, $entityManager);
+        $tester = new CommandTester(new AssertTransactionalTransportCommand($validator));
         $tester->execute([]);
 
         return $tester;

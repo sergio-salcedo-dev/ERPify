@@ -9,6 +9,11 @@
 parameters:
     api.name: erpify
 
+    # Transport classes `AsyncTransportValidator` admits for `async` without the Doctrine-connection check.
+    # Empty here on purpose: a deployment that resolves `async` to anything but the Doctrine transport on the
+    # application connection is refused. Only `services_test.yaml` declares one (the in-memory double).
+    erpify.messenger.accepted_async_transport_classes: []
+
     # Shared/Images canonicalization pipeline — deployment defaults, not domain requirements. The
     # pixel ceiling and `memory_limit` were benchmarked together against the real worker and are now
     # ONE decision, held by `ImagePixelBudgetGateTest`; the other three are still starting points.
