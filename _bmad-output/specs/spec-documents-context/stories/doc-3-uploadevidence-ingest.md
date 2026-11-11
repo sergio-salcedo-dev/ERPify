@@ -2,7 +2,7 @@
 title: 'doc-3: UploadEvidence ingest'
 type: 'feature'
 created: '2026-11-06'
-status: 'in-progress'
+status: 'done'
 baseline_commit: 'e4c35490eda3e180e0fdb51341d9f3688efedac9'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -113,10 +113,46 @@ context:
 ## Implementation Notes
 
 - The Gone (410) marker is implemented only by exceptions of the upload flow. `DekDestroyed` and `DecryptionFailed` stay marker-less: `PiiDiffSealer` shares them on the write path, where a 4xx marker would silence a real 500. Issue #418 (the read-side `dek-destroyed` status) is owned and closed by doc-5; doc-3 writes no code for it (memlog, 2026-11-06).
+- `RetentionReason`'s four values (`contract-execution`, `tax-and-accounting`, `technical-file`, `legal-claims`), chosen during implementation because SPEC.md fixes a closed enum but not its members, were accepted by the owner on 2026-11-08. Period, anchor, jurisdiction and enforcement still wait for counsel's matrix; adding a value later is additive, removing one needs a data migration.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Four layers ran in parallel on 2026-11-08 as read-only subagents over the diff from `e4c35490` (Blind Hunter BH, Edge Case Hunter ECH, Verification Gap VG, Acceptance Auditor AA, the last added because the repository's review rule names it). Verdicts re-verified against the tree; every `patch` applied in `662f3e4c`, owner residuals in `087cbf2d` and the follow-up commit.
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| BH/ECH: `ExpireUpload` deletes staging before locking and checking the intent | high | patch | Delete ran first (`ExpireUpload.php:38`); a commit throwing after COMMIT lost a filed document's object. Lock, check Streaming, then delete. |
+| BH/ECH: `reviewAt` stored without zone, replay compared as DATE_ATOM | medium | patch | `review_at` is `TIMESTAMP(0) WITHOUT TIME ZONE`; offset dropped, identical replay answered 409. Normalised to UTC seconds, compared as instants. |
+| BH: heartbeat turns any DB fault into the caller's `aborted-upload` | medium | patch | `UploadEvidence::heartbeat()` caught `Throwable` and returned false; server faults now surface as themselves (5xx). |
+| BH: `OriginalFilename` prints itself through var_dump/print_r/VarDumper/serialize | medium | patch | Only `__toString` was guarded; bytes moved off the instance, `__debugInfo`, serialisation refused. |
+| AA/BH: ingest proof gate passes a non-literal or out-of-file production value | high | patch | Gate checked only literal `true` in one file; any non-`false` value counts as opening and declarations elsewhere fail. |
+| BH: plaintext spool outlives aborts and erasure | high | patch (owner: mitigate) | Measured: every PUT, refused ones included, leaves a `php*` spool; `DiscardUploadSpoolListener` + `PhpUploadBodySpool` destroy it; four residuals accepted by the owner 2026-11-11. |
+| Subagent while mitigating: anonymous slow PUT pins a thread under the 100 MiB bound | high | patch (owner: Caddy cookie filter) | The body is received whole before any answer, for anonymous callers too; the 100 MiB bound now needs the session cookie. |
+| BH: two actors at the per-actor cap lock everyone out | medium | patch (owner: accept, §7) | Consequence of owner decision 2; recorded in §7, accepted 2026-11-08. |
+| BH: APP_SECRET rotation silently voids idempotency hashes | medium | patch (owner: record) | HMAC under `kernel.secret`; recorded in §7, at the secret line and in the rotation procedure. |
+| BH: `DOCUMENTS_STORAGE_PATH` can point off the volume and the probe still passes | medium | patch | Entrypoint now refuses a root that is not a mount point; the value is a literal equal to the mount target, gated. |
+| BH/ECH: report and sweeps stall on a fixed window or a poisoned head item | medium | patch | `LIMIT` windows with whole-batch failure; per-item catch, deletion-counted limits, a truncation alarm. |
+| ECH: report checks Final before Staging, racing a promotion | low | patch | Order flipped to follow the move direction. |
+| BH/ECH/VG: whole-query redaction misses `/index.php`, encoded paths, `url.full`/`http.target`, PWA detached queries | medium | patch | Regex anchored on `/api/v1` only; both deployables now match every spelling and sink. |
+| VG/ECH: route path spelled in three places, `UploadRoutes` docblock false | medium | patch | `UploadRoutePathAgreementGateTest` derives the path from the route manifest. |
+| AA/BH: containment gate sends only unauthenticated probes | high | patch | All probes were firewall 401s; now authenticated, completed (over 1 MB), aborted and over-bound, plus a spool check. |
+| BH: malformed upload id answers 410 instead of 400 `invalid-uuid` | low | patch | `Uuid::isValid` mapped to Gone, against the project rule; `Uuid::ensure()` at the edge and in the use case. |
+| BH: profiler guard shares the firewall's priority | low | patch | Priority 8 = firewall; raised to 9 (dev only). |
+| ECH: roll-forward recovery branches set `promoted_at` without a directory sync | medium | patch | Confirmed; `syncFinal()` added to both branches. |
+| AA: `MAX_ORIGINAL_BYTES` still several constants | medium | patch | `SealedLayout` and literals now reference `UploadLimits::MAX_ORIGINAL_BYTES`. |
+| AA: no acceptance scenario proves the purge nulls the intent hash | medium | patch | `erase.feature` seeds intents and asserts marker, NULL hash, expired. |
+| VG/AA: reaper batch selection, committed prune, storage report, schedule periods, sink failure, promote failure, viewer 403, boot probe, spool confinement untested | medium | patch | Each removable with every test green; tests added and falsified. |
+| AA: invalid-name test misses the intent row; CL tests miss log sinks; short body misses deletion/tombstone; promoted_at test near-vacuous | low | patch | Assertions added; the recovery test now drives production code. |
+| AA: §7 entries waiting on the upload story, ADR D5, `api/CLAUDE.md:22` stale | low | patch | Revisited and re-pointed at D6/§7. |
+| AA: memlog/story references in tracked code and §7 | low | patch | Banned by the comment rule; removed. |
+| VG: Caddy upload bound unverified through Caddy | medium | patch | Covered by the authenticated containment probe (over-1 MB completed) and the anonymous-cut test. |
+| AA: PUT answers 403 rather than gone when the voter refuses | false | reject | The 403 precedes any lookup and does not depend on the intent existing, so absent and present answer alike; no oracle. |
+| ECH: `ConflictingIntentVanished` on the retry escapes as 500 | low | reject | Needs the conflicting row to vanish twice in a row; loud failure, fix adds a branch. |
+| ECH: ingest gate answers 405 before 404 on a wrong method | low | reject | Route existence is public; raising above the router adds coupling for no protected fact. |
+| ECH: boot probe object can trip the report's final-without-row alarm | low | reject | Requires the daily scan to hit a millisecond window; fix adds a reserved area. |
+| VG other: `ExpireUpload` after a persisted commit | high | patch | Same root cause as the first row. |
 
 ## Design Notes
 
