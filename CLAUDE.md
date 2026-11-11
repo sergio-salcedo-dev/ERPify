@@ -42,6 +42,7 @@ make composer c='req vendor/pkg'    # Composer in container.
 make php.unit c='--filter SomeTest' # PHPUnit (also: make php.behat, make php.test).
 make php.stan                       # PHPStan — REQUIRED on every PHP file you change.
 make php.quality                    # Full PHP lint sweep — REQUIRED at end of any PHP task.
+make php.prepush                    # Before pushing PHP: php.quality (apply) → php.quality.dry-run (what CI runs) → php.unit.
 make db.diff                        # Generate migration from entity diff (then make db.migrate).
 make db.test.prepare                # Create + migrate the APP_ENV=test database (<dbname>_test); a prerequisite of php.unit.
 make pwa.dev                        # Next dev (Turbopack, host :80) — needs pwa/.env.local.

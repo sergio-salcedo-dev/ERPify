@@ -710,6 +710,33 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 # analyser to reconcile it with.
 php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
+# The one command to run before pushing PHP: apply the fixers, then prove the tree is clean the way CI reads it,
+# then run the suite. Each step answers something the others cannot:
+#   1. php.quality — leaves the tree FORMATTED (rector, cs-fixer and phpcbf rewrite files in place). Its exit 0
+#      is not evidence of cleanliness, because a fixer that repaired the drift exits 0 over it.
+#   2. php.quality.dry-run — the check-only sweep CI runs, on the tree step 1 left. Skipping it is what reddened
+#      #1228: a green php.quality and a red php.cs-fixer.dry-run.
+#   3. php.unit — the gates no php.lint.* target selects by class name, which therefore run only in the suite
+#      (MessengerSendBoundaryGateTest and MailAssemblyBoundaryGateTest are two): a green sweep says nothing
+#      about them, and CI reads them in the API Tests job.
+# Sub-makes, not prerequisites: prerequisites are ordered only when make runs serial, and a caller's -j would
+# race the in-place fixers of step 1 against the checks of step 2. Every step is pinned -j1. CI fans step 2 out
+# with -j4, but that changes how long it takes and not what it checks, and on a many-core host the overlap of
+# rector, PHPStan and cs-fixer (each parallel per core) exceeds the php container's memory cap and kills members
+# with 137.
+# A 137 in step 1 is the other cause: the dev stack watches api/src, so a fixer that rewrites a file there
+# restarts the php container under the exec that is running. The tree is formatted by then, so the recipe says
+# so and a second run goes through; retrying in the recipe would also repeat a genuine failure unannounced.
+# Not covered: Behat (php.behat, minutes more, CI runs it) and anything outside PHP. Fixers may have rewritten
+# files, so stage what `git status --short` lists before committing.
+php.prepush: ## Before pushing PHP: php.quality (apply) → php.quality.dry-run (CI's check) → php.unit
+	@$(MAKE) --no-print-directory -j1 php.quality || { \
+		echo "php.prepush: php.quality failed. If the error was 137, a fixer rewrote a file under api/src and the dev watcher restarted php: wait for it to be healthy and run php.prepush again."; \
+		exit 1; }
+	@$(MAKE) --no-print-directory -j1 php.quality.dry-run
+	@$(MAKE) --no-print-directory -j1 php.unit
+	@echo "php.prepush: green. The fixers ran in apply mode - stage any file 'git status --short' lists before committing."
+
 .PHONY: php.stan php.stan.baseline \
         php.rector php.rector.dry-run \
         php.cs-fixer php.cs-fixer.dry-run \
