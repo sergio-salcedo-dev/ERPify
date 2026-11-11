@@ -160,9 +160,10 @@ final readonly class MessengerRoutingConfig
      *
      * The test environment's own override is asserted rather than tolerated. It replaces `async` with an
      * in-memory transport, which does NOT join the transaction — measured, a rollback leaves the message
-     * held — so no test in this suite can demonstrate the guarantee end to end. Pinning that substitution
-     * means a later change to it turns this red and forces the claim to be revisited, instead of leaving a
-     * comment that has quietly stopped being true.
+     * held — so no test that boots the kernel's own `async` can demonstrate the guarantee. That is observed
+     * on a Doctrine transport the test builds itself (`AsyncDoctrineTransportFunctionalTest`). Pinning the
+     * substitution means a later change to it turns this red, instead of leaving a comment that has quietly
+     * stopped being true.
      *
      * What it cannot do, and this belongs in the docblock rather than only in an ADR: three of the five
      * places that carry this DSN are `${MESSENGER_TRANSPORT_DSN:-…}` interpolations in the compose files,

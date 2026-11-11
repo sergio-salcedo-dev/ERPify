@@ -24,7 +24,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
  *
  * `async` is the in-memory double here by `when@test`, so the outbox table never receives rows in this
  * environment and is not asserted: what is pinned is the `event_store` row count and the double's
- * `getSent()`. The Doctrine transport's own insert is not observed by any test.
+ * `getSent()`. The Doctrine transport's own insert is observed by `AsyncDoctrineTransportFunctionalTest`.
  *
  * @internal
  */

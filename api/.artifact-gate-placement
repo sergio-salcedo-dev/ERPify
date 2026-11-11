@@ -171,6 +171,7 @@ tests/Unit/Gate/EventDispatchGateTest.php :: home
 tests/Unit/Gate/FailedMessagePruneStatementGateTest.php :: home
 tests/Unit/Gate/IntNarrowingConfinementGateTest.php :: home
 tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
+tests/Unit/Gate/MessengerSendBoundaryGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultGateTest.php :: home
 tests/Unit/Gate/MigrationColumnDefaultRulesGateTest.php :: home
 tests/Unit/Gate/MonologExclusionDeclarationGateTest.php :: home
