@@ -23,7 +23,6 @@ use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUpload
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
-use Erpify\Tests\Support\Dig;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Log\NullLogger;
@@ -145,36 +144,40 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
         );
     }
 
-    public function testACrashAfterPromotedAtAndBeforeTheMessageLeavesTheRowAsTheObligation(): void
+    public function testACrashWhileWakingTheScanRollsTheMarkBackAndTheRollForwardFinishesIt(): void
     {
         $document = $this->committedWithStagedObject('sealed');
-        $crashBeforeTheMessage = new class implements DocumentScanWakeUp {
+        $crashWhileWaking = new class implements DocumentScanWakeUp {
             #[Override]
             public function wake(string $documentId): void
             {
-                throw new RuntimeException(\sprintf('the writer died before waking the scan of %s', $documentId));
+                throw new RuntimeException(\sprintf('the writer died while waking the scan of %s', $documentId));
             }
         };
 
         try {
-            (new PromoteDocument($this->storage(), $this->service(DocumentRepository::class), $crashBeforeTheMessage))
-                ->promote($document->documentId(), $document->scopeId())
-            ;
+            (new PromoteDocument(
+                $this->storage(),
+                $this->service(DocumentRepository::class),
+                $crashWhileWaking,
+                $this->service(TransactionManager::class),
+            ))->promote($document->documentId(), $document->scopeId());
             $this->fail('The simulated crash did not happen.');
         } catch (RuntimeException) {
-            // The writer's own promotion moved the object and set promoted_at, then died.
+            // The object moved; the mark and the message share one transaction, which rolled back.
         }
+
+        $this->assertNull(
+            $this->intentConnection()->fetchOne(
+                'SELECT promoted_at FROM document WHERE id = :id',
+                ['id' => $document->documentId()],
+            ),
+            'the mark is undone with the message that could not be published',
+        );
 
         $this->rollForward();
 
-        $row = $this->intentConnection()->fetchAssociative(
-            'SELECT promoted_at, next_scan_at <= NOW() AS due FROM document WHERE id = :id',
-            ['id' => $document->documentId()],
-        );
-        $this->assertIsArray($row);
-        $this->assertNotNull(Dig::value($row, 'promoted_at'));
-        $this->assertTrue((bool) Dig::value($row, 'due'), 'the scan sweep finds it by the row, with no message needed');
-        $this->assertSame([], $this->wakeUps, 'the writer already set promoted_at: the roll-forward has nothing to do');
+        $this->assertPromotedOnce($document, 'sealed');
     }
 
     public function testTheStagingSweepNeverDeletesAnObjectARowOwnsAndTheRollForwardStillPromotesIt(): void
@@ -266,7 +269,7 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
 
         (new RollForwardPromotions(
             $documents,
-            new PromoteDocument($this->promoting, $documents, $wakeUp),
+            new PromoteDocument($this->promoting, $documents, $wakeUp, $this->service(TransactionManager::class)),
             $wakeUp,
             $this->service(TransactionManager::class),
             new NullLogger(),

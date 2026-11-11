@@ -53,7 +53,6 @@ final readonly class RollForwardPromotions
 
                 if ($this->rollForwardOne($documentId)) {
                     ++$promoted;
-                    $this->scanWakeUp->wake($documentId);
 
                     if ($promoted >= $limit) {
                         return $promoted;
@@ -97,7 +96,13 @@ final readonly class RollForwardPromotions
 
             $this->promoteDocument->moveToFinal($document->scopeId());
 
-            return $this->documents->markPromoted($documentId);
+            if (!$this->documents->markPromoted($documentId)) {
+                return false;
+            }
+
+            $this->scanWakeUp->wake($documentId);
+
+            return true;
         });
     }
 }

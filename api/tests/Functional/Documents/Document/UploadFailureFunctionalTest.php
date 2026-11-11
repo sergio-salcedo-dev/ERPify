@@ -140,6 +140,7 @@ final class UploadFailureFunctionalTest extends KernelTestCase
             $storage,
             $this->service(DocumentRepository::class),
             $this->service(DocumentScanWakeUp::class),
+            $this->service(TransactionManager::class),
         );
 
         $outcome = $this->useCase(promote: $promote)->upload($this->command($actor, $upload));

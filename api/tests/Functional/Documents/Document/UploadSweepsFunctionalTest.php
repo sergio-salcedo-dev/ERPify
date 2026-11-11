@@ -205,7 +205,7 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
 
         (new RollForwardPromotions(
             $documents,
-            new PromoteDocument($storage, $documents, $wakeUp),
+            new PromoteDocument($storage, $documents, $wakeUp, $this->service(TransactionManager::class)),
             $wakeUp,
             $this->service(TransactionManager::class),
             $this->logger(),
@@ -266,7 +266,7 @@ final class UploadSweepsFunctionalTest extends KernelTestCase
 
         $promoted = (new RollForwardPromotions(
             $documents,
-            new PromoteDocument($storage, $documents, $wakeUp),
+            new PromoteDocument($storage, $documents, $wakeUp, $this->service(TransactionManager::class)),
             $wakeUp,
             $this->service(TransactionManager::class),
             $this->logger(),

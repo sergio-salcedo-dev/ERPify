@@ -10,8 +10,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Dispatches {@see ScanDocumentMessage} on the default bus, which routes it to `async`. Called only after the
- * row is promoted and the promotion committed, so a delivery never precedes the state it announces.
+ * Dispatches {@see ScanDocumentMessage} on the default bus, which routes it to `async`. Called inside the
+ * transaction that marks the row promoted, so the message commits with that mark and a delivery never precedes the
+ * state it announces; the bus refuses it outside a transaction.
  */
 #[AsAlias(DocumentScanWakeUp::class)]
 final readonly class MessengerDocumentScanWakeUp implements DocumentScanWakeUp

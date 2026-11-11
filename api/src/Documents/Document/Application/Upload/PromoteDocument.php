@@ -9,17 +9,20 @@ use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\ObjectAlreadyExists;
 use Erpify\Documents\Document\Domain\Storage\ObjectNotFound;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 
 /**
  * Moves a committed document's sealed object from staging into the final namespace, marks the row promoted and
- * only then wakes the scan. The writer runs it right after its commit; the roll-forward sweep runs it for a row
- * whose writer died in between. Each step is safe to repeat, so a crash at any point is finished by the next run:
+ * wakes the scan in the same transaction as the mark. The writer runs it right after its commit; the roll-forward
+ * sweep runs it for a row whose writer died in between. Each step is safe to repeat, so a crash at any point is
+ * finished by the next run:
  *
  *  - the move accepts a final object that is already there (a previous run linked it and died before removing
  *    the staged name) and never overwrites it — the stale staged name is removed instead;
  *  - a staged object that is gone with the final one present is a move that already happened;
- *  - `promoted_at` is a compare-and-set, and only the call that set it dispatches the wake-up, so a crash after
- *    it loses at most a hint the scan sweep does not need.
+ *  - `promoted_at` is a compare-and-set, and only the call that set it publishes the wake-up, in the same
+ *    transaction, so the mark and the message commit together or not at all; the message is a hint the scan sweep
+ *    does not need, and the row stays the obligation.
  *
  * A row with no object in either namespace is not repaired here: it raises {@see ObjectNotFound} and the
  * scheduled report alarms on it.
@@ -30,6 +33,7 @@ final readonly class PromoteDocument
         private DocumentStorage $storage,
         private DocumentRepository $documents,
         private DocumentScanWakeUp $scanWakeUp,
+        private TransactionManager $transactionManager,
     ) {
     }
 
@@ -40,9 +44,11 @@ final readonly class PromoteDocument
     {
         $this->moveToFinal($scopeId);
 
-        if ($this->documents->markPromoted($documentId)) {
-            $this->scanWakeUp->wake($documentId);
-        }
+        $this->transactionManager->transactional(function () use ($documentId): void {
+            if ($this->documents->markPromoted($documentId)) {
+                $this->scanWakeUp->wake($documentId);
+            }
+        });
     }
 
     /**
