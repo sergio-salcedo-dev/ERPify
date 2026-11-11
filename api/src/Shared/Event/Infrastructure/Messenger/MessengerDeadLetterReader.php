@@ -18,8 +18,8 @@ use Symfony\Component\Messenger\Transport\Receiver\MessageCountAwareInterface;
 use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 
 /**
- * {@link DeadLetterReader} over the configured Messenger failure transport (bound to
- * `@messenger.transport.failed`).
+ * {@link DeadLetterReader} over the configured Messenger failure transport (the wiring is in
+ * `config/services.yaml`).
  *
  * Typed as the read-only {@see ReceiverInterface} — inspection never sends. Only the Doctrine
  * transport used in dev/prod is listable and countable, while the in-memory transport used in tests
