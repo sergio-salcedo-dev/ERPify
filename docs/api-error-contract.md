@@ -317,6 +317,8 @@ Two problem types, both on the existing `Conflict` marker, so no marker is added
 | Re-scan with a `reason` outside `scanner_outage_resolved`, `scanner_limits_changed`, `failure_investigated`, no `reason`, or any member the payload does not declare | **422 `validation-failed`** with `violations[]`, at mapping, before the use case | `RescanDocumentRequest`, `#[StrictRequestPayload]` |
 | Re-scan without `document.rescan` (only the ADMIN wildcard holds it) | **403 `forbidden`** | `#[IsGranted(DocumentPermission::RESCAN)]` |
 
+The scan is a read of a sealed object that is not a route, and `api/src/Documents/Document/Application/Scanning/ScanDocument.php` is its registered reader (`make php.lint.crypto-read-boundary`): `dek-destroyed` is the expected post-erasure outcome and aborts the claim with no verdict and no count (a lapse on a row that is not `Erased` is counted by the expiry sweep, ADR `documents-custody-log.md` D8), while `decryption-failed` is a deterministic failure that ends in `ScanFailed` with an alarm and no retry; neither shared exception gains a marker.
+
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 
 Not every `DomainException` carries a marker. Two of them guard the session-minting stage of the login and are graded in its table above — `SessionAdmissionUnresolvable` (`session-admission-unresolvable`) and `MembershipCardinalityViolated` (`membership-cardinality-violated`); both are HTTP-reachable on every flow that signs a device in, map to **500** by the mechanism below, and carry no context. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:

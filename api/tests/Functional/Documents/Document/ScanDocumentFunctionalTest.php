@@ -38,6 +38,7 @@ use Monolog\Logger;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\TestDox;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Throwable;
 
@@ -372,10 +373,15 @@ final class ScanDocumentFunctionalTest extends KernelTestCase
         $this->assertSame(0, $row['attempts'] + $row['outage']);
     }
 
+    /**
+     * One of the two crypto causes a read of a sealed object can meet. This scan is a read boundary registered in
+     * `CryptoReadBoundaryGateTest`, and what it does at each cause is what the error contract's line for it states.
+     */
     #[Test]
-    public function aDestroyedKeyMidScanAbortsWithNothingCounted(): void
+    #[TestDox('A destroyed key (dek-destroyed) aborts the claim: no verdict, nothing counted, no alarm')]
+    public function aDestroyedKeyEndsTheScanAsTheExpectedPostErasureOutcome(): void
     {
-        $id = $this->fileScannableDocument('sealed under a key about to be destroyed');
+        $id = $this->fileScannableDocument(\random_bytes(100_000));
         $document = $this->service(DocumentRepository::class)->findById($id);
         $this->assertInstanceOf(Document::class, $document);
         $this->service(TransactionManager::class)->transactional(
@@ -385,21 +391,26 @@ final class ScanDocumentFunctionalTest extends KernelTestCase
             ),
         );
 
-        $this->assertSame(ScanResult::Aborted, $this->scanner()->scan($id, $this->health()));
-
+        $result = $this->scanner()->scan($id, $this->health());
         $row = $this->scanRow($id);
+
+        $this->assertSame(ScanResult::Aborted, $result);
         $this->assertSame(0, $row['attempts'] + $row['outage']);
         $this->assertSame(['received', 'scan_claimed'], $this->custodyEvents($id));
+        $this->assertFalse($this->log->hasErrorThatContains('will not be retried'));
     }
 
+    /** The other cause: a deterministic failure, ScanFailed with its custody row and the alarm, no retry. */
     #[Test]
-    public function anObjectThatFailsItsAuthenticationIsScanFailedWithAnAlarm(): void
+    #[TestDox('An altered object (decryption-failed) is ScanFailed with its custody row and an alarm, no retry')]
+    public function anAlteredObjectEndsTheScanInScanFailedWithAnAlarm(): void
     {
         $id = $this->fileScannableDocument(\random_bytes(100_000));
         $this->flipAByteOfTheFinalObject($id);
 
-        $this->assertSame(ScanResult::Failed, $this->scanner()->scan($id, $this->health()));
+        $result = $this->scanner()->scan($id, $this->health());
 
+        $this->assertSame(ScanResult::Failed, $result);
         $this->assertSame('scan_failed', $this->scanRow($id)['state']);
         $this->assertSame('authentication-failed', $this->alarmContext()['reason'] ?? null);
         $this->assertSame(['received', 'scan_claimed', 'scan_failed'], $this->custodyEvents($id));
