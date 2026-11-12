@@ -14,11 +14,12 @@ use Erpify\Documents\Document\Application\Upload\ReapUploadIntents;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Behat\Context\Abstraction\AbstractContext;
 
 /**
- * Evidence ingest steps: closing the switch for one scenario, and observing what an aborted upload leaves on the
- * document volume and in the keystore once the reaper has run.
+ * Evidence ingest steps: closing the switch for one scenario, filing a document in a given state, and observing
+ * what an aborted upload leaves on the document volume and in the keystore once the reaper has run.
  *
  * Closing the switch: the test environment reads `documents.ingest_enabled` from `DOCUMENTS_INGEST_ENABLED`, and
  * the kernel reboots between requests, so the next request's container reads the closed switch — the same
@@ -43,6 +44,30 @@ final class DocumentsIngestContext extends AbstractContext implements Context
     public function evidenceIngestIsSwitchedOff(): void
     {
         $this->set('false');
+    }
+
+    /**
+     * Files a document row straight in the given state, so a scenario about an operator decision starts from the
+     * state the scan would have left rather than running a scanner. The uploader is a fresh id that names no
+     * identity; nothing here reads the sealed bytes.
+     */
+    #[Given('/^a document in state "([^"]*)" with id "([^"]*)"$/')]
+    public function aDocumentInStateWithId(string $state, string $id): void
+    {
+        $scope = Uuid::generate();
+
+        $this->entityManager->getConnection()->executeStatement(
+            'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, next_scan_at, '
+            . 'created_at, updated_at) '
+            . 'VALUES (:id, :scope, :id, :uploader, :state, :digest, 5, NOW(), NOW(), NOW())',
+            [
+                'id' => $id,
+                'scope' => $scope,
+                'uploader' => Uuid::generate(),
+                'state' => $state,
+                'digest' => \hash('sha256', $id),
+            ],
+        );
     }
 
     #[AfterScenario]

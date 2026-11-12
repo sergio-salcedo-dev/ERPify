@@ -9,6 +9,11 @@
 parameters:
     api.name: erpify
 
+    # Where the Documents scan reaches clamd (compose service `scanner`, TCP). Dev and test bind a fake scanner
+    # and never read it.
+    env(DOCUMENTS_SCANNER_ADDRESS): 'tcp://scanner:3310'
+    documents.scanner.address: '%env(DOCUMENTS_SCANNER_ADDRESS)%'
+
     # Transport classes `AsyncTransportValidator` admits for `async` without the Doctrine-connection check.
     # Empty here on purpose: a deployment that resolves `async` to anything but the Doctrine transport on the
     # application connection is refused. Only `services_test.yaml` declares one (the in-memory double).
@@ -146,6 +151,28 @@ services:
             $logger: '@monolog.logger.observability'
 
     Erpify\Documents\Document\Application\Upload\SweepStagedOrphans:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    # The scan's sweeps and the operator re-scan log by document id only, on the always-on channel: they run on a
+    # path that never ends in a 5xx.
+    Erpify\Documents\Document\Application\Scanning\ScanDocument:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Scanning\ScanDueDocuments:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Scanning\ExpireScanLeases:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Scanning\SweepCappedDocuments:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Scanning\RescanDocument:
         arguments:
             $logger: '@monolog.logger.observability'
 

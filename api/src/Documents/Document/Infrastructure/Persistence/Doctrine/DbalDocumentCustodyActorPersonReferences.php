@@ -14,7 +14,9 @@ use Override;
 
 /**
  * {@link PersonReferenceSource} over `document_custody.actor_id`, excluding the marker an erasure writes for
- * the reason {@see DbalDocumentUploaderPersonReferences} gives. The actor index is what each page seeks through.
+ * the reason {@see DbalDocumentUploaderPersonReferences} gives, and a NULL actor, which names the system (a scan's
+ * own facts) and is no person: the keyset reader skips NULL on every page. The actor index is what each page seeks
+ * through.
  */
 final readonly class DbalDocumentCustodyActorPersonReferences implements PersonReferenceSource
 {

@@ -2,7 +2,8 @@
 title: 'doc-4: Scan and readiness gate'
 type: 'feature'
 created: '2026-11-11'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'a591be6d2aaf218236497f7099f02c18cf1db0b2'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -208,9 +209,68 @@ All paths below are under `api/src/Documents/Document/`.
 
 ## Implementation Notes
 
+**Spike (2026-11-12, `clamav/clamav:1.4` = clamd 1.4.6, signatures 28181; scripts were in `tmp/`, not committed).** The final `api/clamav/clamd.conf` was run with `--memory 2g --memory-swap 2g`, `--cap-drop ALL` plus five caps and a tmpfs temporary directory.
+- Memory (`memory.peak`): idle 0.99-1.0 GiB (signatures); one 100 MiB scan 1.21 GiB; three concurrent 100 MiB scans 1.45 GiB; a signature `RELOAD` with `ConcurrentDatabaseReload no` added nothing to the peak. No OOM at 2g, so `mem_limit: 2g` stands.
+- Limits: exactly 104857600 bytes answers `stream: OK`; one byte more answers `INSTREAM size limit exceeded. ERROR` (the sender is not cut off first). With `AlertExceedsMax yes`: a zip of 10100 entries answers `stream: Heuristics.Limits.Exceeded.MaxFiles FOUND`, a zip nested 25 deep `...MaxRecursion FOUND`, a 509 KB gzip of 500 MiB of zeros `...MaxFileSize FOUND`. The adapter maps the prefix and the size answer to `LimitExceeded` (`ScanFailed`), never clean.
+- Time: a 100 MiB INSTREAM took 4.8-11.0 s against a local clamd (with the sender generating random bytes), 1 MiB 0.1 s. The constants held as provisional: attempts 3, outage returns 10 (alarm at 5), deadline 10 minutes, lease 2 minutes, heartbeat 30 s, ladder 1/5/15/60 minutes with 20 percent jitter. `MaxScanTime` is 90 s (under the lease and the deadline); the read timeout is 20 s (under the heartbeat), so the wait for a verdict is a poll that heartbeats between reads.
+- The image's healthcheck probes `localhost:3310`, which resolves to `::1` first: a `TCPAddr 0.0.0.0` leaves the container never healthy, so the config sets none. The image's init also waits for a local socket, hence `LocalSocket`. `LogFile /dev/stdout` is refused to the clamav user, so a foreground clamd logs to the container's stdout with no `LogFile`.
+- `api/clamav/clamd.conf` is exercised by the opt-in `make php.scanner.integration` (4 tests green: probe, EICAR, the 100 MiB boundary and one byte more, the archive limits).
+
+**Decisions and deviations, each argued in D8 of the ADR.**
+- *The custody row is in the same TRANSACTION as the compare-and-set, not the same statement (accepted by the owner, 2026-11-12).* The contract says both "its custody row in the same statement" and "through `AppendCustody`"; the second is the only writer the custody gate and the sequence lock admit, and the compare-and-set already holds the row lock `AppendCustody` takes, so the pair commits together. A single `UPDATE ... INSERT` CTE would have bypassed the sequence computation.
+- *`scan(callable $producer, callable $keepAlive)` rather than `scan(stream)`.* `unseal()` pushes plaintext and cannot be paused, so the port hands the producer a sink (as `DocumentStorage::stageWith()` does) and polls for the verdict with the caller's `keepAlive`. The plaintext goes to the socket and to no file.
+- *The scanner profile is declared in `compose.dev.yaml`, not in the base file (accepted by the owner, 2026-11-12, with the narrowed `ComposeStackCommands` refusal).* A `profiles: !reset []` in the prod overlay is a YAML tag the gate readers do not parse. The base defines the service for every environment; dev opts out, prod always starts it. `ComposeStackCommands` now refuses `profiles:` only on a service that runs a `command` (the scanner has none), with a falsifying fixture.
+- *The rescan reason is stored in custody* (owner decision, 2026-11-12): a nullable `document_custody.reason` column, set for `RescanRequested` and NULL for every other fact, enforced in the `DocumentCustody` constructor beside the actor pairing (a scan fact has a NULL actor, an operator decision a non-NULL one). It is also logged on the observability channel and is not a person reference.
+- *The abort path does not release the claim* (owner sign-off, 2026-11-12). A superseded epoch, `Erased` seen by a heartbeat, a verdict refused by the clock and `DekDestroyed` end the pass with nothing counted and the claim live; if the lease lapses on a row that is not `Erased`, the expiry sweep returns it as a worker that died (an outage return before streaming, an attempt after), so a document that keeps ending this way reaches `ScanFailed` with its alarm; a row that is `Erased` by then matches no predicate. Both halves are pinned in `ScanLeaseAccountingFunctionalTest`.
+- *A scan wake-up is published by the re-scan inside its transaction*, like the promotion's, so a reopen does not wait for the next tick.
+- *A transient local read error before the first byte counts as an outage return* (streaming not started), per the contract's rule on the mark; it is not a verdict.
+- *Pass bound.* `ScanDueDocuments` starts no new document after 60 s and takes at most 10 per pass: the scheduler worker also owns the upload reaper's one-minute cadence, whose staging margin is computed on it.
+- *Fakes.* `Erpify\Tests\Double\Scanner\FakeMalwareScanner` is bound in dev and test and scripted by static state (the kernel reboots between requests); production binds `ClamdScanner`.
+- Registries and docs updated: route manifest, credential-proof policy (`ordinary`), permission catalog (`document.rescan`, ADMIN wildcard only), step vocabulary, gate placement, the channel and log-retention gates, the error contract, the ADR (D1 amendment, D6 rows, D8), `docs/architecture-api.md`, `docs/deployment-guide.md`, `docs/vps-deployment.md` and the §7 residuals.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+Layers: Blind Hunter (18), Edge Case Hunter (12), Acceptance Auditor with the verification-gap instructions (G1-G4 + 5). Run on `tmp/doc4.diff` against baseline `a591be6d`. Verdicts were rendered after reading the code, not from the layers' severity.
+
+| # | Finding | Verdict | Route | Evidence |
+|---|---|---|---|---|
+| 1 | Outage horizon stated 7.4 h; the code gives 6.35 h and the test is loose | low | patch | Return 10 caps, so only 1-9 back off: 60+300+900+6×3600 = 22,860 s. `ScanPolicyTest` accepts 7 h ± 1 h. Prose and test corrected. |
+| 2 | "counts NOTHING" contradicts the expiry sweep (`DekDestroyed`, deadline-refused verdict) | medium | owner decision | `afterFailure` returns Aborted and leaves the lease live; `ExpireScanLeases` then counts. Owner chose to correct the documentation (2026-11-12). |
+| 3 | Sustained scanner outage silent for 10 h | medium | residual (§7) | `ScanDueDocuments::run` returns 0 on a failed probe by contract ("no epoch, attempt or custody row"); detection is the stuck bound. A per-minute warning would be buffered and invisible under `fingers_crossed`. |
+| 4 | Quarantined alarm repeats hourly and never clears; ScanFailed reported twice | low | rejected | The hourly list-ids template is the existing reporter shape and the two reports are the two the contract asks for; the way out is erasure (doc-7). |
+| 5 | Throughput capped at 10 documents per pass | low | rejected | A design parameter nothing in the contract fixes; wake-ups also run a pass. 600/h is above the evidence volume. |
+| 6 | Pass bounds starts only, not the in-flight scan | medium | residual (§7) | Wait is bounded by `MaxScanTime` + 30 s margin and clamd's own read timeouts, not 10 min; recorded with the figure. |
+| 7 | Limit gate runs against real clamd only in the opt-in target | low | rejected | By the owner's decision; the answer classification is covered over real sockets by `ClamdScannerTest`. |
+| 8 | `ClamdSocket::answer` runs `$keepAlive` under a global error suppressor | medium | patch | Confirmed in the tree: the handler wraps the whole loop. Scoped to `fread`/`feof`. |
+| 9 | Compose gate reads the base file, not the merged stack; `cpus` env-widenable | medium | patch | Gate reads `compose.yaml` only; the overlay can raise `mem_limit` unseen. Reads the merged stack now. |
+| 10 | clamd command port reachable from `frontend` (pwa, php) | high | patch | `compose.prod.yaml` joins `scanner` to `frontend` for freshclam egress; clamd has no auth. Dedicated egress network. |
+| 11 | Signature freshness unmonitored | medium | residual (§7) | Not in the contract; if freshclam fails, clamd answers from stale signatures. |
+| 12 | No scanning-shape CHECK; missing indexes for the expiry and cap sweeps | low | rejected | Writers always set the lease; the table is small and nothing here is measured. Dropped CHECK is deviation (f), judged legitimate. |
+| 13 | Docblocks overstate (handler "never reaches retry"; "ended in a verdict") | low | patch | `scanOne` is the only catch; `probe()`/`dueCandidates()` propagate. Docblocks made true. |
+| 14 | NULL-actor rule not enforced at the constructor | medium | patch | `RescanRequested` with a NULL actor is accepted today. Event-to-actor pairing enforced. |
+| 15 | `backoffSeconds()`/`reachesCap()` dead in production | low | patch | Only `ScanPolicyTest` calls them; the SQL takes `ScanPolicy::ladder()`. Deleted. |
+| 16 | Re-scan reason not durable | medium | owner decision | Owner chose to store it in `document_custody` (2026-11-12). |
+| 17 | Sizing contradictions in docs; `MaxThreads` wording; rehearsal doc | low | patch | `vps-deployment.md` row vs verification column; "at most two workers" holds for one replica. |
+| 18 | Aggregate no longer owns lifecycle; receipt view reused; `UploadRoutes::RESCAN` placement | low | rejected | Database-clock compare-and-set is the contract; the rest is cosmetic. |
+| 19 | Inline FQNs, plain EICAR string, orphan daemon/child, gate list order, long line, no CLAUDE.md "Required checks" row | low | patch (CLAUDE.md row: not applied) | Hygiene patched. The CLAUDE.md row is an agent-context file and is left for the owner. |
+| 20 | Connect failing after a passing probe never marks health down | medium | patch | `$down = streamingStarted() && isDown()` never probes when streaming did not start, so `knownDown()` stays false and the run keeps claiming. `markDown()` added. |
+| 21 | A DB fault in the wake-up handler reaches Messenger retry | low | patch | Idempotent pass re-run; docblock made true (see 13). |
+| 22 | Poison archive killing clamd is accounted as outage returns | low | residual (§7) | It is the contract's accounting (re-probe finds the daemon down). |
+| 23 | tmpfs 512m vs `MaxScanSize` 400M × 3 threads | maybe-false | residual (§7) | Only 100 MiB flat streams were measured; an expanding archive was not. |
+| 24 | One vs two probes per run | low | rejected | A re-probe only after a return; the claim "one probe per run" is loose, not harmful. |
+| 25 | `STUCK_BOUND` 10 h vs "> 7 h" | false | rejected | 10 h is above 7 h; it must clear the jittered ladder (≈7.6 h). |
+| 26 | `#[IsGranted]` after payload resolution (422 before 403) | low | rejected | Same on every route in the codebase; the Behat 403 uses a valid body. |
+| 27 | Terminating chunk fails after clamd answered a size limit | medium | patch | Falls to `ScanInterrupted`, so three attempts instead of a prompt alarmed `ScanFailed`. Reads the pending answer as `stream()` does. |
+| 28 | `/ 1000 + 30` is a float if the constant is not a multiple of 1000 | low | patch | `intdiv`. |
+| G1 | Lost settle/return/expiry CAS not shown to write no custody row | high | patch | Moving `append` ahead of the `settle` check keeps every test green. Tests added. |
+| G2 | `ScanSession` heartbeat never exercised at an interval | medium | patch | Test added. |
+| G3 | Cap through `ExpireScanLeases` and the outage-cap sweep branch untested | medium | patch | Tests added. |
+| G4 | NULL-actor person-reference path and the reason unobserved | medium | patch | Tests added. |
+| A | Custody in the same transaction, not the same statement | n/a | owner decision | Accepted (2026-11-12). |
+| B | `scan(callable, callable)` instead of `scan(stream)` | n/a | rejected | Signature is in Tasks, not the frozen block; `unseal()` pushes. |
+| C | `scanner` profile only in `compose.dev.yaml`; gate reader relaxed | n/a | owner decision | Accepted (2026-11-12). |
 
 ## Design Notes
 

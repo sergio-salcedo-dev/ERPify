@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
+use Erpify\Documents\Document\Domain\Exception\DocumentNotReadable;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
@@ -40,13 +41,23 @@ use InvalidArgumentException;
  * The idempotency key hash is the actor-scoped hash of the caller's key, held on the mutable snapshot so the
  * same purge that rewrites the uploader can null it; replay protection for that actor ends there.
  *
- * @SuppressWarnings("PHPMD.TooManyPublicMethods") the accessors of one snapshot; there is no behaviour yet to split
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") the accessors of one snapshot and its one guard
+ * @SuppressWarnings("PHPMD.TooManyMethods") the same
+ * @SuppressWarnings("PHPMD.TooManyFields") one row: the document, its intake and the scan lease columns of D8
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'document')]
 #[ORM\UniqueConstraint(name: self::SCOPE_ID_CONSTRAINT, columns: ['scope_id'])]
 #[ORM\UniqueConstraint(name: self::IDEMPOTENCY_KEY_CONSTRAINT, columns: ['idempotency_key_hash'])]
 #[ORM\Index(name: 'idx_document_uploader_id', columns: ['uploader_id'])]
+// The scan sweep's candidate list: only promoted `Received` rows are ever due, and they are few next to the table.
+// The predicate is spelled as PostgreSQL prints it back (`pg_get_expr`), because the schema comparison matches it as
+// text: the migration writes the plain form and the database stores this one.
+#[ORM\Index(
+    name: 'idx_document_scan_due',
+    columns: ['next_scan_at'],
+    options: ['where' => "(((state)::text = 'received'::text) AND (promoted_at IS NOT NULL))"],
+)]
 final class Document extends AggregateRoot
 {
     /**
@@ -120,6 +131,81 @@ final class Document extends AggregateRoot
     )]
     // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
     private ?DateTimeImmutable $promotedAt = null;
+
+    /**
+     * The scan's own columns. Like `promoted_at` they are read-only to the ORM: every transition is a DBAL
+     * compare-and-set (`DbalDocumentScanLeases`) evaluated by the database clock, so no managed instance is ever
+     * the writer and a stale one cannot overwrite a newer lease.
+     *
+     * `scan_attempts` counts claims that began streaming and ended with no verdict; `scan_outage_returns` counts
+     * the returns that were the scanner's absence. `lease_epoch` only grows (every claim and every operator reset).
+     */
+    #[ORM\Column(
+        name: 'scan_attempts',
+        type: Types::INTEGER,
+        insertable: false,
+        updatable: false,
+        options: ['default' => 0],
+    )]
+    private int $scanAttempts = 0;
+
+    #[ORM\Column(
+        name: 'scan_outage_returns',
+        type: Types::INTEGER,
+        insertable: false,
+        updatable: false,
+        options: ['default' => 0],
+    )]
+    private int $scanOutageReturns = 0;
+
+    #[ORM\Column(
+        name: 'lease_epoch',
+        type: Types::BIGINT,
+        insertable: false,
+        updatable: false,
+        options: ['default' => 0],
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates a bigint as a string)
+    private int|string $leaseEpoch = 0;
+
+    #[ORM\Column(
+        name: 'first_claim_recorded',
+        type: Types::BOOLEAN,
+        insertable: false,
+        updatable: false,
+        options: ['default' => false],
+    )]
+    private bool $firstClaimRecorded = false;
+
+    #[ORM\Column(
+        name: 'scan_streaming_started_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
+    private ?DateTimeImmutable $scanStreamingStartedAt = null;
+
+    #[ORM\Column(
+        name: 'claimed_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
+    private ?DateTimeImmutable $claimedAt = null;
+
+    #[ORM\Column(
+        name: 'lease_expires_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
+    private ?DateTimeImmutable $leaseExpiresAt = null;
 
     private function __construct(
         string $id,
@@ -260,6 +346,54 @@ final class Document extends AggregateRoot
     public function nextScanAt(): DateTimeImmutable
     {
         return $this->nextScanAt;
+    }
+
+    public function scanAttempts(): int
+    {
+        return $this->scanAttempts;
+    }
+
+    public function scanOutageReturns(): int
+    {
+        return $this->scanOutageReturns;
+    }
+
+    public function leaseEpoch(): int
+    {
+        return (int) $this->leaseEpoch;
+    }
+
+    public function firstClaimRecorded(): bool
+    {
+        return $this->firstClaimRecorded;
+    }
+
+    public function scanStreamingStartedAt(): ?DateTimeImmutable
+    {
+        return $this->scanStreamingStartedAt;
+    }
+
+    public function claimedAt(): ?DateTimeImmutable
+    {
+        return $this->claimedAt;
+    }
+
+    public function leaseExpiresAt(): ?DateTimeImmutable
+    {
+        return $this->leaseExpiresAt;
+    }
+
+    /**
+     * The one readability guard: content is reachable only in `Ready`. Every consumer calls this and mints no
+     * refusal of its own, so a state added later is closed by default.
+     *
+     * @throws DocumentNotReadable in every other state, `Erased` included
+     */
+    public function assertReadable(): void
+    {
+        if (DocumentState::Ready !== $this->state) {
+            throw DocumentNotReadable::create();
+        }
     }
 
     /**

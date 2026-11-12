@@ -34,6 +34,12 @@ x-logging: &bounded-logging
     max-file: "5"
 
 services:
+  # The malware scanner (defined in compose.yaml) is opt-in in dev: the stack binds a fake scanner that answers clean
+  # except for an EICAR-marked stream, so a ~1 GiB daemon that downloads its signatures on a cold start is started
+  # only by `make php.scanner.integration` (or `--profile scanner`), which drives the real-clamd test.
+  scanner:
+    profiles: ["scanner"]
+
   mailpit:
     # Cap: memory.peak reads 26 MiB.
     deploy:

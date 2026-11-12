@@ -9,6 +9,7 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Documents\Document\Domain\CustodyEvent;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
+use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -23,6 +24,9 @@ use InvalidArgumentException;
  * {@see ErasedPersonMarker::UUID}. `make php.lint.document-custody` holds
  * that set closed. Custody is therefore no longer absolutely append-only, and is not claimed cryptographically
  * immutable (`docs/adr/documents-custody-log.md`).
+ *
+ * A NULL actor is the system. It is NULL for the scan's own facts (the first claim, every verdict, the cap sweep)
+ * and never for an operator decision, which names the operator.
  *
  * `seq` numbers a document's rows from 1 with no gap among committed rows; it is computed under the lock on
  * the document row and `UNIQUE (document_id, seq)` is the second defence. Rows are never deleted: the foreign
@@ -60,13 +64,19 @@ final readonly class DocumentCustody
         private int $seq,
         #[ORM\Column(length: 32, enumType: CustodyEvent::class)]
         private CustodyEvent $event,
-        #[ORM\Column(name: 'actor_id', type: Types::GUID)]
+        #[ORM\Column(name: 'actor_id', type: Types::GUID, nullable: true)]
         #[PersonSubjectReference(erasedBy: 'src/Documents/Document/Application/PurgeUserDocumentReferences.php')]
-        private string $actorId,
+        private ?string $actorId,
+        /** Why an operator reopened a scan; set for {@see CustodyEvent::RescanRequested} and NULL for every other fact. */
+        #[ORM\Column(length: 64, nullable: true)]
+        private ?string $reason = null,
     ) {
         Uuid::ensure($this->id);
         Uuid::ensure($this->documentId);
-        Uuid::ensure($this->actorId);
+
+        if (null !== $this->actorId) {
+            Uuid::ensure($this->actorId);
+        }
 
         if (ErasedPersonMarker::UUID === $this->actorId) {
             throw new InvalidArgumentException('The erased-person marker is written by the erasure, never recorded.');
@@ -76,12 +86,24 @@ final readonly class DocumentCustody
             throw new InvalidArgumentException('A custody sequence number starts at 1.');
         }
 
+        $this->ensureActorAndReasonFitTheEvent();
+
         $this->createdAt = SystemClock::now();
     }
 
-    public static function record(string $id, string $documentId, int $seq, CustodyEvent $event, string $actorId): self
-    {
-        return new self($id, $documentId, $seq, $event, $actorId);
+    /**
+     * @param string|null $actorId the person who caused the fact, or NULL when the system did (a scan claim, a
+     *                             verdict, the cap sweep); an operator decision always names the operator
+     */
+    public static function record(
+        string $id,
+        string $documentId,
+        int $seq,
+        CustodyEvent $event,
+        ?string $actorId,
+        ?string $reason = null,
+    ): self {
+        return new self($id, $documentId, $seq, $event, $actorId, $reason);
     }
 
     public function id(): string
@@ -104,7 +126,12 @@ final readonly class DocumentCustody
         return $this->event;
     }
 
-    public function actorId(): string
+    public function reason(): ?string
+    {
+        return $this->reason;
+    }
+
+    public function actorId(): ?string
     {
         return $this->actorId;
     }
@@ -112,5 +139,39 @@ final readonly class DocumentCustody
     public function createdAt(): DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    /**
+     * The one point every row passes: the scan's own facts are the system's (NULL actor, never a person), an operator
+     * decision names the operator and carries a reason from the closed list, and no other fact carries a reason.
+     */
+    private function ensureActorAndReasonFitTheEvent(): void
+    {
+        $bySystem = \in_array($this->event, [
+            CustodyEvent::ScanClaimed,
+            CustodyEvent::ScanReady,
+            CustodyEvent::ScanQuarantined,
+            CustodyEvent::ScanFailed,
+        ], true);
+
+        if ($bySystem && null !== $this->actorId) {
+            throw new InvalidArgumentException("A scan fact is the system's and names no actor.");
+        }
+
+        if (CustodyEvent::RescanRequested === $this->event) {
+            if (null === $this->actorId) {
+                throw new InvalidArgumentException('An operator decision names the operator.');
+            }
+
+            if (null === $this->reason || null === RescanReason::tryFrom($this->reason)) {
+                throw new InvalidArgumentException('A re-scan carries a reason from the closed list.');
+            }
+
+            return;
+        }
+
+        if (null !== $this->reason) {
+            throw new InvalidArgumentException('Only a re-scan carries a reason.');
+        }
     }
 }

@@ -97,3 +97,10 @@ services:
     Erpify\Shared\Audit\Application\AuditLogger:
         alias: Erpify\Shared\Audit\Infrastructure\SymfonyAuditLogger
         public: true
+
+    # The Documents scanner is the scripted double in test, never clamd: no test reaches a network scanner.
+    Erpify\Documents\Document\Domain\Scanning\MalwareScanner:
+        alias: Erpify\Tests\Double\Scanner\FakeMalwareScanner
+        public: true
+
+    Erpify\Tests\Double\Scanner\FakeMalwareScanner: ~

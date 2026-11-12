@@ -13,4 +13,10 @@ namespace Erpify\Documents\Document\Infrastructure\Security;
 final class DocumentPermission
 {
     public const string WRITE = 'document.write';
+
+    /**
+     * Reopens a document whose scan failed. A verb no tier carries, so only the ADMIN wildcard reaches it: an
+     * editor, who may file evidence, may not decide that a failed scan is worth trying again.
+     */
+    public const string RESCAN = 'document.rescan';
 }
