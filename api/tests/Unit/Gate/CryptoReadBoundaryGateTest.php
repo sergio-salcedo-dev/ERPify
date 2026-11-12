@@ -7,6 +7,7 @@ namespace Erpify\Tests\Unit\Gate;
 use Erpify\Tests\Support\ApiSourceFiles;
 use Erpify\Tests\Support\CryptoReadBoundaryRules;
 use Erpify\Tests\Support\CryptoReadRegistration;
+use Erpify\Tests\Support\RepositoryRoot;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -15,36 +16,40 @@ use ReflectionMethod;
 
 /**
  * The first caller of a READ method of the encryption ports outside `api/src/Shared/Crypto/` reds the build until
- * it is registered beside the functional test that pins what that read route answers when the key is gone, and
- * a line of `docs/api-error-contract.md` that links the file and names the outcome. The decision this guards
- * is #418: `DekDestroyed`
- * (`dek-destroyed`) and `DecryptionFailed` (`decryption-failed`) carry no marker and map to 500, which is right
- * on the write path and wrong on a read path, where the first is an EXPECTED post-erasure outcome. The read
- * boundary translates (candidate 410 for the first, a 5xx that stays Sentry-visible for the second); neither
- * shared exception gains a marker, because the write path needs its 500.
+ * it is registered beside a test that provokes what that read route answers when the key is gone, and a line of
+ * `docs/api-error-contract.md` that cites the file and names the outcome. The decision this guards is #418:
+ * `DekDestroyed` (`dek-destroyed`) and `DecryptionFailed` (`decryption-failed`) carry no marker and map to 500,
+ * which is right on the write path and wrong on a read path, where the first is an EXPECTED post-erasure outcome.
+ * The read boundary translates (candidate 410 for the first, a 5xx that stays Sentry-visible for the second);
+ * neither shared exception gains a marker, because the write path needs its 500.
  *
  * "Read" is DERIVED, never listed: every public method of `EnvelopeEncryptor` and `StreamEnvelopeEncryptor` that
- * is not in {@see CryptoReadBoundaryRules::WRITE_METHODS}. A list of forbidden names is blind to the next read a
- * port grows (`decrypt(` alone misses the sibling port's `unseal(`), where a list of ALLOWED names leaves that
- * method red by default. The ports themselves are listed ({@see CryptoReadBoundaryRules::PORTS}), not derived:
- * `Shared/Crypto/Application` also holds `Keystore`, whose callers are legitimate infrastructure, so a third
- * decrypting port is covered only once it is added there.
+ * is not in {@see CryptoReadBoundaryRules::WRITE_METHODS} and is not magic (`__*`, which no `->name(` can call).
+ * A list of forbidden names is blind to the next read a port grows (`decrypt(` alone misses the sibling port's
+ * `unseal(`), where a list of ALLOWED names leaves that method red by default. The ports themselves are listed
+ * ({@see CryptoReadBoundaryRules::PORTS}), not derived: `Shared/Crypto/Application` also holds `Keystore`, whose
+ * callers are legitimate infrastructure, so a third decrypting port is covered only once it is added there.
  *
- * {@see self::READERS} is `reading file => [functional test]`, empty while nothing reads. Its checks are driven
- * with planted repositories by `CryptoReadBoundaryRulesGateTest`, so they are exercised while the real map is
- * empty; the engine is `Tests\Support\CryptoReadBoundaryRules` and `Tests\Support\CryptoReadRegistration`.
+ * {@see self::READERS} is `'Documents/X.php' => ['test' => 'tests/Functional/Documents/XTest.php']`: the reader
+ * relative to `api/src`, the test relative to `api/` (a `*Test.php` under `tests/Functional`, or a `.feature`
+ * under `features`, the two lanes in which this repository proves a route). It is empty while nothing reads. Its
+ * checks are driven with planted repositories by `CryptoReadBoundaryRulesGateTest`, so they are exercised while
+ * the real map is empty; the engine is `Tests\Support\CryptoReadBoundaryRules` and `CryptoReadRegistration`.
  *
  * What a green proves: the files under `api/src` (outside `Shared/Crypto/`) that call a read method of either
  * port as `->method(` or `?->method(` are exactly the keys of {@see self::READERS}; the same engine finds the
- * write calls that exist today, so it reaches the tree and the call shape; each registered reader resolves, by
- * `realpath`, to a file under `api/src`; its test resolves to a `*Test.php` file under `api/tests/Functional`
- * holding both `dek-destroyed` and `decryption-failed` as string literals; and a line of
- * `docs/api-error-contract.md` links the reading file as a whole path and names `dek-destroyed`.
+ * write calls of the two real port callers, so it reaches the tree and the call shape; each registered reader
+ * resolves, by `realpath`, to a file under `api/src`; its test holds `dek-destroyed` and `decryption-failed` as
+ * string literals (PHP) or outside a `#` comment (Gherkin); and one line of `docs/api-error-contract.md` cites the
+ * reader's path as a whole path and names `dek-destroyed`.
  *
  * What it does not prove:
- * - **That the registered test proves anything.** It exists and holds both types as literals; whether it drives
- *   the route, erases the scope and reads the status that comes back is review's to judge. One test may be
- *   registered for several readers, and the contract line may be prose rather than a table row.
+ * - **That the registered test proves anything.** It holds both types and nothing more: a skipped test, an
+ *   abstract class or a trait in a `*Test.php` file satisfies it, one test may be registered for several readers,
+ *   and the contract line may be prose rather than a table row or a link. Whether the test provokes the outcomes
+ *   and reads the status that comes back is review's to judge.
+ * - **That the literals are the wire type.** They are the crypto CAUSES (`DekDestroyed::TYPE`,
+ *   `DecryptionFailed::TYPE`); the type a read-specific exception carries after translation is the route's.
  * - **That a reader is a route.** A delegating decorator or a port implementation outside `Shared/Crypto/` that
  *   forwards `->decrypt(` is reported like any reader and owes the same registration; so does a CLI or Messenger
  *   reader, whose test is then its own functional test of both outcomes.
@@ -57,8 +62,9 @@ use ReflectionMethod;
  *   computed method name, a static or `parent::` call (`Port::decrypt(`), a call from outside `api/src`, a file
  *   under a symlinked directory or without a `.php` extension (the sweep is `ApiSourceFiles`'), and any alias or
  *   wrapper that forwards to a port from inside `Shared/Crypto/`, which the sweep excludes by construction.
- * - It matches the METHOD NAME on any receiver, so an unrelated `->unseal(` on another type also reds it; the
- *   accepted cost of a match that needs no type information.
+ * - It matches the METHOD NAME on any receiver, so an unrelated `->unseal(` on another type also reds it, and the
+ *   only way to lift that red is to register it or rename the method; the accepted cost of a match that needs no
+ *   type information.
  *
  * @internal
  */
@@ -66,8 +72,7 @@ use ReflectionMethod;
 final class CryptoReadBoundaryGateTest extends TestCase
 {
     /**
-     * File under `api/src` calling a read method => the functional test under `api/tests` that pins what the path
-     * answers for both outcomes.
+     * File under `api/src` calling a read method => the test, relative to `api/`, that provokes both outcomes.
      *
      * @var array<string, array{test: string}>
      */
@@ -115,25 +120,40 @@ final class CryptoReadBoundaryGateTest extends TestCase
     }
 
     #[Test]
-    public function theEngineFindsTheWriteCallsThatExistToday(): void
+    public function theEngineFindsTheWriteCallsOfTheTwoRealPortCallers(): void
     {
         $writing = CryptoReadBoundaryRules::readersIn(CryptoReadBoundaryRules::WRITE_METHODS);
 
-        $this->assertNotSame(
-            [],
-            $writing,
-            'the engine finds no write call in api/src, although callers of encrypt() and seal() exist: it misses '
-            . 'a real call shape or the sweep no longer reaches the tree',
+        $this->assertContains(
+            'encrypt',
+            $writing['Documents/Document/Application/Upload/CommitUpload.php'] ?? [],
+            'the engine no longer finds the encrypt() call of CommitUpload: it misses a real call shape, '
+            . 'or the caller moved (update this witness)',
+        );
+        $this->assertContains(
+            'seal',
+            $writing['Documents/Document/Application/Upload/UploadEvidence.php'] ?? [],
+            'the engine no longer finds the seal() call of UploadEvidence: it misses a real call shape, '
+            . 'or the caller moved (update this witness)',
         );
     }
 
     #[Test]
-    public function everyRegisteredReaderHasItsFunctionalTestAndItsContractRow(): void
+    public function theRepositoryRootThatHoldsTheContractPageResolves(): void
     {
-        $this->assertSame([], CryptoReadRegistration::problems(
-            $this->readers(),
-            \dirname(ApiSourceFiles::root(), 2),
-        ));
+        $root = RepositoryRoot::path();
+
+        $this->assertNotNull($root, 'the repository root does not resolve: the compose.dev.yaml bind mount is gone');
+        $this->assertFileExists($root . '/' . CryptoReadRegistration::CONTRACT);
+    }
+
+    #[Test]
+    public function everyRegisteredReaderHasItsTestAndItsContractLine(): void
+    {
+        $root = RepositoryRoot::path();
+
+        $this->assertNotNull($root, 'the repository root does not resolve: the compose.dev.yaml bind mount is gone');
+        $this->assertSame([], CryptoReadRegistration::problems($this->readers(), $root));
     }
 
     #[Test]
@@ -142,19 +162,19 @@ final class CryptoReadBoundaryGateTest extends TestCase
         $swept = [];
 
         foreach (ApiSourceFiles::phpFiles() as $file) {
-            $swept[] = $file->getPathname();
+            $swept[] = (string) \realpath($file->getPathname());
         }
 
         $this->assertGreaterThan(500, \count($swept), 'the sweep walked a fraction of api/src');
 
         foreach (CryptoReadBoundaryRules::PORTS as $port) {
-            $declaringFile = (string) (new ReflectionClass($port))->getFileName();
+            $declaringFile = (string) \realpath((string) (new ReflectionClass($port))->getFileName());
 
             $this->assertContains($declaringFile, $swept, $port . ' is never swept');
         }
 
         foreach (\array_keys($this->readers()) as $reader) {
-            $path = ApiSourceFiles::root() . '/' . $reader;
+            $path = (string) \realpath(ApiSourceFiles::root() . '/' . $reader);
 
             $this->assertContains($path, $swept, $reader . ' is registered but never swept');
         }

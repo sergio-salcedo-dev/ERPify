@@ -40,10 +40,12 @@ final class CryptoReadBoundaryRules
     public const string RECIPE = 'A file that calls a read method of EnvelopeEncryptor / StreamEnvelopeEncryptor owes '
         . 'the contract #418 defers to it: translate at the read boundary, so dek-destroyed answers a deliberate '
         . 'status (candidate 410 Gone) and decryption-failed stays a 5xx integrity fault, WITHOUT a marker on '
-        . 'DekDestroyed / DecryptionFailed (the write path needs their 500). Add a functional test under '
-        . 'api/tests/Functional (a *Test.php file) that asserts both types as string literals, a line of '
-        . 'docs/api-error-contract.md that links this file and names dek-destroyed, and register it in READERS of '
-        . 'CryptoReadBoundaryGateTest as "file => [test]".';
+        . 'DekDestroyed / DecryptionFailed (the write path needs their 500). Add a test that provokes both and '
+        . 'holds dek-destroyed and decryption-failed as string literals (a *Test.php under api/tests/Functional) '
+        . 'or outside a comment (a .feature under api/features), a single line of docs/api-error-contract.md that '
+        . 'cites api/src/<file> and names dek-destroyed, and register it in READERS of CryptoReadBoundaryGateTest '
+        . "as 'Documents/X.php' => ['test' => 'tests/Functional/Documents/XTest.php'] (the reader relative "
+        . 'to api/src, the test relative to api/).';
 
     /**
      * Public methods of the ports that are not writes, lower-cased and sorted. A method a port grows tomorrow is a

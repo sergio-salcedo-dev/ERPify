@@ -4,30 +4,39 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Support;
 
+use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
+use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use RuntimeException;
 
 /**
  * Whether a reader registered in `CryptoReadBoundaryGateTest::READERS` can hold the contract it stands for: a
- * functional test that holds both outcome types as string literals, and a line of the error-contract page that
- * links the file as a whole path and names the outcome. Judged on the files, never on what the test asserts.
+ * test that holds both crypto outcome types, and a line of the error-contract page that cites the file as a
+ * whole path and names the first outcome. Judged on the files, never on what the test does.
+ *
+ * Two kinds of test are accepted, because the repository proves an HTTP route in two lanes: a PHPUnit
+ * `*Test.php` under `api/tests/Functional` (the type held as a string literal, so a comment never counts) and a
+ * Behat `.feature` under `api/features` (the type held outside a `#` comment line).
  *
  * @internal test support
  */
 final class CryptoReadRegistration
 {
-    public const string CONTRACT = 'docs/api-error-contract.md';
-
     /**
-     * The two outcomes a read path must pin, spelled as the wire `type` they answer with.
+     * The two crypto CAUSES a read path must provoke and pin, spelled as the `type` those exceptions carry. They
+     * are the causes, not necessarily the type on the wire after the read boundary translates them.
      *
      * @var list<string>
      */
-    public const array OUTCOME_TYPES = ['dek-destroyed', 'decryption-failed'];
+    public const array OUTCOME_TYPES = [DekDestroyed::TYPE, DecryptionFailed::TYPE];
+
+    public const string CONTRACT = 'docs/api-error-contract.md';
+
+    private const string TEST_KINDS = 'a *Test.php under api/tests/Functional or a .feature under api/features';
 
     /**
      * Why each registered reader cannot hold the contract it stands for; empty when every one can.
      *
-     * @param array<string, array{test: string}> $readers
+     * @param array<string, array{test: string}> $readers reader (relative to api/src) => ['test' => path from api/]
      *
      * @return list<string>
      */
@@ -36,7 +45,7 @@ final class CryptoReadRegistration
         $problems = [];
 
         foreach ($readers as $reader => ['test' => $test]) {
-            $problem = self::registrationProblem($reader, $test, $repository);
+            $problem = self::problem($reader, $test, $repository);
 
             if (null !== $problem) {
                 $problems[] = $reader . ': ' . $problem . '. ' . CryptoReadBoundaryRules::RECIPE;
@@ -46,10 +55,12 @@ final class CryptoReadRegistration
         return $problems;
     }
 
-    private static function registrationProblem(string $reader, string $test, string $repository): ?string
+    private static function problem(string $reader, string $test, string $repository): ?string
     {
-        return self::readerProblem($reader, self::directory($repository . '/api/src'))
-            ?? self::testProblem($test, self::directory($repository . '/api/tests'))
+        $apiRoot = self::directory($repository . '/api');
+
+        return self::readerProblem($reader, $apiRoot . '/src')
+            ?? self::testProblem($test, $apiRoot)
             ?? self::contractProblem($reader, $repository . '/' . self::CONTRACT);
     }
 
@@ -64,23 +75,29 @@ final class CryptoReadRegistration
         return null;
     }
 
-    private static function testProblem(string $test, string $testsRoot): ?string
+    private static function testProblem(string $test, string $apiRoot): ?string
     {
-        $path = \realpath($testsRoot . '/' . $test);
+        $path = \realpath($apiRoot . '/' . $test);
 
         if (false === $path || !\is_file($path)) {
-            return \sprintf('its test %s does not exist', $test);
+            return \sprintf('its test %s does not exist under api/', $test);
         }
 
-        if (!\str_starts_with($path, $testsRoot . '/Functional/') || !\str_ends_with($path, 'Test.php')) {
-            return \sprintf('its test %s is not a *Test.php file under api/tests/Functional', $test);
+        $kind = self::kindOf($path, $apiRoot);
+
+        if (null === $kind) {
+            return \sprintf('its test %s is not %s', $test, self::TEST_KINDS);
         }
 
-        $literals = self::stringLiteralsIn((string) \file_get_contents($path));
+        $texts = 'php' === $kind
+            ? self::stringLiteralsIn(self::read($path))
+            : self::featureLinesIn(self::read($path));
+
+        $form = 'php' === $kind ? 'a string literal' : 'text outside a comment';
 
         foreach (self::OUTCOME_TYPES as $type) {
-            if (!self::anyContains($literals, $type)) {
-                return \sprintf('its test %s does not assert %s', $test, $type);
+            if (!self::anyContains($texts, $type)) {
+                return \sprintf('its test %s does not hold %s as %s', $test, $type, $form);
             }
         }
 
@@ -89,20 +106,32 @@ final class CryptoReadRegistration
 
     private static function contractProblem(string $reader, string $contract): ?string
     {
-        if (!\is_file($contract)) {
-            throw new RuntimeException($contract . ' does not exist');
-        }
-
-        if (self::contractStatesTheReader((string) \file_get_contents($contract), $reader)) {
+        if (self::contractNamesTheReader(self::read($contract), $reader)) {
             return null;
         }
 
         return \sprintf(
-            '%s has no line that links %s and names %s',
+            '%s has no single line that cites api/src/%s and names %s',
             self::CONTRACT,
             $reader,
             self::OUTCOME_TYPES[0],
         );
+    }
+
+    /**
+     * @return 'php'|'feature'|null
+     */
+    private static function kindOf(string $path, string $apiRoot): ?string
+    {
+        if (\str_starts_with($path, $apiRoot . '/tests/Functional/') && \str_ends_with($path, 'Test.php')) {
+            return 'php';
+        }
+
+        if (\str_starts_with($path, $apiRoot . '/features/') && \str_ends_with($path, '.feature')) {
+            return 'feature';
+        }
+
+        return null;
     }
 
     /**
@@ -127,6 +156,19 @@ final class CryptoReadRegistration
     }
 
     /**
+     * The lines of a Gherkin source that are not `#` comments.
+     *
+     * @return list<string>
+     */
+    private static function featureLinesIn(string $source): array
+    {
+        return \array_values(\array_filter(
+            \explode("\n", $source),
+            static fn (string $line): bool => !\str_starts_with(\ltrim($line), '#'),
+        ));
+    }
+
+    /**
      * @param list<string> $haystacks
      */
     private static function anyContains(array $haystacks, string $needle): bool
@@ -135,18 +177,31 @@ final class CryptoReadRegistration
     }
 
     /**
-     * A line of the page that holds the reader's path as a whole path (not a prefix of a longer one) and names the
-     * outcome that path owes a deliberate status. A file the page already cites for another reason does not pass
-     * unless that line also says what the read path answers.
+     * A line of the page that cites the reader's path as a whole path (not as the tail of a longer one or the
+     * head of another) and names the outcome. A file the page already cites for another reason does not pass
+     * unless that same line also says what the read path answers. A citation is not a Markdown link: prose
+     * satisfies it, and whether the line says the right thing is review's to judge.
      */
-    private static function contractStatesTheReader(string $contract, string $reader): bool
+    private static function contractNamesTheReader(string $contract, string $reader): bool
     {
-        $path = '#api/src/' . \preg_quote($reader, '#') . '(?![\w\-]|\.\w)#';
+        $path = '#(?<![\w\-])api/src/' . \preg_quote($reader, '#') . '(?![\w\-]|\.\w)#';
 
         return \array_any(
             \explode("\n", $contract),
-            static fn ($line): bool => \str_contains($line, self::OUTCOME_TYPES[0]) && 1 === \preg_match($path, $line),
+            static fn (string $line): bool => \str_contains($line, self::OUTCOME_TYPES[0])
+                && 1 === \preg_match($path, $line),
         );
+    }
+
+    private static function read(string $path): string
+    {
+        $contents = \is_file($path) ? \file_get_contents($path) : false;
+
+        if (!\is_string($contents)) {
+            throw new RuntimeException($path . ' does not exist or could not be read');
+        }
+
+        return $contents;
     }
 
     private static function directory(string $path): string

@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Gate;
 
 use Erpify\Tests\Support\CryptoReadBoundaryRules;
 use Erpify\Tests\Support\CryptoReadRegistration;
+use Erpify\Tests\Support\CryptoReadRegistrationCases;
 use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use RuntimeException;
 use SplFileInfo;
 
 /**
@@ -86,6 +88,10 @@ final class CryptoReadBoundaryRulesGateTest extends TestCase
             {
             }
 
+            public function __invoke(): void
+            {
+            }
+
             protected function internal(): void
             {
             }
@@ -120,84 +126,22 @@ final class CryptoReadBoundaryRulesGateTest extends TestCase
      */
     public static function provideARegistrationIsJudgedByWhatItCanHoldCases(): iterable
     {
-        $reader = 'Documents/Download.php';
-        $test = 'Functional/Documents/DownloadTest.php';
-        $testFile = 'api/tests/' . $test;
-        $notATest = 'is not a *Test.php file under api/tests/Functional';
-        $contract = 'docs/api-error-contract.md';
-        $unstated = 'has no line that links Documents/Download.php and names dek-destroyed';
-
-        yield 'both outcomes pinned and the contract links the reader' => [
-            self::completeRepository(),
-            [$reader => ['test' => $test]],
-            null,
-        ];
-
-        yield 'reader that does not exist' => self::refused([], 'Absent.php', $test, 'its file Absent.php');
-        yield 'reader that is a directory' => self::refused([], 'Documents', $test, 'its file Documents does');
-        yield 'reader outside api/src' => self::refused([], '../tests/' . $test, $test, 'does not exist under api/src');
-        yield 'test that does not exist' => self::refused([], $reader, 'Functional/X.php', 'its test Functional/X.php');
-        yield 'test that is a directory' => self::refused([], $reader, 'Functional/Documents', 'its test Functional/D');
-        yield 'test outside Functional' => self::refused(
-            ['api/tests/Unit/DownloadTest.php' => self::assertingBothTypes()],
-            $reader,
-            'Unit/DownloadTest.php',
-            $notATest,
-        );
-        yield 'file under Functional that is not a test class file' => self::refused(
-            ['api/tests/Functional/Helper.php' => self::assertingBothTypes()],
-            $reader,
-            'Functional/Helper.php',
-            $notATest,
-        );
-        yield 'test that pins only dek-destroyed' => self::refused(
-            [$testFile => "<?php return ['dek-destroyed'];"],
-            $reader,
-            $test,
-            'does not assert decryption-failed',
-        );
-        yield 'test that pins only decryption-failed' => self::refused(
-            [$testFile => "<?php return ['decryption-failed'];"],
-            $reader,
-            $test,
-            'does not assert dek-destroyed',
-        );
-        yield 'test that names both types only in a comment' => self::refused(
-            [$testFile => "<?php // 'dek-destroyed' 'decryption-failed'"],
-            $reader,
-            $test,
-            'does not assert dek-destroyed',
-        );
-        yield 'contract that does not mention the reader' => self::refused(
-            [$contract => "# Errors\n"],
-            $reader,
-            $test,
-            $unstated,
-        );
-        yield 'contract that links the reader on a line that does not name the outcome' => self::refused(
-            [$contract => "| download | api/src/Documents/Download.php |\n"],
-            $reader,
-            $test,
-            $unstated,
-        );
-        yield 'contract that links only a longer path' => self::refused(
-            [$contract => "| download | api/src/Documents/Download.php.bak | dek-destroyed |\n"],
-            $reader,
-            $test,
-            $unstated,
-        );
+        return CryptoReadRegistrationCases::all();
     }
 
-    /**
-     * One refused registration: the complete planted repository with `$files` laid over it.
-     *
-     * @param array<string, string> $files
-     *
-     * @return array{array<string, string>, array<string, array{test: string}>, string}
-     */
-    private static function refused(array $files, string $reader, string $test, string $problem): array
+    #[Test]
+    public function aMissingContractPageIsAnEnvironmentFailureAndNotARegistrationProblem(): void
     {
-        return [[...self::completeRepository(), ...$files], [$reader => ['test' => $test]], $problem];
+        $files = CryptoReadRegistrationCases::completeRepository();
+        unset($files['docs/api-error-contract.md']);
+        $repository = $this->plantedRepository($files);
+
+        $this->expectException(RuntimeException::class);
+
+        CryptoReadRegistration::problems(
+            ['Documents/Download.php' => ['test' => 'tests/Functional/Documents/DownloadTest.php']],
+            $repository,
+        );
     }
 
     #[Test]
@@ -250,26 +194,6 @@ final class CryptoReadBoundaryRulesGateTest extends TestCase
         yield 'a vendor function ending in the name' => ['\sodium_crypto_aead_xchacha20poly1305_ietf_decrypt($c);', []];
         // Pinned blind spot: a static receiver is not an instance call, and the ports are injected instances.
         yield 'static call' => ['Port::decrypt($scope);', []];
-    }
-
-    /**
-     * A planted repository carrying the reader, a passing functional test and a contract row, for the cases that
-     * each break exactly one of them.
-     *
-     * @return array<string, string>
-     */
-    private static function completeRepository(): array
-    {
-        return [
-            'api/src/Documents/Download.php' => '<?php // reader',
-            'api/tests/Functional/Documents/DownloadTest.php' => self::assertingBothTypes(),
-            'docs/api-error-contract.md' => '| download | api/src/Documents/Download.php | `dek-destroyed` |' . "\n",
-        ];
-    }
-
-    private static function assertingBothTypes(): string
-    {
-        return "<?php return ['dek-destroyed', 'decryption-failed'];";
     }
 
     /**

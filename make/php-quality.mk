@@ -255,11 +255,11 @@ php.lint.document-custody: ## Document custody log append-only gate
 
 # Fails CI when a file under `api/src` outside `Shared/Crypto/` calls a READ method of EnvelopeEncryptor or
 # StreamEnvelopeEncryptor (every public method that is not encrypt, seal or destroyScope, derived by reflection so
-# a method a port grows tomorrow is a read by default) without being registered beside the functional test that
-# pins what that path answers for `dek-destroyed` and `decryption-failed`, and a line of
-# docs/api-error-contract.md that links it and names `dek-destroyed` (#418). Both exceptions carry no marker and map to 500, which is right
-# on the write path and wrong on a read path, where the first is an expected post-erasure outcome; the read
-# boundary translates, and neither shared exception gains a marker.
+# a method a port grows tomorrow is a read by default) without being registered beside a test (a PHPUnit
+# functional test or a Behat feature) that holds `dek-destroyed` and `decryption-failed`, and a line of
+# docs/api-error-contract.md that cites it and names `dek-destroyed` (#418). Both exceptions carry no marker
+# and map to 500, which is right on the write path and wrong on a read path, where the first is an expected
+# post-erasure outcome; the read boundary translates, and neither shared exception gains a marker.
 #
 # A green proves the files calling a read method are exactly the registered ones; it does not prove the
 # registered test proves anything, nor that the status is the right one, nor a call the tokens do not show
