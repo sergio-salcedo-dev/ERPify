@@ -155,6 +155,8 @@ tests/Unit/Gate/CorrelationIdOwnershipGateTest.php :: home
 tests/Unit/Gate/CredentialProofActionRulesGateTest.php :: home
 tests/Unit/Gate/CredentialProofGateTest.php :: home
 tests/Unit/Gate/CredentialProofRulesGateTest.php :: home
+tests/Unit/Gate/CryptoReadBoundaryGateTest.php :: home
+tests/Unit/Gate/CryptoReadBoundaryRulesGateTest.php :: home
 tests/Unit/Gate/DeptracBlessedLayerGateTest.php :: home
 tests/Unit/Gate/DeptracSeamSyncGateTest.php :: home
 tests/Unit/Gate/DocumentCustodyMutationBlindSpotGateTest.php :: home

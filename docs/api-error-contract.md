@@ -327,6 +327,8 @@ Redaction: `DekDestroyed` / `DecryptionFailed` / `CannotSealEmptyStream` / `Stre
 The drift gate (`ErrorContractGateTest`) covers only markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
 
 > **Deferred decision for Epic 3 — do not skip.** Before the Epic 3 decrypt/read route ships, `dek-destroyed` and `decryption-failed` need a deliberate status *on that path*: `dek-destroyed` is an expected post-erasure outcome (candidate **410 Gone**), while `decryption-failed` stays a **5xx** integrity fault (keep it Sentry-visible). Assign these by **translating at the read boundary** — the read handler catches the crypto exception and throws a read-specific, marker-carrying exception. Do **not** add a marker to `DekDestroyed` / `DecryptionFailed` themselves: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry.
+>
+> `make php.lint.crypto-read-boundary` reds the build when a file under `api/src` outside `Shared/Crypto/` calls a read method of `EnvelopeEncryptor` / `StreamEnvelopeEncryptor` (every public method that is not `encrypt`, `seal` or `destroyScope`) until it is registered with a test (a `*Test.php` functional test or a Behat `.feature`) holding both types and a single line on this page that cites the file and names `dek-destroyed`. A green proves that registration exists, not that the status chosen is right nor that the test exercises it; that stays review's to judge.
 
 ## How to add a new error
 
