@@ -251,6 +251,28 @@ php.lint.document-custody: ## Document custody log append-only gate
 	@$(PHP_TEST) bin/phpunit --filter=DocumentCustodyMutationRulesGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentCustodyMutationBlindSpotGateTest
 
+## —— Crypto read-boundary gate ——————————————————————————————————————————————
+
+# Fails CI when a file under `api/src` outside `Shared/Crypto/` calls a READ method of EnvelopeEncryptor or
+# StreamEnvelopeEncryptor (every public method that is not encrypt, seal or destroyScope, derived by reflection so
+# a method a port grows tomorrow is a read by default) without being registered beside the functional test that
+# pins what that path answers for `dek-destroyed` and `decryption-failed`, and a line of
+# docs/api-error-contract.md that links it and names `dek-destroyed` (#418). Both exceptions carry no marker and map to 500, which is right
+# on the write path and wrong on a read path, where the first is an expected post-erasure outcome; the read
+# boundary translates, and neither shared exception gains a marker.
+#
+# A green proves the files calling a read method are exactly the registered ones; it does not prove the
+# registered test proves anything, nor that the status is the right one, nor a call the tokens do not show
+# (the header of the test enumerates them). The registry is empty while no read route exists.
+#
+# Two classes, each selected BY NAME in its own run, for the reason spelled out at the sibling targets: the
+# assertions over the real tree, and the falsifiability of the rules against planted input (which is the only
+# thing exercising the registration checks while the registry is empty). A vanished class is an empty suite,
+# which `failOnEmptyTestSuite` turns into exit 1.
+php.lint.crypto-read-boundary: ## Encryption-port read-caller registration gate (#418)
+	@$(PHP_TEST) bin/phpunit --filter=CryptoReadBoundaryGateTest
+	@$(PHP_TEST) bin/phpunit --filter=CryptoReadBoundaryRulesGateTest
+
 ## —— Documents ingest gate —————————————————————————————————————————————————
 
 # Six classes, each selected BY NAME in its own run (a common prefix goes green on a strict subset):
@@ -690,7 +712,7 @@ php.deptrac.baseline: ## Regenerate the deptrac baseline (grandfathered inner-la
 # masked here and only fails later in CI's `php.quality.dry-run`. Re-running the
 # strict, read-only `php.cs.dry-run` at the end makes `make php.quality` FAIL on
 # that drift locally, so it is caught before commit/push instead of on CI. History: long-line drift slipped through on the keyset PR.
-php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
+php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.crypto-read-boundary php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac php.cs.dry-run ## Full PHP lint sweep
 
 # Check-only sweep for CI / pre-push: the read-only subset of php.quality that is
 # currently green, fanned out in parallel. Two wins over php.quality:
@@ -715,7 +737,7 @@ php.quality: php.stan php.rector php.cs-fixer php.md php.cs php.gherkin php.lint
 #
 # PHPStan `level: max` is the sole type-checking gate — there is no second
 # analyser to reconcile it with.
-php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
+php.quality.dry-run: php.stan php.rector.dry-run php.cs-fixer.dry-run php.md php.cs.dry-run php.gherkin php.lint.yaml php.lint.doctrine php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.crypto-read-boundary php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary php.lint.project-context php.lint.public-access php.lint.credential-proof php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention php.lint.accepted-risk php.lint.stacked-docblock php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference composer.check.missing-deps php.deptrac ## Check-only PHP lint sweep (CI; read-only, parallel-safe)
 
 # The one command to run before pushing PHP: apply the fixers, then prove the tree is clean the way CI reads it,
 # then run the suite. Each step answers something the others cannot:
@@ -751,7 +773,7 @@ php.prepush: ## Before pushing PHP: php.quality (apply) → php.quality.dry-run 
         php.gherkin php.gherkin.rules \
         php.lint.doctrine php.lint.yaml \
         php.lint.error-contract php.lint.bounded-context php.lint.event-bus php.lint.orm-sort-direction php.lint.audit-resource php.lint.audit-evidence \
-        php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary \
+        php.lint.persistent-transport php.lint.person-reference php.lint.document-custody php.lint.crypto-read-boundary php.lint.documents-ingest php.lint.schedule-consumption php.lint.step-vocabulary \
         php.lint.composer-stability php.lint.prod-container php.lint.route-manifest php.lint.config-reference php.lint.project-context php.lint.public-access php.lint.credential-proof \
         php.lint.gate-placement php.lint.skills-sync php.lint.log-carriers php.lint.log-retention \
         php.lint.accepted-risk php.lint.stacked-docblock \
