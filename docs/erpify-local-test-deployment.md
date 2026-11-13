@@ -68,6 +68,12 @@ remaining copy/paste commands (hosts entry, system-trust import, Firefox),
 below are handled or spelled out for you by the script; they remain the full
 per-client reference.
 
+The rehearsal also always starts the Documents malware scanner (`scanner`, ClamAV `clamd`): a 2 GiB memory
+ceiling on top of the rest of the stack, and a first start that downloads about 300 MiB of signatures from the
+ClamAV mirror, so the first `make deploy.local` takes minutes longer to become healthy and needs outbound HTTPS to
+`database.clamav.net`. Documents wait `Received`, untouched, until it answers. See the *Document scanner* section of
+[`deployment-guide.md`](deployment-guide.md).
+
 The rehearsal runs as its own compose project, **`erpify-prodlocal`**, never as
 dev's `erpify`: sharing it hands prod dev's volumes, and Postgres — which applies
 `POSTGRES_PASSWORD` only when it initialises a volume — then refuses the prod
@@ -194,7 +200,7 @@ Inside the repo, only `./erpify-local-root-ca.crt` is written (gitignored).
 - `https://erpify.local` loads the PWA, with a valid (internally-trusted) lock.
 - `https://erpify.local/api/v1/health` returns `200`.
 - `make ENV=prod docker.ps` (or `docker compose -p erpify-prodlocal --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml -f compose.rehearsal.yaml ps`)
-  shows every service healthy.
+  shows every service healthy (`scanner` last: it reports healthy only once its signatures are loaded).
 
 ## Inspect the database (psql or a GUI client)
 

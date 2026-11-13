@@ -11,3 +11,10 @@ services:
         # dev kernel dies in `DefinitionErrorExceptionPass` — `make php.lint.yaml` is where it surfaces,
         # since that target runs `bin/console lint:yaml` and compiling the container precedes it.
         exclude: '../tests/DataFixtures/Purger/EventBackbonePurger.php'
+
+    # Dev scans against the fake (clean, except an EICAR-marked stream) so `make app.dev` needs no 1 GiB scanner;
+    # the real one starts with the `scanner` compose profile and is what production binds.
+    Erpify\Tests\Double\Scanner\FakeMalwareScanner: ~
+
+    Erpify\Documents\Document\Domain\Scanning\MalwareScanner:
+        alias: Erpify\Tests\Double\Scanner\FakeMalwareScanner

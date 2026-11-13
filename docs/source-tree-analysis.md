@@ -19,7 +19,7 @@ ERPify/
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
 │   │   ├── Documents/
-│   │   │   └── Document/           # evidence-class binaries — Document snapshot + append-only document_custody log, upload intent + UploadEvidence ingest (declare + raw-body PUT), DocumentStorage port + filesystem adapter, maintenance schedule, erasure owner behind Shared/Privacy — adr/documents-custody-log.md
+│   │   │   └── Document/           # evidence-class binaries — Document snapshot + append-only document_custody log, upload intent + UploadEvidence ingest (declare + raw-body PUT), DocumentStorage port + filesystem adapter, maintenance schedule, erasure owner behind Shared/Privacy — adr/documents-custody-log.md (`Domain/Scanning`, `Application/Scanning`, `Infrastructure/Scanning`: the scan sweep over leased compare-and-sets, the `MalwareScanner` port and its clamd adapter; D8 of docs/adr/documents-custody-log.md)
 │   │   ├── Frontoffice/
 │   │   │   ├── Dev/Infrastructure/Controller
 │   │   │   ├── Health/Infrastructure/Controller

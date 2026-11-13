@@ -304,6 +304,21 @@ The re-login that follows a successful change is [`ReauthenticateDeviceBestEffor
 
 No exception above carries a context, so no problem body names an id, a parameter, a filename or a key. A sink fault while sealing (a disk that refuses the write) and a database error — one raised while renewing the lease mid-stream included — are not an aborted upload: they propagate as themselves (5xx), since the caller could not have avoided them, and the upload is expired all the same.
 
+### Documents scan (`POST /api/v1/documents/{id}/rescan`, `Document::assertReadable()`)
+
+Two problem types, both on the existing `Conflict` marker, so no marker is added and the drift gate does not fire; this table is the manual NFR26 record. `document-not-readable` is the **only** readability refusal: `Document::assertReadable()` throws it in every state but `Ready` (`Received`, `Scanning`, `Quarantined`, `ScanFailed`, `Erased`), so a caller learns nothing about the scan from it, and the audited read route (doc-5) reuses it and mints none of its own. Neither carries a context, so no problem body names an id or a state.
+
+| Situation | Answer | Source |
+|---|---|---|
+| A read of a document that is not `Ready` | **409 `document-not-readable`** (`Conflict`), identical for every state | `DocumentNotReadable`, thrown by `Document::assertReadable()` |
+| Re-scan of a document that is not `ScanFailed` (`Ready`, `Quarantined`, `Received`, `Scanning`, `Erased`) | **409 `document-not-rescannable`** (`Conflict`); nothing changes, no custody row | `DocumentNotRescannable`, decided by the compare-and-set and not by a prior read |
+| Re-scan of a document that does not exist | **404 `document-not-found`** (`NotFound`) | `DocumentNotFound` |
+| Re-scan with an id that is not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in `RescanDocumentController` |
+| Re-scan with a `reason` outside `scanner_outage_resolved`, `scanner_limits_changed`, `failure_investigated`, no `reason`, or any member the payload does not declare | **422 `validation-failed`** with `violations[]`, at mapping, before the use case | `RescanDocumentRequest`, `#[StrictRequestPayload]` |
+| Re-scan without `document.rescan` (only the ADMIN wildcard holds it) | **403 `forbidden`** | `#[IsGranted(DocumentPermission::RESCAN)]` |
+
+The scan is a read of a sealed object that is not a route, and `api/src/Documents/Document/Application/Scanning/ScanDocument.php` is its registered reader (`make php.lint.crypto-read-boundary`): `dek-destroyed` is the expected post-erasure outcome and aborts the claim with no verdict and no count (a lapse on a row that is not `Erased` is counted by the expiry sweep, ADR `documents-custody-log.md` D8), while `decryption-failed` is a deterministic failure that ends in `ScanFailed` with an alarm and no retry; neither shared exception gains a marker.
+
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 
 Not every `DomainException` carries a marker. Two of them guard the session-minting stage of the login and are graded in its table above — `SessionAdmissionUnresolvable` (`session-admission-unresolvable`) and `MembershipCardinalityViolated` (`membership-cardinality-violated`); both are HTTP-reachable on every flow that signs a device in, map to **500** by the mechanism below, and carry no context. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:

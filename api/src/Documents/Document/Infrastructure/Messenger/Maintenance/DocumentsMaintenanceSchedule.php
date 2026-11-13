@@ -24,6 +24,12 @@ use Symfony\Contracts\Cache\CacheInterface;
  * objects at least twenty minutes old, so five minutes is fine-grained enough; the retention prune works in days
  * and runs hourly; the report observes state that stays wrong until someone repairs it, so it runs daily.
  *
+ * The scan ticks are the scan's drivers, not hints: the scan sweep claims what is due on `next_scan_at`, the lease
+ * expiry takes back a scan whose worker died (a 2 minute lease, so a minute is fine-grained enough), and the cap
+ * sweep ends a `Received` row a lowered cap would otherwise strand. One scan pass may START documents for a minute
+ * and then finishes the one in flight, which is why it fits the margin the reaper's cadence is computed on. The
+ * scan report is hourly: it observes documents that wait for a person or an outage, in hours.
+ *
  * **Every tick is idempotent and safe under a duplicate.** One `scheduler_worker` replica is an operating policy,
  * not a correctness dependency: each intent and each row is decided under its own lock and rechecked there, a
  * deletion of an absent object is already satisfied, and the report only reads.
@@ -34,6 +40,8 @@ use Symfony\Contracts\Cache\CacheInterface;
 #[AsSchedule('documents_maintenance')]
 final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInterface
 {
+    private const string EVERY_MINUTE = '60 seconds';
+
     public function __construct(
         #[Autowire(service: 'cache.scheduler_checkpoint')]
         private CacheInterface $checkpointState,
@@ -45,10 +53,14 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
     {
         return (new Schedule())
             ->stateful($this->checkpointState)
-            ->add(RecurringMessage::every('60 seconds', new ReapUploadIntentsMessage()))
-            ->add(RecurringMessage::every('60 seconds', new RollForwardPromotionsMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new ReapUploadIntentsMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new RollForwardPromotionsMessage()))
             ->add(RecurringMessage::every('5 minutes', new SweepStagedOrphansMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new ScanDueDocumentsMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new ExpireScanLeasesMessage()))
+            ->add(RecurringMessage::every('5 minutes', new SweepCappedDocumentsMessage()))
             ->add(RecurringMessage::every('1 hour', new PruneCommittedIntentsMessage()))
+            ->add(RecurringMessage::every('1 hour', new ReportDocumentScansMessage()))
             ->add(RecurringMessage::every('1 day', new ReportDocumentStorageMessage()))
         ;
     }

@@ -17,8 +17,6 @@ use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\UploadLimits;
-use Erpify\Documents\Document\Infrastructure\Messenger\ScanDocumentHandler;
-use Erpify\Documents\Document\Infrastructure\Messenger\ScanDocumentMessage;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentRepository;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
 use Erpify\Shared\Persistence\Application\TransactionManager;
@@ -51,7 +49,6 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
 #[CoversClass(PromoteDocument::class)]
 #[CoversClass(SweepStagedOrphans::class)]
 #[CoversClass(ReapUploadIntents::class)]
-#[CoversClass(ScanDocumentHandler::class)]
 #[CoversClass(DoctrineUploadIntentRepository::class)]
 #[CoversClass(DoctrineDocumentRepository::class)]
 final class UploadRecoveryFunctionalTest extends KernelTestCase
@@ -264,25 +261,6 @@ final class UploadRecoveryFunctionalTest extends KernelTestCase
 
         $this->assertFalse($this->storage()->has(StorageArea::Staging, $orphan));
         $this->assertTrue($this->storage()->has(StorageArea::Staging, $live->scopeId));
-    }
-
-    public function testTheScanHandlerLeavesTheRowUntouched(): void
-    {
-        $document = $this->committedWithStagedObject('sealed');
-        $before = $this->intentConnection()->fetchAssociative(
-            'SELECT * FROM document WHERE id = :id',
-            ['id' => $document->documentId()],
-        );
-
-        (new ScanDocumentHandler())(new ScanDocumentMessage($document->documentId()));
-
-        $this->assertSame(
-            $before,
-            $this->intentConnection()->fetchAssociative(
-                'SELECT * FROM document WHERE id = :id',
-                ['id' => $document->documentId()],
-            ),
-        );
     }
 
     private function committedWithStagedObject(string $bytes): Document

@@ -200,6 +200,40 @@ services:
       - document_storage:/app/documents
     command: ["php", "bin/console", "messenger:consume", "async", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "scheduler_documents_maintenance", "--time-limit=3600"]
 
+  # The malware scanner of the Documents scan: ClamAV's clamd, reached over TCP on the internal network by the two
+  # processes that run the scan (messenger_worker and scheduler_worker). Defined once here and always started by
+  # the production stack; compose.dev.yaml puts it behind the `scanner` profile, so `make app.dev` does not start a
+  # ~1 GiB daemon the dev fake never calls. (The profile is NOT declared here and reset in the prod overlay: a
+  # `!reset` tag is a YAML tag the gates that read these files do not parse.) Pinned by digest: a signature engine is code that decides
+  # whether evidence is released, and a moving tag would change that on a pull.
+  #
+  # PLAINTEXT NEVER REACHES A PERSISTENT LAYER, and each line below is one of the reasons: clamd spools part of a
+  # stream to its `TemporaryDirectory` (a tmpfs, api/clamav/clamd.conf), `memswap_limit` equal to `mem_limit` leaves
+  # the container no swap to be paged into, and core dumps are off so a crash writes no memory image. What stays
+  # out of reach of these is the host's `core_pattern` and the memory itself (PRODUCTION_SECURITY_CHECKLIST.md §7).
+  #
+  # `mem_limit` and `memswap_limit` are the measured peak (1.21 GiB idle-to-100 MiB scan, 1.45 GiB with three scans at
+  # once, no growth across a signature reload with `ConcurrentDatabaseReload no`) plus headroom, and literals for the
+  # reason the logging block is: they are what keeps plaintext out of swap, and a bound an env file can widen is not a
+  # bound. (The CPU quota in compose.prod.yaml is a knob: it bounds no plaintext.) The signature database lives on a volume of its
+  # own so a recreated container does not download it again; freshclam inside the image keeps its outbound access
+  # to the ClamAV mirror, which is why compose.prod.yaml joins this service to the egress network.
+  scanner:
+    image: clamav/clamav:1.4@sha256:cbc30de94b6e9b33ac14136ff45306cee02a1f9ae522394a3cc5b9215d1affe9
+    restart: unless-stopped
+    logging: *bounded-logging
+    mem_limit: 2g
+    memswap_limit: 2g
+    ulimits:
+      core:
+        soft: 0
+        hard: 0
+    tmpfs:
+      - /run/clamav-scan:size=512m,mode=0700,uid=100,gid=101
+    volumes:
+      - clamav_db:/var/lib/clamav
+      - ./api/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+
 volumes:
   caddy_data:
   caddy_config:
@@ -221,3 +255,6 @@ volumes:
   # dies with the container; and deliberately left out of every backup, so a restore can never bring back a
   # line the retention had already deleted.
   caddy_access_log:
+  # clamd's signature database (~300 MiB), refreshed by the image's freshclam. Not a backup subject: it is
+  # downloaded again on a cold start, and the scanner is the only reader.
+  clamav_db:

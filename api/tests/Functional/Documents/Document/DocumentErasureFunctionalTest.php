@@ -204,6 +204,26 @@ final class DocumentErasureFunctionalTest extends KernelTestCase
         );
     }
 
+    #[Test]
+    public function aCustodyRowOfTheSystemNamesNobodyAndTheActorSourceNeverReportsIt(): void
+    {
+        $person = Uuid::generate();
+        $documentId = $this->plantDocument(Uuid::generate());
+        $this->plantCustody($documentId, 1, $person);
+        $this->connection()->executeStatement(
+            'INSERT INTO document_custody (id, document_id, seq, event, actor_id, created_at) '
+            . "VALUES (:id, :document, 2, 'scan_ready', NULL, NOW())",
+            ['id' => Uuid::generate(), 'document' => $documentId],
+        );
+
+        // The NULL is in the table, and what the detective source lists is the person only.
+        $this->assertSame(1, $this->intOf($this->connection()->fetchOne(
+            'SELECT COUNT(*) FROM document_custody WHERE actor_id IS NULL',
+        )));
+        $source = new DbalDocumentCustodyActorPersonReferences($this->connection());
+        $this->assertSame([$person], $source->retainedPersonIds());
+    }
+
     private function purge(string $subject): int
     {
         return $this->service(TransactionManager::class)->transactional(

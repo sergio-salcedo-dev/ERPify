@@ -163,6 +163,7 @@ tests/Unit/Gate/DocumentCustodyMutationBlindSpotGateTest.php :: home
 tests/Unit/Gate/DocumentCustodyMutationGateTest.php :: home
 tests/Unit/Gate/DocumentCustodyMutationRulesGateTest.php :: home
 tests/Unit/Gate/DocumentErasureStatementLockOrderGateTest.php :: home
+tests/Unit/Gate/DocumentScannerLimitsGateTest.php :: home
 tests/Unit/Gate/DocumentsIngestProofGateTest.php :: home
 tests/Unit/Gate/DocumentsNotAuditedGateTest.php :: home
 tests/Unit/Gate/DocumentsSchedulerStorageGateTest.php :: home

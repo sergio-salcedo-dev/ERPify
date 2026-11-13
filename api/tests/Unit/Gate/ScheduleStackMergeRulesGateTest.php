@@ -23,6 +23,8 @@ use Symfony\Component\Yaml\Exception\ParseException;
  * falsified in {@see ScheduleConsumptionRulesGateTest}.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per merge rule of Compose
  */
 #[CoversNothing]
 final class ScheduleStackMergeRulesGateTest extends TestCase
@@ -124,6 +126,18 @@ final class ScheduleStackMergeRulesGateTest extends TestCase
             self::FIXTURES . '/compose.overlay-base.yaml',
             self::FIXTURES . '/compose.overlay-reset.yaml',
         );
+    }
+
+    #[Test]
+    public function aProfileOnAServiceThatRunsNoCommandIsReadPastAndTheConsumerStaysCounted(): void
+    {
+        $consumed = ScheduleConsumption::consumedTransportsByServiceIn(
+            self::FIXTURES . '/compose.overlay-base.yaml',
+            self::FIXTURES . '/compose.overlay-profiles-non-consumer.yaml',
+        );
+
+        $this->assertArrayHasKey('messenger_worker', $consumed);
+        $this->assertArrayNotHasKey('scanner', $consumed);
     }
 
     #[Test]

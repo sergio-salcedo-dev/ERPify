@@ -2589,17 +2589,59 @@ mitigated state. Accepting one means recording who accepted it and against which
       altered after its first chunks has already written an authenticated prefix to its sink when the exception
       arrives; only the FINAL tag proves the object is whole. Every consumer therefore treats its sink as discarded
       on any exception, and one that forwards the plaintext as it arrives (an HTTP response, a scanner stream)
-      must decide, before it ships, what a partial delivery means. **Open — to be settled by the first story
-      that reads a sealed object (the scan and the audited read path).** The same story owns the second face of
-      this: an `unseal()` that has already unwrapped the DEK keeps opening chunks after a concurrent
-      `destroy()` commits, so crypto-shredding holds for every read that starts after the tombstone and not for
-      one already in flight; serialising readers with erasure (or re-checking the scope between chunks) is a
-      read-path decision, not something the encryptor can offer. Two neighbours, both accepted by construction:
+      must decide, before it ships, what a partial delivery means. **Settled for the scan (doc-4), still open for
+      the audited read path (doc-5).** The scan's scanner is the only consumer of the stream and a scan that
+      ends in an exception posts no verdict at all: a partial plaintext reaches clamd, but clamd's answer is
+      read only after the producer completed (`ClamdScanner` sends the zero-length terminator after `unseal()`
+      returned), a failed authentication or missing final chunk is `ScanFailed` (`DecryptionFailed`, an alarm,
+      no retry), and a transport fault is a return with no verdict; none of them can make a document `Ready`.
+      The same story owned the second face of this: an `unseal()` that has already unwrapped the DEK keeps
+      opening chunks after a concurrent `destroy()` commits, so crypto-shredding holds for every read that
+      starts after the tombstone and not for one already in flight. For the scan that is bounded and harmless:
+      a scan in flight when a document is erased is aborted by its next heartbeat (30 s) or by
+      `DekDestroyed` on the next chunk's key use, whichever first, and its verdict compare-and-set matches
+      nothing on an `Erased` row, so the in-flight bytes go to the scanner only and never to a caller. The
+      read path, which forwards plaintext to a caller, still has to serialise readers with erasure (or
+      re-check the scope between chunks): a read-path decision, not something the encryptor can offer. Two neighbours, both accepted by construction:
       the plaintext chunk buffers are ordinary PHP strings that are not wiped (of the key material, the DEK and
       the stream state are wiped with `sodium_memzero()` on a best-effort basis, since the copy libsodium returns
       from `init_push()`/`init_pull()` may remain in memory until PHP frees it), and the per-document keys are
       wrapped by the same `AUDIT_KEK` as the audit keys, the only KEK the module has, so one key-encryption key
       protects both; separating them is a rotation decision with no owner yet.
+- [ ] **The Documents scan holds evidence plaintext in places no control here reaches.** The scan
+      unseals an original and streams the plaintext to clamd, so for the duration of a scan it exists in the
+      worker's memory, on the TCP connection between the worker and `scanner`, and in clamd's memory and its
+      `TemporaryDirectory`. What is closed: the directory is a tmpfs (`/run/clamav-scan`, 512 MiB), the
+      scanner's `memswap_limit` equals its `mem_limit` (no swap to page plaintext into), core dumps are off for
+      the scanner, `php`, `messenger_worker` and `scheduler_worker`, and nothing in the application writes
+      plaintext to a file (`DocumentScannerLimitsGateTest` holds the declarations). What is not: **(1) the
+      host's `kernel.core_pattern`** is one setting for every process on the kernel: a piped handler
+      (systemd-coredump, apport) is the host's, not the container's, and whether it honours the container's
+      `ulimit -c 0` is the handler's choice. The VPS's pattern has not been read; **(2) tmpfs
+      pages and process memory** are readable by root on the host and by anything with `CAP_SYS_PTRACE`, and
+      the plaintext chunk buffers are ordinary PHP strings that are not wiped; **(3) the hop is unencrypted**:
+      `tcp://scanner:3310` crosses the `backend` network, which is internal (no route out, no published
+      port) but not a trust boundary against a co-resident container; **(4) the scanner is on the egress
+      network** because the image's `freshclam` refreshes signatures from `database.clamav.net`, so a compromised
+      clamd could exfiltrate what it is sent; narrowing that means a signature mirror reachable from the
+      backend network and a scanner with no egress, which is not built; **(5) a signature reload pauses
+      scanning** (`ConcurrentDatabaseReload no`, chosen so the container's 2 GiB suffices) and documents wait
+      `Received` for those seconds, deliberately. **Open — accepted while no deployment is live; closing (1)
+      is a host configuration check before the first customer, (3) and (4) are design work with no owner.**
+- [ ] **The Documents scan has five operational blind spots, each accepted by the design of doc-4.**
+      **(1) Outage detection latency:** a scanner that fails its probe claims nothing and logs nothing, so the rows
+      it has not yet claimed are reported only by the stuck-document bound (10 hours); the outage-return alarm
+      (5 returns) covers only rows a claim already touched. **(2) Signature freshness is unmonitored:** if
+      `freshclam` cannot reach the ClamAV mirror, clamd keeps answering `OK` from stale signatures and nothing
+      raises it. **(3) A poison archive that kills clamd mid-stream** is accounted as outage returns (cap 10, about
+      6.35 hours of backoff) rather than 3 attempts, because the re-probe finds the daemon restarting: the contract's
+      accounting, and slower to reach `ScanFailed` than a per-document fault deserves. **(4) The scanner's tmpfs was
+      not measured against an expanding archive:** 512 MiB against `MaxScanSize` 400M × `MaxThreads` 3 was proved
+      only for 100 MiB flat streams, and a full tmpfs fails the scan (a return), not the host. **(5) A scan pass
+      starts no document after 60 seconds, but the one in flight can run to clamd's `MaxScanTime` plus a 30 second
+      margin** on the same consumer as the upload reaper, so the reaper's one-minute cadence can slip by about two
+      minutes under a slow scan (the staging sweep's margin was computed with room for it). **Open — accepted;
+      owner: the Documents scan.**
 - [ ] **Nothing reconciles a Document tombstone until the Documents erasure story delivers the Document-driven
       reconciler.** `DbalSubjectErasureReconciler` excludes Document scopes by construction (a Document's
       erasure is recorded in its own custody, not as a `GDPR_SUBJECT_ERASED` entry) and no other reader takes

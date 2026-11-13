@@ -94,6 +94,7 @@
 /^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" as part of the property "([^"]*)"$/ => idle
 /^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" equal to "([^"]*)" as part of the property "([^"]*)"$/ => idle
 /^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" not existing as part of the property "([^"]*)"$/ => idle
+/^a document in state "([^"]*)" with id "([^"]*)"$/ => used
 /^the "([^"]*)" should have "([^"]*)" records$/ => idle
 /^the JSON nodes should be equal to \(if path not empty\):$/ => idle
 /^the SQL result as JSON should be:$/ => used

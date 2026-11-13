@@ -338,11 +338,17 @@ services:
       DOCUMENTS_STORAGE_PATH: /app/documents
     volumes:
       - document_storage:/app/documents
+    # This worker now unseals originals to scan them, so a crash must not write the plaintext into a core file;
+    # the other PHP services get the same line from compose.yaml.
+    ulimits:
+      core:
+        soft: 0
+        hard: 0
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # frontend = Sentry egress; backend = reach Postgres.
+    # frontend = Sentry egress; backend = reach Postgres and the scanner.
     networks:
       - frontend
       - backend
@@ -359,6 +365,32 @@ services:
     # retires nothing while a genuine leak still does.
     command: ["php", "bin/console", "messenger:consume", "scheduler_maintenance", "scheduler_audit_maintenance", "scheduler_identity_maintenance", "scheduler_documents_maintenance", "--time-limit=3600", "--memory-limit=224M"]
 
+  # The Documents scanner (the service is defined in compose.yaml). It has no profile here: only the dev overlay
+  # gates it, so a deployment that scans nothing — which releases nothing — cannot come from a profile somebody
+  # forgot to enable.
+  #
+  # Capabilities: the image's init chowns its signature volume as root and then drops to the `clamav` user, so
+  # those five are re-added after dropping all, and `no-new-privileges` stops anything else being regained.
+  # Two networks, neither shared with a web-facing service: `scanner_egress` is freshclam's outbound access to the
+  # ClamAV mirror and nothing else joins it (clamd's command port is unauthenticated — SHUTDOWN, RELOAD, INSTREAM —
+  # and listens on every interface, so it must not sit on `frontend` beside php and pwa); `backend` is where the
+  # scanning workers reach it, over a network with no route out and no published port.
+  scanner:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    networks:
+      - scanner_egress
+      - backend
+    cpus: ${SCANNER_CPU_LIMIT:-1.0}
+
 # Build-time only. The Sentry auth token grants write access to the project, so
 # it rides a BuildKit secret mount rather than a build arg: an arg is recorded in
 # the image and `docker history` prints it to anyone who can pull. Sourced from
@@ -374,6 +406,8 @@ secrets:
 # overlay and in compose.rehearsal.yaml, never here, so a public host runs none.
 networks:
   frontend:
+  # Outbound access for the scanner's signature refresh, joined by no other service.
+  scanner_egress:
   backend:
     internal: true
     # Fixed subnet so the database keeps a stable IP across restarts (see the

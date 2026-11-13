@@ -8,7 +8,7 @@
 .PHONY: php.unit php.unit.coverage \
 		php.behat php.behat.coverage \
 		php.test \
-		php.bench
+		php.bench php.scanner.integration
 
 ## —— PHP Unit ——
 
@@ -28,6 +28,18 @@
 # real HTTP requests. 512M is margin over the measured peak, not a measured need.
 php.unit: db.test.prepare ## PHPUnit; pass c='…' for extra args (e.g. c='--filter SomeTest')
 	@$(PHP_TEST) php -d memory_limit=$(PHPUNIT_MEMORY_LIMIT) bin/phpunit $(c)
+
+# The real-clamd test, opt-in. The default suite binds a fake scanner and never reaches a network one; this starts
+# the `scanner` compose profile (a ~1 GiB daemon whose signatures download on a cold start, so the first run takes
+# minutes), waits for its healthcheck, and runs the `scanner` group with RUN_SCANNER_INTEGRATION set. It measures what
+# only a real clamd can: that exactly MAX_ORIGINAL_BYTES is scanned, one byte more and an archive past MaxFiles or
+# MaxRecursion are limit answers, and EICAR is infected. Not a member of any quality sweep or of CI.
+php.scanner.integration: ## Real-clamd integration test (opt-in; starts the `scanner` profile, stops it afterwards)
+	$(DOCKER_COMPOSE) --profile scanner up --wait --no-build --detach scanner
+	@status=0; \
+	$(PHP_TEST) env RUN_SCANNER_INTEGRATION=1 php -d memory_limit=512M bin/phpunit --group scanner || status=$$?; \
+	$(DOCKER_COMPOSE) --profile scanner stop scanner; \
+	exit $$status
 
 # Clover report for SonarCloud (sonar.php.coverage.reportPaths). Runs with
 # XDEBUG_MODE=coverage (the image ships Xdebug off). PHPUnit writes absolute

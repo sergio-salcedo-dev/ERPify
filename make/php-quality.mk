@@ -275,7 +275,7 @@ php.lint.crypto-read-boundary: ## Encryption-port read-caller registration gate 
 
 ## —— Documents ingest gate —————————————————————————————————————————————————
 
-# Six classes, each selected BY NAME in its own run (a common prefix goes green on a strict subset):
+# Seven classes, each selected BY NAME in its own run (a common prefix goes green on a strict subset):
 #  - DocumentsTransportBoundaryGateTest: ADR invariant 6 over src/Documents — no HTTP transport type and no
 #    caller-supplied location past Infrastructure; the sealed filename value is the one exclusion. Asserts its own
 #    universe and falsifies its engine on planted sources.
@@ -288,16 +288,21 @@ php.lint.crypto-read-boundary: ## Encryption-port read-caller registration gate 
 #    var/cache/prod warm and unwritten under it), and DocumentsIngestGate must read exactly that parameter.
 #  - DocumentsSchedulerStorageGateTest: every service that runs the Documents sweeps resolves and mounts the same
 #    document storage as php.
+#  - DocumentScannerLimitsGateTest: api/clamav/clamd.conf keeps StreamMaxLength, MaxFileSize and MaxScanSize at or
+#    above UploadLimits::MAX_ORIGINAL_BYTES with AlertExceedsMax on and MaxScanTime under the scan lease, and the
+#    scanner service keeps plaintext off persistent layers (tmpfs temp directory, memswap_limit = mem_limit, core
+#    dumps off, digest-pinned image); prod always starts it, dev gates it behind the `scanner` profile.
 #  - UploadRoutePathAgreementGateTest: the content route's path from api/.route-manifest.json is matched by the
 #    API whole-query rule, its PWA mirror and both Caddyfile upload matchers, and a near miss by none of them.
 #  - UploadSpoolConfinementGateTest: upload_tmp_dir in 10-app.ini is a tmpfs in compose.yaml, prod's swap limit
 #    equals its memory limit, and the entrypoint refuses to start over a spool that is not a tmpfs.
 # All but the first two read root files through the read-only `./` bind mount at /app/repo, and FAIL without it.
-php.lint.documents-ingest: php.lint.prod-container ## Documents ingest gates (boundary, not audited, proof, storage, route path, spool)
+php.lint.documents-ingest: php.lint.prod-container ## Documents ingest gates (boundary, not audited, proof, storage, scanner limits, route path, spool)
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsTransportBoundaryGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsNotAuditedGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsIngestProofGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsSchedulerStorageGateTest
+	@$(PHP_TEST) bin/phpunit --filter=DocumentScannerLimitsGateTest
 	@$(PHP_TEST) bin/phpunit --filter=UploadRoutePathAgreementGateTest
 	@$(PHP_TEST) bin/phpunit --filter=UploadSpoolConfinementGateTest
 

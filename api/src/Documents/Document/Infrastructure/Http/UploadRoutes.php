@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Documents\Document\Infrastructure\Http;
 
 /**
- * The two ingest route names. The content route's public path is the router's, and four patterns outside it
- * recognise that path on their own — the two Caddyfile matchers lifting its body bound, the API's whole-query
- * redaction and its PWA mirror — so each is held to the path the router serves by
+ * The two ingest route names, and the operator's re-scan. The content route's public path is the router's, and four
+ * patterns outside it recognise that path on their own — the two Caddyfile matchers lifting its body bound, the
+ * API's whole-query redaction and its PWA mirror — so each is held to the path the router serves by
  * `UploadRoutePathAgreementGateTest`, which reads it from `api/.route-manifest.json`.
  */
 final class UploadRoutes
@@ -15,6 +15,9 @@ final class UploadRoutes
     public const string DECLARE = 'documents_upload_declare';
 
     public const string CONTENT = 'documents_upload_content';
+
+    /** The operator's re-scan of a document whose scan failed; not an ingest route, kept here for the one file. */
+    public const string RESCAN = 'documents_rescan';
 
     private function __construct()
     {

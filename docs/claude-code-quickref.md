@@ -53,6 +53,7 @@ make php.unit c='--filter SomeTest' # PHPUnit only.
 make php.behat c='features/...'     # Behat only.
 make php.behat.coverage             # Behat + Clover for SonarCloud (api/var/coverage/behat-clover.xml).
 make php.bench                      # Opt-in performance-budget benchmarks (default php.unit skips).
+make php.scanner.integration        # Opt-in real-clamd test (starts the `scanner` compose profile, ~1 GiB; the default suite binds a fake).
 make php.quality                    # Full sweep: PHPStan, Rector, PHP-CS-Fixer, PHPMD, PHPCS.
 make php.stan                       # PHPStan only — REQUIRED on every PHP file you change.
 make composer.update                # Safe dependency update (within composer.json ranges).

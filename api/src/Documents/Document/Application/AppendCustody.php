@@ -47,10 +47,17 @@ final readonly class AppendCustody
      * @throws DocumentNotFound            when the document does not exist
      * @throws TransientTransactionFailure when the sequence number was lost to a concurrent appender on every attempt
      */
-    public function append(string $documentId, CustodyEvent $event, string $actorId): DocumentCustody
-    {
+    public function append(
+        string $documentId,
+        CustodyEvent $event,
+        ?string $actorId,
+        ?string $reason = null,
+    ): DocumentCustody {
         Uuid::ensure($documentId);
-        Uuid::ensure($actorId);
+
+        if (null !== $actorId) {
+            Uuid::ensure($actorId);
+        }
 
         $attempts = 0;
 
@@ -59,7 +66,7 @@ final readonly class AppendCustody
 
             try {
                 return $this->transactionManager->transactional(
-                    fn (): DocumentCustody => $this->appendOnce($documentId, $event, $actorId),
+                    fn (): DocumentCustody => $this->appendOnce($documentId, $event, $actorId, $reason),
                 );
             } catch (CustodySequenceCollision $collision) {
                 if ($attempts >= self::MAX_ATTEMPTS) {
@@ -69,8 +76,12 @@ final readonly class AppendCustody
         }
     }
 
-    private function appendOnce(string $documentId, CustodyEvent $event, string $actorId): DocumentCustody
-    {
+    private function appendOnce(
+        string $documentId,
+        CustodyEvent $event,
+        ?string $actorId,
+        ?string $reason,
+    ): DocumentCustody {
         $locked = $this->documents->lockForUpdate($documentId);
 
         $custody = DocumentCustody::record(
@@ -79,6 +90,7 @@ final readonly class AppendCustody
             $this->custody->nextSequenceFor($locked),
             $event,
             $actorId,
+            $reason,
         );
         $this->custody->append($custody);
 

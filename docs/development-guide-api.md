@@ -171,6 +171,7 @@ make php.unit                              # PHPUnit
 make php.unit c='--filter SomeTest'        # filter
 make php.behat                             # Behat, --strict (config: api/behat.dist.php)
 make php.behat.coverage                    # Behat under Xdebug → api/var/coverage/behat-clover.xml (what CI runs)
+make php.scanner.integration               # Opt-in: starts the `scanner` profile (clamd) and runs the real-scanner test group
 make db.test.prepare                       # create + migrate <dbname>_test (idempotent; php.unit runs it for you)
 make db.test.reset                         # drop every <dbname>_test*, recreate the PHPUnit one (destructive)
 make db.test.shell                         # psql on the test database (db.shell opens the runtime one)

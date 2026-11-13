@@ -1,0 +1,5 @@
+# A profile on a service that runs no command of its own cannot hide a consumer: the Documents scanner is the image's
+# own entrypoint, gated behind a profile in the dev overlay. The reader reads past it and the consumer stays counted.
+services:
+  scanner:
+    profiles: ["scanner"]

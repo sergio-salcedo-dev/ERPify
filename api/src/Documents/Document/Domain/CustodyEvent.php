@@ -15,4 +15,9 @@ namespace Erpify\Documents\Document\Domain;
 enum CustodyEvent: string
 {
     case Received = 'received';
+    case ScanClaimed = 'scan_claimed';
+    case ScanReady = 'scan_ready';
+    case ScanQuarantined = 'scan_quarantined';
+    case ScanFailed = 'scan_failed';
+    case RescanRequested = 'rescan_requested';
 }
