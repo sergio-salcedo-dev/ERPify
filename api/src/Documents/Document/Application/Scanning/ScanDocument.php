@@ -75,10 +75,13 @@ final readonly class ScanDocument
     {
         $claim = $this->claim($documentId);
 
-        if (!$claim instanceof ScanClaim) {
-            return ScanResult::NotClaimed;
-        }
+        return $claim instanceof ScanClaim
+            ? $this->scanClaimed($documentId, $claim, $health)
+            : ScanResult::NotClaimed;
+    }
 
+    private function scanClaimed(string $documentId, ScanClaim $claim, ScannerHealth $health): ScanResult
+    {
         $document = $this->documents->findById($documentId);
 
         if (!$document instanceof Document) {
@@ -180,13 +183,7 @@ final readonly class ScanDocument
         }
 
         if ($throwable instanceof DecryptionFailed || $throwable instanceof ObjectNotFound) {
-            if (!$this->post($claim, DocumentState::ScanFailed, CustodyEvent::ScanFailed)) {
-                return ScanResult::Aborted;
-            }
-
-            $this->alarm($claim, $throwable instanceof ObjectNotFound ? 'object-missing' : 'authentication-failed');
-
-            return ScanResult::Failed;
+            return $this->failDeterministically($claim, $throwable);
         }
 
         $this->stopTheRunWhenTheScannerCannotBeReached($throwable, $health);
@@ -196,6 +193,21 @@ final readonly class ScanDocument
         }
 
         throw $throwable;
+    }
+
+    /**
+     * A failure no retry changes: the document ends in `ScanFailed` with an alarm, unless the clock or an erasure
+     * refuses the verdict, which is an abort.
+     */
+    private function failDeterministically(ScanClaim $claim, Throwable $cause): ScanResult
+    {
+        if (!$this->post($claim, DocumentState::ScanFailed, CustodyEvent::ScanFailed)) {
+            return ScanResult::Aborted;
+        }
+
+        $this->alarm($claim, $cause instanceof ObjectNotFound ? 'object-missing' : 'authentication-failed');
+
+        return ScanResult::Failed;
     }
 
     /**

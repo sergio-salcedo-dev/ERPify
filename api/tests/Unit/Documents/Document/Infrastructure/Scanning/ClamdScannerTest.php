@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Scanning;
 
+use Erpify\Documents\Document\Application\Scanning\WriteCallbackStream;
 use Erpify\Documents\Document\Domain\Scanning\ScanInterrupted;
 use Erpify\Documents\Document\Domain\Scanning\ScannerUnavailable;
 use Erpify\Documents\Document\Domain\Scanning\ScanVerdict;
 use Erpify\Documents\Document\Infrastructure\Scanning\ClamdScanner;
+use Erpify\Documents\Document\Infrastructure\Scanning\ClamdSocket;
 use Erpify\Tests\Support\Clamd\FakeClamd;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -20,8 +22,14 @@ use RuntimeException;
  * property that matters is that nothing but `stream: OK` is clean and a limit answer is never infected-or-clean.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per answer or break of the exchange
  */
 #[CoversClass(ClamdScanner::class)]
+#[CoversClass(ClamdSocket::class)]
+#[CoversClass(WriteCallbackStream::class)]
+#[CoversClass(ScanInterrupted::class)]
+#[CoversClass(ScannerUnavailable::class)]
 final class ClamdScannerTest extends TestCase
 {
     private ?FakeClamd $clamd = null;
@@ -94,6 +102,60 @@ final class ClamdScannerTest extends TestCase
         );
 
         $this->assertSame(ScanVerdict::LimitExceeded, $verdict);
+    }
+
+    #[Test]
+    public function aLimitAnswerClamdWroteIsTheVerdictEvenWhenTheProducerFailedOnTheRefusedWrite(): void
+    {
+        $scanner = $this->scannerAnswering('size-close');
+
+        // A decryptor whose sink stopped accepting raises, as `unseal()` does on a write that stores nothing.
+        $verdict = $scanner->scan(
+            static function ($sink): void {
+                \set_error_handler(static fn (): bool => true);
+
+                try {
+                    for ($chunk = 0; $chunk < 300; ++$chunk) {
+                        if (!\fwrite($sink, \str_repeat('a', 65_536))) {
+                            throw new RuntimeException('the sink refused the write');
+                        }
+
+                        \usleep(1_000);
+                    }
+                } finally {
+                    \restore_error_handler();
+                }
+            },
+            static fn (): bool => true,
+        );
+
+        $this->assertSame(ScanVerdict::LimitExceeded, $verdict);
+    }
+
+    #[Test]
+    public function aProducerFailureAfterARefusedWriteWithNoLimitAnswerPropagatesUnchanged(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageIsOrContains('the sink refused the write');
+
+        $this->scannerAnswering('close-early')->scan(
+            static function ($sink): void {
+                \set_error_handler(static fn (): bool => true);
+
+                try {
+                    for ($chunk = 0; $chunk < 300; ++$chunk) {
+                        if (!\fwrite($sink, \str_repeat('a', 65_536))) {
+                            throw new RuntimeException('the sink refused the write');
+                        }
+
+                        \usleep(1_000);
+                    }
+                } finally {
+                    \restore_error_handler();
+                }
+            },
+            static fn (): bool => true,
+        );
     }
 
     #[Test]

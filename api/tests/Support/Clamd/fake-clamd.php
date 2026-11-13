@@ -72,8 +72,11 @@ while (true) {
         $length = unpack('N', $header);
 
         // Past its ceiling clamd answers and closes at once, without reading the rest of the stream.
-        if ('size-close' === $mode) {
-            fwrite($connection, $replies['size']);
+        if (in_array($mode, ['size-close', 'close-early'], true)) {
+            if ('size-close' === $mode) {
+                fwrite($connection, $replies['size']);
+            }
+
             fclose($connection);
 
             continue 2;

@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Documents\Document;
 
+use DateTimeImmutable;
 use Erpify\Documents\Document\Application\AppendCustody;
 use Erpify\Documents\Document\Application\Scanning\ExpireScanLeases;
 use Erpify\Documents\Document\Application\Scanning\ScanDocument;
 use Erpify\Documents\Document\Application\Scanning\ScanDueDocuments;
+use Erpify\Documents\Document\Application\Scanning\ScannerHealth;
 use Erpify\Documents\Document\Application\Scanning\ScanResult;
 use Erpify\Documents\Document\Application\Scanning\ScanSession;
 use Erpify\Documents\Document\Application\Scanning\SweepCappedDocuments;
+use Erpify\Documents\Document\Application\Scanning\WriteCallbackStream;
+use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Scanning\DocumentScanLeases;
 use Erpify\Documents\Document\Domain\Scanning\ScanClaim;
 use Erpify\Documents\Document\Domain\Scanning\ScanInterrupted;
+use Erpify\Documents\Document\Domain\Scanning\ScanLease;
+use Erpify\Documents\Document\Domain\Scanning\ScannerUnavailable;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentScanLeases;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
@@ -42,6 +49,14 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(ExpireScanLeases::class)]
 #[CoversClass(SweepCappedDocuments::class)]
 #[CoversClass(ScanSession::class)]
+#[CoversClass(ScannerHealth::class)]
+#[CoversClass(WriteCallbackStream::class)]
+#[CoversClass(Document::class)]
+#[CoversClass(DbalDocumentScanLeases::class)]
+#[CoversClass(ScanClaim::class)]
+#[CoversClass(ScanLease::class)]
+#[CoversClass(ScannerUnavailable::class)]
+#[CoversClass(ScanInterrupted::class)]
 final class ScanLeaseAccountingFunctionalTest extends KernelTestCase
 {
     use BuildsScanServices;
@@ -272,11 +287,46 @@ final class ScanLeaseAccountingFunctionalTest extends KernelTestCase
         $this->assertSame(1, $this->scanRow($first)['outage'] + $this->scanRow($second)['outage']);
     }
 
+    #[Test]
+    public function theSnapshotReadsTheScanColumnsTheCompareAndSetsWrote(): void
+    {
+        $id = $this->fileScannableDocument('hydrated');
+        $leases = $this->service(DocumentScanLeases::class);
+        $documents = $this->service(DocumentRepository::class);
+
+        $claim = $leases->claim($id);
+        $this->assertInstanceOf(ScanClaim::class, $claim);
+        $claimed = $documents->findById($id);
+        $this->assertInstanceOf(Document::class, $claimed);
+        $this->assertSame([1, true, 0, 0], [
+            $claimed->leaseEpoch(),
+            $claimed->firstClaimRecorded(),
+            $claimed->scanAttempts(),
+            $claimed->scanOutageReturns(),
+        ]);
+        $this->assertNull($claimed->scanStreamingStartedAt(), 'cleared by the claim');
+        $this->assertInstanceOf(DateTimeImmutable::class, $claimed->claimedAt());
+        $this->assertGreaterThan($claimed->claimedAt(), $claimed->leaseExpiresAt());
+
+        $this->assertTrue($leases->markStreaming($id, $claim->epoch));
+        $streaming = $documents->findById($id);
+        $this->assertInstanceOf(Document::class, $streaming);
+        $this->assertInstanceOf(DateTimeImmutable::class, $streaming->scanStreamingStartedAt());
+
+        $leases->returnToReceived($id, $claim->epoch, false, false);
+        $returned = $documents->findById($id);
+        $this->assertInstanceOf(Document::class, $returned);
+        $this->assertSame([1, 0], [$returned->scanAttempts(), $returned->scanOutageReturns()]);
+        $this->assertNull($returned->claimedAt(), 'cleared by the return');
+        $this->assertNull($returned->leaseExpiresAt());
+        $this->assertNull($returned->scanStreamingStartedAt());
+    }
+
     private function abortedByADestroyedKey(): string
     {
         $id = $this->fileScannableDocument('sealed under a key about to be destroyed');
         $document = $this->service(DocumentRepository::class)->findById($id);
-        $this->assertInstanceOf(\Erpify\Documents\Document\Domain\Entity\Document::class, $document);
+        $this->assertInstanceOf(Document::class, $document);
         $this->service(TransactionManager::class)->transactional(
             fn () => $this->service(Keystore::class)->destroy(
                 EncryptionScopeId::forDocument($document->scopeId()),

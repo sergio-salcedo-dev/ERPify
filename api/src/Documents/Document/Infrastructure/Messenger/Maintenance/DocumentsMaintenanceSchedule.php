@@ -40,6 +40,8 @@ use Symfony\Contracts\Cache\CacheInterface;
 #[AsSchedule('documents_maintenance')]
 final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInterface
 {
+    private const string EVERY_MINUTE = '60 seconds';
+
     public function __construct(
         #[Autowire(service: 'cache.scheduler_checkpoint')]
         private CacheInterface $checkpointState,
@@ -51,11 +53,11 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
     {
         return (new Schedule())
             ->stateful($this->checkpointState)
-            ->add(RecurringMessage::every('60 seconds', new ReapUploadIntentsMessage()))
-            ->add(RecurringMessage::every('60 seconds', new RollForwardPromotionsMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new ReapUploadIntentsMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new RollForwardPromotionsMessage()))
             ->add(RecurringMessage::every('5 minutes', new SweepStagedOrphansMessage()))
-            ->add(RecurringMessage::every('60 seconds', new ScanDueDocumentsMessage()))
-            ->add(RecurringMessage::every('60 seconds', new ExpireScanLeasesMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new ScanDueDocumentsMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new ExpireScanLeasesMessage()))
             ->add(RecurringMessage::every('5 minutes', new SweepCappedDocumentsMessage()))
             ->add(RecurringMessage::every('1 hour', new PruneCommittedIntentsMessage()))
             ->add(RecurringMessage::every('1 hour', new ReportDocumentScansMessage()))

@@ -11,7 +11,7 @@ use RuntimeException;
  * {@see \Erpify\Documents\Document\Infrastructure\Scanning\ClamdScanner} to be exercised over a real socket.
  * The mode picks the reply to every stream: `ok`, `found`, `limit-found`, `size`, `error`, `slow` (answers after
  * three seconds), `drop` (closes with no reply) or `size-close` (answers the size error and closes after the first
- * frame header, the way clamd treats a stream past its ceiling).
+ * frame header, the way clamd treats a stream past its ceiling) or `close-early` (closes there without saying why).
  */
 final class FakeClamd
 {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\Scanning\RescanDocument;
+use Erpify\Documents\Document\Application\Scanning\ScanDocument;
 use Erpify\Documents\Document\Application\Scanning\ScanDueDocuments;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
@@ -15,6 +16,7 @@ use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentScansHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentScansMessage;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentScanLeases;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Scanner\FakeMalwareScanner;
 use Monolog\Handler\TestHandler;
@@ -36,6 +38,11 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(RescanDocument::class)]
 #[CoversClass(ReportDocumentScansHandler::class)]
 #[CoversClass(Document::class)]
+#[CoversClass(ScanDocument::class)]
+#[CoversClass(ScanDueDocuments::class)]
+#[CoversClass(DocumentNotReadable::class)]
+#[CoversClass(DocumentNotRescannable::class)]
+#[CoversClass(DbalDocumentScanLeases::class)]
 final class ScanReportAndRescanFunctionalTest extends KernelTestCase
 {
     use PlantsScannableDocuments;

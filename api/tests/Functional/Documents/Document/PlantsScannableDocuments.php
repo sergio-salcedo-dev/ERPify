@@ -145,4 +145,24 @@ trait PlantsScannableDocuments
             ['id' => $documentId],
         );
     }
+
+    /**
+     * Flips one byte of the sealed object in the final namespace — in the middle of it, or `$fromTheEnd` bytes before
+     * its end — so the next unseal fails its authentication at that chunk.
+     */
+    private function flipAByteOfTheFinalObject(string $documentId, ?int $fromTheEnd = null): void
+    {
+        $document = $this->service(DocumentRepository::class)->findById($documentId);
+        $this->assertNotNull($document);
+        $scope = $document->scopeId();
+        $root = self::getContainer()->getParameter('erpify.documents.storage_root');
+        $this->assertIsString($root);
+        $shard = \substr($scope, -4, 2) . '/' . \substr($scope, -2);
+        $path = \sprintf('%s/%s/%s/%s', $root, StorageArea::Final->value, $shard, $scope);
+        $bytes = \file_get_contents($path);
+        $this->assertIsString($bytes);
+        $at = null === $fromTheEnd ? \intdiv(\strlen($bytes), 2) : \strlen($bytes) - $fromTheEnd;
+        $bytes[$at] = \chr(\ord($bytes[$at]) ^ 0xFF);
+        \file_put_contents($path, $bytes);
+    }
 }

@@ -31,6 +31,10 @@ final readonly class DbalDocumentScanLeases implements DocumentScanLeases
 {
     private const string UNEXPIRED_DEADLINE = 'NOW() < claimed_at + make_interval(secs => :deadline)';
 
+    /** The tail every transition that continues a claim shares: the state, the epoch it was granted, the deadline. */
+    private const string ON_LIVE_CLAIM = 'AND state = :scanning AND lease_epoch = :epoch AND '
+        . self::UNEXPIRED_DEADLINE;
+
     public function __construct(
         private Connection $connection,
     ) {
@@ -85,7 +89,7 @@ final readonly class DbalDocumentScanLeases implements DocumentScanLeases
     {
         return $this->changed(
             'UPDATE document SET scan_streaming_started_at = NOW() WHERE id = CAST(:id AS UUID) '
-            . 'AND state = :scanning AND lease_epoch = :epoch AND ' . self::UNEXPIRED_DEADLINE,
+            . self::ON_LIVE_CLAIM,
             $documentId,
             $epoch,
         );
@@ -97,7 +101,7 @@ final readonly class DbalDocumentScanLeases implements DocumentScanLeases
         return $this->changed(
             'UPDATE document SET lease_expires_at = LEAST(NOW() + make_interval(secs => :lease), '
             . 'claimed_at + make_interval(secs => :deadline)) WHERE id = CAST(:id AS UUID) '
-            . 'AND state = :scanning AND lease_epoch = :epoch AND ' . self::UNEXPIRED_DEADLINE,
+            . self::ON_LIVE_CLAIM,
             $documentId,
             $epoch,
             ['lease' => ScanPolicy::LEASE_SECONDS],
@@ -114,7 +118,7 @@ final readonly class DbalDocumentScanLeases implements DocumentScanLeases
         return $this->changed(
             'UPDATE document SET state = :verdict, scan_streaming_started_at = NULL, claimed_at = NULL, '
             . 'lease_expires_at = NULL WHERE id = CAST(:id AS UUID) '
-            . 'AND state = :scanning AND lease_epoch = :epoch AND ' . self::UNEXPIRED_DEADLINE,
+            . self::ON_LIVE_CLAIM,
             $documentId,
             $epoch,
             ['verdict' => $verdict->value],

@@ -11,7 +11,9 @@ use Erpify\Documents\Document\Application\Scanning\ScanDocument;
 use Erpify\Documents\Document\Application\Scanning\ScanDueDocuments;
 use Erpify\Documents\Document\Application\Scanning\ScannerHealth;
 use Erpify\Documents\Document\Application\Scanning\ScanResult;
+use Erpify\Documents\Document\Application\Scanning\ScanSession;
 use Erpify\Documents\Document\Application\Scanning\SweepCappedDocuments;
+use Erpify\Documents\Document\Application\Scanning\WriteCallbackStream;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotReadable;
@@ -20,6 +22,8 @@ use Erpify\Documents\Document\Domain\Scanning\DocumentScanLeases;
 use Erpify\Documents\Document\Domain\Scanning\MalwareScanner;
 use Erpify\Documents\Document\Domain\Scanning\ReturnOutcome;
 use Erpify\Documents\Document\Domain\Scanning\ScanClaim;
+use Erpify\Documents\Document\Domain\Scanning\ScanInterrupted;
+use Erpify\Documents\Document\Domain\Scanning\ScannerUnavailable;
 use Erpify\Documents\Document\Domain\ScanPolicy;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
@@ -60,6 +64,15 @@ use Throwable;
 #[CoversClass(SweepCappedDocuments::class)]
 #[CoversClass(DbalDocumentScanLeases::class)]
 #[CoversClass(ScanDocumentHandler::class)]
+#[CoversClass(ScanSession::class)]
+#[CoversClass(ScannerHealth::class)]
+#[CoversClass(WriteCallbackStream::class)]
+#[CoversClass(Document::class)]
+#[CoversClass(DocumentNotReadable::class)]
+#[CoversClass(ScanPolicy::class)]
+#[CoversClass(ScanClaim::class)]
+#[CoversClass(ScannerUnavailable::class)]
+#[CoversClass(ScanInterrupted::class)]
 final class ScanDocumentFunctionalTest extends KernelTestCase
 {
     use PlantsScannableDocuments;
@@ -697,21 +710,5 @@ final class ScanDocumentFunctionalTest extends KernelTestCase
         }
 
         return [];
-    }
-
-    private function flipAByteOfTheFinalObject(string $documentId): void
-    {
-        $document = $this->service(DocumentRepository::class)->findById($documentId);
-        $this->assertInstanceOf(Document::class, $document);
-        $scope = $document->scopeId();
-        $root = self::getContainer()->getParameter('erpify.documents.storage_root');
-        $this->assertIsString($root);
-        $shard = \substr($scope, -4, 2) . '/' . \substr($scope, -2);
-        $path = \sprintf('%s/%s/%s/%s', $root, StorageArea::Final->value, $shard, $scope);
-        $bytes = \file_get_contents($path);
-        $this->assertIsString($bytes);
-        $middle = \intdiv(\strlen($bytes), 2);
-        $bytes[$middle] = \chr(\ord($bytes[$middle]) ^ 0xFF);
-        \file_put_contents($path, $bytes);
     }
 }

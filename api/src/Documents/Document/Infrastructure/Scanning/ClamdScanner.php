@@ -150,21 +150,16 @@ final readonly class ClamdScanner implements MalwareScanner
     private function classify(string $answer): ?ScanVerdict
     {
         $answer = \trim($answer);
+        $signature = 1 === \preg_match('/^stream: (?<signature>.+) FOUND$/D', $answer, $matches)
+            ? $matches['signature']
+            : null;
 
-        if ('stream: OK' === $answer) {
-            return ScanVerdict::Clean;
-        }
-
-        if (\str_starts_with($answer, 'INSTREAM size limit exceeded')) {
-            return ScanVerdict::LimitExceeded;
-        }
-
-        if (1 === \preg_match('/^stream: (?<signature>.+) FOUND$/D', $answer, $matches)) {
-            return \str_starts_with($matches['signature'], self::LIMIT_SIGNATURE_PREFIX)
-                ? ScanVerdict::LimitExceeded
-                : ScanVerdict::Infected;
-        }
-
-        return null;
+        return match (true) {
+            'stream: OK' === $answer => ScanVerdict::Clean,
+            \str_starts_with($answer, 'INSTREAM size limit exceeded') => ScanVerdict::LimitExceeded,
+            null === $signature => null,
+            \str_starts_with($signature, self::LIMIT_SIGNATURE_PREFIX) => ScanVerdict::LimitExceeded,
+            default => ScanVerdict::Infected,
+        };
     }
 }

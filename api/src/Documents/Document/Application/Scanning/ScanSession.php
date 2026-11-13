@@ -47,15 +47,21 @@ final class ScanSession
     public function accept($sink, string $bytes): bool
     {
         try {
-            if (!$this->beforeWrite()) {
-                return false;
-            }
+            $ready = $this->beforeWrite();
         } catch (Throwable $throwable) {
             $this->failure = $throwable;
 
             return false;
         }
 
+        return $ready && $this->forward($sink, $bytes);
+    }
+
+    /**
+     * @param resource $sink
+     */
+    private function forward($sink, string $bytes): bool
+    {
         $written = 0;
         $length = \strlen($bytes);
 
@@ -115,20 +121,22 @@ final class ScanSession
             return false;
         }
 
-        if (!$this->streaming) {
-            if (!$this->leases->markStreaming($this->documentId, $this->epoch)) {
-                $this->lost = true;
+        return $this->streaming ? $this->renewIfDue() : $this->startStreaming();
+    }
 
-                return false;
-            }
+    /** The mark that streaming began, set immediately before the first byte goes to the scanner. */
+    private function startStreaming(): bool
+    {
+        if (!$this->leases->markStreaming($this->documentId, $this->epoch)) {
+            $this->lost = true;
 
-            $this->streaming = true;
-            $this->lastBeat = $this->now();
-
-            return true;
+            return false;
         }
 
-        return $this->renewIfDue();
+        $this->streaming = true;
+        $this->lastBeat = $this->now();
+
+        return true;
     }
 
     private function renewIfDue(): bool
