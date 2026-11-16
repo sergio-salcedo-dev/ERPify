@@ -17,9 +17,11 @@ use Symfony\Component\Yaml\Yaml;
  * and the rule that ties them to the ingest switch.
  *
  * A record is valid when it carries every field of {@see FIELDS} with a non-empty value, `kind` is `restore` or
- * `drill`, `result` is `passed`, and the four booleans are true. The switch rule: production configuration may set
+ * `drill`, `result` is `passed`, and the four booleans are true; a `drill` also carries `ledger_replay_verified: true`
+ * (the restore drill replayed the erasure ledger). The switch rules: production configuration may set
  * `documents.ingest_enabled` true only when a valid record of kind `restore` names, as its `mechanism`, the backup
- * mechanism that same configuration declares — a historical record for another mechanism does not count.
+ * mechanism that same configuration declares, and `documents.read_enabled` true only when a valid `restore` AND a
+ * valid `drill` do — a historical record for another mechanism does not count.
  *
  * @SuppressWarnings("PHPMD.CyclomaticComplexity") one branch per rule a record must satisfy
  * @SuppressWarnings("PHPMD.NPathComplexity") the same
@@ -40,7 +42,9 @@ final class DocumentsRestoreProofs
         'result',
     ];
 
-    private const string SWITCH = 'documents.ingest_enabled';
+    private const string INGEST_SWITCH = 'documents.ingest_enabled';
+
+    private const string READ_SWITCH = 'documents.read_enabled';
 
     private const array KINDS = ['restore', 'drill'];
 
@@ -94,6 +98,10 @@ final class DocumentsRestoreProofs
             }
         }
 
+        if ('drill' === ($record['kind'] ?? null) && true !== ($record['ledger_replay_verified'] ?? null)) {
+            $problems[] = 'a drill must carry "ledger_replay_verified" true';
+        }
+
         return $problems;
     }
 
@@ -109,43 +117,35 @@ final class DocumentsRestoreProofs
      */
     public static function ingestViolations(array $config, array $records): array
     {
-        $production = self::productionParameters($config);
-
-        if (false === ($production['documents.ingest_enabled'] ?? null)) {
-            return [];
-        }
-
-        $mechanism = $production['documents.backup_mechanism'] ?? null;
-
-        if (!\is_string($mechanism) || '' === $mechanism || 'none' === $mechanism) {
-            return ['production opens ingest but declares no backup mechanism'];
-        }
-
-        foreach ($records as $yaml) {
-            $record = Yaml::parse($yaml);
-
-            if (
-                [] === self::problemsWith($yaml)
-                && \is_array($record)
-                && 'restore' === ($record['kind'] ?? null)
-                && $mechanism === ($record['mechanism'] ?? null)
-            ) {
-                return [];
-            }
-        }
-
-        return [\sprintf('production opens ingest with no valid restore proof for the mechanism "%s"', $mechanism)];
+        return self::violations(self::INGEST_SWITCH, 'ingest', ['restore'], $config, $records);
     }
 
     /**
-     * The files under `$configRoot`, other than `$ownFile`, that name the switch other than as a `%…%` reference.
+     * The same rule for the read route, with the stricter proof it owes: a valid `restore` record AND a valid
+     * `drill` record (which carries `ledger_replay_verified`), each naming the declared backup mechanism.
+     *
+     * @param array<array-key, mixed> $config
+     * @param list<string>            $records
+     *
+     * @return list<string> why production may not open reads; empty when it may, or when it does not try to
+     */
+    public static function readViolations(array $config, array $records): array
+    {
+        return self::violations(self::READ_SWITCH, 'reads', ['restore', 'drill'], $config, $records);
+    }
+
+    /**
+     * The files under `$configRoot`, other than `$ownFile`, that name `$switch` other than as a `%…%` reference.
      * The gate reads one file; a declaration anywhere else — a `config/packages/prod/` override, a `parameters:`
      * block in services.yaml, a PHP or XML loader — would decide production's value out of its sight.
      *
      * @return list<string> the offending paths, relative to `$configRoot`
      */
-    public static function declarationsOutside(string $configRoot, string $ownFile): array
-    {
+    public static function declarationsOutside(
+        string $configRoot,
+        string $ownFile,
+        string $switch = self::INGEST_SWITCH,
+    ): array {
         $offending = [];
         $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(
             $configRoot,
@@ -158,9 +158,9 @@ final class DocumentsRestoreProofs
             }
 
             $contents = (string) \file_get_contents($file->getPathname());
-            $withoutReferences = \str_replace('%' . self::SWITCH . '%', '', $contents);
+            $withoutReferences = \str_replace('%' . $switch . '%', '', $contents);
 
-            if (\str_contains($withoutReferences, self::SWITCH)) {
+            if (\str_contains($withoutReferences, $switch)) {
                 $offending[] = \substr($file->getPathname(), \strlen(\rtrim($configRoot, '/')) + 1);
             }
         }
@@ -168,6 +168,64 @@ final class DocumentsRestoreProofs
         \sort($offending);
 
         return $offending;
+    }
+
+    /**
+     * @param list<string>            $kinds   every kind of valid record that must exist for the mechanism
+     * @param array<array-key, mixed> $config
+     * @param list<string>            $records
+     *
+     * @return list<string>
+     */
+    private static function violations(string $switch, string $noun, array $kinds, array $config, array $records): array
+    {
+        $production = self::productionParameters($config);
+
+        if (false === ($production[$switch] ?? null)) {
+            return [];
+        }
+
+        $mechanism = $production['documents.backup_mechanism'] ?? null;
+
+        if (!\is_string($mechanism) || '' === $mechanism || 'none' === $mechanism) {
+            return [\sprintf('production opens %s but declares no backup mechanism', $noun)];
+        }
+
+        $missing = [];
+
+        foreach ($kinds as $kind) {
+            if (!self::hasValidRecord($records, $kind, $mechanism)) {
+                $missing[] = \sprintf(
+                    'production opens %s with no valid %s record for the mechanism "%s"',
+                    $noun,
+                    $kind,
+                    $mechanism,
+                );
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @param list<string> $records
+     */
+    private static function hasValidRecord(array $records, string $kind, string $mechanism): bool
+    {
+        foreach ($records as $yaml) {
+            $record = Yaml::parse($yaml);
+
+            if (
+                [] === self::problemsWith($yaml)
+                && \is_array($record)
+                && $kind === ($record['kind'] ?? null)
+                && $mechanism === ($record['mechanism'] ?? null)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

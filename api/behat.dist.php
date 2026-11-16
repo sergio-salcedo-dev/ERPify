@@ -14,6 +14,7 @@ use Erpify\Kernel;
 use Erpify\Tests\Support\AcceptanceEntryPoints;
 use Erpify\Tests\Behat\Context\DoctrineContext;
 use Erpify\Tests\Behat\Context\DocumentsIngestContext;
+use Erpify\Tests\Behat\Context\DocumentsReadContext;
 use Erpify\Tests\Behat\Context\EntityManagerContext;
 use Erpify\Tests\Behat\Context\EventStoreContext;
 use Erpify\Tests\Behat\Context\FixturesContext;
@@ -119,6 +120,7 @@ return (new Config())
                     PrivacyContext::class,
                     ImageFixtureContext::class,
                     DocumentsIngestContext::class,
+                    DocumentsReadContext::class,
                 ),
         )
         ->withExtension(new Extension(SymfonyExtension::class, [
