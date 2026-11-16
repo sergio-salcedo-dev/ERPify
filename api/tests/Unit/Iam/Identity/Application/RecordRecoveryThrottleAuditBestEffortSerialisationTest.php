@@ -98,7 +98,7 @@ final class RecordRecoveryThrottleAuditBestEffortSerialisationTest extends TestC
         // `kernel.terminate` listener it would otherwise escape after the uniform 202 was already sent.
         $failure = new RuntimeException('canceling statement due to lock timeout');
         $identityRows = new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create()));
-        $identityRows->onLock = static fn () => throw $failure;
+        $identityRows->onLock = static fn (): never => throw $failure;
 
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();

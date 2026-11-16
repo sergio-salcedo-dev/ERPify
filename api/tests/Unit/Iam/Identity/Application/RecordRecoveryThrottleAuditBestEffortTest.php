@@ -156,7 +156,7 @@ final class RecordRecoveryThrottleAuditBestEffortTest extends TestCase
         // report has to say the write got that far rather than blaming the INSERT.
         $failure = new RuntimeException('could not serialize access');
         $identityRows = new InMemoryIdentityRowLock(new InMemoryUserRepository(UserMother::create()));
-        $identityRows->onRelease = static fn () => throw $failure;
+        $identityRows->onRelease = static fn (): never => throw $failure;
 
         $logger = new RecordingLogger();
 
