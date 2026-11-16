@@ -179,17 +179,27 @@ final readonly class ReadDocument
             return $this->abort($documentId, $overran ? 'size-mismatch' : $this->reasonOf($throwable));
         }
 
-        if ($running->size() !== $size) {
-            return $this->abort($documentId, 'size-mismatch');
-        }
+        $mismatch = $this->mismatchOf($running, $digest, $size);
 
-        if (!$running->digestMatches($digest)) {
-            return $this->abort($documentId, 'changed-between-passes');
+        if (null !== $mismatch) {
+            return $this->abort($documentId, $mismatch);
         }
 
         $emit($held);
 
         return true;
+    }
+
+    /**
+     * Why the second pass no longer matches the row, as the reason slug of its alarm; null when it matches.
+     */
+    private function mismatchOf(RunningDigest $running, string $digest, int $size): ?string
+    {
+        if ($running->size() !== $size) {
+            return 'size-mismatch';
+        }
+
+        return $running->digestMatches($digest) ? null : 'changed-between-passes';
     }
 
     /**
