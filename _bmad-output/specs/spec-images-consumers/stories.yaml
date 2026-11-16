@@ -1,0 +1,52 @@
+- id: "ic-1"
+  title: Shared image attachment seam (API)
+  description: >-
+    CAP-1 and the shared half of CAP-2: the raw-body reader in Infrastructure, the application service that
+    mints an image and hands its id to a consumer, the replace/release protocol and its compensation, the
+    per-identity-and-route limiter, and the gate registrations a consumer needs. It wires no real consumer.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Owes the three review layers (it creates the first image write path). Reuse UploadImage and DeleteImage
+    unchanged; no UploadedFile or path reaches Application. Prove the release protocol against a test-only
+    holder, not a product aggregate. The wire contract is fixed in SPEC.md so ic-2 can run beside it.
+- id: "ic-2"
+  title: PWA image seam (upload field and display)
+  description: >-
+    CAP-6: the Inversify upload port and adapter, a reusable upload control and an image display with a
+    placeholder on 404 or 429, English Problem Details messages, and a Playwright test of set, replace and
+    remove against a stub route.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    Code against the wire contract in SPEC.md, not against ic-1's branch. No dangerouslySetInnerHTML; src
+    goes through safeHref; the accept allowlist and size precheck never truncate input.
+- id: "ic-3"
+  title: Bank logo
+  description: >-
+    CAP-3: Bank::$logoImageId with its migration, the logo PUT/DELETE, the Resource DTO field, release on
+    replace and on bank deletion, the read-policy entry in the ADR, and the logo on the bank list and detail.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    Decide the BankSnapshot / event-version question first and record it. Parallel with ic-4 and ic-5 in its
+    own worktree; rebase on main in merge order for the manifest and policy files.
+- id: "ic-4"
+  title: User avatar
+  description: >-
+    CAP-4: User::$avatarImageId with its migration, #[PersonalData] sealing, the avatar routes, release on
+    replace and inside FulfilIdentityErasure, the person-denoting audit type with its erasure scenario, and
+    the avatar on the profile and user screens.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Owes the three review layers (GDPR and audit surface). Answer the four open questions about who sets,
+    who reads, the cache window and the audit type before code; ask Sergio, do not choose. The persons
+    registry line is non-person, not person.
+- id: "ic-5"
+  title: Bank-account image
+  description: >-
+    CAP-5: the bank-account image id with its migration, its routes, release on replace and on account
+    deletion, and the matching screens. Starts only once the open question about what the image depicts is
+    answered.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    If the image denotes a natural person, apply the avatar constraints (PersonalData, audit type, release in
+    EraseBankAccountSubject); otherwise follow the logo story.
