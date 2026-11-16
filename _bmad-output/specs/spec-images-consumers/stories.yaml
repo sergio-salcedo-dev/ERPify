@@ -1,0 +1,59 @@
+- id: "ic-1"
+  title: Shared image attachment seam (API)
+  description: >-
+    CAP-1 and the shared half of CAP-2: the raw-body reader in Infrastructure, the shared replace service that
+    is the creating site of ImageDeletionRequested, the release protocol with its lock and compensation, the
+    Problem Details types, the edge matcher, spool and session handling, the per-identity limiter and the gate
+    redesign. It wires no real consumer and closes #872.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Reuse UploadImage and DeleteImage; no UploadedFile or path reaches Application. Prove the protocol on a
+    test-double holder over the real transaction manager and outbox, and register the replace service in the
+    publisher gate with the rollback recipe. Own the section 7 and ADR edits that closing #872 requires, and
+    decide the limiter budgets. If the projection passes ~70 files, cut the edge, spool and limiter into their
+    own story before ic-3..ic-5 start. The wire contract is fixed in wire-contract.md so ic-2 can run beside it.
+- id: "ic-2"
+  title: PWA image seam (upload field and display)
+  description: >-
+    CAP-6: the Inversify upload port and adapter, a reusable upload control and an image display with a
+    placeholder on any load failure, English Problem Details messages, and a Playwright test of set, replace
+    and remove against a stub route. Needs no API code; ic-3..ic-5 need it before their screens.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    Code against wire-contract.md, not against ic-1's branch, and keep the stub and its error types identical to
+    that file. No dangerouslySetInnerHTML; src goes through safeHref; the accept allowlist and size precheck
+    never truncate input.
+- id: "ic-3"
+  title: Bank logo
+  description: >-
+    CAP-3: Bank::$logoImageId with its migration and findByIdForUpdate, the logo PUT/DELETE, the Resource DTO
+    field, release on replace and on bank deletion, the registry entry and ADR D1 line, and the logo on the bank
+    list and detail. Starts after ic-1 and ic-2 are merged.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    Decide the BankSnapshot and event question first and record it. Parallel with ic-4 and ic-5 in its own
+    worktree; rebase on main in merge order for the manifest and policy files. Owns the three review layers.
+- id: "ic-4"
+  title: User avatar
+  description: >-
+    CAP-4: User::$avatarImageId with its migration, the avatar write routes and the owner-scoped read route,
+    the explicit UserAvatar audit row, release on replace and inside FulfilIdentityErasure with the
+    avatar_release_queued category, and the avatar on the profile and user screens. Starts after ic-1 and ic-2
+    are merged.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Answer the open questions about who sets, who reads, the cache window and whether a read is audited before
+    code; ask Sergio, do not choose. The persons registry line is non-person; the DTO exposes hasAvatar and
+    never the id. Owns the three review layers (GDPR and audit surface).
+- id: "ic-5"
+  title: Bank-account image
+  description: >-
+    CAP-5: the bank-account image id with its migration, its routes, release on replace and on account deletion
+    and in EraseBankAccountSubject, and the matching screens. Starts after ic-1 and ic-2 are merged and only
+    once the open question about what the image depicts is answered.
+  spec_checkpoint: false
+  invoke_dev_with: >-
+    If the image denotes a natural person, apply the avatar constraints (audit type, owner-scoped read); the
+    release in EraseBankAccountSubject is unconditional either way. Otherwise follow the logo story. Owns the
+    three review layers.
