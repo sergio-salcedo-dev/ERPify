@@ -34,6 +34,16 @@
   invoke_dev_with: >-
     Decide the BankSnapshot and event question first and record it. Parallel with ic-4 and ic-5 in its own
     worktree; rebase on main in merge order for the manifest and policy files. Owns the three review layers.
+    The seam is wired by convention, so this story proves it for its route: the route carries
+    RawBodyRoute::ATTRIBUTE, the owner and permission checks and the write throttle run before
+    ImageRequestBodyReader::read(), the write goes through ImageAttachment, the matcher path in the Caddyfile
+    matches the real manifest path, and a body over 1 MB is measured through Caddy. This story owns the
+    manifest-driven gate that fails a PUT route matched by the matcher without the attribute, so ic-4 and ic-5
+    only extend it. It also proves the compensation of ImageAttachment through its ORM-backed holder after a real
+    manager reset, which ic-1's DBAL holder cannot show. The ImageConsumerAuthorizationGateTest registry is keyed
+    by file and holder and its universe is every declared or promoted property named like an image id outside
+    Shared/Images, so the Resource DTO field and any event property of the logo are registered too, each with the
+    same ADR D1 anchor.
 - id: "ic-4"
   title: User avatar
   description: >-
@@ -45,7 +55,9 @@
   invoke_dev_with: >-
     Answer the open questions about who sets, who reads, the cache window and whether a read is audited before
     code; ask Sergio, do not choose. The persons registry line is non-person; the DTO exposes hasAvatar and
-    never the id. Owns the three review layers (GDPR and audit surface).
+    never the id. Owns the three review layers (GDPR and audit surface). Proves, as ic-3 does, that the route
+    carries RawBodyRoute::ATTRIBUTE, throttles before reading the body and writes through ImageAttachment, and
+    that its Caddy matcher path matches the real manifest path.
 - id: "ic-5"
   title: Bank-account image
   description: >-
@@ -55,5 +67,6 @@
   spec_checkpoint: false
   invoke_dev_with: >-
     If the image denotes a natural person, apply the avatar constraints (audit type, owner-scoped read); the
-    release in EraseBankAccountSubject is unconditional either way. Otherwise follow the logo story. Owns the
-    three review layers.
+    release in EraseBankAccountSubject is unconditional either way. Otherwise follow the logo story, including
+    its proof of the seam wiring (route attribute, throttle before reader, ImageAttachment, matcher path).
+    Owns the three review layers.

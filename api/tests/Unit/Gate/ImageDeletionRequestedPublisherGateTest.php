@@ -25,9 +25,9 @@ use PHPUnit\Framework\TestCase;
  *
  *  - {@see self::NAMING_SITES} — files that name the class and create nothing: the declaration, the handler
  *    consuming it and the port documenting it. A creating site never belongs here; the sweep refuses one;
- *  - {@see self::PUBLISHERS} — `creating site => [use case, functional test]`, empty while nothing creates the
- *    event. Each entry is checked by {@see self::registrationProblems()}, which is driven with planted maps so
- *    its checks are exercised while the real map is empty.
+ *  - {@see self::PUBLISHERS} — `creating site => [use case, functional test]`. Each entry is checked by
+ *    {@see self::registrationProblems()}, which is also driven with planted maps, so its checks are exercised
+ *    whatever the real map holds.
  *
  * What a green proves: the files under `api/src` that create the event are exactly the keys of
  * {@see self::PUBLISHERS}; every file naming it is one of those or a pinned naming site; each registered use
@@ -77,10 +77,18 @@ final class ImageDeletionRequestedPublisherGateTest extends TestCase
      *
      * @var array<string, array{useCase: string, test: string}>
      */
-    private const array PUBLISHERS = [];
+    private const array PUBLISHERS = [
+        // The one creating site: every consumer attaches, replaces and removes its image through this service, so
+        // a consumer story registers nothing here. Its test drives it over the real transaction manager, Postgres
+        // and the Doctrine transport and reads a rolled-back unit of work from a second connection.
+        'Shared/Images/Application/ImageAttachment.php' => [
+            'useCase' => 'Shared/Images/Application/ImageAttachment.php',
+            'test' => 'Functional/Shared/Images/ImageAttachmentFunctionalTest.php',
+        ],
+    ];
 
-    private const string RECIPE = 'A file that creates ImageDeletionRequested owes the observation #872 defers '
-        . 'to it (docs/adr/image-deletion-signal-transport.md D3): a functional test under api/tests/Functional '
+    private const string RECIPE = 'A file that creates ImageDeletionRequested owes an observation '
+        . '(docs/adr/image-deletion-signal-transport.md D3): a functional test under api/tests/Functional '
         . 'that calls the REAL use case publishing what that file records, lets it make its business write and '
         . 'publish, rolls that transaction back, and reads from a SECOND connection that neither the business '
         . 'row nor the message in messenger_messages is there. Then register it in PUBLISHERS here as '
@@ -236,8 +244,8 @@ final class ImageDeletionRequestedPublisherGateTest extends TestCase
             $this->assertContains(ApiSourceFiles::root() . '/' . $site, $swept, $site . ' is pinned but never swept');
         }
 
-        // Nothing under api/src creates the event yet, so the creation match is proven on spellings, each of
-        // which only one branch of the pattern matches, and on the descriptors it must let through.
+        // The creation match is proven on spellings, each of which only one branch of the pattern matches, and on
+        // the descriptors it must let through.
         $creating = [
             'new ImageDeletionRequested($id)',
             'new \Erpify\Shared\Images\Domain\Event\ImageDeletionRequested($id)',
@@ -352,8 +360,7 @@ final class ImageDeletionRequestedPublisherGateTest extends TestCase
     }
 
     /**
-     * Read through a method so the sweep is typed by what the constant holds, not by its literal value: while
-     * it is empty, the code over it is still the code the first registration runs.
+     * Read through a method so the sweep is typed by what the constant holds, not by its literal value.
      *
      * @return array<string, array{useCase: string, test: string}>
      */

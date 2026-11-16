@@ -13,6 +13,7 @@ use Erpify\Shared\Images\Infrastructure\Http\HttpCacheValidator;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Unit\Shared\Images\Application\PermanentlyFailingImageStorage;
 use Erpify\Tests\Unit\Shared\Images\Application\UnreadableImageRepository;
+use Erpify\Tests\Unit\Shared\Images\Infrastructure\Http\ImageThrottles;
 use Erpify\Tests\Unit\Shared\Images\Infrastructure\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +45,7 @@ final class ImageGetControllerIdentityGuardTest extends TestCase
                 1_048_576,
             ),
             new HttpCacheValidator(),
+            ImageThrottles::permissive(),
         );
 
         $this->expectException(InvalidUuidException::class);

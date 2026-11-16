@@ -11,6 +11,7 @@ use Erpify\Shared\Images\Infrastructure\Http\HttpCacheValidator;
 use Erpify\Tests\Unit\Shared\Images\Application\ImageFinderHarness;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageRepository;
 use Erpify\Tests\Unit\Shared\Images\Application\InMemoryImageStorage;
+use Erpify\Tests\Unit\Shared\Images\Infrastructure\Http\ImageThrottles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -125,6 +126,7 @@ final class ImageGetConditionalRequestTest extends TestCase
         $controller = new ImageGetController(
             ImageFinderHarness::finder($repository, $storage),
             new HttpCacheValidator(),
+            ImageThrottles::permissive(),
         );
 
         return [$controller, $image];

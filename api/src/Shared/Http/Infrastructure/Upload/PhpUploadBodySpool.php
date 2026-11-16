@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Documents\Document\Infrastructure\Upload;
+namespace Erpify\Shared\Http\Infrastructure\Upload;
 
 use HashContext;
 use Psr\Log\LoggerInterface;
@@ -10,11 +10,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Throwable;
 
 /**
- * The server's own copy of an evidence PUT's body. PHP caches every byte read from a request body in a temporary
- * stream, which spills to a named `php*` file in `upload_tmp_dir` from {@see SPOOL_THRESHOLD_BYTES} on and is held
- * open by the worker thread until it serves its next request — so the plaintext original would outlive its upload,
- * filed, aborted or refused, by however long that thread waits. This destroys it: truncated first, which returns its
- * tmpfs pages at once although the worker thread still holds the file open, then unlinked.
+ * The server's own copy of a raw-body PUT's body (an image today). PHP caches every byte read from a request body in
+ * a temporary stream, which spills to a named `php*` file in `upload_tmp_dir` from {@see SPOOL_THRESHOLD_BYTES} on
+ * and is held open by the worker thread until it serves its next request — so the plaintext upload would outlive its
+ * request, stored, aborted or refused, by however long that thread waits. This destroys it: truncated first, which
+ * returns its tmpfs pages at once although the worker thread still holds the file open, then unlinked.
  *
  * PHP gives userland no handle on that file, so it is identified by what only this request can know: a `php*` file
  * whose size is at least the bytes read and at most one read-ahead past them, and whose leading bytes hash to exactly

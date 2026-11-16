@@ -6,6 +6,7 @@ namespace Erpify\Tests\Unit\Shared\ErrorContract\Infrastructure\Http;
 
 use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\ContentTooLarge;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
@@ -17,6 +18,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Domain\Exception\UnsupportedMediaType;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Tests\Support\ApiSourceFiles;
 use LogicException;
@@ -33,11 +35,11 @@ use Throwable;
  * The data provider reflects directly over {@see ProblemDetailsFactory::MARKER_STATUS_MAP}
  * and `MARKER_DEFAULT_TYPE_MAP` so the test cannot drift from the production constants:
  * adding or removing a marker without matching code-side updates makes this contract
- * fail. The eleven canonical markers are the marker-interface set:
+ * fail. The thirteen canonical markers are the marker-interface set:
  * {@see NotFound}, {@see Conflict}, {@see Forbidden}, {@see Unauthenticated},
  * {@see InvariantViolation}, {@see InvalidInput}, {@see RateLimited},
  * {@see InvalidSearchCriteria}, {@see ServiceUnavailable} (the single 5xx marker), {@see Gone},
- * {@see LengthRequired}.
+ * {@see LengthRequired}, {@see ContentTooLarge}, {@see UnsupportedMediaType}.
  *
  * Co-located alongside {@see ProblemDetailsFactoryTest} under
  * `api/tests/Unit/Shared/ErrorContract/Infrastructure/Http/`.
@@ -50,9 +52,9 @@ use Throwable;
 final class MarkerStatusMapContractTest extends TestCase
 {
     /**
-     * The eleven canonical marker interfaces. Pinned here as a STATIC list so any addition to
+     * The thirteen canonical marker interfaces. Pinned here as a STATIC list so any addition to
      * `MARKER_STATUS_MAP` without updating this canonical-set assertion fails the
-     * `testMarkerStatusMapContainsExactlyTheCanonicalEleven` guard. The data-provider-driven
+     * `testMarkerStatusMapContainsExactlyTheCanonicalThirteen` guard. The data-provider-driven
      * row tests still iterate from the constants directly — the canonical list is the
      * "should equal X" half of the equality, not the source of the rows.
      */
@@ -68,6 +70,8 @@ final class MarkerStatusMapContractTest extends TestCase
         ServiceUnavailable::class,
         Gone::class,
         LengthRequired::class,
+        ContentTooLarge::class,
+        UnsupportedMediaType::class,
     ];
 
     private const string CID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
@@ -151,19 +155,19 @@ final class MarkerStatusMapContractTest extends TestCase
     }
 
     /**
-     * Pins that the factory's mapping constant array contains exactly those eleven marker classes.
+     * Pins that the factory's mapping constant array contains exactly those thirteen marker classes.
      * Set-equality (not order-sensitive) so a marker addition that drifts the constant from
      * the canonical list fails fast — without forcing a particular declaration order
      * (`testMarkerOrderingFollowsImplementsClause` already pins the ordering separately).
      */
-    public function testMarkerStatusMapContainsExactlyTheCanonicalEleven(): void
+    public function testMarkerStatusMapContainsExactlyTheCanonicalThirteen(): void
     {
         $statusMap = self::reflectConstant('MARKER_STATUS_MAP');
 
         $this->assertCount(
-            11,
+            13,
             $statusMap,
-            'MARKER_STATUS_MAP must contain exactly the eleven canonical markers.',
+            'MARKER_STATUS_MAP must contain exactly the thirteen canonical markers.',
         );
 
         $actualKeys = \array_keys($statusMap);
@@ -180,7 +184,7 @@ final class MarkerStatusMapContractTest extends TestCase
     }
 
     /**
-     * Sister pin to {@see testMarkerStatusMapContainsExactlyTheCanonicalEleven}: the default-type
+     * Sister pin to {@see testMarkerStatusMapContainsExactlyTheCanonicalThirteen}: the default-type
      * map MUST mirror the status map's key set so every marker has a default `type` literal
      * for PWA `type`-only routing.
      */
@@ -373,6 +377,11 @@ final class MarkerStatusMapContractTest extends TestCase
             Gone::class => new class ('', 'x') extends DomainException implements Gone {
             },
             LengthRequired::class => new class ('', 'x') extends DomainException implements LengthRequired {
+            },
+            ContentTooLarge::class => new class ('', 'x') extends DomainException implements ContentTooLarge {
+            },
+            // phpcs:ignore Generic.Files.LineLength.TooLong
+            UnsupportedMediaType::class => new class ('', 'x') extends DomainException implements UnsupportedMediaType {
             },
             default => throw new LogicException(\sprintf(
                 'No anonymous-class branch for marker %s — add it when extending the marker set.',

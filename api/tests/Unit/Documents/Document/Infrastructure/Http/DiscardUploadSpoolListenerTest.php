@@ -6,7 +6,7 @@ namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Http;
 
 use Erpify\Documents\Document\Infrastructure\Http\DiscardUploadSpoolListener;
 use Erpify\Documents\Document\Infrastructure\Http\UploadRoutes;
-use Erpify\Documents\Document\Infrastructure\Upload\PhpUploadBodySpool;
+use Erpify\Shared\Http\Infrastructure\Upload\PhpUploadBodySpool;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

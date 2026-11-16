@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Domain\Exception;
 
-use DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
+use Erpify\Shared\ErrorContract\Domain\Exception\UnsupportedMediaType;
 
 /**
  * A MIME rejection at the decoder's security boundary — never a decision about the
@@ -13,11 +14,13 @@ use DomainException;
  * itself is not supported, or it does not match what the caller declared (decoder-confusion
  * defense) — a mismatch is rejected even when both formats are individually allowlisted.
  */
-final class UnsupportedImageFormat extends DomainException implements ImageProcessingException
+final class UnsupportedImageFormat extends DomainException implements ImageProcessingException, UnsupportedMediaType
 {
+    public const string TYPE = ImageProblemType::UNSUPPORTED_TYPE;
+
     private function __construct(string $message, private readonly FailureCategory $category)
     {
-        parent::__construct($message);
+        parent::__construct(type: self::TYPE, title: $message);
     }
 
     public static function notInAllowlist(): self

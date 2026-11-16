@@ -7,6 +7,7 @@ namespace Erpify\Shared\Monitoring\Infrastructure\Sentry;
 use Doctrine\DBAL\Exception\ConnectionException;
 use Erpify\Shared\ErrorContract\Domain\Exception\ClientError;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\ContentTooLarge;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
@@ -18,6 +19,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Domain\Exception\UnsupportedMediaType;
 use Erpify\Shared\Monitoring\Domain\RoutineOutcome;
 use Sentry\Event;
 use Sentry\EventHint;
@@ -99,6 +101,8 @@ final class SentryEventFilter
         InvalidSearchCriteria::class,
         Gone::class,
         LengthRequired::class,
+        ContentTooLarge::class,
+        UnsupportedMediaType::class,
     ];
 
     /**
