@@ -16,15 +16,28 @@ class HttpResponse
     public function __construct(
         private GuzzleResponse|string|SymfonyResponse $value,
         private string $streamedResponse = '',
+        private ?string $rawBody = null,
     ) {
+    }
+
+    /**
+     * The bytes the kernel browser captured for the response, untouched: a streamed body that is not
+     * newline-delimited JSON (a document's original) has no other accessor, and
+     * {@see getStreamedResponse()} would try to decode it.
+     */
+    public function getRawBody(): ?string
+    {
+        return $this->rawBody;
     }
 
     public function update(
         GuzzleResponse|string|SymfonyResponse $value,
         string $streamedResponse = '',
+        ?string $rawBody = null,
     ): self {
         $this->value = $value;
         $this->streamedResponse = $streamedResponse;
+        $this->rawBody = $rawBody;
 
         return $this;
     }

@@ -19,6 +19,9 @@ final class UploadRoutes
     /** The operator's re-scan of a document whose scan failed; not an ingest route, kept here for the one file. */
     public const string RESCAN = 'documents_rescan';
 
+    /** The audited read of a document's original. Never `shared_`-prefixed: that prefix opts a route out of audit. */
+    public const string READ = 'documents_read';
+
     private function __construct()
     {
     }

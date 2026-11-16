@@ -33,9 +33,9 @@ use ReflectionMethod;
  * {@see self::READERS} is `'Documents/X.php' => ['test' => 'tests/Functional/Documents/XTest.php']`: the reader
  * relative to `api/src`, the test relative to `api/` (a `*Test.php` under `tests/Functional`, or a `.feature`
  * under `features`, the two lanes in which this repository proves a route). It holds the Documents scan, a reader
- * that is not a route. Its checks are also driven with planted repositories by `CryptoReadBoundaryRulesGateTest`,
- * so they are exercised whatever the real map holds; the engine is `Tests\Support\CryptoReadBoundaryRules` and
- * `CryptoReadRegistration`.
+ * that is not a route, and the Documents read, the route #418 waited for. Its checks are also driven with planted
+ * repositories by `CryptoReadBoundaryRulesGateTest`, so they are exercised whatever the real map holds; the engine
+ * is `Tests\Support\CryptoReadBoundaryRules` and `CryptoReadRegistration`.
  *
  * What a green proves: the files under `api/src` (outside `Shared/Crypto/`) that call a read method of either
  * port as `->method(` or `?->method(` are exactly the keys of {@see self::READERS}; the same engine finds the
@@ -80,6 +80,9 @@ final class CryptoReadBoundaryGateTest extends TestCase
     private const array READERS = [
         'Documents/Document/Application/Scanning/ScanDocument.php' => [
             'test' => 'tests/Functional/Documents/Document/ScanDocumentFunctionalTest.php',
+        ],
+        'Documents/Document/Application/Read/ReadDocument.php' => [
+            'test' => 'tests/Functional/Documents/Document/ReadDocumentFunctionalTest.php',
         ],
     ];
 

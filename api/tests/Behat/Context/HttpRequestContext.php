@@ -181,6 +181,7 @@ class HttpRequestContext extends AbstractContext
             new HttpResponse(
                 $this->getClient()->getResponse(),
                 (string) $streamedResult,
+                $this->getClient()->getInternalResponse()->getContent(),
             ),
         );
     }

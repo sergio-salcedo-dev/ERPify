@@ -8,19 +8,30 @@
 # `DocumentsIngestProofGateTest` reads this file, fails otherwise, and fails when the switch is declared in any
 # other file under `config/`.
 #
+# `documents.read_enabled` opens the read route `GET /api/v1/documents/{id}/content`; while it is false the
+# controller answers 404 (after the firewall and the voter). Same rules as the ingest switch — false by default, true
+# in dev, read from the environment in test, closed in production only with the literal `false` — and a stricter
+# proof: opening it needs a valid `restore` record AND a valid `drill` record (restore drill with the erasure ledger
+# replayed) whose `mechanism` both equal `documents.backup_mechanism`. `DocumentsReadProofGateTest` reads this file
+# and the compiled prod container, and fails when the switch is declared in any other file under `config/`.
+#
 # `documents.backup_mechanism` names the backup of the `document_storage` volume a restore proof must have
 # exercised. `none` until one exists, which no proof record can match.
 parameters:
     documents.ingest_enabled: false
+    documents.read_enabled: false
     documents.backup_mechanism: 'none'
 
 when@dev:
     parameters:
         documents.ingest_enabled: true
+        documents.read_enabled: true
 
-# Test reads the switch from the environment (default on) so an acceptance scenario can close ingest for one
+# Test reads both switches from the environment (default on) so an acceptance scenario can close one for one
 # request: the kernel reboots between requests and the next container instance re-reads it.
 when@test:
     parameters:
         env(DOCUMENTS_INGEST_ENABLED): 'true'
         documents.ingest_enabled: '%env(bool:DOCUMENTS_INGEST_ENABLED)%'
+        env(DOCUMENTS_READ_ENABLED): 'true'
+        documents.read_enabled: '%env(bool:DOCUMENTS_READ_ENABLED)%'
