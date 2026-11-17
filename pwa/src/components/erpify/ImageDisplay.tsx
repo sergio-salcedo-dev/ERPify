@@ -21,6 +21,23 @@ interface ImageDisplayProps {
   testId?: string;
 }
 
+type ImageState = "loaded" | "loading" | "placeholder";
+
+function imageStateOf(
+  src: string | null,
+  failedSrc: string | null,
+  loadedSrc: string | null,
+): ImageState {
+  if (src === null || failedSrc === src) return "placeholder";
+  return loadedSrc === src ? "loaded" : "loading";
+}
+
+/** What a server-rendered `<img>` already settled to: pixels mean loaded, none mean failed. */
+function settledOutcome(element: HTMLImageElement | null): "pending" | "failed" | "loaded" {
+  if (element?.complete !== true) return "pending";
+  return element.naturalWidth === 0 ? "failed" : "loaded";
+}
+
 /**
  * A stored image, or a placeholder in its place on ANY failure to show it.
  *
@@ -49,15 +66,15 @@ export function ImageDisplay({
   // event is replayed: a settled image is read after the fact, with pixels as loaded and without
   // as failed.
   useEffect(() => {
-    const element = imageRef.current;
-    if (element?.complete !== true) return;
-    if (element.naturalWidth === 0) setFailedSrc(src);
-    else setLoadedSrc(src);
+    const outcome = settledOutcome(imageRef.current);
+    if (outcome === "failed") setFailedSrc(src);
+    else if (outcome === "loaded") setLoadedSrc(src);
   }, [src]);
 
   const decorative = alt === "";
-  const showImage = src !== null && failedSrc !== src;
-  const showPlaceholder = !showImage || loadedSrc !== src;
+  const state = imageStateOf(src, failedSrc, loadedSrc);
+  const showImage = state !== "placeholder";
+  const showPlaceholder = state !== "loaded";
   // The "not available" name is true only when there is no image to show or it failed; while the
   // image is loading the placeholder is a decoration under it and must not be announced.
   const placeholderIsDecorative = decorative || showImage;
@@ -65,7 +82,7 @@ export function ImageDisplay({
   return (
     <span
       data-testid={testId}
-      data-image-state={showImage ? (loadedSrc === src ? "loaded" : "loading") : "placeholder"}
+      data-image-state={state}
       className={cn(
         "bg-muted text-muted-foreground relative inline-grid size-9 flex-none place-items-center overflow-hidden rounded-lg",
         className,
@@ -82,7 +99,7 @@ export function ImageDisplay({
           {placeholder ?? <ImageIcon className="size-1/2" aria-hidden="true" />}
         </span>
       ) : null}
-      {showImage ? (
+      {showImage && src !== null ? (
         // A raw <img>: the optimiser would proxy the read through a server that holds no session,
         // and this route is authenticated by the cookie the browser sends itself.
         // eslint-disable-next-line @next/next/no-img-element
@@ -95,7 +112,7 @@ export function ImageDisplay({
           data-testid={testId ? `${testId}__image` : undefined}
           className={cn(
             "size-full object-cover transition-opacity",
-            loadedSrc === src ? "opacity-100" : "opacity-0",
+            state === "loaded" ? "opacity-100" : "opacity-0",
           )}
           onLoad={() => setLoadedSrc(src)}
           onError={() => setFailedSrc(src)}
