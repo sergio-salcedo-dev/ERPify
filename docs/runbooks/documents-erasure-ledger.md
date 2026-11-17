@@ -31,7 +31,9 @@ Measured by the spike behind D11 (rest-server and restic 0.18.1, local):
    the secrets store of `docs/vps-deployment.md`.
 4. Prove it: `docker compose … exec php php bin/console documents:erasure:check-ledger` exits 0. Then prove the
    append-only property the way Gate 2 does, with the production credential against the real backend: a `restic forget` of
-   a test snapshot is refused (`403`) and the snapshot is still there.
+   a test snapshot is refused (`403`) and the snapshot is still there. Do not read the exit code: restic exits 0 on that
+   refusal. Count the snapshots (`restic snapshots --json | jq length`) before and after, and require both the `403` text
+   and an unchanged count.
 
 ## When the erase route answers 503
 
