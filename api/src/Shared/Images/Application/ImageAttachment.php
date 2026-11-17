@@ -26,22 +26,21 @@ use Throwable;
  * **The compensation cannot run inside the failed transaction.** Doctrine closes the manager on a failure and the
  * publish guard demands an active transaction, so when the attach transaction throws, the release of the NEW id is
  * published by a second transaction afterwards. If that one fails too, the original failure is the one the caller
- * sees and the second is only logged by class: the object it would have released is then an orphan, which
- * `PRODUCTION_SECURITY_CHECKLIST.md` §7 (the image residuals) records as accepted, together with a crash between
- * the store and the attach.
+ * sees and the second is only logged by class, so the new id is left unreleased. What that leaves behind, and a crash
+ * between the store and the attach, is `PRODUCTION_SECURITY_CHECKLIST.md` §7 item 3.
  *
  * **The compensation re-reads the owner with the same `FOR UPDATE`** ({@see ImageHolder::lockAndRead()}), and that
- * lock may be what failed the attach: under contention the re-read can fail too, nothing is queued, and the new id is
- * an orphan — logged by class, accepted.
+ * lock may be what failed the attach, so under contention the re-read can fail too: nothing is queued and the failure
+ * is logged by class.
  *
- * **A lost acknowledgement plus a later writer can queue one id twice.** The commit landed and was reported as
- * failed, the re-read finds the new id held and leaves it alone, and a later replace then releases that id as its
- * previous one, which may already have been released once. That is safe because `DeleteImage` is idempotent
+ * **The same id can be queued twice.** A throwable out of the attach does not prove it rolled back, so the compensation
+ * queues the NEW id only when the owner, read again, does not hold it. If a concurrent writer replaced that id after
+ * the commit landed (its acknowledgement lost) and before the re-read, the writer has already queued it as its
+ * previous id and the compensation queues it a second time. That is safe because `DeleteImage` is idempotent
  * (`DeleteImageIntegrationTest::testASecondDeliveryOfTheSameRequestLeavesTheSameStateAndDoesNotFail`).
  *
  * **What is not here.** No reference counting and no check that anyone else holds an id: an owner holds the id it
- * minted and nothing else does, which is the single-holder rule the consumer epic states. A failure inside
- * {@see UploadImage} after `store()` leaves an orphan too, with the same record.
+ * minted and nothing else does, which is the single-holder rule the consumer epic states.
  */
 final readonly class ImageAttachment
 {

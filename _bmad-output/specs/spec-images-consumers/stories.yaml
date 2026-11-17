@@ -38,9 +38,10 @@
     RawBodyRoute::ATTRIBUTE, the owner and permission checks and the write throttle run before
     ImageRequestBodyReader::read(), the write goes through ImageAttachment, the matcher path in the Caddyfile
     matches the real manifest path, and a body over 1 MB is measured through Caddy. This story owns the
-    manifest-driven gate that fails a PUT route matched by the matcher without the attribute, so ic-4 and ic-5
-    only extend it. It also proves the compensation of ImageAttachment through its ORM-backed holder after a real
-    manager reset, which ic-1's DBAL holder cannot show. The ImageConsumerAuthorizationGateTest registry is keyed
+    manifest-driven gate, in both directions: it fails a PUT route the matcher admits without the attribute, and a
+    route that carries the attribute or reaches ImageAttachment but that no @imageWrite alternative matches (a
+    truncated image is that second case), so ic-4 and ic-5 only extend it. It also proves the compensation of
+    ImageAttachment through its ORM-backed holder after a real manager reset, which ic-1's DBAL holder cannot show. The ImageConsumerAuthorizationGateTest registry is keyed
     by file and holder and its universe is every declared or promoted property named like an image id outside
     Shared/Images, so the Resource DTO field and any event property of the logo are registered too, each with the
     same ADR D1 anchor.

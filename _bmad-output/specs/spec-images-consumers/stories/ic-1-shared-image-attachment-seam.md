@@ -53,7 +53,7 @@ context:
 - `api/src/Shared/Persistence/Infrastructure/DoctrineTransactionManager.php` -- `transactional()` rolls back and resets the manager; a fresh `transactional()` after a caught failure is the compensation.
 - `api/src/Shared/Images/Domain/Exception/` -- five exceptions extend native `\DomainException`; re-parent to `Shared\ErrorContract\Domain\Exception\DomainException` with a marker and `type` (keep `ImageProcessingException`); `ImageProcessingFailed` untouched in status.
 - `api/src/Shared/ErrorContract/Infrastructure/Http/ProblemDetailsFactory.php` (`MARKER_STATUS_MAP`, `MARKER_DEFAULT_TYPE_MAP`), `Shared/Monitoring/Infrastructure/Sentry/SentryEventFilter.php`, `docs/api-error-contract.md`, `ErrorContractGateTest` -- new markers for 413 and 415 (411 and 422 exist: `LengthRequired`, `InvariantViolation`).
-- `api/src/Documents/Document/Infrastructure/Http/DiscardUploadSpoolListener.php`, `Upload/PhpUploadBodySpool.php`, `UploadEvidenceController.php:70-120` -- the shape to copy into `Shared`: spool discard on `kernel.response`, `session->save()` before streaming, `Content-Length` regex.
+- `api/src/Documents/Document/Infrastructure/Http/DiscardUploadSpoolListener.php`, `UploadEvidenceController.php:70-120` -- the shape `Shared/Http/Infrastructure/Upload/` follows (the Documents spool class now lives there): spool discard on `kernel.response`, `session->save()` before streaming, `Content-Length` regex.
 - `api/frankenphp/Caddyfile:171-198`, `api/tests/Unit/Gate/UploadRoutePathAgreementGateTest.php` (`assertCount(2`) -- add the image matcher and parametrise the gate.
 - `api/src/Documents/Document/Infrastructure/Security/DeclareUploadThrottle.php`, `config/packages/rate_limiter.yaml`, `.env` -- limiter shape; add write and read limiters.
 - `api/tests/Unit/Shared/Images/ImageConsumerAuthorizationGateTest.php` -- regex `/\$[a-z][A-Za-z0-9_]*ImageId\b/`, asserts `[]`; redesign as a registry of `property => ADR D1 anchor`, universe derived from `src`, sweep-size test kept.
@@ -89,7 +89,7 @@ context:
 - The media-type hint is passed on only when it is exactly one of the four types the processor accepts (`ImagePreflightGuard::SUPPORTED_MEDIA_TYPES`): the wire contract's `image/jpg` is "clean" by token shape and must still be ignored.
 - Numbers decided here: write budget 30 per 10 minutes, read budget 600 per minute, both per identity and route.
 - Kept apart on purpose: `ImageProcessingFailed` stays on the native `DomainException` (500 unchanged); `ContentTooLarge` (413) and `UnsupportedMediaType` (415) are new markers, and 413 joined `HTTP_STATUS_TYPE_MAP`.
-- `PhpUploadBodySpool` is copied into `Shared/Http/Infrastructure/Upload`, as the spec said; the Documents twin can adopt it later.
+- `PhpUploadBodySpool` lives in `Shared/Http/Infrastructure/Upload`; the Documents copy was deleted in pass 2 and `DiscardUploadSpoolListener` imports the Shared class.
 
 ## Spec Change Log
 
@@ -110,11 +110,11 @@ Layers: Blind Hunter, Edge Case Hunter and Acceptance Auditor ran as parallel re
 | 7 | Docs now false: `api-error-contract.md` 415 "no marker backs it", `MARKER_FREE_BRIDGE_STATUSES` and the test name; `ProblemDetailsFactory` 413 "bridge raises" with no producer in vendor | medium | patch: rewrite; delete the empty constant if unread |
 | 8 | `wire-contract.md` says "clean `image/*` token", code passes only the four supported types | medium | patch: wire-contract states the exact rule (ic-2 codes against it) |
 | 9 | Memory residual says "several identities"; a 30-per-10-minutes budget bounds requests, so one identity can reach the OOM kill | medium | patch: §7 item 7 wording |
-| 10 | Drain of a refused or anonymous body holds a worker up to 120 s, same as the Documents listener, unrecorded | medium | patch: record in §7 item 11 (parity, accepted) |
-| 11 | Seam wired by convention only: a consumer route missing `RawBodyRoute::ATTRIBUTE`, the throttle-before-reader order, or `ImageAttachment` leaves a plaintext spool with every gate green; forward guard misses a path outside the three shapes | medium | patch: acceptance lines in `stories.yaml` for ic-3..ic-5, §7 item 11 notes it; a manifest gate needs a consumer route and lands with the first one |
+| 10 | Drain of a refused or anonymous body holds a worker up to 120 s, same as the Documents listener, unrecorded | medium | patch: record in §7 item 12 (a) (parity, accepted) |
+| 11 | Seam wired by convention only: a consumer route missing `RawBodyRoute::ATTRIBUTE`, the throttle-before-reader order, or `ImageAttachment` leaves a plaintext spool with every gate green; forward guard misses a path outside the three shapes | medium | patch: acceptance lines in `stories.yaml` for ic-3..ic-5, §7 item 12 (c) notes it; a manifest gate needs a consumer route and lands with the first one |
 | 12 | Stale or present-tense comments: publisher gate docblock "real map is empty", "No such route is mounted yet", "(no production route yet)"; PWA mapping claimed in docs with no PWA code | low | patch (boy scout, same files) |
 | 13 | `source-tree-analysis.md` lacks `Shared/Http/Infrastructure/Upload/`; §7 items 2 and 6 not touched | low | patch: one row, one pointer each |
-| 14 | `BestEffortReportChannelGateTest` duplicate `PhpUploadBodySpool.php` | false | two files, Documents and Shared, share the basename; the test compares basenames (AA verified) |
+| 14 | `BestEffortReportChannelGateTest` duplicate `PhpUploadBodySpool.php` | false | two files, Documents and Shared, shared the basename; the test compares basenames (AA verified). Moot since pass 2: Documents adopted the Shared class and one file remains |
 | 15 | Pixel and dimension refusals answer 413; malformed `Content-Length` reuses "not as long as declared" | false / low | 413 is the wire contract's rule; wording is cosmetic and the fix adds a factory |
 | 16 | New gate sees declared properties only, narrower than the old whole-file regex | low | rejected: a holder must be a declared ORM property to persist; fix would add machinery |
 | 17 | ADR anchor satisfied by any backticked mention; gate pins an ADR phrase | low | rejected: the phrase is the anchor the gate exists to hold |
@@ -129,7 +129,7 @@ Pass 2 (2026-11-17): `bmad-code-review` over commit `5c5e93a9` — Blind Hunter,
 - [x] [Review][Patch] Compensation re-read takes the owner `FOR UPDATE`, the lock that may have just failed the attach, so contention can orphan the new id; the failure mode is in no docblock or §7 item 3 [`ImageAttachment::holds`] — medium (AA)
 - [x] [Review][Patch] `ImageHolder` docblock says both methods run inside the attach transaction and the holder's not-found "own exception"; the compensation now calls `lockAndRead` alone and catches only the `NotFound` marker — state both [`ImageHolder.php`] — medium (AA)
 - [x] [Review][Patch] A lost acknowledgement plus a later writer releases the same id twice; harmless only because `DeleteImage` is idempotent, which no docblock or test states [`ImageAttachment`] — low (BH, AA)
-- [x] [Review][Patch] An image `PUT` refused before routing (per-IP 429 at priority 512, or no route yet under the lifted 20 MiB matcher) never gets `RawBodyRoute::ATTRIBUTE`, so its spool is not discarded; Documents' twin has the same hole — record both causes in §7 item 11 (a) [`PRODUCTION_SECURITY_CHECKLIST.md`] — medium (EC, BH)
+- [x] [Review][Patch] An image `PUT` refused before routing (per-IP 429 at priority 512, or no route yet under the lifted 20 MiB matcher) never gets `RawBodyRoute::ATTRIBUTE`, so its spool is not discarded; Documents' twin has the same hole — record both causes in §7 item 12 (b) [`PRODUCTION_SECURITY_CHECKLIST.md`] — medium (EC, BH)
 - [x] [Review][Patch] `PhpUploadBodySpool` is duplicated between Documents and Shared with adoption deferred; Documents adopts the Shared class here and its copy is deleted (this also removes the double `REPORTERS` entry) [`Documents/…/Upload/PhpUploadBodySpool.php`] — medium (BH)
 - [x] [Review][Patch] Stale `clean image/* hint` in `docs/architecture-api.md:146`, the same rule corrected in `wire-contract.md` [`docs/architecture-api.md`] — low (BH, AA)
 - [x] [Review][Patch] `ContentTooLarge` is described as the endpoint's pre-decode bound and also carries the post-decode pixel and dimension limits; 415 is called "one wire type" while the image refusal is `image-unsupported-type` and the framework one `unsupported-media-type`; a framework 413 is re-typed from `http-error` to `content-too-large` without a line saying so (check the PWA mapping and gallery) [`docs/api-error-contract.md`, marker docblocks] — low (BH)
@@ -143,6 +143,25 @@ Pass 2 (2026-11-17): `bmad-code-review` over commit `5c5e93a9` — Blind Hunter,
 - [x] [Review][Patch] Commit message says five exceptions map "through two new markers"; four are re-parented and 411 uses the existing `LengthRequired` marker [commit `5c5e93a9`, unpushed, amend] — low (EC)
 
 Rejected: owner pre-check before decoding (carried from pass 1, row 18: consumer contract, proved per consumer story) · "two replaces" blocked-writer test (carried, row 6) · drain deadline and time-limit untested under CLI (parity with the Documents twin) · listener registration unverified (autoconfigured by the `Erpify\` glob) · test-double counter order and `parent::tearDown()` (cosmetic) · compensation-failure `message` and `context.event` duplicate (cosmetic).
+
+Pass 3 (2026-11-17): the delta `5c5e93a9..c1b1ad19` (24 files) — Blind Hunter, Edge Case Hunter and Acceptance Auditor in parallel, read-only, told the pass 1 and 2 verdicts and that PR #1257 had no open threads. No GRAVE; two MEDIO.
+
+- [x] [Review][Patch] `docs/deployment-guide.md` still says Caddy admits a body above 1 MB only on the evidence PUT; the `@imageWrite` matcher admits 20 MiB on three more paths [`docs/deployment-guide.md`] — medium (AA)
+- [x] [Review][Patch] `ImageAttachment` docblock says §7 "records as accepted" two orphans no §7 line has an owner or date for, and restates the residual; the "lost acknowledgement plus a later writer" paragraph described a sequence that releases once. Rewritten: the §7 pointer only, and the real double-queue interleaving (a writer replaces the new id between the commit and the re-read) [`ImageAttachment`] — medium (AA, BH, EC)
+- [x] [Review][Patch] No test makes the compensation's re-read fail, hands it a third id, or removes the owner after a lost acknowledgement; doubles extended (`rereadFails`, an `afterCommit` hook) and three cases added [`ImageAttachmentTest`] — low (EC, AA)
+- [x] [Review][Patch] §7 item 3 says an orphan is found by comparing `image` with the storage listing; one from a failed compensation has a row, and only `image` against the holders' columns finds it [`PRODUCTION_SECURITY_CHECKLIST.md`] — low (AA)
+- [x] [Review][Patch] The holder pattern misses `private(set)`, `public private(set)`, `protected(set)` and `final`; a bare `static` stays out on purpose [`ImageConsumerAuthorizationGateTest`] — low (EC)
+- [x] [Review][Patch] A malformed `Content-Length` was titled "not as long as declared" and a 19-or-more-digit one answered 411 although it is over the cap: `ImageLengthRequired::malformed()` and 413 for a declared length too long for an int [`ImageRequestBodyReader`] — low (EC)
+- [x] [Review][Patch] Reader docblock said a wrong label never turns a good image into a refusal; true only outside the allowlist [`ImageRequestBodyReader`] — low (EC)
+- [x] [Review][Patch] `docs/architecture-api.md` said the aggregate publishes "after its own commit" and that a failed attach always queues the new id; the spool docblock and `source-tree-analysis.md` still described the spool as image-only or Shared-only [`docs/architecture-api.md`, `PhpUploadBodySpool`, `docs/source-tree-analysis.md`] — low (AA)
+- [x] [Review][Patch] Change-relative wording ("is now typed … where it was", "instead of `http-error`") in `docs/api-error-contract.md` and the `ProblemDetailsFactory` docblock [both] — low (BH, AA)
+- [x] [Review][Patch] The record pointed at §7 item 11 for what now lives in item 12, and the Code Map and Implementation Notes still described the Documents spool copy [this file] — low (AA)
+- [x] [Review][Patch] `stories.yaml` ic-3 described the manifest-driven gate in one direction only; it now also fails an image write route that carries the attribute or reaches `ImageAttachment` and is not matched by `@imageWrite` [`stories.yaml`] — medium (AA)
+- [x] [Review][Patch] §7 item 12 and item 3 had lines past the file's wrap [`PRODUCTION_SECURITY_CHECKLIST.md`] — low (BH)
+
+Rejected: a test per every `ImageHolder` implementation concurrency interleaving (the functional test against Postgres and ic-3's ORM holder own real locking) · `ip:unknown` bucket of a non-HTTP caller (the image routes need a session) · limiter budgets unpinned in the tests (env-driven, the accepted pattern).
+
+Where the layers ran: pass 3 on the delta above, three read-only subagents (the Verification Gap layer was not repeated: no behaviour of the delta is a runtime claim a test run does not already carry).
 
 ## Design Notes
 

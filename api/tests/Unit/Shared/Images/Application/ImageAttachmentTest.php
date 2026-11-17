@@ -269,6 +269,91 @@ final class ImageAttachmentTest extends TestCase
         $this->assertArrayHasKey($held->toString(), $this->storage->objects);
     }
 
+    #[Test]
+    public function aCompensationWhoseReReadFailsQueuesNothingAndLeavesTheOriginalFailureStanding(): void
+    {
+        $holder = $this->holder([self::OWNER => null]);
+        $holder->attachFails = new RuntimeException('the attach failed');
+        $holder->rereadFails = new RuntimeException('the lock timed out');
+
+        try {
+            $this->attachment()->replace($holder, self::OWNER, 'raw');
+            $this->fail('the original failure must propagate');
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame('the attach failed', $runtimeException->getMessage());
+        }
+
+        $this->assertSame([], $this->bus->queuedIds());
+        $this->assertCount(1, $this->logger->records);
+        $this->assertSame(
+            ['event' => 'images.attachment.compensation_failed', 'exceptionClass' => RuntimeException::class],
+            $this->logger->records[0]['context'],
+        );
+    }
+
+    /**
+     * A writer got in between the commit whose acknowledgement was lost and the compensation's re-read: it replaced
+     * the new id and queued it as its previous one, so the compensation queues the same id again. Safe because the
+     * deletion is idempotent; what is pinned here is that the owner is NOT left pointing at released bytes.
+     */
+    #[Test]
+    public function aWriterThatReplacedTheNewIdBeforeTheReReadMakesTheCompensationQueueItASecondTime(): void
+    {
+        $old = ImageId::generate();
+        $third = ImageId::generate();
+        $holder = $this->holder([self::OWNER => $old]);
+        $transactions = new LostAcknowledgementTransactionManager(
+            $this->transactions,
+            2,
+            function () use ($holder, $third): void {
+                $minted = \array_key_first($this->storage->objects);
+                $this->assertIsString($minted);
+
+                $this->transactions->transactional(function () use ($holder, $third, $minted): void {
+                    $holder->attach(self::OWNER, $third);
+                    $this->bus->publish(new ImageDeletionRequested($minted));
+                });
+            },
+        );
+
+        try {
+            $this->attachment(null, $transactions)->replace($holder, self::OWNER, 'raw');
+            $this->fail('the lost acknowledgement must propagate');
+        } catch (RuntimeException) {
+            // expected
+        }
+
+        $minted = \array_key_first($this->storage->objects);
+        $this->assertIsString($minted);
+        $this->assertTrue($holder->holds(self::OWNER)?->equals($third) ?? false, 'the later writer keeps its id');
+        $this->assertSame([$old->toString(), $minted, $minted], $this->bus->queuedIds());
+    }
+
+    #[Test]
+    public function anOwnerRemovedAfterALostAcknowledgementHoldsNothingSoTheNewIdIsReleased(): void
+    {
+        $old = ImageId::generate();
+        $holder = $this->holder([self::OWNER => $old]);
+        $transactions = new LostAcknowledgementTransactionManager(
+            $this->transactions,
+            2,
+            static function () use ($holder): void {
+                $holder->remove(self::OWNER);
+            },
+        );
+
+        try {
+            $this->attachment(null, $transactions)->replace($holder, self::OWNER, 'raw');
+            $this->fail('the lost acknowledgement must propagate');
+        } catch (RuntimeException) {
+            // expected
+        }
+
+        $minted = \array_key_first($this->storage->objects);
+        $this->assertIsString($minted);
+        $this->assertSame([$old->toString(), $minted], $this->bus->queuedIds());
+    }
+
     /**
      * @param array<string, ImageId|null> $held
      */

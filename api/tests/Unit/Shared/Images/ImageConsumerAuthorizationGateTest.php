@@ -54,9 +54,14 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
      */
     private const array REGISTRY = [];
 
-    private const string PROPERTY_DECLARATION = '/(?:\b(?:public|protected|private|var)\s+'
-        . '(?:readonly\s+)?(?:static\s+)?'
-        . '|\breadonly\s+(?:(?:public|protected|private)\s+)?(?:static\s+)?)'
+    /**
+     * A declared or promoted property: a visibility word (with PHP 8.4's `(set)` / `(get)` asymmetric form) or `var`
+     * first, then any further modifiers; or `readonly` / `final` first, then the same. A bare `static` is no
+     * declaration here — it is also how a local variable is made static.
+     */
+    private const string PROPERTY_DECLARATION = '/(?:\b(?:public|protected|private|var)(?:\((?:set|get)\))?\s+'
+        . '|\b(?:readonly|final)\s+)'
+        . '(?:(?:public|protected|private|readonly|static|final)(?:\((?:set|get)\))?\s+)*'
         . '(?:\??[\w\\\|&()]+\s+)?\$(\w*image_?id)\b/i';
 
     /** A `Column` attribute, aliased or not, whose `name:` ends in `image_id` wherever it sits among the arguments. */
@@ -182,11 +187,10 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
 
     /**
      * The derivation, driven over planted sources so that it is exercised while the registry is empty: a declared or
-     * promoted property, in any case, a mapped column, and nothing a comment, a local variable or a bare parameter
-     * says.
+     * promoted property, in any case and in any modifier order, and a mapped column.
      */
     #[Test]
-    public function theDerivationFindsDeclarationsAndOnlyDeclarations(): void
+    public function theDerivationFindsEveryDeclaredOrPromotedHolder(): void
     {
         $found = $this->holdersIn(<<<'PHP'
             <?php
@@ -197,7 +201,15 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
                 protected static $accountImageId;
                 readonly private string $cardImageID;
                 var $legacyImageId;
+                private(set) ?string $asymImageId = null;
+                public private(set) string $dualImageId;
+                protected(set) string $protImageId;
+                final public string $finalImageId;
                 public function __construct2(readonly string $promotedImageId, readonly ?string $typedImageId = null)
+                {
+                }
+
+                public function __construct3(private(set) ?string $promotedAsymImageId = null)
                 {
                 }
 
@@ -223,26 +235,39 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
         $this->assertSame(
             [
                 'accountImageId',
+                'asymImageId',
                 'avatar_image_id',
                 'cardImageID',
                 'column:badge_image_id',
                 'column:multi_image_id',
                 'column:plain_image_id',
                 'column:scan_image_id',
+                'dualImageId',
+                'finalImageId',
                 'heroImageId',
                 'legacyImageId',
                 'logoImageId',
+                'promotedAsymImageId',
                 'promotedImageId',
+                'protImageId',
                 'typedImageId',
             ],
             $found,
         );
+    }
 
+    /**
+     * Nothing a comment, a local variable, a static local or a bare parameter says is a holder.
+     */
+    #[Test]
+    public function theDerivationFindsNothingThatIsNotADeclaration(): void
+    {
         $this->assertSame([], $this->holdersIn(<<<'PHP'
             <?php
             /** private ?string $commentedImageId */
             // public $alsoCommentedImageId
             function read(string $imageId): void { $localImageId = $imageId; $this->usedImageId = 1; }
+            function memo(): void { static $cachedImageId; static ?string $typedCachedImageId = null; }
             PHP));
     }
 

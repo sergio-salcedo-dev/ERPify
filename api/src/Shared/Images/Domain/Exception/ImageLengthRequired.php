@@ -21,6 +21,11 @@ final class ImageLengthRequired extends DomainException implements LengthRequire
         return new self(type: self::TYPE, title: 'The image upload must declare its Content-Length.');
     }
 
+    public static function malformed(): self
+    {
+        return new self(type: self::TYPE, title: 'The image upload declares a Content-Length that is not a number.');
+    }
+
     public static function notEqualToBytesRead(): self
     {
         return new self(type: self::TYPE, title: 'The image body is not as long as its Content-Length declares.');

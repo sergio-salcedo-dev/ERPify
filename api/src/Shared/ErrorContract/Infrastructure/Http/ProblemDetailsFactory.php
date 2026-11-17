@@ -163,7 +163,7 @@ final readonly class ProblemDetailsFactory
      * out of this map the framework source would reach the wire as `http-error`, indistinguishable from every other
      * unmapped status, and a client routing on `type` could not tell "resend this as JSON" from a failure it can do
      * nothing about. 413 is here because its marker is: every status of this map is marker-backed, which the mirror
-     * test asserts, and a framework-raised 413 therefore answers `content-too-large` instead of `http-error`.
+     * test asserts. A framework-raised 413 answers `content-too-large`.
      */
     private const array HTTP_STATUS_TYPE_MAP = [
         Response::HTTP_BAD_REQUEST => 'invalid-input',

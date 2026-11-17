@@ -350,7 +350,7 @@ Full reference (mapping table, header rules, observability, code map, test surfa
   regardless of routing; that table's own person ids are erased by the identity erasure, not by this registry.
 - **`ImageDeletionRequested` is the one event routed for a reason other than fan-out.** `Shared/Images` owns
   the physical removal of an image's bytes and never decides an image's lifecycle: the consuming aggregate
-  publishes the request after its own commit, and `DeleteImageOnDeletionRequested` runs `ImageStorage::delete()`
+  asks for it through `ImageAttachment`, inside the transaction that detaches the id, and `DeleteImageOnDeletionRequested` runs `ImageStorage::delete()`
   and *then* the row — an order whose every intermediate state is retryable, since deleting an absent object is
   a success while an object with no row is unreachable for ever. Routing it to `async` is what keeps that work
   out of the owner's transaction: an unrouted `DomainEvent` is handled in process, and use cases publish inside
@@ -358,8 +358,8 @@ Full reference (mapping table, header rules, observability, code map, test surfa
   reference over destroyed bytes. It has exactly one publisher, `ImageAttachment` (`Shared/Images/Application`),
   which every image holder goes through: it takes the owner row `FOR UPDATE` through the `ImageHolder` port the
   consumer implements, reads the id it holds, attaches the new one and queues the release of the old one in one
-  transaction, and — when that transaction fails — rolls back and queues the release of the NEW id in a second,
-  fresh one. Its functional test reads a rolled-back unit of work from a second connection. `Shared.Image` is nonetheless classified `person` in
+  transaction, and — when that transaction fails, unless the owner already holds the new id — queues the release of
+  the NEW id in a second, fresh one. Its functional test reads a rolled-back unit of work from a second connection. `Shared.Image` is nonetheless classified `person` in
   [`api/.persistent-transport-policy`](../api/.persistent-transport-policy) — the same identifier type covers a
   bank logo and a person's avatar and this module cannot tell them apart — so the routing is an argued ADR
   exception rather than a `non-person` verdict: [`adr/image-deletion-signal-transport.md`](./adr/image-deletion-signal-transport.md),

@@ -2092,7 +2092,8 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **Image bytes: what the storage root guarantees, and the twelve things it does not.** Residuals of
       `Shared/Images`, listed together because each is invisible from the others. One to four are the
       write and deletion paths; five to ten are opened by the authenticated read route
-      `GET /api/v1/images/{imageId}` and are not closed by it; eleven is the publish guard's own reach, twelve the upload seam's.
+      `GET /api/v1/images/{imageId}` and are not closed by it; eleven is the publish guard's own reach, twelve the upload
+      seam's.
       **One — the root is provisioned by the deployment, conditionally, and that condition is the control.**
       `compose.yaml` mounts the named volume `image_storage` at `/app/storage` for both `php` and
       `messenger_worker`, and the entrypoint creates `<STORAGE_LOCAL_PATH>/images` **only when that path is
@@ -2129,12 +2130,16 @@ mitigated state. Accepting one means recording who accepted it and against which
       **The attach protocol shrinks the bucket and does not empty it.** `ImageAttachment` queues the release of
       the NEW id in a fresh transaction when the attach fails, so a failed attach, a vanished owner and a rolled-back
       transaction no longer strand bytes. What still does: a crash or an out-of-memory kill between the store and
-      the attach, a failure inside `UploadImage` after `store()`, and a compensation that itself fails, which includes the owner-row
-      contention that failed the attach failing the compensation's own re-read — which is logged by exception class on
-      the `observability` channel (`images.attachment.compensation_failed`) and replaces nothing of the original
-      failure the caller sees. **The log carries the class only on purpose**: the new id is an identifier of an image
-      that may be a face, and the sink has no erasure path. The consequence is that an orphan is found only by
-      comparing the `image` table with the storage listing, which nothing does.
+      the attach, a failure inside `UploadImage` after `store()`, and a compensation that itself fails — which
+      includes the owner-row contention that failed the attach failing the compensation's own re-read. That failure
+      is logged by exception class on the `observability` channel (`images.attachment.compensation_failed`) and
+      replaces nothing of the original failure the caller sees. **The log carries the class only on purpose**: the
+      new id is an identifier of an image that may be a face, and the sink has no erasure path. The consequence is
+      that no log line leads to an orphan.
+      Two shapes need two comparisons, and nothing runs either: an object whose row was never written (a crash
+      between the store and the row) is found only by comparing the storage listing with the `image` table, and one
+      from a failed compensation, which has both a row and an object, only by comparing the `image` rows with the
+      holders' columns.
       **Four — `event_store` keeps the `ImageId` for ever, and routing changes nothing.**
       `PersistDomainEventMiddleware` appends every dispatched event with its real `aggregate_id` before
       Messenger picks a transport; identity erasure rewrites by the value of the **subject's** identifier,

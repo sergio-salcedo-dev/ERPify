@@ -102,6 +102,41 @@ final class ImageRequestBodyReaderTest extends TestCase
     }
 
     #[Test]
+    public function aMalformedLengthIsNamedAsNotANumberAndNeverAsAShortBody(): void
+    {
+        try {
+            $this->reader()->read($this->request('xx', 'abc'));
+            $this->fail('the length is not a number');
+        } catch (ImageLengthRequired $imageLengthRequired) {
+            $this->assertStringContainsString('not a number', $imageLengthRequired->getMessage());
+        }
+    }
+
+    #[DataProvider('provideADeclaredLengthWithTooManyDigitsIsTooLargeNotMalformedCases')]
+    #[Test]
+    public function aDeclaredLengthWithTooManyDigitsIsTooLargeNotMalformed(string $declared): void
+    {
+        $this->expectException(ImageResourceLimitExceeded::class);
+
+        $this->reader()->read($this->request('xx', $declared));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideADeclaredLengthWithTooManyDigitsIsTooLargeNotMalformedCases(): iterable
+    {
+        yield 'nineteen digits' => ['1000000000000000000'];
+        yield 'twenty digits that overflow an int' => ['99999999999999999999'];
+    }
+
+    #[Test]
+    public function leadingZerosAreNotDigitsOfTheLength(): void
+    {
+        $this->assertSame('xx', $this->reader()->read($this->request('xx', '0000000000000000000002'))->bytes);
+    }
+
+    #[Test]
     public function aMissingLengthIsRefusedAsLengthRequired(): void
     {
         $this->expectException(ImageLengthRequired::class);

@@ -21,6 +21,11 @@ final class InMemoryImageHolder implements ImageHolder, Snapshottable
     /** Raised by `attach` when set, so a case can fail the unit of work after the lock. */
     public ?RuntimeException $attachFails = null;
 
+    /** Raised by every `lockAndRead` once `attach` has been called, so a case can fail the compensation's re-read. */
+    public ?RuntimeException $rereadFails = null;
+
+    private bool $attachCalled = false;
+
     /**
      * The unit of work each `lockAndRead` ran in.
      *
@@ -43,6 +48,10 @@ final class InMemoryImageHolder implements ImageHolder, Snapshottable
     {
         $this->lockedInUnits[] = $this->transactions->current;
 
+        if ($this->attachCalled && $this->rereadFails instanceof RuntimeException) {
+            throw $this->rereadFails;
+        }
+
         if (!\array_key_exists($ownerId, $this->held)) {
             throw new OwnerNotFound();
         }
@@ -53,6 +62,7 @@ final class InMemoryImageHolder implements ImageHolder, Snapshottable
     #[Override]
     public function attach(string $ownerId, ?ImageId $imageId): void
     {
+        $this->attachCalled = true;
         $this->held[$ownerId] = $imageId;
 
         if ($this->attachFails instanceof RuntimeException) {

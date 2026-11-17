@@ -30,12 +30,16 @@ use Symfony\Component\HttpFoundation\Request;
  *
  * **The declared media type is a hint, not an input.** It is passed on only when it is exactly one of the types the
  * processor accepts; anything else (`application/octet-stream`, `image/jpg`, a parameter, a form type) is dropped,
- * because the processor refuses a declaration that contradicts the detected format and a client's wrong label must
- * not turn a good image into a refusal. The served type always comes from detection.
+ * because the processor refuses a declaration that contradicts the detected format and a label outside the
+ * allowlist must not turn a good image into a refusal. A label that IS on the allowlist but names the wrong format
+ * (`image/png` over JPEG bytes) is passed on and refused as unsupported. The served type always comes from detection.
  */
 final readonly class ImageRequestBodyReader
 {
-    private const string LENGTH_PATTERN = '/^\d{1,18}$/D';
+    private const string LENGTH_PATTERN = '/^\d+$/D';
+
+    /** More significant digits than this cannot be held in an int, and no cap is that large. */
+    private const int MAX_DECLARED_DIGITS = 18;
 
     public function __construct(
         #[Autowire(param: 'erpify.images.max_input_bytes')]
@@ -45,7 +49,7 @@ final readonly class ImageRequestBodyReader
 
     /**
      * @throws ImageLengthRequired        the length is missing, malformed or not the bytes read
-     * @throws ImageResourceLimitExceeded the declared length is above the byte cap
+     * @throws ImageResourceLimitExceeded the declared length is above the byte cap, however many digits it has
      */
     public function read(Request $request): ImageRequestBody
     {
@@ -75,7 +79,11 @@ final readonly class ImageRequestBodyReader
         }
 
         if (1 !== \preg_match(self::LENGTH_PATTERN, $header)) {
-            throw ImageLengthRequired::notEqualToBytesRead();
+            throw ImageLengthRequired::malformed();
+        }
+
+        if (\strlen(\ltrim($header, '0')) > self::MAX_DECLARED_DIGITS) {
+            throw ImageResourceLimitExceeded::inputTooLarge();
         }
 
         return (int) $header;
