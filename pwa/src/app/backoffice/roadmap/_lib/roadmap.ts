@@ -36,6 +36,10 @@ import {
   FileSignature,
   Construction,
   Truck,
+  KeyRound,
+  EyeOff,
+  Images,
+  ShieldAlert,
 } from "lucide-react";
 
 /**
@@ -46,12 +50,13 @@ import {
  * no framework imports — so it stays portable (a future API/DB seed or a
  * GitHub-Projects export can consume the same shape).
  *
- * `status` is flipped EXPLICITLY, task by task, as each piece is closed and
- * verified — the backlog ships fully unmarked and is never pre-marked from
- * assumptions about the codebase:
- * - `done`        — delivered and verified by a closed task.
+ * `status` is flipped EXPLICITLY, task by task, and only with evidence (code plus a test or an
+ * ADR, or a closed epic in `_bmad-output/implementation-artifacts/sprint-status*.yaml`); the
+ * note beside a submodule says where that evidence lives or what is still missing:
+ * - `done`        — delivered and verified.
  * - `in-progress` — actively being worked on.
- * - `planned`     — not started (the default).
+ * - `planned`     — not started (the default). A partly built submodule stays `planned` and
+ *                   its note says what exists.
  *
  * Status is declared ONLY at the submodule level; an omitted submodule status
  * means `planned` — never an inherited optimism. A module's status is DERIVED
@@ -125,7 +130,7 @@ export const roadmapPhases: RoadmapPhase[] = [
     code: "0",
     label: "Platform foundation",
     summary:
-      "The enterprise-grade base everything else rests on. Proven by the two verticals already delivered (Banks, System Health); what is missing is generalising it into reusable capabilities.",
+      "The enterprise-grade base everything else rests on. The event backbone, authentication, RBAC, audit trail, privacy guarantees, images and the documents backend are delivered; what is missing is i18n, tenant scoping of business data, offline support, metrics and the documents UI.",
     modules: [
       {
         code: "0.1",
@@ -141,13 +146,41 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Command Bus / Query Bus (CQRS light)" },
-          { name: "Domain Event Dispatcher" },
-          { name: "Async Job Pipeline (Messenger transports)" },
-          { name: "Retry / failure strategy (DLQ)" },
-          { name: "Idempotency layer", note: "critical for an ERP" },
-          { name: "Event versioning strategy" },
+          {
+            name: "Command Bus / Query Bus (CQRS light)",
+            note: "Use cases are plain handlers today; no bus yet",
+          },
+          {
+            name: "Domain Event Dispatcher",
+            status: "done",
+            note: "SymfonyMessengerEventBus; ADR event-store-and-projections",
+          },
+          {
+            name: "Async Job Pipeline (Messenger transports)",
+            status: "done",
+            note: "Doctrine transport with a dedicated worker",
+          },
+          {
+            name: "Retry / failure strategy (DLQ)",
+            status: "done",
+            note: "Failed transport plus backlog report; ADR dead-letter-observability",
+          },
+          { name: "Idempotency layer", status: "done", note: "critical for an ERP" },
+          {
+            name: "Event versioning strategy",
+            note: "eventVersion() exists; the upcaster chain is empty",
+          },
           { name: "Integration Events vs Domain Events" },
+          {
+            name: "Dead-letter and queue maintenance jobs",
+            status: "done",
+            note: "ADRs dead-letter-observability and maintenance-job-execution-contract",
+          },
+          {
+            name: "Event store replay + projection rebuild",
+            status: "done",
+            note: "RebuildProjectionCommand; ADR event-store-and-projections",
+          },
         ],
       },
       {
@@ -164,12 +197,28 @@ export const roadmapPhases: RoadmapPhase[] = [
         boundedContext: "shared",
         dependsOn: ["0.1"],
         submodules: [
-          { name: "Outbox table schema" },
-          { name: "Outbox writer (persistence decorator)" },
-          { name: "Outbox publisher worker (Messenger consumer)" },
-          { name: "Retry + backoff strategy" },
-          { name: "Deduplication / idempotency keys" },
-          { name: "Event serialization registry" },
+          {
+            name: "Outbox table schema",
+            status: "done",
+            note: "Implemented as event_store plus the Messenger Doctrine transport (ADR event-store-and-projections)",
+          },
+          {
+            name: "Outbox writer (persistence decorator)",
+            status: "done",
+            note: "PersistDomainEventMiddleware",
+          },
+          { name: "Outbox publisher worker (Messenger consumer)", status: "done" },
+          {
+            name: "Retry + backoff strategy",
+            status: "done",
+            note: "messenger.yaml retry_strategy",
+          },
+          {
+            name: "Deduplication / idempotency keys",
+            status: "done",
+            note: "handled_domain_event; ADR domain-event-handler-idempotency",
+          },
+          { name: "Event serialization registry", status: "done", note: "DomainEventMapper" },
         ],
       },
       {
@@ -186,12 +235,35 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Criteria Query System (composable filters)" },
-          { name: "Pagination (cursor-based + offset fallback)" },
-          { name: "Sorting DSL" },
-          { name: "API Response Standard (RFC 9457)" },
-          { name: "DTO mapping layer (never expose entities)" },
-          { name: "Read model separation (future CQRS)" },
+          {
+            name: "Criteria Query System (composable filters)",
+            status: "done",
+            note: "ADR filters-search-criteria",
+          },
+          {
+            name: "Pagination (keyset cursors)",
+            status: "done",
+            note: "Keyset only, by design: no offset fallback (ADR keyset-pagination)",
+          },
+          {
+            name: "Sorting DSL",
+            status: "done",
+            note: "SortFieldMap; ADR filters-search-criteria",
+          },
+          {
+            name: "API Response Standard (RFC 9457)",
+            status: "done",
+            note: "docs/api-error-contract.md",
+          },
+          {
+            name: "DTO mapping layer (never expose entities)",
+            status: "done",
+            note: "ADR api-resource-dtos",
+          },
+          {
+            name: "Read model separation (future CQRS)",
+            note: "One reference projection (BankCount) and a rebuild command",
+          },
         ],
       },
       {
@@ -203,17 +275,36 @@ export const roadmapPhases: RoadmapPhase[] = [
         objective: "Enterprise SaaS base: per-tenant isolation and authorization.",
         userNeeds: [
           "Sign in securely with my account.",
-          "That each company can only see and touch its own data.",
+          "That each organization can only see and touch its own data.",
           "Permissions by role: each person sees and does exactly what they should.",
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Tenant Context Resolver" },
-          { name: "RBAC engine (roles + permissions)" },
+          {
+            name: "Tenant Context Resolver",
+            note: "The session carries organizationId; no business table is tenant-scoped yet (see docs/saas-production-roadmap.md, Phase H)",
+          },
+          {
+            name: "RBAC engine (roles + permissions)",
+            status: "done",
+            note: "ADR rbac-authorization-model",
+          },
           { name: "Future ABAC hooks (policies)" },
-          { name: "JWT auth + refresh strategy" },
-          { name: "Session / device tracking" },
-          { name: "Audit log base system", note: "domain_event table" },
+          {
+            name: "Authentication (session firewall)",
+            status: "done",
+            note: "Session-cookie firewall, not JWT (ADR auth-rbac-subsystem)",
+          },
+          {
+            name: "Session / device tracking",
+            status: "done",
+            note: "Iam/Session and the profile sessions page",
+          },
+          {
+            name: "Audit log base system",
+            status: "done",
+            note: "audit_log plus event_store (ADR regulatory-audit-trail)",
+          },
         ],
       },
       {
@@ -229,9 +320,16 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Structured logging standard" },
-          { name: "Correlation ID propagation", note: "critical with Messenger" },
-          { name: "Sentry integration (backend + frontend)" },
+          {
+            name: "Structured logging standard",
+            status: "done",
+            note: "JSON observability channel with redaction processors",
+          },
+          {
+            name: "Correlation ID propagation",
+            note: "Stamped on audit_log rows; propagation into async messages is unverified",
+          },
+          { name: "Sentry integration (backend + frontend)", status: "done" },
           { name: "Metrics hooks (future Prometheus)" },
           { name: "Event tracing hooks (domain → async)" },
         ],
@@ -278,14 +376,23 @@ export const roadmapPhases: RoadmapPhase[] = [
         boundedContext: "shared",
         dependsOn: ["0.4"],
         submodules: [
-          { name: "Audit table schema (domain_event)" },
-          { name: "Audit log viewer (UI /backoffice/audit)" },
-          { name: "Filter + search by entity / user / action" },
-          { name: "Per-entity change history (timeline)" },
+          { name: "Audit table schema (audit_log)", status: "done" },
+          { name: "Audit log viewer (UI /backoffice/audit)", status: "done" },
+          { name: "Filter + search by entity / user / action", status: "done" },
+          {
+            name: "Per-entity change history (timeline)",
+            note: "AuditTimelineSearcher exists; a per-entity view is unverified",
+          },
           { name: "Tenant-scoped audit queries" },
-          { name: "Retention + archiving policy" },
+          {
+            name: "Retention + archiving policy",
+            note: "Retention floor shipped (ADR regulatory-audit-trail); archiving not started",
+          },
           { name: "Export (CSV / PDF)" },
-          { name: "Tamper-evidence / log integrity" },
+          {
+            name: "Tamper-evidence / log integrity",
+            note: "Hash-chain or WORM storage is only a revisit trigger in the ADR",
+          },
         ],
       },
       {
@@ -306,11 +413,24 @@ export const roadmapPhases: RoadmapPhase[] = [
         submodules: [
           {
             name: "F0 · Model design (MediaFile, StorageProviderInterface, MIME)",
+            status: "done",
+            note: "Delivered as CanonicalImage (Shared/Images) and the Document aggregate; ADR images-vs-documents-conservation-contract",
           },
-          { name: "F1 · Local storage + per-tenant upload/download" },
+          {
+            name: "F1 · Local storage + per-tenant upload/download",
+            status: "in-progress",
+            note: "Images: done. Documents: ingest, scan and audited read built, ingest switched off. Not tenant-scoped",
+          },
           { name: "F2 · Generic Media Library (reuse, no duplication, tags)" },
-          { name: "F3 · Document System (Document aggregate, versioning, types, states)" },
-          { name: "F4 · Storage abstraction (S3/MinIO, swappable by config)" },
+          {
+            name: "F3 · Document System (Document aggregate, versioning, types, states)",
+            status: "in-progress",
+            note: "Aggregate, custody log, scan, audited read and list shipped (doc-1 to doc-6). No versioning, draft/approved states or UI yet",
+          },
+          {
+            name: "F4 · Storage abstraction (S3/MinIO, swappable by config)",
+            note: "Flysystem abstraction is in place; only local adapters are configured",
+          },
           { name: "F5 · SaaS optimisation (signed URLs, CDN, thumbnails, OCR)" },
         ],
       },
@@ -329,11 +449,114 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Design system (tokens, composites, patterns)" },
-          { name: "API client layer (HTTP port + adapters)" },
-          { name: "State management (preferences, list caching)" },
+          {
+            name: "Design system (tokens, composites, patterns)",
+            note: "Primitives and composites exist (pwa/DESIGN.md); tokens unverified",
+          },
+          {
+            name: "API client layer (HTTP port + adapters)",
+            status: "done",
+            note: "HttpClient port with fetch and mock adapters",
+          },
+          {
+            name: "State management (preferences, list caching)",
+            note: "Resource hooks exist; preferences are localStorage only",
+          },
           { name: "Offline-first foundations (service worker, sync queue)" },
           { name: "Lazy loading / code splitting per module" },
+        ],
+      },
+      {
+        code: "0.10",
+        name: "Privacy & Data Protection (GDPR)",
+        icon: EyeOff,
+        priority: "high",
+        complexity: "high",
+        objective:
+          "Personal data can be erased on request and stays out of durable logs, with guarantees the test suite executes.",
+        userNeeds: [
+          "That a person's data can be erased when they ask, without breaking the audit trail.",
+          "That personal data never lingers in logs or audit diffs where no erasure can reach it.",
+        ],
+        boundedContext: "shared",
+        dependsOn: ["0.7"],
+        submodules: [
+          {
+            name: "Crypto-shredding keystore for PII-safe audit diffs",
+            status: "done",
+            note: "Shared/Crypto and Shared/Privacy; ADR regulatory-audit-trail",
+          },
+          {
+            name: "Executable erasure guarantees (actor trail, identity subject, person references)",
+            status: "done",
+            note: "Epic gdpr-hardening",
+          },
+          { name: "Data-subject access export" },
+        ],
+      },
+      {
+        code: "0.11",
+        name: "Authentication Hardening & Recovery",
+        icon: KeyRound,
+        priority: "high",
+        complexity: "medium",
+        objective:
+          "Onboarding, sign-in and account recovery that resist abuse and can be proven ready before they are needed.",
+        userNeeds: [
+          "Join through an invitation and recover my account without contacting an administrator for every slip.",
+          "That repeated wrong passwords or abusive requests cannot lock the whole team out or let someone in.",
+        ],
+        boundedContext: "iam",
+        dependsOn: ["0.4"],
+        submodules: [
+          {
+            name: "Invitation-first onboarding lifecycle",
+            status: "done",
+            note: "ADR identity-invitation-lifecycle",
+          },
+          { name: "Login lockout and rate limiting", status: "done" },
+          {
+            name: "Password reset and recovery secret",
+            status: "done",
+            note: "ADR administrative-recovery-channel",
+          },
+          {
+            name: "Recovery readiness checks",
+            status: "in-progress",
+            note: "Epic recovery-readiness; the next story is not started",
+          },
+        ],
+      },
+      {
+        code: "0.12",
+        name: "Shared Images",
+        icon: Images,
+        priority: "medium",
+        complexity: "medium",
+        objective:
+          "One upload, serving and deletion seam for images, reused by every entity that shows a logo or picture.",
+        userNeeds: [
+          "Attach a logo or a picture to a record and see it everywhere that record appears.",
+          "That removing a record removes its images too.",
+        ],
+        boundedContext: "shared",
+        dependsOn: ["0.8"],
+        submodules: [
+          {
+            name: "Canonical image upload and serving",
+            status: "done",
+            note: "Shared/Images; ADRs image-read-route-contract and image-read-failure-signal-bound",
+          },
+          {
+            name: "Deletion signal transport",
+            status: "done",
+            note: "ADR image-deletion-signal-transport",
+          },
+          { name: "Shared upload control and display (PWA)", status: "done" },
+          {
+            name: "Consumers: bank logo, user avatar, bank-account image",
+            status: "in-progress",
+          },
         ],
       },
     ],
@@ -350,20 +573,33 @@ export const roadmapPhases: RoadmapPhase[] = [
         icon: UsersRound,
         priority: "high",
         complexity: "medium",
-        objective: "Users, companies (the multi-tenant boundary) and teams.",
+        objective: "Users, organizations (the multi-tenant boundary) and teams.",
         userNeeds: [
-          "Manage my company's users and teams.",
+          "Manage my organization's users and teams.",
           "Invite people and give them the right role and permissions.",
           "Edit my profile, my password and my preferences.",
         ],
         boundedContext: "organization",
         dependsOn: ["0.4"],
         submodules: [
-          { name: "Users" },
-          { name: "Companies (multi-tenant boundary)" },
+          {
+            name: "Users",
+            status: "done",
+            note: "Invite, status, roles and erasure from the admin console",
+          },
+          {
+            name: "Organizations (multi-tenant boundary)",
+            note: "Organization and Membership exist in the API; no UI yet",
+          },
           { name: "Teams" },
-          { name: "Roles & Permissions (UI layer)" },
-          { name: "User profile & preferences" },
+          {
+            name: "Roles & Permissions (UI layer)",
+            note: "Roles can be assigned; there is no permission editor (the policy is static)",
+          },
+          {
+            name: "User profile & preferences",
+            note: "Password change, recovery secret and sessions are real; settings and notifications pages are placeholders",
+          },
         ],
       },
       {
@@ -644,7 +880,11 @@ export const roadmapPhases: RoadmapPhase[] = [
         boundedContext: "backoffice",
         dependsOn: ["1.4"],
         submodules: [
-          { name: "Banks / Treasury (the reference vertical)" },
+          {
+            name: "Banks / Treasury (the reference vertical)",
+            status: "done",
+            note: "Bank and BankAccount (ADR bank-bankaccount-modeling)",
+          },
           { name: "Invoices (client/supplier)" },
           { name: "Payments tracking" },
           { name: "Certification-based invoicing (progress billing)", note: "from 1.3" },
@@ -845,13 +1085,15 @@ export const roadmapPhases: RoadmapPhase[] = [
             name: "Notification center (in-app)",
             note: "toasts + Mercure realtime",
           },
-          {
-            name: "Email notifications",
-            note: "BankChanged notify handler",
-          },
+          { name: "Email notifications", note: "One reference handler (BankChanged)" },
           { name: "Event subscriptions per user/role" },
           { name: "Notification preferences engine" },
           { name: "Push notifications (PWA)" },
+          {
+            name: "Realtime list refresh (Mercure)",
+            status: "done",
+            note: "Bank topics refresh the open list",
+          },
         ],
       },
       {
@@ -862,7 +1104,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         complexity: "medium",
         objective: "Per-tenant/user activation and gradual rollout.",
         userNeeds: [
-          "Turn features on or off for my company without waiting for a deploy.",
+          "Turn features on or off for my organization without waiting for a deploy.",
           "Try new things with a small group before opening them to everyone.",
         ],
         boundedContext: "shared",
@@ -964,7 +1206,7 @@ export const roadmapPhases: RoadmapPhase[] = [
         complexity: "high",
         objective: "A registry of per-tenant activatable modules with extension hooks.",
         userNeeds: [
-          "Add or remove modules according to what my company needs.",
+          "Add or remove modules according to what my organization needs.",
           "Pay only for the capabilities I actually use.",
         ],
         boundedContext: "shared",
@@ -982,7 +1224,7 @@ export const roadmapPhases: RoadmapPhase[] = [
     code: "6",
     label: "Platform Ops (CI/CD + Delivery)",
     summary:
-      "The delivery pipeline. Detailed in docs/saas-production-roadmap.md (phases A–H); this is the summary.",
+      "The delivery pipeline and its safety nets. Delivery is detailed in docs/saas-production-roadmap.md (phases A–H); this is the summary.",
     modules: [
       {
         code: "6.1",
@@ -997,9 +1239,16 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "GitHub Actions pipelines", note: "quality + tests on push/PR" },
+          {
+            name: "GitHub Actions pipelines",
+            status: "done",
+            note: "Quality and tests on push/PR, CodeQL and the accepted-risk check",
+          },
           { name: "Environment promotion (dev → staging → prod)" },
-          { name: "Migration automation strategy" },
+          {
+            name: "Migration automation strategy",
+            note: "deploy.sh runs migrations; no pre-deploy backup in the flow yet",
+          },
           { name: "Rollback system" },
           { name: "Build artifacts versioning" },
         ],
@@ -1017,11 +1266,21 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Behat BDD layer" },
-          { name: "Contract testing (API)" },
-          { name: "Integration test harness" },
-          { name: "Event-driven test utilities" },
-          { name: "Test data factories (DDD aligned)" },
+          { name: "Behat BDD layer", status: "done" },
+          {
+            name: "Contract testing (API)",
+            note: "Endpoint and image contract tests exist; no OpenAPI or consumer-driven contracts",
+          },
+          { name: "Integration test harness", status: "done" },
+          {
+            name: "Event-driven test utilities",
+            status: "done",
+            note: "Behat contexts for event store, outbox, consumer and Mercure",
+          },
+          {
+            name: "Test data factories (DDD aligned)",
+            note: "Fixture factories for identity, session, invitation and membership",
+          },
         ],
       },
       {
@@ -1037,10 +1296,46 @@ export const roadmapPhases: RoadmapPhase[] = [
         ],
         boundedContext: "shared",
         submodules: [
-          { name: "Docker Compose environments" },
+          { name: "Docker Compose environments", status: "done" },
           { name: "Infrastructure as code (future)" },
           { name: "Blue/green or rolling deploy" },
-          { name: "Background worker scaling (Messenger consumers)" },
+          {
+            name: "Background worker scaling (Messenger consumers)",
+            note: "One worker service; scaling not exercised",
+          },
+        ],
+      },
+      {
+        code: "6.4",
+        name: "Security Assurance & Disaster Recovery",
+        icon: ShieldAlert,
+        priority: "high",
+        complexity: "medium",
+        objective:
+          "Security checks that run on every change, accepted risks that are written down and re-checked, and backups proven by restoring them.",
+        userNeeds: [
+          "That known vulnerabilities in dependencies are caught before they reach me.",
+          "That my data can be restored after a failure, and that this has been tried.",
+        ],
+        boundedContext: "shared",
+        submodules: [
+          { name: "Dependency updates (Dependabot + batched bumps)", status: "done" },
+          { name: "Static analysis (CodeQL, Semgrep repository rules, SonarQube)", status: "done" },
+          { name: "Architecture gate tests", status: "done", note: "api/tests/Unit/Gate" },
+          {
+            name: "Accepted-risk register with a live-state check",
+            status: "done",
+            note: "PRODUCTION_SECURITY_CHECKLIST.md section 7",
+          },
+          {
+            name: "Backup, restore drill and off-site hook",
+            status: "done",
+            note: "scripts/deploy backup and restore; docs/vps-deployment.md",
+          },
+          {
+            name: "Image scan, secret scan, SBOM and signing in CI",
+            note: "docs/saas-production-roadmap.md, Phase A",
+          },
         ],
       },
     ],
