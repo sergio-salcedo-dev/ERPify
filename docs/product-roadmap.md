@@ -362,3 +362,19 @@ fases, no como bloque aparte. Detalle de submódulos en `roadmap.ts` donde apliq
   recalcula sola (`computeRoadmapProgress`).
 - Actualiza la narrativa de fases / buckets de este doc solo cuando cambie la
   **estrategia**, no en cada submódulo cerrado.
+
+## Verificación pendiente de las marcas (2026-11-17)
+
+Las marcas `done` y `in-progress` de `roadmap.ts` (49 y 4) salen de una pasada de lectura sobre el
+código, los ADR y las épicas cerradas, y no de ejecutar nada. Se contrastaron a mano con el código las
+que quedaban en duda (orden de los criterios de búsqueda, reintentos y cola de errores, idempotencia,
+borrado RGPD, bloqueo de login, antivirus, ingesta de Documents, copias de seguridad). **El resto no se
+ha revisado una a una**, y la barra de progreso de `/backoffice/roadmap` sale de esas marcas, así que
+una marca de más la infla.
+
+- **Pendiente:** revisar por muestreo (por ejemplo, una de cada tres) cada nota contra el ADR o la ruta
+  que cita; lo que no aguante pasa a `planned` con su nota. Apuntar aquí cuántas se revisaron y el
+  resultado.
+- **Sin confirmar:** la propagación del correlation-id a los mensajes asíncronos y la vista de
+  historial por entidad de la auditoría (siguen `planned` con nota «unverified»).
+- Una pieza a medias nunca se marca `done`; si la revisión encuentra una, se corrige en el mismo PR.
