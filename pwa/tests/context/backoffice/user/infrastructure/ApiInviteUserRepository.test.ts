@@ -9,7 +9,14 @@ import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEn
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
 // HttpClient method; recover the spy for assertions via `vi.mocked(client.post)`.
 function httpClient(): HttpClient {
-  return { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+  return {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    putRaw: vi.fn(),
+    delete: vi.fn(),
+  };
 }
 
 describe("ApiInviteUserRepository", () => {

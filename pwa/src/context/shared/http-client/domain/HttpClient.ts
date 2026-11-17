@@ -50,5 +50,18 @@ export interface HttpClient {
     validate?: ResponseGuard<T>,
     options?: RequestOptions,
   ): Promise<T>;
+  /**
+   * `PUT` a binary body as-is: the bytes of `body`, never JSON-encoded. No `Content-Type` is
+   * set by the client — the browser derives it from `body.type` and fills `Content-Length` from
+   * the blob's size. Everything else (timeout, expiry bounce, Problem Details parsing, minted
+   * network and timeout errors, the `ResponseGuard` on a 2xx JSON body) is the same transport the
+   * JSON verbs use.
+   */
+  putRaw<T>(
+    url: string,
+    body: Blob,
+    validate?: ResponseGuard<T>,
+    options?: RequestOptions,
+  ): Promise<T>;
   delete(url: string, options?: RequestOptions): Promise<void>;
 }

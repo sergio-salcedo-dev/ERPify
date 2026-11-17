@@ -117,6 +117,12 @@ export const API_ENDPOINTS = {
       FRANKENPHP_HOT_RELOAD: `${FRONTOFFICE_PREFIX}/dev/frankenphp-hot-reload`,
     },
   },
+  // Stored images, read through one route for every consumer (bank logo, bank-account image).
+  // The write routes belong to each consumer's own resource and are passed in by the consumer;
+  // none is declared here.
+  IMAGES: {
+    GET: (imageId: string): string => `${API_PREFIX_V1}/images/${encodeURIComponent(imageId)}`,
+  },
   // Identity / session subsystem — mounted at the v1 root (not under a portal
   // prefix): the signed-in user reads their own identity and session registry.
   IDENTITY: {

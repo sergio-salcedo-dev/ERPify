@@ -1,4 +1,4 @@
-import { LayoutGrid } from "lucide-react";
+import { ImagePlus, LayoutGrid } from "lucide-react";
 import type { DevToolGroup } from "@/context/shared/dev-tools/domain/DevTool";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 
@@ -20,6 +20,18 @@ export const DEV_TOOL_GROUPS: ReadonlyArray<DevToolGroup> = [
         description:
           "Visual inventory of every PWA error surface (404, 401, 403, 500, 503, 429, offline) plus inline `<ProblemDisplay>` fixtures for 4xx, 422 with violations, and 5xx with the dev-only `debug` block.",
         icon: LayoutGrid,
+      },
+    ],
+  },
+  {
+    label: "Components / QA",
+    tools: [
+      {
+        label: "Image Upload",
+        url: `${Routes.DEV_TOOLS}/image-upload`,
+        description:
+          "Drives `<ImageUploadField>` and `<ImageDisplay>` against a stub write URL: set, replace, remove, and every refusal the control maps.",
+        icon: ImagePlus,
       },
     ],
   },

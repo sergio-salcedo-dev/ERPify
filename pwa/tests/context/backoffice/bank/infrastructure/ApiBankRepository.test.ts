@@ -32,6 +32,7 @@ function httpClientReturning(response: unknown): HttpClient {
     post: vi.fn(),
     put: vi.fn(),
     patch: vi.fn(),
+    putRaw: vi.fn(),
     delete: vi.fn(),
   };
 }
@@ -152,6 +153,7 @@ describe("ApiBankRepository response guards", () => {
       post: vi.fn().mockResolvedValue({ data: primitives }),
       put: vi.fn().mockResolvedValue({ data: primitives }),
       patch: vi.fn(),
+      putRaw: vi.fn(),
       delete: vi.fn(),
     };
     const repository = new ApiBankRepository(httpClient);
@@ -192,6 +194,7 @@ describe("ApiBankRepository response guards", () => {
       post: vi.fn().mockResolvedValue({ data: primitives }),
       put: vi.fn().mockResolvedValue({ data: primitives }),
       patch: vi.fn(),
+      putRaw: vi.fn(),
       delete: vi.fn(),
     };
     const repository = new ApiBankRepository(httpClient);

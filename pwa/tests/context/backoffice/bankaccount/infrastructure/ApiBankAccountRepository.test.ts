@@ -39,6 +39,7 @@ function httpClientReturning(response: unknown): HttpClient {
     post: vi.fn(),
     put: vi.fn(),
     patch: vi.fn(),
+    putRaw: vi.fn(),
     delete: vi.fn(),
   };
 }
@@ -183,6 +184,7 @@ function writeHttpClient(): HttpClient {
     post: vi.fn().mockResolvedValue({ data: detailPrimitives }),
     put: vi.fn().mockResolvedValue({ data: detailPrimitives }),
     patch: vi.fn().mockResolvedValue({ data: detailPrimitives }),
+    putRaw: vi.fn(),
     delete: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -385,6 +387,7 @@ describe("ApiBankAccountRepository.findByIban", () => {
       post: vi.fn().mockResolvedValue({ data: collectionRow }),
       put: vi.fn(),
       patch: vi.fn(),
+      putRaw: vi.fn(),
       delete: vi.fn(),
     };
 
@@ -406,6 +409,7 @@ describe("ApiBankAccountRepository.findByIban", () => {
       post: vi.fn().mockRejectedValue(failure),
       put: vi.fn(),
       patch: vi.fn(),
+      putRaw: vi.fn(),
       delete: vi.fn(),
     };
 

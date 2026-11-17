@@ -248,6 +248,8 @@ const METHOD_BY_KEY: Readonly<Record<string, string>> = {
   "IDENTITY.SESSIONS": "GET",
   "IDENTITY.SESSIONS_REVOKE_CURRENT": "POST",
   "IDENTITY.SESSIONS_REVOKE_OTHERS": "POST",
+  // Read by an `<img src>`, not by `HttpClient`, so only the completeness directions hold it.
+  "IMAGES.GET": "GET",
 };
 
 interface ManifestRoute {

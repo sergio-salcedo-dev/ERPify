@@ -324,6 +324,32 @@ export class FetchHttpClient implements HttpClient {
     return this.sendWithBody<TBody, T>("PATCH", url, body, validate, options);
   }
 
+  async putRaw<T>(
+    url: string,
+    body: Blob,
+    validate?: ResponseGuard<T>,
+    options?: RequestOptions,
+  ): Promise<T> {
+    const { res, raw } = await this.request(
+      this.resolveUrl(url),
+      {
+        method: "PUT",
+        // No Content-Type: fetch takes it from `body.type` and sets Content-Length from the
+        // blob. A caller header still goes first, and Accept is the only one this client owns.
+        headers: { ...options?.headers, Accept: "application/json" },
+        cache: "no-store",
+        body,
+      },
+      options,
+    );
+
+    if (!res.ok) {
+      throw this.toHttpError(res, raw);
+    }
+
+    return this.parseBody<T>(res, raw, url, validate);
+  }
+
   async delete(url: string, options?: RequestOptions): Promise<void> {
     const { res, raw } = await this.request(
       this.resolveUrl(url),

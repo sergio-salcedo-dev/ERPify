@@ -88,7 +88,7 @@ ERPify/
 │   │       ├── frontoffice/        # health  — {application,domain,infrastructure}
 │   │       └── shared/             # capability modules (the dissolved shared kernel): access · date-time-provider · debug-token ·
 │   │                               #   dependency-injection (Inversify) · dev-tools · environment · error (ProblemDetails) ·
-│   │                               #   http-client · keyboard · navigation (safeHref) · notification · observability · rate-limit ·
+│   │                               #   http-client · images (upload port, pre-upload check) · keyboard · navigation (safeHref) · notification · observability · rate-limit ·
 │   │                               #   real-time (Mercure) · resource · routing · search · storage · styling · system-status ·
 │   │                               #   theme · uuid · validation (Zod) · view-state
 │   ├── tests/                      # Mirrors src/ (Vitest unit + Playwright e2e) + repo-guardrail tests (data-testid uniqueness, env allowlist, …)

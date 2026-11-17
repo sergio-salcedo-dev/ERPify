@@ -47,6 +47,7 @@ pwa/src/context/
     ├── date-time-provider/ notification/ observability/ real-time/  # ports + adapters
     ├── rate-limit/ search/ validation/ debug-token/ storage/
     ├── http-client/ dependency-injection/                           # kernel: fetch transport + Inversify container
+    ├── images/                                                      # image write port + adapter, pre-upload check, Problem Details copy
     └── connectivity/ environment/ keyboard/ navigation/ routing/ system-status/ theme/ uuid/ view-state/
 ```
 
@@ -56,6 +57,16 @@ pwa/src/context/
 - `erpify/` — entity-agnostic backoffice design-system primitives, barrel-exported from `@/components/erpify`.
 
 Pure cross-cutting helpers/hooks live as capability modules under `src/context/shared/<capability>/` (the former `src/lib/` bucket was dissolved) — never business logic.
+
+### Images — one upload control, one display (`context/shared/images`, `components/erpify`)
+
+Every consumer of `Shared/Images` (bank logo, user avatar, bank-account image) composes the same pair: `<ImageDisplay>` and `<ImageUploadField>` from `@/components/erpify`. A consumer screen never writes its own `<img>` over a stored image or its own `<input type="file">`.
+
+- **Transport.** `HttpClient.putRaw(url, blob, guard?, options?)` sends the blob as the body of a `PUT` with no `Content-Type` of its own (the browser takes it from `blob.type` and fills `Content-Length`), over the same `request()` as the JSON verbs — one timeout, one 401 bounce, one set of minted `network-error` / `request-timeout`.
+- **Port.** `ImageUploader` (`upload(url, file)`, `remove(url)`), bound as a singleton and implemented by `ApiImageUploader`. The **consumer passes its own write URL**: there is no generic upload route, so no write key lives in `API_ENDPOINTS`. Only the shared read route does (`IMAGES.GET`), composed by `imageReadUrl()` through `safeHref` and `encodeURIComponent`.
+- **Domain.** `checkImageFile()` refuses an empty file, a type outside `image/jpeg|png|webp|gif` and a size over the 20 MiB cap before any byte leaves; it never truncates, resizes or re-encodes, and the server stays the authority. `imageProblemMessage()` maps each `ImageProblemType` (`image-length-required`, `image-too-large`, `image-unsupported-type`, `image-invalid`) and `invalid-uuid`, 401, 403, 404, 429, `network-error`, `request-timeout` to its own English message, with an unknown fallback.
+- **Components.** `<ImageDisplay>` shows a placeholder when no id is held, while loading and on **any** load failure (an `<img>` does not expose the status), unmounting the `<img>` so no broken-image glyph paints. `<ImageUploadField>` receives async callbacks rather than resolving the port, because no `components/erpify` piece reaches the container: precheck refusals are inline, a server refusal is a persistent `<MutationError>` naming the kept file with a retry, and a second pick while one is in flight is ignored.
+- **Harness.** `/backoffice/dev-tools/image-upload` drives the control against a stub write URL (`tests/e2e/backoffice/image-upload.spec.ts`).
 
 ### Shared execution toolkits — access (IAM) & resource (CRUD)
 
