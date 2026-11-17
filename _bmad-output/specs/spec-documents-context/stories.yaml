@@ -487,7 +487,7 @@
     restore proceeds. The override sets a database flag that doc-5's read controller checks (gone
     problem type whatever documents.read_enabled says), cleared only when a completion run has
     replayed the whole ledger and the Document-driven reconciler reports no non-Erased row whose
-    scope is in it; it leaves a custody-style record (who, when, why) and the drill asserts that no
+    scope is in it; it leaves a record (when, why, and a random record_ref the operator writes in the off-host operator log, which is where who lives) and the drill asserts that no
     resurrected document is served before the replay completes. Record in section 7 that whoever holds the write credential can append an
     entry for a live scope and the sweep then destroys that document with no voter, that the
     ledger is a single copy, that a deleted entry leaves no trace and that a leaked repository

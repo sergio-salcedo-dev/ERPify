@@ -115,7 +115,7 @@ context:
 
 ## Implementation Notes
 
-- Contract deviations beyond the disclosed actor change, found by review and not amended in `stories.yaml`/SPEC (the user's approval covered the actor line only): the override record holds no "who" (`record_ref` points at the off-host operator log; stories.yaml says "who, when, why"), and the lock order is intent, document, keystore (stories.yaml says "document, then keystore"). Both are recorded in ADR D11.
+- Contract amendments, all made in `stories.yaml` and SPEC with the user's go-ahead (2026-11-17): the replay/completion actor is NULL, and the override record holds no "who" (`record_ref` points at the off-host operator log). Recorded in ADR D11. The lock order is not a deviation: the story's "document, then keystore" is the order within one document, and the intent lock the SPEC already puts first globally is taken before it.
 - Review layers, this PR (no PR existed when they ran): Blind Hunter, Edge Case Hunter, verification-gap and an Acceptance Auditor (the CLAUDE.md third layer), four read-only subagents over the diff at baseline `801caedb`, 2026-11-17; plus two consultations before approval (codex on the replay actor, on the override's "who" and on the spec; codex and Winston on the override's clearing and the erase route's re-proof).
 - Open for the owner: the real restore drill and its `drill` proof record; `restore-prod.sh` was never run end to end against a prod stack.
 
