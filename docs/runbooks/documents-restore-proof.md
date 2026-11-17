@@ -17,7 +17,7 @@ declared only in `documents.yaml`, and a value injected at deploy time is outsid
 `documents.read_enabled` (same file) opens `GET /api/v1/documents/{id}/content`; while it is false the route answers
 404. It is false in production, and `DocumentsReadProofGateTest` (same target) holds it to the stricter proof: a
 valid `restore` record **and** a valid `drill` record, each whose `mechanism` equals `documents.backup_mechanism`.
-The erasure ledger's override flag, when it exists, closes the route with 410 whatever the switch says.
+The erasure ledger's override flag closes the route with 410 whatever the switch says (`docs/runbooks/documents-erasure-ledger.md`).
 
 ## The record
 
@@ -47,4 +47,7 @@ committed by whoever ran the proof. Every field is required:
 3. Record the outcome as above and commit it on a branch with the configuration change that names the mechanism.
 
 The read route's gate reads the same directory; the restore drill adds its `drill` record here, with
-`ledger_replay_verified: true`.
+`ledger_replay_verified: true`. The drill's steps — the restore from the independent copy of the ledger credentials, a
+planted corrupted entry holding recovery mode, no resurrected document served before the replay, the override set and
+cleared — are in [`documents-erasure-ledger.md`](./documents-erasure-ledger.md), and the record is committed by the person
+who ran them: no test writes it.

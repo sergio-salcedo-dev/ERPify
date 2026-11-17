@@ -40,6 +40,27 @@ services:
   scanner:
     profiles: ["scanner"]
 
+  # A real append-only REST server for the erasure ledger's integration test, opt-in like the scanner: the stack binds a
+  # fake ledger, so nothing starts this except `make php.ledger.integration` (or `--profile ledger`). Authentication is off
+  # (it is reachable only on the compose network, holds a tmpfs and keeps nothing), `--no-verify-upload` lets the test plant
+  # a corrupted snapshot file over the API to prove a damaged ledger is refused, and `--append-only` is what the production
+  # server runs with: the property under test. Defined without a `command` so the profile stays readable by the compose gates.
+  ledger:
+    profiles: ["ledger"]
+    image: restic/rest-server:0.14.0@sha256:d2aff06f47eb38637dff580c3e6bce4af98f386c396a25d32eb6727ec96214a5
+    restart: "no"
+    logging: *bounded-logging
+    environment:
+      DISABLE_AUTHENTICATION: "1"
+      OPTIONS: "--append-only --no-verify-upload"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8000"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
   mailpit:
     # Cap: memory.peak reads 26 MiB.
     deploy:

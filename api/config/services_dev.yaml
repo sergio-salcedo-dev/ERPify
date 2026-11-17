@@ -18,3 +18,10 @@ services:
 
     Erpify\Documents\Document\Domain\Scanning\MalwareScanner:
         alias: Erpify\Tests\Double\Scanner\FakeMalwareScanner
+
+    # Dev has no second host: the erasure ledger is an in-process fake (it forgets on a restart), and the restic
+    # adapter is what production binds.
+    Erpify\Tests\Double\Erasure\FakeErasureLedger: ~
+
+    Erpify\Documents\Document\Application\Erasure\ErasureLedger:
+        alias: Erpify\Tests\Double\Erasure\FakeErasureLedger

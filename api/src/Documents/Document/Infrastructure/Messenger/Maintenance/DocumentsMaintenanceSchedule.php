@@ -31,6 +31,13 @@ use Symfony\Contracts\Cache\CacheInterface;
  * and then finishes the one in flight, which is why it fits the margin the reaper's cadence is computed on. The
  * scan report is hourly: it observes documents that wait for a person or an outage, in hours.
  *
+ * The erasure adds three. The erased-object sweep (60 s) is the single owner of an erased row's sealed object; the
+ * completion sweep (5 min, longer than the margin it judges entries by) finishes an erasure whose ledger entry landed
+ * and whose transaction did not, and reports a standing ledger override while it stands (it clears nothing); the
+ * tombstone reconciler (hourly) alarms on a row that is not `Erased` whose key is destroyed. All three stay stopped
+ * while a restore holds the stack, which is what keeps a restored database from being swept before the ledger is
+ * replayed.
+ *
  * **Every tick is idempotent and safe under a duplicate.** One `scheduler_worker` replica is an operating policy,
  * not a correctness dependency: each intent and each row is decided under its own lock and rechecked there, a
  * deletion of an absent object is already satisfied, and the report only reads.
@@ -64,6 +71,9 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
             ->add(RecurringMessage::every('5 minutes', new SweepCappedDocumentsMessage()))
             ->add(RecurringMessage::every('1 hour', new PruneCommittedIntentsMessage()))
             ->add(RecurringMessage::every('1 hour', new ReportDocumentScansMessage()))
+            ->add(RecurringMessage::every(self::EVERY_MINUTE, new DeleteErasedObjectsMessage()))
+            ->add(RecurringMessage::every('5 minutes', new CompleteInterruptedErasuresMessage()))
+            ->add(RecurringMessage::every('1 hour', new ReportTombstonedDocumentsMessage()))
             ->add(RecurringMessage::every('1 day', new ReportDocumentStorageMessage()))
             ->add(RecurringMessage::every('1 day', new ReportDocumentNamesMessage()))
         ;

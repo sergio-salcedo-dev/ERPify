@@ -104,3 +104,29 @@ services:
         public: true
 
     Erpify\Tests\Double\Scanner\FakeMalwareScanner: ~
+
+    # The erasure ledger is a scripted double in test, never restic: no test reaches a repository.
+    Erpify\Documents\Document\Application\Erasure\ErasureLedger:
+        alias: Erpify\Tests\Double\Erasure\FakeErasureLedger
+        public: true
+
+    Erpify\Tests\Double\Erasure\FakeErasureLedger: ~
+
+    # The erasure's collaborators, public so a functional test can build the use case around one of them by hand (a fault
+    # injected at the destruction, a probe at each lock) from the same services the container would wire.
+    Erpify\Documents\Document\Application\Erasure\EraseDocument:
+        public: true
+    Erpify\Documents\Document\Application\Erasure\ReplayErasure:
+        public: true
+    Erpify\Documents\Document\Application\Erasure\ErasureProgress:
+        alias: Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalErasureProgress
+        public: true
+    Erpify\Documents\Document\Application\Erasure\ErasureOverrideSwitch:
+        alias: Erpify\Documents\Document\Infrastructure\Read\DbalErasureLedgerOverride
+        public: true
+    Erpify\Documents\Document\Application\Read\ErasureLedgerOverride:
+        alias: Erpify\Documents\Document\Infrastructure\Read\DbalErasureLedgerOverride
+        public: true
+    Erpify\Documents\Document\Domain\Erasure\DocumentErasures:
+        alias: Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentErasures
+        public: true

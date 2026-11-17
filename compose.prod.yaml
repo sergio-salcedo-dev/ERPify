@@ -74,6 +74,12 @@ services:
       # receives nothing. Required rather than defaulted for the same reason as on the two workers.
       MAILER_DSN: ${MAILER_DSN:?MAILER_DSN is required in prod (null://null discards mail silently)}
       MAILER_SECURITY_FROM: ${MAILER_SECURITY_FROM:?MAILER_SECURITY_FROM is required in prod (a monitored, replyable mailbox)}
+      # The erasure ledger (restic over an append-only REST server on a second host): the erase route writes it
+      # before it destroys a key, and a missing value would answer every erasure 503, so none has a default.
+      DOCUMENTS_ERASURE_LEDGER_REPOSITORY: ${DOCUMENTS_ERASURE_LEDGER_REPOSITORY:?DOCUMENTS_ERASURE_LEDGER_REPOSITORY is required in prod (rest:https://<host>/<repo>)}
+      DOCUMENTS_ERASURE_LEDGER_REST_USERNAME: ${DOCUMENTS_ERASURE_LEDGER_REST_USERNAME:?DOCUMENTS_ERASURE_LEDGER_REST_USERNAME is required in prod}
+      DOCUMENTS_ERASURE_LEDGER_REST_PASSWORD: ${DOCUMENTS_ERASURE_LEDGER_REST_PASSWORD:?DOCUMENTS_ERASURE_LEDGER_REST_PASSWORD is required in prod}
+      DOCUMENTS_ERASURE_LEDGER_PASSWORD: ${DOCUMENTS_ERASURE_LEDGER_PASSWORD:?DOCUMENTS_ERASURE_LEDGER_PASSWORD is required in prod}
       # The thread pool is the real capacity limit (measured): four slow evidence PUTs held the whole default
       # pool of a 2-CPU container and starved every other request. Explicit, not derived from the CPU count, so
       # the global Streaming cap (4, `UploadLimits::MAX_STREAMING_GLOBAL`) stays at most half the worker threads,
@@ -332,6 +338,11 @@ services:
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:?SENTRY_TRACES_SAMPLE_RATE is required in prod}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
+      # The completion sweep lists the erasure ledger from here; same required gating as on php.
+      DOCUMENTS_ERASURE_LEDGER_REPOSITORY: ${DOCUMENTS_ERASURE_LEDGER_REPOSITORY:?DOCUMENTS_ERASURE_LEDGER_REPOSITORY is required in prod (rest:https://<host>/<repo>)}
+      DOCUMENTS_ERASURE_LEDGER_REST_USERNAME: ${DOCUMENTS_ERASURE_LEDGER_REST_USERNAME:?DOCUMENTS_ERASURE_LEDGER_REST_USERNAME is required in prod}
+      DOCUMENTS_ERASURE_LEDGER_REST_PASSWORD: ${DOCUMENTS_ERASURE_LEDGER_REST_PASSWORD:?DOCUMENTS_ERASURE_LEDGER_REST_PASSWORD is required in prod}
+      DOCUMENTS_ERASURE_LEDGER_PASSWORD: ${DOCUMENTS_ERASURE_LEDGER_PASSWORD:?DOCUMENTS_ERASURE_LEDGER_PASSWORD is required in prod}
       # The Documents reaper and sweeps run here and delete staged objects: they must resolve the same root as
       # `php`, and the entrypoint's storage boot probe refuses to start this worker when that root cannot stage,
       # promote and delete. A sweep pointed at an empty root would report every deletion as done.

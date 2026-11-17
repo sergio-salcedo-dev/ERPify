@@ -340,6 +340,24 @@ Two problem types, both on the existing `Conflict` marker, so no marker is added
 
 The scan is a read of a sealed object that is not a route, and `api/src/Documents/Document/Application/Scanning/ScanDocument.php` is its registered reader (`make php.lint.crypto-read-boundary`): `dek-destroyed` is the expected post-erasure outcome and aborts the claim with no verdict and no count (a lapse on a row that is not `Erased` is counted by the expiry sweep, ADR `documents-custody-log.md` D8), while `decryption-failed` is a deterministic failure that ends in `ScanFailed` with an alarm and no retry; neither shared exception gains a marker.
 
+### Documents erasure (`POST /api/v1/documents/{id}/erase`)
+
+The operator's erasure by key destruction (`document.erase`, ADMIN only). **Two problem types, both on the existing `ServiceUnavailable` marker**, so no marker is added and the drift gate does not fire; this table is the manual NFR26 record. Both are 5xx on purpose: an operator who cannot erase is an operational fault, so both reach Sentry, and neither carries a context, so no problem body names an id or a scope. They differ because the remedy does: `erasure-ledger-unavailable` says nothing was erased and the same request can be sent again, whereas `erasure-outcome-unknown` says the ledger write timed out (or the erasure transaction failed after the entry was durable), this call erased nothing, **and the erasure may still complete** (an entry that landed is finished by the completion sweep), so the caller checks the document before sending it again.
+
+| Situation | Answer | Source |
+|---|---|---|
+| The ledger entry is certainly not durable: restic exited at once (no repository or password configured, a refused credential, a missing binary) | **503 `erasure-ledger-unavailable`** (`ServiceUnavailable`); the document, its key and its custody are untouched | `ErasureLedgerUnavailable`, from `LedgerWriteFailed` in `EraseDocument` |
+| The ledger write ran out of time (10 s), so whether the entry landed is unknown — an **unreachable ledger host is this case**, because restic retries a refused connection with backoff until the deadline — or the erasure transaction failed once the entry was durable (a lock or statement timeout, a keystore or database fault) | **503 `erasure-outcome-unknown`** (`ServiceUnavailable`); this call erased nothing and the completion sweep finishes a landed entry | `ErasureOutcomeUnknown`, from `LedgerWriteTimedOut` or from any failure of `ApplyErasure` in `EraseDocument` |
+| The caller's `currentPassword` is wrong | **403 `invalid-current-password`**, after spending the shared per-identity budget and before any ledger write; nothing is written | `ProveActorPassword` in `EraseDocumentController` |
+| `currentPassword` is missing or blank | **422 `validation-failed`** | `EraseDocumentRequest` |
+| Erasure of a document that is already `Erased` | **200** with the document in `erased`, as the first call answered; no ledger write, no custody row, no second tombstone | `EraseDocument` |
+| Erasure of a document that does not exist | **404 `document-not-found`** (`NotFound`), before any ledger write | `DocumentNotFound` |
+| Erasure with an id that is not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in `EraseDocumentController` |
+| Erasure with a `reason` outside `data_subject_request`, `legal_obligation`, `uploaded_in_error`, `retention_expired` (`ledger-replay` and `ledger-completion` included), no `reason`, or any member the payload does not declare | **422 `validation-failed`** with `violations[]`, at mapping, before the use case | `EraseDocumentRequest`, `#[StrictRequestPayload]` |
+| Erasure without `document.erase` (only the ADMIN wildcard holds it) | **403 `forbidden`**, nothing written | `#[IsGranted(DocumentPermission::ERASE)]` |
+
+While the erasure-ledger override is set the three read routes answer **410 `gone`** (see their sections); erasure is a write and is not gated by it, because it is how an operator finishes what the ledger names.
+
 ### Documents read (`GET /api/v1/documents/{id}/content`)
 
 The audited read of a `Ready` document's original (`document.download`, ADMIN only). Every refusal and every integrity failure is decided **before the first byte**, so a client that checks `response.ok` before saving can show the problem. No marker is added: `Gone` and `NotFound`/`Conflict` are reused, and `document-integrity-failure` is deliberately marker-less. The read boundary is `ReadDocument`, which translates the sealed layer's exceptions (neither gains a marker; see the next section).

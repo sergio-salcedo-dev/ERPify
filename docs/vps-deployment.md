@@ -384,7 +384,10 @@ truncated backup is caught *before* any live data is touched), a typed
 confirmation, an **atomic DB restore**
 (`--single-transaction` — any error rolls back rather than leaving a half-restored
 database), and an automatic **writer restart on any failure** so a botched
-restore never leaves the app headless. Use it first for the **restore drill and
+restore never leaves the app headless — with one deliberate exception, the
+**erasure ledger**: after `pg_restore` the script replays the ledger over the
+restored database in a one-off container (`documents:erasure:replay-ledger`) and
+restarts the writers only when that succeeds (see gate 3). Use it first for the **restore drill and
 pre-prod verification** — exercise it on the `erpify.local` rehearsal or a scratch
 worktree stack before you ever need it for real.
 
@@ -419,7 +422,7 @@ point. The checklist it enforces:
 
 1. A fresh backup of the **current** state exists (`make backup.prod`) — you are about to overwrite live data.
 2. `<stamp>` is the intended recovery point (the script prints the artifact size to confirm).
-3. A maintenance window is in effect — `php`/`messenger_worker` are stopped (downtime).
+3. A maintenance window is in effect — `php`, `messenger_worker` and `scheduler_worker` (where the stack has one) are stopped (downtime).
 4. The offsite copy of `<stamp>` is intact, in case the restore goes wrong.
 5. You are on the correct host (`COMPOSE_PROJECT_NAME`).
 
@@ -428,9 +431,10 @@ substitute the project name the backup ran under for `erpify`, and on the
 `tls internal` rehearsal add `-f compose.rehearsal.yaml`):
 
 ```bash
-# 0) stop writers FIRST — they must not race the restore below
+# 0) stop writers FIRST — they must not race the restore below (scheduler_worker too: its sweeps delete
+#    objects and complete erasures, and must not run over a database the ledger has not been replayed on)
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
-  stop php messenger_worker
+  stop php messenger_worker scheduler_worker
 
 # 1) database — restore the stamp's dump (--single-transaction: wrap the whole
 #    restore in one BEGIN/COMMIT so an error rolls back to the pre-restore state
@@ -439,13 +443,19 @@ docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.p
   exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' \
   < /var/backups/erpify/db-<stamp>.dump
 
-# 2) bring the writers back up
+# 2) replay the erasure ledger over it — a one-off container, the writers are down. Non-zero means the ledger
+#    was not readable in full, or a scope it names is still not erased: DO NOT start the writers
 docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
-  start php messenger_worker
+  run --rm --no-deps -T php php bin/console documents:erasure:replay-ledger
+
+# 3) only then bring the writers back up
+docker compose -p erpify --env-file .env.prod.local -f compose.yaml -f compose.prod.yaml \
+  start php messenger_worker scheduler_worker
 ```
 
 Unlike `make restore.prod`, this raw sequence has no safety net: if step 1
-fails, the writers stay stopped — rerun step 2 yourself to bring them back.
+fails, the writers stay stopped — rerun step 3 yourself to bring them back; and
+if step 2 fails they must stay stopped (recovery mode, below).
 
 ### Restore drill (quarterly)
 
@@ -497,26 +507,46 @@ ticked with their evidence before the first customer: gates 1 and 2 are boxes in
    `messenger_worker` and `scheduler_worker` (or point the mailer at mailpit) so nobody real is emailed from
    restored data, use a neutral `SERVER_NAME` so Caddy does not request a certificate for the production
    domain, and destroy the database afterwards — it holds the resurrected keys of gate 3.
-3. **Re-erase after restoring.** A restore returns the whole database to the dump's instant: the
-   `dek_keystore` row of a subject erased since comes back with its `wrapped_dek`, and so do their identity
-   and bank-account rows. `SubjectErasureReconciler` is an anti-join between destroyed keys and
-   `GDPR_SUBJECT_ERASED` evidence, both inside the restored database, so it sees a live row and reports
-   nothing; a green reconciler after a restore proves nothing. Until a ledger of destroyed scope ids
-   survives outside the database, the runbook is, in order:
-   - **Before overwriting**, if the old database is still readable, copy its `GDPR_SUBJECT_ERASED` audit rows
-     out. In a total loss nothing can be copied, and the list is **incomplete by construction**.
-   - Keep an operator log of confirmed erasures **off the VPS** (an opaque subject reference and a date,
-     never a name). It is the only source that survives a total loss, it is itself personal data about erased
-     people, and it is deleted when the last snapshot older than its entries has expired.
-   - `docker compose … stop scheduler_worker` before the restore: `restore-prod.sh` stops only `php` and
-     `messenger_worker`, and the scheduler would keep ticking, mailing locked identities, against restored data.
-   - `restore-prod.sh` **restarts `php` and `messenger_worker` itself**, on success and from its exit trap,
-     and has no hold option. The moment it returns, stop them again; the seconds between are a window in
-     which the API serves resurrected data, and that residual is recorded in §7.
-   - Re-run the erasure for every subject in the log with a one-off container
-     (`docker compose … run --rm php bin/console identity:gdpr:erase-subject <id>`, and
-     `bank-account:gdpr:erase-subject` / `audit:gdpr:erase` where they apply), then start the writers and
-     the scheduler.
+3. **The erasure ledger holds across a restore.** A restore returns the whole database to the dump's
+   instant: the `dek_keystore` row of a document erased since comes back with its `wrapped_dek`, and the
+   document's row comes back un-erased. Nothing inside the database can notice that —
+   `SubjectErasureReconciler` is an anti-join between destroyed keys and `GDPR_SUBJECT_ERASED` evidence, both
+   restored — so the Documents erasure writes its scope id to a **ledger outside the database's failure and
+   restore domain** before it destroys the key (`docs/adr/documents-custody-log.md` D11): a restic repository
+   behind an append-only REST server on a **second host**, kept apart from the backup repository, whose write
+   credential cannot delete or shorten retention. Operations (initialising it, the independent copy of its
+   credentials, rotation) are in [`docs/runbooks/documents-erasure-ledger.md`](./runbooks/documents-erasure-ledger.md).
+   What the restore does with it, in order:
+   - `restore-prod.sh` stops `php`, `messenger_worker` **and `scheduler_worker`**, runs `pg_restore`, then
+     runs `documents:erasure:replay-ledger` in a one-off container: it proves the ledger readable in full
+     (`restic check --read-data` exits 0 **and** the listing prints no `Ignoring` line — restic skips an
+     unreadable snapshot file and still exits 0), then replays every scope: the row `Erased`, the key
+     tombstoned, the sealed object queued for deletion, an object under a scope this database never held
+     deleted.
+   - **Only a successful replay restarts the writers.** A ledger that cannot be read in full, or a scope still not
+     erased afterwards, leaves the stack in **recovery mode**: writers and the scheduler stay stopped, so nothing
+     is served, scanned or swept over resurrected data, and the exit trap says so rather than restarting them.
+     Make the ledger readable and re-run the restore (it is repeatable).
+   - **The override is the only other way past.** The ledger is a single copy (a deleted entry leaves no trace;
+     losing it fails closed). `ERASURE_LEDGER_OVERRIDE=<ledger_unreachable|ledger_corrupt|ledger_lost> STAMP=<stamp>
+     make restore.prod` records a database flag, asks (in production) for the typed phrase
+     `override erasure ledger <project> <stamp>`, and starts the writers **accepting that keys destroyed since the
+     backup may be live again**. While the flag is set every Documents read, listing and custody trail answers
+     **410 `gone`**, whatever `documents.read_enabled` says, and the completion tick writes an `error` line while it
+     stands. **Nothing clears it by itself:** a person runs `documents:erasure:clear-override`, which refuses unless the
+     ledger is readable in full, every scope of it is finished and no row of it is un-erased, and then clears exactly
+     the overrides it read first (see the runbook; for a new empty ledger those checks hold vacuously). The
+     flag's row holds a closed reason, a date and a random `record_ref` the script prints — **no name, label,
+     OS user or key fingerprint**. Write that reference, your identity and the date in the **off-host operator
+     log** (personal data about an operator, deleted when the last snapshot older than its entries has expired):
+     that log is where "who" lives.
+   - The other erasures (identity, bank account, audit) have no such ledger. Until they do, the runbook for
+     them is unchanged: keep an operator log of confirmed erasures **off the VPS** (an opaque subject
+     reference and a date, never a name), and after a restore re-run
+     `docker compose … run --rm php bin/console identity:gdpr:erase-subject <id>` (and
+     `bank-account:gdpr:erase-subject` / `audit:gdpr:erase` where they apply) for every subject in it. The restore
+     script starts the writers as soon as the Documents ledger replay succeeds, so stop them again first if that
+     window must stay closed.
 
 Declared objectives, to be accepted rather than assumed: **RPO 24 hours** on the nights the heartbeat
 arrived (nightly dump), RTO unknown until gate 1. A shorter RPO needs WAL archiving, whose base backup is a
@@ -536,11 +566,14 @@ oldest dump it opens. Keeping the KEK beside an old dump makes any resurrected D
 retention above is the only bound on that. Store the exact env string: `make prod.env.check` on the clean
 host refuses a wrong-length value.
 
-The future Documents module widens this: its encrypted blobs are not in the database dump (nor is
-`image_storage`, above), while the keys that open them are. Its backup scope is the blobs, the keystore and
-the destroyed-key ledger, restored together, and it does not go live before gate 3 has a durable ledger
-behind it. That constraint is prose in this file and in the checklist, enforced by nothing; the Documents
-boundary itself is decided in the
+The Documents module widens this: its encrypted blobs are not in the database dump (nor is `image_storage`,
+above), while the keys that open them are. Its backup scope is the blobs and the keystore, restored together, and
+the erasure ledger (gate 3) is what keeps a destroyed key destroyed across that restore. The ledger is a **single
+copy** off this host: losing it fails closed, and the operator's way past is the override above, exercised in the
+restore drill. A drill that has not proved the ledger readable from the independent copy of its credentials alone,
+a planted corrupted entry holding recovery mode, and no resurrected document served before the replay completes is
+not a recovery; the proof record the read switch waits on is
+[`documents-restore-proof.md`](./runbooks/documents-restore-proof.md). The Documents boundary itself is decided in the
 [conservation contract](./adr/images-vs-documents-conservation-contract.md), so a Documents spec cites both.
 
 ---

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Messenger\Maintenance;
 
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\CompleteInterruptedErasuresMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\DeleteErasedObjectsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\DocumentsMaintenanceSchedule;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ExpireScanLeasesMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\PruneCommittedIntentsMessage;
@@ -11,6 +13,7 @@ use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReapUploadInt
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentNamesMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentScansMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentStorageMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportTombstonedDocumentsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\RollForwardPromotionsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ScanDueDocumentsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\SweepCappedDocumentsMessage;
@@ -43,12 +46,15 @@ final class DocumentsMaintenanceScheduleTest extends TestCase
         $this->assertSame(
             [
                 // Sorted by the helper, so the order here is alphabetical and not the declaration order.
+                CompleteInterruptedErasuresMessage::class . ' @ every 5 minutes',
+                DeleteErasedObjectsMessage::class . ' @ every 60 seconds',
                 ExpireScanLeasesMessage::class . ' @ every 60 seconds',
                 PruneCommittedIntentsMessage::class . ' @ every 1 hour',
                 ReapUploadIntentsMessage::class . ' @ every 60 seconds',
                 ReportDocumentNamesMessage::class . ' @ every 1 day',
                 ReportDocumentScansMessage::class . ' @ every 1 hour',
                 ReportDocumentStorageMessage::class . ' @ every 1 day',
+                ReportTombstonedDocumentsMessage::class . ' @ every 1 hour',
                 RollForwardPromotionsMessage::class . ' @ every 60 seconds',
                 ScanDueDocumentsMessage::class . ' @ every 60 seconds',
                 SweepCappedDocumentsMessage::class . ' @ every 5 minutes',

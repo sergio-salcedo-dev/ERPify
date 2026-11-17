@@ -20,4 +20,5 @@ enum CustodyEvent: string
     case ScanQuarantined = 'scan_quarantined';
     case ScanFailed = 'scan_failed';
     case RescanRequested = 'rescan_requested';
+    case Erased = 'erased';
 }

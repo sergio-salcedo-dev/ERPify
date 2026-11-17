@@ -437,7 +437,7 @@
     asserting that the classes whose constructors depend on it are exactly the restore command and
     the completion sweep handler, and a separate reason enum for the HTTP erase route that excludes
     ledger-replay and ledger-completion, with a test) that skips the ledger write (actor: the
-    nil-UUID marker; reason: ledger-replay for a restore replay, ledger-completion for the sweep
+    NULL, the system; reason: ledger-replay for a restore replay, ledger-completion for the sweep
     finishing an entry that landed, since the ledger holds scope ids only; no voter by construction;
     an object under a ledger scope with no row is deleted during the replay), a restore step in
     restore.prod, and a real restore drill proving the key does not return, committed as a proof
