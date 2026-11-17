@@ -71,15 +71,16 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      * the justification and the trigger that reopens it (a customer requiring contractual separation of
      * duties). It is a declared row rather than something left to fall out of how the policy resolves.
      *
-     * `document.download` is declared for the same reason as the `users.*` rows, although `document` tiers: the verb
-     * is no tier's, so the ADMIN wildcard is what reaches it today, and this row records the decided grantee
-     * (ADMIN only, 2026-11-16) for the day a non-ADMIN role earns it.
+     * `document.download` and `document.custody` are declared for the same reason as the `users.*` rows, although
+     * `document` tiers: the verbs are no tier's, so the ADMIN wildcard is what reaches them today, and these rows
+     * record the grantee (ADMIN only) for the day a non-ADMIN role earns one.
      *
      * @var array<string, list<string>>
      */
     private const array EXPLICIT_GRANTS = [
         'auditTrail.read' => [Role::AUDIT_READER->value, Role::ADMIN->value],
         'bankAccount.changeStatus' => [Role::MANAGER->value],
+        'document.custody' => [Role::ADMIN->value],
         'document.download' => [Role::ADMIN->value],
         'users.read' => [Role::ADMIN->value],
         'users.invite' => [Role::ADMIN->value],

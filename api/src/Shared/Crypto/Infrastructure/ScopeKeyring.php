@@ -13,6 +13,7 @@ use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use Erpify\Shared\Crypto\Domain\Exception\InvalidKek;
 use SodiumException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Throwable;
 
 /**
  * The per-scope data-encryption keys behind both sealing siblings: mints a key with a CSPRNG on first use,
@@ -68,6 +69,47 @@ final readonly class ScopeKeyring
         return $this->unwrap($scope, $wrapped);
     }
 
+    /**
+     * The keys of many scopes for opening, from one keystore query; never minted. Keyed by
+     * {@see EncryptionScopeId::toString()}: the plaintext key, or the exception {@see keyForOpening()} would have
+     * thrown for that scope alone, so one destroyed scope or one corrupt key row never reaches another.
+     *
+     * Every plaintext key in the result is the caller's to wipe with `sodium_memzero()`.
+     *
+     * @param list<EncryptionScopeId> $scopes
+     *
+     * @return array<string, string|DekDestroyed|DecryptionFailed>
+     */
+    public function keysForOpening(array $scopes): array
+    {
+        $wrapped = $this->keystore->wrappedDeksFor($scopes);
+        $keys = [];
+
+        try {
+            foreach ($scopes as $scope) {
+                $name = $scope->toString();
+                $entry = $wrapped[$name] ?? null;
+
+                $keys[$name] = match (true) {
+                    $entry instanceof DecryptionFailed => $entry,
+                    $entry instanceof WrappedDek => $this->unwrapOrFailure($scope, $entry),
+                    default => DekDestroyed::forScope($scope),
+                };
+            }
+        } catch (Throwable $throwable) {
+            // Nothing returns the keys already unwrapped, so nobody else can wipe them.
+            foreach ($keys as $key) {
+                if (\is_string($key)) {
+                    \sodium_memzero($key);
+                }
+            }
+
+            throw $throwable;
+        }
+
+        return $keys;
+    }
+
     public function destroy(EncryptionScopeId $scope, DestroyReason $reason): bool
     {
         return $this->keystore->destroy($scope, $reason);
@@ -101,6 +143,15 @@ final readonly class ScopeKeyring
         }
 
         return $stored;
+    }
+
+    private function unwrapOrFailure(EncryptionScopeId $scope, WrappedDek $wrapped): DecryptionFailed|string
+    {
+        try {
+            return $this->unwrap($scope, $wrapped);
+        } catch (DecryptionFailed $decryptionFailed) {
+            return $decryptionFailed;
+        }
     }
 
     private function wrap(EncryptionScopeId $scope, string $dek): WrappedDek

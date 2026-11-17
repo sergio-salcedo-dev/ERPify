@@ -8,6 +8,7 @@ use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\DocumentsMain
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ExpireScanLeasesMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\PruneCommittedIntentsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReapUploadIntentsMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentNamesMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentScansMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportDocumentStorageMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\RollForwardPromotionsMessage;
@@ -45,6 +46,7 @@ final class DocumentsMaintenanceScheduleTest extends TestCase
                 ExpireScanLeasesMessage::class . ' @ every 60 seconds',
                 PruneCommittedIntentsMessage::class . ' @ every 1 hour',
                 ReapUploadIntentsMessage::class . ' @ every 60 seconds',
+                ReportDocumentNamesMessage::class . ' @ every 1 day',
                 ReportDocumentScansMessage::class . ' @ every 1 hour',
                 ReportDocumentStorageMessage::class . ' @ every 1 day',
                 RollForwardPromotionsMessage::class . ' @ every 60 seconds',

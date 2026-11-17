@@ -26,4 +26,11 @@ final class DocumentPermission
      * download what they filed, is a decision to take there, not a tier to widen.
      */
     public const string DOWNLOAD = 'document.download';
+
+    /**
+     * Lists the documents and reads one's custody trail. Not a tier verb either, like `document.download`: the ADMIN
+     * wildcard reaches it and `StaticAuthorizationPolicy` declares the row. It returns the sealed original filename,
+     * which can name a person.
+     */
+    public const string CUSTODY = 'document.custody';
 }

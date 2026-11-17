@@ -2776,6 +2776,23 @@ mitigated state. Accepting one means recording who accepted it and against which
       until then. Kept out of the access log (Caddy strips every query), the Monolog `request_uri` and per-error
       log line and Sentry's `url`/`query_string`/transaction data (`RequestUriRedaction::QUERY_KEYS`, and the whole
       query on the upload route), audit metadata and events. **Accepted — the user, 2026-11-04.**
+- [ ] **The Documents listing and the custody trail return sealed original filenames with no byte-read audit row
+      (doc-6).** `GET /api/v1/documents` and `GET /api/v1/documents/{id}/custody` open the sealed name of every
+      listed document (the trail on its first page only) and answer it to an ADMIN (`document.custody`), but write
+      no `DOCUMENT_READ`-class row: CAP-9 audits byte reads only, so the only record is the generic access-log row
+      (`ROUTE_DOCUMENTS_LIST`, and `ROUTE_DOCUMENTS_CUSTODY` naming the document as its resource), which carries no
+      name, digest or custody actor (it names the ADMIN who made the call, as every audit row does), is `activity`
+      level and ages out with the audit retention. A listing therefore proves
+      that a page was served, never which names a caller saw. **Gating is the erasure-ledger override alone:**
+      `documents.read_enabled` does not close these routes (they serve no bytes), so while the ledger adapter is the
+      never-set one, a restore without the ledger would bring back an erased document's key and its name would open
+      here; the override is what answers 410 on both routes, and it is as blind to a value the deploy injects as the
+      read route's. A name that does not open lists `null` with no log line from the request; the alarm is the
+      daily `ReportDocumentNamesHandler` line on the `observability` channel (counts per cause and at most 20
+      document ids, never a name), which opens the head of the table inside a 60 s budget and, when the run did not
+      finish, writes a `warning` line with `complete: false` even if no name failed, so a store too large for one run
+      is only covered where it reaches and says so. **Accepted — the user,
+      2026-11-17 (ADMIN only; no listing audit row). Open — owner: doc-7 for the override adapter.**
 - [ ] **Idempotency replay protection ends with the actor's erasure.** The person purge nulls the key hash on
       every upload intent and document of the actor, so a replay of an erased actor's key is a fresh upload.
       **Accepted — the user, 2026-11-04.**

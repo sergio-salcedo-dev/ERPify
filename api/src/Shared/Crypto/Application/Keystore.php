@@ -6,6 +6,7 @@ namespace Erpify\Shared\Crypto\Application;
 
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Crypto\Domain\Exception\KeystoreLockRequiresTransaction;
 use Erpify\Shared\Crypto\Domain\KeyState;
 
@@ -21,6 +22,22 @@ interface Keystore
      * indistinguishable here, which is what {@see lockState()} exists to tell apart.
      */
     public function wrappedDekFor(EncryptionScopeId $scope): ?WrappedDek;
+
+    /**
+     * The live keys of several scopes in ONE query: what a page of values sealed under different scopes needs, where
+     * {@see wrappedDekFor()} per scope would cost one query each.
+     *
+     * Keyed by {@see EncryptionScopeId::toString()}. A scope with no entry is destroyed or was never minted, the same
+     * indistinguishable answer {@see wrappedDekFor()} gives with null. A live row with no usable key material is
+     * corruption and degrades ITS OWN entry to a {@see DecryptionFailed} value, where the single-scope method
+     * throws: one corrupt row must not take the answer for the other scopes of the batch with it. Never throws for
+     * a row, only for the query itself (an outage is the caller's 5xx).
+     *
+     * @param list<EncryptionScopeId> $scopes
+     *
+     * @return array<string, WrappedDek|DecryptionFailed>
+     */
+    public function wrappedDeksFor(array $scopes): array;
 
     public function store(EncryptionScopeId $scope, WrappedDek $dek): void;
 

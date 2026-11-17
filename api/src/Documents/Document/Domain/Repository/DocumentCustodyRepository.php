@@ -7,6 +7,7 @@ namespace Erpify\Documents\Document\Domain\Repository;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\Exception\CustodySequenceCollision;
+use Erpify\Documents\Document\Domain\Projection\CustodyTrailRow;
 
 /**
  * Port for the append-only custody log of a document ({@see DocumentCustody}).
@@ -29,6 +30,18 @@ interface DocumentCustodyRepository
      *                                  transaction
      */
     public function append(DocumentCustody $custody): void;
+
+    /**
+     * Up to `$limit` of the document's rows after `$afterSeq`, ascending by `seq`: a read-only query over
+     * `UNIQUE (document_id, seq)`, scoped to the one document, so a cursor can never cross into another. Takes no
+     * lock and joins no transaction.
+     *
+     * @param int<0, max> $afterSeq the last `seq` the caller already holds; 0 reads from the start
+     * @param int<1, max> $limit
+     *
+     * @return list<CustodyTrailRow>
+     */
+    public function trailAfter(string $documentId, int $afterSeq, int $limit): array;
 
     /**
      * Rewrites the actor of every custody row naming the subject to

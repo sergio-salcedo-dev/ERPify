@@ -10,7 +10,10 @@ use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\Exception\CustodySequenceCollision;
+use Erpify\Documents\Document\Domain\Projection\CustodyTrailRow;
 use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
+use Erpify\Shared\Search\Domain\SortDirection;
+use Erpify\Shared\Search\Infrastructure\Persistence\Doctrine\DoctrineSortDirection;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -25,6 +28,8 @@ use UnexpectedValueException;
  *
  * `append()` flushes inside the caller's transaction and maps ONE violation: `UNIQUE (document_id, seq)`, by
  * its constraint name. Any other unique violation, and every other failure, is rethrown unchanged.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the manager, the connection, three entities and their errors
  */
 #[AsAlias(DocumentCustodyRepository::class)]
 final readonly class DoctrineDocumentCustodyRepository implements DocumentCustodyRepository
@@ -65,6 +70,26 @@ final readonly class DoctrineDocumentCustodyRepository implements DocumentCustod
 
             throw $throwable;
         }
+    }
+
+    #[Override]
+    public function trailAfter(string $documentId, int $afterSeq, int $limit): array
+    {
+        Uuid::ensure($documentId);
+
+        /** @var list<CustodyTrailRow> */
+        return $this->entityManager->createQueryBuilder()
+            ->select(\sprintf('NEW %s(c.seq, c.event, c.actorId, c.reason, c.createdAt)', CustodyTrailRow::class))
+            ->from(DocumentCustody::class, 'c')
+            ->where('c.documentId = :documentId')
+            ->andWhere('c.seq > :afterSeq')
+            ->setParameter('documentId', $documentId)
+            ->setParameter('afterSeq', $afterSeq)
+            ->orderBy('c.seq', DoctrineSortDirection::from(SortDirection::ASC))
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult()
+        ;
     }
 
     #[Override]

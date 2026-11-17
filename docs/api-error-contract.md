@@ -363,6 +363,26 @@ The stream holds one PHP thread for the whole transfer and re-arms PHP's wall-cl
 
 `DocumentGone` (type `gone`) and `UploadGone` share the slug on purpose: both say "stop retrying and start over". It carries no id, scope or cause. `StreamTransferFailed` and a storage fault before the first byte stay untranslated (5xx): they are not a verdict on the document.
 
+### Documents listing (`GET /api/v1/documents`, `GET /api/v1/documents/{id}/custody`)
+
+The metadata of documents and one document's ordered custody trail (`document.custody`, ADMIN only). **No marker and no problem type is minted**: `Gone`, `NotFound`, `InvalidInput` and the `validation-failed` of the existing query mapping are reused. An unopenable sealed filename is never an error: the item's `name` is `null` and the page answers 200, so a destroyed key, a failed authentication or a corrupt key row on one document can neither fail the page nor reach another document. The alarm for those is a scheduled report, not a per-request line (below).
+
+| Situation | Answer | Source |
+|---|---|---|
+| `{id}` of the trail not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in `DocumentCustodyController` |
+| Caller lacks `document.custody` (every role but ADMIN), or no session | **403 `forbidden`** / **401**, nothing read | `#[IsGranted(DocumentPermission::CUSTODY)]` |
+| HEAD on either route | **405**, before anything is opened | both controllers |
+| The erasure ledger's override is set | **410 `gone`** on both routes, for any well-formed id and before any lookup (a malformed trail id is still 400 first) (an erased document's key is back after a restore without the ledger, and its name would open). `documents.read_enabled` does **not** gate them: they serve no bytes | `ErasureLedgerOverride`, `DocumentGone` |
+| Trail of an unknown document, on any page | **404 `document-not-found`** (`NotFound`) | `DocumentNotFound` |
+| Trail of an `Erased` document | **200**, its custody rows kept, `name: null` | `ReadCustodyTrail` |
+| `afterSeq` negative, not an integer or past the `seq` column's range; `limit` below 1 or above 100; listing `limit` above 100, a malformed cursor or an unknown filter | **422 `validation-failed`** (or the search family's own types) | `CustodyTrailQuery`, `SearchQuery` |
+| A name that does not open (destroyed or never-minted key, failed authentication, corrupt key row) | **200**, that item's `name` is `null`; no log line from the request | `DocumentNameOpener` |
+| Keystore or database outage while opening a page | **5xx**, no partial page | untranslated |
+
+Every response carries `Cache-Control: no-store` (it holds names). The trail's `actorId` is `null` for the system and the nil UUID for a person since erased: a marker, never a user. The trail is paged by `afterSeq` (the last `seq` held) and `limit`; its document metadata and `name` ride the first page only, so a later page costs no keystore query. The routes write only the generic access-log row (the trail's names the document as its resource and carries no name, digest or custody actor, and names the ADMIN who read it as every audit row does): no `DOCUMENT_READ`-class row exists for a listing, which `PRODUCTION_SECURITY_CHECKLIST.md` §7 records.
+
+The listing opens sealed names through `api/src/Documents/Document/Application/Listing/DocumentNameOpener.php`, a registered reader of the crypto read boundary (`make php.lint.crypto-read-boundary`): it asks `EnvelopeEncryptor::decryptMany()` for a whole page at once, so `dek-destroyed` and `decryption-failed` come back as per-document values, never thrown; the first is the expected post-erasure outcome and the second an integrity signal, and both list `name: null`. The alarm is `ReportDocumentNamesHandler`, a daily scheduled report that opens the names of non-`Erased` documents through the same opener and writes ONE line on the `observability` channel per run with the count per cause (`key-missing`, `decryption-failed`, `unreadable`), the number examined, whether it finished and the first 20 failing document ids — an `error` when a name failed, a `warning` with zero counts when none did but the run did not finish — never a filename, scope or actor. Neither shared exception gains a marker.
+
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 
 Not every `DomainException` carries a marker. Two of them guard the session-minting stage of the login and are graded in its table above — `SessionAdmissionUnresolvable` (`session-admission-unresolvable`) and `MembershipCardinalityViolated` (`membership-cardinality-violated`); both are HTTP-reachable on every flow that signs a device in, map to **500** by the mechanism below, and carry no context. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:
@@ -386,6 +406,8 @@ Redaction: `DekDestroyed` / `DecryptionFailed` / `CannotSealEmptyStream` / `Stre
 The drift gate (`ErrorContractGateTest`) covers only markers under `api/src/Shared/ErrorContract/Domain/Exception/`, so it does **not** enforce this section — documenting a marker-less `DomainException` that can reach HTTP is manual discipline (see the Review checklist).
 
 > **Translated at the read boundary, not at the exception (#418).** A read path gives `dek-destroyed` and `decryption-failed` a deliberate status of its own: `dek-destroyed` is an expected post-erasure outcome (**410 Gone**), while `decryption-failed` stays a **5xx** integrity fault, kept Sentry-visible. The read handler catches the crypto exception and throws a read-specific exception — `DocumentGone` (marker `Gone`) for the first, the marker-less `DocumentIntegrityFailure` for the second. `DekDestroyed` / `DecryptionFailed` themselves gain no marker: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry. The first such boundary is the Documents read (`api/src/Documents/Document/Application/Read/ReadDocument.php`: `dek-destroyed` answers 410 `gone` with an alarm unless the re-read row is `Erased`, `decryption-failed` answers 500 `document-integrity-failure`), graded in *Documents read* above.
+>
+> The listing is the second reader and translates differently, because it reads a PAGE: the Documents listing (`api/src/Documents/Document/Application/Listing/DocumentNameOpener.php`) turns `dek-destroyed` and `decryption-failed` into a `null` name on that document (see *Documents listing*), never a status.
 >
 > `make php.lint.crypto-read-boundary` reds the build when a file under `api/src` outside `Shared/Crypto/` calls a read method of `EnvelopeEncryptor` / `StreamEnvelopeEncryptor` (every public method that is not `encrypt`, `seal` or `destroyScope`) until it is registered with a test (a `*Test.php` functional test or a Behat `.feature`) holding both types and a single line on this page that cites the file and names `dek-destroyed`. A green proves that registration exists, not that the status chosen is right nor that the test exercises it; that stays review's to judge.
 
