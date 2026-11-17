@@ -11,6 +11,9 @@ describe("HttpStatus", () => {
     expect(HttpStatus.FORBIDDEN).toBe(403);
     expect(HttpStatus.NOT_FOUND).toBe(404);
     expect(HttpStatus.CONFLICT).toBe(409);
+    expect(HttpStatus.LENGTH_REQUIRED).toBe(411);
+    expect(HttpStatus.CONTENT_TOO_LARGE).toBe(413);
+    expect(HttpStatus.UNSUPPORTED_MEDIA_TYPE).toBe(415);
     expect(HttpStatus.UNPROCESSABLE_ENTITY).toBe(422);
     expect(HttpStatus.TOO_MANY_REQUESTS).toBe(429);
     expect(HttpStatus.INTERNAL_SERVER_ERROR).toBe(500);

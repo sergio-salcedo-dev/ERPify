@@ -10,7 +10,14 @@ const USER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
 // HttpClient method; recover the spy for assertions via `vi.mocked(client.delete)`.
 function httpClient(): HttpClient {
-  return { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+  return {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    putRaw: vi.fn(),
+    delete: vi.fn(),
+  };
 }
 
 describe("ApiEraseIdentityRepository", () => {

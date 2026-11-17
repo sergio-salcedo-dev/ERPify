@@ -14,7 +14,14 @@ const PASSWORD = "callerPassword1";
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
 // HttpClient method; recover the spy for assertions via `vi.mocked(client.patch)`.
 function httpClient(): HttpClient {
-  return { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+  return {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    putRaw: vi.fn(),
+    delete: vi.fn(),
+  };
 }
 
 function userPrimitives(status: UserStatus): UserPrimitives {

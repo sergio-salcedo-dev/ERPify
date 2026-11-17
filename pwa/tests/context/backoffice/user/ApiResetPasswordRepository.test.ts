@@ -29,6 +29,7 @@ function httpClientPosting(post: HttpClient["post"]): HttpClient {
     post,
     put: vi.fn(),
     patch: vi.fn(),
+    putRaw: vi.fn(),
     delete: vi.fn(),
   };
 }

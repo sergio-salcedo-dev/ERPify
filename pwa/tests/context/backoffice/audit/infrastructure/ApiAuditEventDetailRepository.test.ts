@@ -26,6 +26,7 @@ function httpClientReturning(response: unknown): HttpClient {
     post: vi.fn(),
     put: vi.fn(),
     patch: vi.fn(),
+    putRaw: vi.fn(),
     delete: vi.fn(),
   };
 }

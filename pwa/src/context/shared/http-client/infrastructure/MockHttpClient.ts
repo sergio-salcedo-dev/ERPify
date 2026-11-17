@@ -71,6 +71,15 @@ export class MockHttpClient implements HttpClient {
     return Promise.resolve({} as T);
   }
 
+  putRaw<T>(
+    _url: string,
+    _body: Blob,
+    _validate?: ResponseGuard<T>,
+    _options?: RequestOptions,
+  ): Promise<T> {
+    return Promise.resolve({} as T);
+  }
+
   delete(_url: string, _options?: RequestOptions): Promise<void> {
     return Promise.resolve();
   }

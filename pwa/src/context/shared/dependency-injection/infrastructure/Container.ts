@@ -72,6 +72,11 @@ import {
   RECOVERY_SECRET_REPOSITORY_KEY,
   type RecoverySecretRepository,
 } from "@/context/shared/access/domain/RecoverySecretRepository";
+import { ApiImageUploader } from "@/context/shared/images/infrastructure/ApiImageUploader";
+import {
+  IMAGE_UPLOADER_KEY,
+  type ImageUploader,
+} from "@/context/shared/images/domain/ImageUploader";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
@@ -323,5 +328,9 @@ container
   .bind<RecoverySecretRepository>(RECOVERY_SECRET_REPOSITORY_KEY)
   .to(ApiRecoverySecretRepository)
   .inSingletonScope();
+
+// Writing and removing the single image a consumer holds. The consumer passes its own write URL;
+// the adapter owns only the raw-body transport shape.
+container.bind<ImageUploader>(IMAGE_UPLOADER_KEY).to(ApiImageUploader).inSingletonScope();
 
 export { container };

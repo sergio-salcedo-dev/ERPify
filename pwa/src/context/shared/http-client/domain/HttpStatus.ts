@@ -28,6 +28,12 @@ export const HttpStatus = {
   NOT_FOUND: 404,
   /** 409 — concurrent edit / unique-constraint violation. */
   CONFLICT: 409,
+  /** 411 — the request declared no usable `Content-Length`. */
+  LENGTH_REQUIRED: 411,
+  /** 413 — the request body is over the endpoint's bound. */
+  CONTENT_TOO_LARGE: 413,
+  /** 415 — the request body's format is not one the endpoint accepts. */
+  UNSUPPORTED_MEDIA_TYPE: 415,
   /** 422 — semantic validation failure (per-field violations). */
   UNPROCESSABLE_ENTITY: 422,
   /** 429 — request rate-limited; client should back off. */

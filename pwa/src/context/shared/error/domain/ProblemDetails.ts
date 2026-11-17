@@ -42,3 +42,13 @@ export function isProblemDetails(value: unknown): value is ProblemDetails {
     typeof v["correlation-id"] === "string"
   );
 }
+
+/**
+ * The wait, in whole seconds, a throttled (429) problem asks for: the integer extension
+ * `retryAfterSeconds` the API's `RateLimitExceeded` carries in the body. `null` when absent or
+ * not an integer of at least 1.
+ */
+export function retryAfterSecondsOf(problem: ProblemDetails): number | null {
+  const value = problem.retryAfterSeconds;
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 ? value : null;
+}

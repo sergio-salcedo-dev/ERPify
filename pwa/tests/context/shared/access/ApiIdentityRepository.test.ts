@@ -24,11 +24,11 @@ function problem(status: number, type: string): ProblemDetails {
 }
 
 function httpClientGetting(get: HttpClient["get"]): HttpClient {
-  return { get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+  return { get, post: vi.fn(), put: vi.fn(), patch: vi.fn(), putRaw: vi.fn(), delete: vi.fn() };
 }
 
 function httpClientPosting(post: HttpClient["post"]): HttpClient {
-  return { get: vi.fn(), post, put: vi.fn(), patch: vi.fn(), delete: vi.fn() };
+  return { get: vi.fn(), post, put: vi.fn(), patch: vi.fn(), putRaw: vi.fn(), delete: vi.fn() };
 }
 
 // Faithful to FetchHttpClient: run the guard against the body, throw a
