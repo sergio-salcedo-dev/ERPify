@@ -92,6 +92,7 @@ final class BestEffortReportChannelGateTest extends TestCase
         'DoctrineDatabaseHealthChecker.php',
         'ExpireScanLeases.php',
         'FlysystemImageStorage.php',
+        'ImageAttachment.php',
         'InspectStoredIdentityHandler.php',
         'InterventionImageProcessor.php',
         'LeakedTransactionContainment.php',

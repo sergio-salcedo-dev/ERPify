@@ -76,6 +76,12 @@ use PHPUnit\Framework\TestCase;
  * really take a lock where the doubles record one is a different claim, and its instrument is
  * {@see \Erpify\Tests\Functional\Iam\Identity\ErasureLockOrderFunctionalTest}.
  *
+ * **The image row has a place in this order too, and the chain does not reach it.** The identity erasure takes no
+ * image row. What is pinned is the shared attach service: its attach unit locks only the owner's row and the image row
+ * is written by the upload unit, so no unit takes both
+ * (`ImageAttachmentTest::noUnitOfWorkTakesBothTheOwnerRowAndAnImageRow`).
+ * A unit that ever takes both, an erasure that releases an avatar included, has to take the owner's row first.
+ *
  * @internal
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")

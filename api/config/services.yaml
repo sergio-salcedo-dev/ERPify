@@ -216,6 +216,12 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    # The compensation's own failure is the one signal that a stored object has no owner and no release queued, so
+    # it goes to the always-on stream like the other best-effort reporters.
+    Erpify\Shared\Images\Application\ImageAttachment:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     # Bound here rather than with `#[Autowire(param: …)]` for the reason its `Infrastructure` siblings can
     # use the attribute and this class cannot: deptrac refuses `Application` a dependency on the container's
     # attributes. Wiring is configuration, so it lives in configuration.

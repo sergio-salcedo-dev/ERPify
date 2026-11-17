@@ -19,7 +19,7 @@ The suffix never collides with the owner's own update route. Authentication, per
 | `PUT` request | Raw image bytes as the body. No multipart, no query. `Content-Length` is mandatory and the bytes read must equal it. `Content-Type` is an optional hint. |
 | `PUT` success | `200` with `{"imageId": "<uuid>"}`. The old image, if any, is released by a queued request. |
 | `DELETE` success | `204`, always. Idempotent: no image held means `204` and no event. |
-| Declared media type | Handed to the processor only when it is a clean `image/*` token; anything else (`application/octet-stream`, `image/jpg`, parameters, form types) is ignored. The served type comes from detection, never from the declaration. |
+| Declared media type | The `Content-Type` header is handed to the processor only when it is, byte for byte, one of `image/jpeg`, `image/png`, `image/webp`, `image/gif` (lower case, no parameters, no padding). Anything else — `application/octet-stream`, `image/jpg`, `IMAGE/PNG`, `image/png; charset=…`, `image/svg+xml`, `image/*`, form types — is ignored, not refused. A handed-over type that contradicts the detected format is refused `415 image-unsupported-type`. The served type comes from detection, never from the declaration. |
 | Accepted formats | The `ImageProcessor` allowlist, and nothing wider. The bytes are decoded and re-encoded; the stored bytes are never the upload. |
 | Byte cap | `erpify.images.max_input_bytes` (20 MiB today). The edge matcher for these routes carries the same value. |
 

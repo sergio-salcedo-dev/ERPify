@@ -2089,10 +2089,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Expiry: re-assess before the first production deployment or the first customer**, whichever
       comes first.
 
-- [ ] **Image bytes: what the storage root guarantees, and the ten things it does not.** Residuals of
+- [ ] **Image bytes: what the storage root guarantees, and the twelve things it does not.** Residuals of
       `Shared/Images`, listed together because each is invisible from the others. One to four are the
       write and deletion paths; five to ten are opened by the authenticated read route
-      `GET /api/v1/images/{imageId}` and are not closed by it.
+      `GET /api/v1/images/{imageId}` and are not closed by it; eleven is the publish guard's own reach, twelve the upload
+      seam's.
       **One — the root is provisioned by the deployment, conditionally, and that condition is the control.**
       `compose.yaml` mounts the named volume `image_storage` at `/app/storage` for both `php` and
       `messenger_worker`, and the entrypoint creates `<STORAGE_LOCAL_PATH>/images` **only when that path is
@@ -2112,7 +2113,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       transport ran on Symfony's default of three retries at 1 s, 2 s and 4 s — a storage outage longer than
       seven seconds was enough. The transport now declares ten attempts over about three hours, which makes
       the residual rare rather than closing it; the 30-day prune destroys the request either way, and
-      `event_store` cannot re-dispatch it because the consumer is a message handler and not a projector. There is deliberately no reconciliation
+      `event_store` cannot re-dispatch it because the consumer is a message handler and not a projector.
+      `ImageAttachment` is the one publisher of that request: every replace and remove reaches it through that
+      service. There is deliberately no reconciliation
       between rows and stored objects: the bookkeeping that would find an orphan is the same bookkeeping the
       module refuses to build, so nothing can distinguish "never asked for" from "asked for and lost". A
       second latent case joins it the day a consumer adds a foreign key into `image`: the row deletion would
@@ -2124,6 +2127,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       is permanently unerasable **by construction** rather than by an absent control: with no bookkeeping,
       no query can enumerate them. Bounded by the failure rate, and by nothing else. (A write the substrate
       corrupted is *not* in this bucket: the adapter removes an object its integrity check refused.)
+      **The attach protocol shrinks the bucket and does not empty it.** `ImageAttachment` queues the release of
+      the NEW id in a fresh transaction when the attach fails, so a failed attach, a vanished owner and a rolled-back
+      transaction no longer strand bytes. What still does: a crash or an out-of-memory kill between the store and
+      the attach, a failure inside `UploadImage` after `store()`, and a compensation that itself fails — which
+      includes the owner-row contention that failed the attach failing the compensation's own re-read. That failure
+      is logged by exception class on the `observability` channel (`images.attachment.compensation_failed`) and
+      replaces nothing of the original failure the caller sees. **The log carries the class only on purpose**: the
+      new id is an identifier of an image that may be a face, and the sink has no erasure path. The consequence is
+      that no log line leads to an orphan.
+      Two shapes need two comparisons, and nothing runs either: an object whose row was never written (a crash
+      between the store and the row) is found only by comparing the storage listing with the `image` table, and one
+      from a failed compensation, which has both a row and an object, only by comparing the `image` rows with the
+      holders' columns.
       **Four — `event_store` keeps the `ImageId` for ever, and routing changes nothing.**
       `PersistDomainEventMiddleware` appends every dispatched event with its real `aggregate_id` before
       Messenger picks a transport; identity erasure rewrites by the value of the **subject's** identifier,
@@ -2143,19 +2159,29 @@ mitigated state. Accepting one means recording who accepted it and against which
       `/api/*` request that is not an `OPTIONS`, without consulting authentication — but its bound is softer
       than its number suggests: the pool is local to a deployment (the configuration itself says a
       multi-worker deployment behind a balancer needs a shared Redis), and with `lock_factory: null`
-      concurrent workers *"may over- or under-count"*. What does not exist is a limit **per identity and per
-      route**. `ImageId` is never an authorization mechanism and never a secret.
+      concurrent workers *"may over- or under-count"*. **A limit per identity and per route now exists, and what it bounds is narrower than the whole axis.**
+      `image_read_per_identity_route` (600 per minute) is spent by `GET /api/v1/images/{imageId}` before
+      anything is looked up, a `304` included, and `image_write_per_identity_route` (30 per 10 minutes) WILL be spent by every
+      image write route that follows the convention, before its body is read — spending it is the consumer
+      controller's call (item twelve); both are keyed by an HMAC of the identity and the route name, so
+      the cache pool holds no person's id, and answer 429 with `Retry-After`. The numbers are decisions of this
+      story, not measurements: 600 admits a 100-row list page six times over, and bounds a revalidation loop to
+      ten full reads a second. They share the `anonymous_api` pool's properties — local to a deployment, with
+      `lock_factory: null` over-counting under concurrency — and they sit beside, not instead of, the per-IP
+      bucket, which an office behind one address still shares. `ImageId` is never an authorization mechanism and
+      never a secret.
       **What defends the frontier is now a tripwire rather than a promise.** The argument for having no voter
       (D1 of [`docs/adr/image-read-route-contract.md`](docs/adr/image-read-route-contract.md)) is that no
       consumer relation exists to vote on, and its second half — that the first real consumer brings its
       own policy — was prose that nothing enforced; an external security review named
       the exact failure that permits, a consumer wired without an owner check turning a documented
-      provisional frontier into a silent cross-user read. `ImageConsumerAuthorizationGateTest` refuses any
-      aggregate outside `Shared/Images` holding an image reference, so that question is forced into the diff
-      that first raises it. The bot's own suggested fix — gating the route behind a permission granted to no
+      provisional frontier into a silent cross-user read. `ImageConsumerAuthorizationGateTest` holds a registry
+      `file::property => anchor in D1`, its universe derived from `api/src`: an aggregate outside `Shared/Images` holding
+      an image reference with no entry reds it, and so does an entry whose anchor D1 does not record, so that
+      question is forced into the diff that first raises it. The bot's own suggested fix — gating the route behind a permission granted to no
       role — was measured and refused: it answers 403 to every caller, which deletes the slice rather than
-      deferring the decision. The gate matches a property NAME, so a reference under another spelling, in a
-      join table or in a JSON column is still invisible to it.
+      deferring the decision. The gate matches a property NAME (or an ORM column name) ending in `image_id`, so a
+      reference under another spelling, in a join table or in a JSON column is still invisible to it.
       **And the conditional request inverts the usual self-limiting.** A `304` is gated on the same verified
       read as a `200` — the full object off disk plus its SHA-256 — because the storage port exposes no
       existence predicate; the cost is declared at the controller. What is NOT declared there is that the
@@ -2164,14 +2190,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       caller the whole body and self-limit. Nothing bounds aggregate bytes served, and the per-IP budget is
       sized for page navigation (120/min) while this route is one request per rendered image rather than one
       per navigation — so an office behind one NAT shares it, and a 429 arrives inside an `<img>` as a broken
-      image with no diagnosis. Latent while the route has no consumer; the epic that wires the first one
-      inherits it.
+      image with no diagnosis. The per-identity read budget above bounds one session's loop, never an office's
+      shared address; latent while the route has no consumer, and the epic that wires the first one inherits it.
       **Six — a cached copy outlives the erasure, shortened to an hour rather than closed.** A conforming
       client does not revalidate while the response is fresh, so once the bytes and the row are gone every
       viewer keeps serving the image for up to `max-age` with no request reaching a server that could answer
       404. The route emits `max-age=3600` rather than the year first asked for (D3 of the same ADR), which shortens the exposure
       without turning every view into a full read; it is still the residual with the most personal-data
-      content this route adds, and it is not immediate deletion. What the hour does **not** cover, said
+      content this route adds, and it is not immediate deletion. A replace mints a new id and queues the release of
+      the old one through `ImageAttachment`, so a copy cached under the old id is exactly this residual. What the hour does **not** cover, said
       rather than implied: a copy the viewer downloaded, a screenshot, a page already open with the bytes in
       memory, and the stale behaviour of an offline user agent. And the ambiguity that decides the ceiling is
       recorded rather than resolved: the conservation ADR's *"stop being retrievable by any route, cached
@@ -2203,8 +2230,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       container rather than the ini**: prod caps the php service at 1 GiB and FrankenPHP runs about two
       workers per core, so `workers x memory_limit` overcommits and a concurrent burst of large uploads is
       bounded by `PHP_MEM_LIMIT` — where an overrun is an OOM-kill of the container, not of one request.
-      Nothing sizes that today, and nothing can until an upload endpoint exists to generate the load; it
-      belongs to the epic that exposes one.
+      **Decided 2026-11-16 (Sergio): the accepted measure is the arithmetic, with no global in-flight
+      counter.** One write costs about 200 MB at 20 MP against the 256M `memory_limit`; prod caps the php service
+      at 1 GiB and FrankenPHP runs about two workers per core, so the bound is `PHP_MEM_LIMIT` and the worker count
+      together with the per-identity write budget above. **That budget bounds requests per window, not
+      concurrency**: one identity can open several large uploads at once, each a worker thread at up to 200 MB, so a
+      single session can reach the OOM-kill of the whole service as well as several identities can — an OOM-kill of
+      the container rather than of one request. That stays accepted until a deployment shows the load, and the
+      counter that would close it is declined.
       **Eight — nothing records who read what.** Deliberate, and recorded as D2 of the same ADR: the route name begins
       `shared_`, which is the one exclusion of the generic activity audit that fits object serving, so a
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
@@ -2247,6 +2280,33 @@ mitigated state. Accepting one means recording who accepted it and against which
       questioning it. This is also the first `/api/*` route returning a browser-renderable body at all; the
       API origin still publishes no CSP, no CORP and no `X-Frame-Options` of its own, so every other route
       relies on returning JSON.
+      **Eleven — what the publish guard does not see.** `ImageDeletionRequested` now has its one publisher
+      (`ImageAttachment`), observed end to end by `ImageAttachmentFunctionalTest` from a second connection, and the
+      guard, its build-time twin and the send-boundary gate are described in
+      [`docs/adr/image-deletion-signal-transport.md`](docs/adr/image-deletion-signal-transport.md) D3. What stays
+      open there: a message that is not a `DomainEvent` and is routed only off `async` is not guarded at all
+      (`ScanDocumentMessage`, the scan wake-up entry below, only while it stays routed to `async`); a second bus, or
+      a `send()` straight to a transport, passes through nothing, and `MessengerSendBoundaryGateTest` sees only
+      `api/src` text — its header lists what else it cannot see, and a `TransportNamesStamp` outside `api/src` is
+      refused at runtime only; `isTransactionActive()` proves a transaction is open, not that it is the business
+      write's; a business write already autocommitted outside a transaction is not undone by the refusal; a
+      received envelope passes by design; and the answer for `async` is memoised per process, because the DSN is
+      fixed at start. A second use case reusing the registered creating site trips no gate. The boot-time assertion stays (`event:transport:assert-transactional`, gated by
+      `AsyncTransportBootAssertionGateTest`) and §8 keeps the manual `exec` verification.
+      **Twelve — the upload seam: what drains, what never reaches it, and what is only convention.**
+      (a) A body the application refuses before reading it — an anonymous request, a 403, a 404, a refused
+      length — is still drained by `DiscardRawBodySpoolListener` so its spool can be matched and destroyed, for up
+      to the listener's time budget (about 120 s per request, the same posture as the Documents listener, accepted);
+      a slow client therefore holds a worker for that long even on a refusal. (b) **The drain is skipped when the
+      request is refused before routing**: the per-IP `anonymous_api` 429 answers at priority 512 on `kernel.request`,
+      and a `PUT` under the lifted 20 MiB matcher whose path has no route ends in the router's 404. Neither carries
+      `RawBodyRoute::ATTRIBUTE`, so the plaintext spool survives until the worker serves another request. The
+      Documents twin has the same hole. (c) Nothing but convention makes a consumer's route carry
+      `RawBodyRoute::ATTRIBUTE`, spend `ImageRequestThrottle` before it calls the reader, and go through
+      `ImageAttachment`: a route that omits the attribute leaves a plaintext spool until the worker serves another
+      request, one that reads the body first spends its budget after the cost, and one that bypasses `ImageAttachment`
+      publishes no release — with every gate green. A manifest-driven gate over the image write routes lands with the
+      first consumer route, which is when there is a route to read.
 
 - [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
       on its next tick — unless it commits after the subject's window closed.** The erasure's passes reach
@@ -2362,8 +2422,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       development Caddy, never the prod image, and pins the bound between 0.9 MB and 2 MB, not where exactly;
       `{$CADDY_SERVER_EXTRA_DIRECTIVES}` and `{$CADDY_EXTRA_CONFIG}` can add a `request_body` of their own from a
       deployment's environment; bodies to the PWA, the Sentry tunnel and the hub are outside the bound; a client
-      past it sees its request fail rather than a guaranteed 413; and the first upload route needs its own
-      bound (`erpify.images.max_input_bytes` is 20 MB).
+      past it sees its request fail rather than a guaranteed 413. The image write routes have their own
+      cookie-gated matcher, `@imageWrite`, bounded at `erpify.images.max_input_bytes` (20 MiB) and kept in step
+      with its `@boundedBody` exclusion and the three planned public paths by `UploadRoutePathAgreementGateTest`;
+      **until the first consumer mounts a route the matcher is proved on text, and its through-Caddy measurement
+      (a body over 1 MB reaching PHP whole) lands with that story, beside the route.** A body Caddy cuts reaches PHP
+      as a clean, shorter stream, so what refuses a truncated image is the mandatory `Content-Length` equal to the
+      bytes read (`ImageRequestBodyReader`, 411 `image-length-required`), not the bound.
 
 - [x] **The persisted lockout confirmed a correct password, and so did the suspended and deactivated walls,
       closed 2026-11-02.** Each was read AFTER the firewall verified the password, so the right password was the
@@ -2483,8 +2548,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       register it cannot read in full: the first cell stays `[#N](https://github.com/<owner>/<repo>/issues/N)`,
       the bold lead-in above and the `Issue` header are how it finds the table, and the table stays one
       unbroken block, with no blank line, comment or other text inside it or after it within this item.
-      Independently, #872 carries two `@accepted-risk` tags in `docs/adr/image-deletion-signal-transport.md`,
-      which the same job requires to point at an open issue. Beware of GitHub's closing keywords: a pull
+      Beware of GitHub's closing keywords: a pull
       request or commit saying "closes #N" or "fixes #N" closes that issue on merge — after the pull request's
       checks have run — which is how #418 was once closed by a change that only documented who would close
       it. The job therefore also refuses a pull request whose body (or sidebar link) will close a watched
@@ -2498,7 +2562,6 @@ mitigated state. Accepting one means recording who accepted it and against which
   | Issue | Accepted risk | Revisit when | Accepted |
   |---|---|---|---|
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
-  | [#872](https://github.com/sergio-salcedo-dev/ERPify/issues/872) | The first *irreversible* `async` consumer has no end-to-end proof through a real publisher: `ImageDeletionRequested` destroys stored bytes, nothing in `api/src` creates or publishes it today, and the test environment's `in-memory://` `async` joins no transaction — so nothing shows that a publisher's transaction is the one carrying its business write. What is already closed (the publish guard and its rule that every sender of a guarded message is `async` or `sync`, its build-time twin, the commit/rollback observations, the send-boundary gate) is in `docs/adr/image-deletion-signal-transport.md` D3, from its fourth residual on. Blind spots that stay: a message that is not a `DomainEvent` and is routed only off `async` is not guarded at all (`ScanDocumentMessage`, the scan wake-up entry below, only while it stays routed to `async`); a second bus, or a `send()` straight to a transport, passes through nothing, and `MessengerSendBoundaryGateTest` sees only `api/src` text — its header lists what else it cannot see, and a `TransportNamesStamp` outside `api/src` is refused at runtime only; `isTransactionActive()` proves a transaction is open, not that it is the business write's; a business write already autocommitted outside a transaction is not undone by the refusal; a received envelope passes by design; and the answer for `async` is memoised per process, because the DSN is fixed at start | The first file under `api/src` that creates `ImageDeletionRequested` — `ImageDeletionRequestedPublisherGateTest` (`make php.lint.persistent-transport`) reds on it until it is registered with the use case that publishes what it records and that use case's functional test. **Recipe:** call the real use case, let it make its business write and publish, roll that transaction back, and read from a second connection that neither the business row nor the message in `messenger_messages` is there; the gate checks the test is declared, exists and names the use case, never what it proves, and a second use case reusing a registered site does not trip it. Also any change to the sets `MessengerSendBoundaryGateTest` pins. The boot-time assertion stays (`event:transport:assert-transactional`, gated by `AsyncTransportBootAssertionGateTest`) and §8 keeps the manual `exec` verification | the product owner, 2026-11-11 (kept open, narrowed to the first publisher) |
 
 
 - [x] **A production restore could take the scriptable non-production path, closed 2026-10-23.**

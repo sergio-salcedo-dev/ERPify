@@ -8,6 +8,7 @@ use Erpify\Shared\ErrorContract\Application\ProblemBodyTooLargeException;
 use Erpify\Shared\ErrorContract\Application\ProblemDetails;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\ContentTooLarge;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
@@ -19,6 +20,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Domain\Exception\UnsupportedMediaType;
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
 use Erpify\Shared\Search\Domain\Exception\UnknownSearchField;
 use Erpify\Shared\Search\Domain\Exception\UnsupportedSearchOperator;
@@ -66,13 +68,6 @@ final class ProblemDetailsFactoryTest extends TestCase
     private const string CID = '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
 
     private const string INSTANCE = 'urn:uuid:0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1a2c';
-
-    /**
-     * Statuses the Symfony bridge maps that no marker declares, so the mirror assertion below cannot
-     * reach them: `array_intersect_key` only compares the keys both maps hold. Naming them here is what
-     * keeps the mirror from degrading into a subset check that any new entry satisfies in silence.
-     */
-    private const array MARKER_FREE_BRIDGE_STATUSES = [415];
 
     /**
      * env-aware factory helper. Defaults to 'prod' so existing tests' byte-for-byte
@@ -583,7 +578,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame([], $problemDetails->extensions);
     }
 
-    public function testMarkerStatusMapHasExactlyTheCanonicalElevenEntries(): void
+    public function testMarkerStatusMapHasExactlyTheCanonicalThirteenEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_STATUS_MAP');
@@ -605,16 +600,18 @@ final class ProblemDetailsFactoryTest extends TestCase
             ServiceUnavailable::class => 503,
             Gone::class => 410,
             LengthRequired::class => 411,
+            ContentTooLarge::class => 413,
+            UnsupportedMediaType::class => 415,
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_STATUS_MAP must contain exactly the eleven canonical marker→status entries in canonical order.',
+            'MARKER_STATUS_MAP must contain exactly the thirteen canonical marker→status entries in canonical order.',
         );
     }
 
-    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalElevenEntries(): void
+    public function testMarkerDefaultTypeMapHasExactlyTheCanonicalThirteenEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('MARKER_DEFAULT_TYPE_MAP');
@@ -636,12 +633,14 @@ final class ProblemDetailsFactoryTest extends TestCase
             ServiceUnavailable::class => 'service-unavailable',
             Gone::class => 'gone',
             LengthRequired::class => 'length-required',
+            ContentTooLarge::class => 'content-too-large',
+            UnsupportedMediaType::class => 'unsupported-media-type',
         ];
 
         $this->assertSame(
             $expected,
             $value,
-            'MARKER_DEFAULT_TYPE_MAP must contain exactly the eleven canonical '
+            'MARKER_DEFAULT_TYPE_MAP must contain exactly the thirteen canonical '
             . 'marker→default-type entries in canonical order.',
         );
     }
@@ -952,7 +951,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame('Bank not found', $problemDetails->title);
     }
 
-    public function testHttpStatusTypeMapHasExactlyTheCanonicalElevenEntries(): void
+    public function testHttpStatusTypeMapHasExactlyTheCanonicalTwelveEntries(): void
     {
         $reflectionClass = new ReflectionClass(ProblemDetailsFactory::class);
         $constant = $reflectionClass->getReflectionConstant('HTTP_STATUS_TYPE_MAP');
@@ -970,6 +969,7 @@ final class ProblemDetailsFactoryTest extends TestCase
             409 => 'conflict',
             410 => 'gone',
             411 => 'length-required',
+            413 => 'content-too-large',
             415 => 'unsupported-media-type',
             422 => 'invariant-violation',
             429 => 'rate-limited',
@@ -979,7 +979,7 @@ final class ProblemDetailsFactoryTest extends TestCase
         $this->assertSame(
             $expected,
             $value,
-            'HTTP_STATUS_TYPE_MAP must contain exactly the eleven canonical status→type entries in canonical order.',
+            'HTTP_STATUS_TYPE_MAP must contain exactly the twelve canonical status→type entries in canonical order.',
         );
     }
 
@@ -1031,11 +1031,10 @@ final class ProblemDetailsFactoryTest extends TestCase
         );
 
         $this->assertSame(
-            self::MARKER_FREE_BRIDGE_STATUSES,
+            [],
             \array_keys(\array_diff_key($httpType, $derived)),
-            'HTTP_STATUS_TYPE_MAP carries a status no marker backs and this file never declared. The mirror '
-            . 'above is blind to it by construction, so it is named in MARKER_FREE_BRIDGE_STATUSES or it '
-            . 'does not belong in the map.',
+            'HTTP_STATUS_TYPE_MAP carries a status no marker backs, which the mirror above is blind to by '
+            . 'construction: back it with a marker or it does not belong in the map.',
         );
     }
 

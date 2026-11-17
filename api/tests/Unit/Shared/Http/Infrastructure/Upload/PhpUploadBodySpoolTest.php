@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Upload;
+namespace Erpify\Tests\Unit\Shared\Http\Infrastructure\Upload;
 
-use Erpify\Documents\Document\Infrastructure\Upload\PhpUploadBodySpool;
+use Erpify\Shared\Http\Infrastructure\Upload\PhpUploadBodySpool;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
 use Override;

@@ -6,7 +6,7 @@ namespace Erpify\Documents\Document\Infrastructure\Http;
 
 use Erpify\Documents\Document\Application\Upload\UploadTimeBudget;
 use Erpify\Documents\Document\Domain\UploadLimits;
-use Erpify\Documents\Document\Infrastructure\Upload\PhpUploadBodySpool;
+use Erpify\Shared\Http\Infrastructure\Upload\PhpUploadBodySpool;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;

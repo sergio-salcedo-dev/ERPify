@@ -49,7 +49,7 @@ row — no dual-write).
 
 **Routing is per event, and most events are not routed.** Only eight events go to the **`async`** transport
 (Doctrine outbox → `messenger_worker`, at-least-once): the seven `Backoffice.*` events and
-`ImageDeletionRequested`, the argued exception of `docs/adr/image-deletion-signal-transport.md`. The rest are unrouted, which
+`ImageDeletionRequested`, the argued exception of `docs/adr/image-deletion-signal-transport.md`, created only by `ImageAttachment` (`Shared/Images`) when an owner's image is replaced, removed or compensated. The rest are unrouted, which
 means `SendMessageMiddleware` hands them straight to their handlers *in the caller*, inside the write
 transaction. Whether an event may be routed at all is governed by the persisted-transport rule below.
 

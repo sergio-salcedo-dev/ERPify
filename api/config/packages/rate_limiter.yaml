@@ -198,3 +198,27 @@ framework:
             limit: '%env(int:RATE_LIMIT_DOCUMENT_UPLOAD_DECLARE_PER_ACTOR_LIMIT)%'
             interval: '%env(RATE_LIMIT_DOCUMENT_UPLOAD_DECLARE_PER_ACTOR_INTERVAL)%'
             lock_factory: null
+
+        # `image_write_per_identity_route` — budget of one identity on one image write route (the logo, avatar and
+        # bank-account image `PUT`/`DELETE`s), keyed by an HMAC of the acting identity and the route name. A write
+        # decodes and re-encodes an image of up to 20 MP on a worker thread (about 10 B/px: roughly 200 MB against the
+        # 256M `memory_limit`), so the budget bounds how much of that one session can ask for. 30 per 10 minutes
+        # leaves an operator a corrected upload and a retry many times over. Exhaustion is a visible 429 with
+        # `Retry-After`. Consumed by `ImageRequestThrottle` at the controller edge, before the body is read.
+        image_write_per_identity_route:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_IMAGE_WRITE_PER_IDENTITY_ROUTE_LIMIT)%'
+            interval: '%env(RATE_LIMIT_IMAGE_WRITE_PER_IDENTITY_ROUTE_INTERVAL)%'
+            lock_factory: null
+
+        # `image_read_per_identity_route` — budget of one identity on `GET /api/v1/images/{imageId}`, keyed like the
+        # write budget. Sized against a LIST PAGE rather than a navigation: every row of a page is one image read, and
+        # a `304` costs the same read and digest as a `200`, so a loop of matching `If-None-Match` requests is cheap
+        # for the caller and not for the server. 600 per minute admits a page of 100 rows six times over and bounds a
+        # revalidation loop to ten full reads a second. It sits beside, not instead of, the per-IP `anonymous_api`
+        # bucket, which an office behind one address shares.
+        image_read_per_identity_route:
+            policy: 'sliding_window'
+            limit: '%env(int:RATE_LIMIT_IMAGE_READ_PER_IDENTITY_ROUTE_LIMIT)%'
+            interval: '%env(RATE_LIMIT_IMAGE_READ_PER_IDENTITY_ROUTE_INTERVAL)%'
+            lock_factory: null

@@ -20,7 +20,7 @@ use finfo;
 final readonly class ImagePreflightGuard
 {
     /** @var array<string, true> */
-    private const array SUPPORTED_MEDIA_TYPES = [
+    public const array SUPPORTED_MEDIA_TYPES = [
         'image/jpeg' => true,
         'image/png' => true,
         'image/webp' => true,

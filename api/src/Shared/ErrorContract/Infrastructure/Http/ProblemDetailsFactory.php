@@ -8,6 +8,7 @@ use Erpify\Shared\ErrorContract\Application\ProblemBodyTooLargeException;
 use Erpify\Shared\ErrorContract\Application\ProblemDetails;
 use Erpify\Shared\ErrorContract\Application\RedactionDenylist;
 use Erpify\Shared\ErrorContract\Domain\Exception\Conflict;
+use Erpify\Shared\ErrorContract\Domain\Exception\ContentTooLarge;
 use Erpify\Shared\ErrorContract\Domain\Exception\DomainException;
 use Erpify\Shared\ErrorContract\Domain\Exception\Forbidden;
 use Erpify\Shared\ErrorContract\Domain\Exception\Gone;
@@ -19,6 +20,7 @@ use Erpify\Shared\ErrorContract\Domain\Exception\NotFound;
 use Erpify\Shared\ErrorContract\Domain\Exception\RateLimited;
 use Erpify\Shared\ErrorContract\Domain\Exception\ServiceUnavailable;
 use Erpify\Shared\ErrorContract\Domain\Exception\Unauthenticated;
+use Erpify\Shared\ErrorContract\Domain\Exception\UnsupportedMediaType;
 use JsonSerializable;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
@@ -127,6 +129,8 @@ final readonly class ProblemDetailsFactory
         ServiceUnavailable::class => Response::HTTP_SERVICE_UNAVAILABLE,
         Gone::class => Response::HTTP_GONE,
         LengthRequired::class => Response::HTTP_LENGTH_REQUIRED,
+        ContentTooLarge::class => Response::HTTP_REQUEST_ENTITY_TOO_LARGE,
+        UnsupportedMediaType::class => Response::HTTP_UNSUPPORTED_MEDIA_TYPE,
     ];
 
     private const array MARKER_DEFAULT_TYPE_MAP = [
@@ -141,6 +145,8 @@ final readonly class ProblemDetailsFactory
         ServiceUnavailable::class => 'service-unavailable',
         Gone::class => 'gone',
         LengthRequired::class => 'length-required',
+        ContentTooLarge::class => 'content-too-large',
+        UnsupportedMediaType::class => 'unsupported-media-type',
     ];
 
     /**
@@ -150,12 +156,14 @@ final readonly class ProblemDetailsFactory
      * exception, or a Symfony `HttpExceptionInterface`. The alignment is pinned by
      * `testHttpStatusTypeMapValuesMirrorMarkerDefaultTypeMapValues`.
      *
-     * 415 is the one entry no marker backs, and it needs one for the same reason the others do. No
-     * domain code raises it: the refusal happens in Symfony's argument resolver, so an endpoint mapping
-     * a {@see \Erpify\Shared\Http\Infrastructure\StrictRequestPayload} answers a form-encoded or multipart
-     * body before any handler runs. Left out of this map that refusal reaches the wire as `http-error`,
-     * indistinguishable from every other unmapped status, and a client routing on `type` cannot tell
-     * "resend this as JSON" from a failure it can do nothing about.
+     * 415 is reached from two sources and may carry two `type` values: the {@see UnsupportedMediaType} marker (a
+     * concrete exception may override the default with its own, as the image refusal does), and Symfony's argument
+     * resolver, whose refusal of a form-encoded or multipart body against a
+     * {@see \Erpify\Shared\Http\Infrastructure\StrictRequestPayload} endpoint happens before any handler runs. Left
+     * out of this map the framework source would reach the wire as `http-error`, indistinguishable from every other
+     * unmapped status, and a client routing on `type` could not tell "resend this as JSON" from a failure it can do
+     * nothing about. 413 is here because its marker is: every status of this map is marker-backed, which the mirror
+     * test asserts. A framework-raised 413 answers `content-too-large`.
      */
     private const array HTTP_STATUS_TYPE_MAP = [
         Response::HTTP_BAD_REQUEST => 'invalid-input',
@@ -165,6 +173,7 @@ final readonly class ProblemDetailsFactory
         Response::HTTP_CONFLICT => 'conflict',
         Response::HTTP_GONE => 'gone',
         Response::HTTP_LENGTH_REQUIRED => 'length-required',
+        Response::HTTP_REQUEST_ENTITY_TOO_LARGE => 'content-too-large',
         Response::HTTP_UNSUPPORTED_MEDIA_TYPE => 'unsupported-media-type',
         Response::HTTP_UNPROCESSABLE_ENTITY => 'invariant-violation',
         Response::HTTP_TOO_MANY_REQUESTS => 'rate-limited',
