@@ -200,7 +200,7 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 
 1. Don't assume. Don't hide confusion. Surface tradeoffs.
 2. Minimum code that solves the problem. Nothing speculative.
-3. Touch only what you must. Clean up only your own mess.
+3. Touch only what you must. Clean up your own mess, and leave the block you edit better than you found it (see *Boy scout rule*).
 4. Define success criteria. Loop until verified.
 5. Learn from your errors; don't repeat them. Follow up with a plan or doc when warranted.
 
@@ -432,6 +432,16 @@ A comment must explain the non-obvious *why* of the **current** code, standing o
 - **A residual, a known gap or a risk acceptance** — what the code does *not* cover, who accepted that and when, what would reopen it. A comment states what the code does and why; what it leaves open goes to the record that owns that kind of fact: `PRODUCTION_SECURITY_CHECKLIST.md` §7 for a security, GDPR or audit residual, the ADR whose decision produced it for a design consequence, `deferred-work.md` for work still pending. Three reasons it is not a comment: a docblock is read only by whoever already opened that file, while a register is read by whoever decides; nothing fails when the code moves under it, so it goes on asserting a gap that is closed or missing one that opened — `NotifyLockedIdentities` kept "accepted rather than closed with a lock" after the lock had closed it; and two copies of one acceptance drift apart. Two things stay at the code site because they are about this code: a **contract** on how to use it (a precondition, an ordering, "call it with no transaction open"), and an **`@accepted-risk #<issue>` tripwire** — one sentence naming the hazard at that line and the tag, pointing at the record rather than restating it (`make php.lint.accepted-risk` wants prose beside the tag, not the rationale). The test: a sentence whose subject is something this code does **not** do belongs to a register; the comment keeps the one about what it does.
 
 No mass cleanup of existing files. Instead apply the **boy scout rule**: when editing a file for any reason, also remove this kind of stale comment you find in it — leave the file better than you found it.
+
+### Boy scout rule
+
+Whenever you modify a file — or at least the block you touch — leave it **better than you found it**, without turning the PR into a cleanup. This is the standing form of the "low-risk improvement inside the files you already touch" allowed under *Question the status quo*; the *Operating mode* there still holds.
+
+- **What counts as better:** stale or change-relative comments (see above), dead code and unused imports, a confusing name, a missing type or return type, a function that is plainly too long and is already being edited, or the test that was missing for what you change.
+- **Limit — low complexity.** The improvement lives in the file or block you already edit, fits in the diff without hiding the real change, and does not make the reviewer read a second PR inside the first. A little extra diff is fine when it is clearly explained; mixed-in large refactors are not — surface those with their argument and stop.
+- **Never as part of it:** mass renames or reformatting, moving files, touching areas you do not edit, or anything listed under *Do not touch*. A big cleanup gets its own PR, asked for by the user.
+- **No behaviour change in disguise.** If an improvement changes what the code does, say so and give it a test. Name the cleanup in the commit or PR summary (one line, "Boy scout: …") so it is reviewable.
+- The same rule applies in the developer's other projects (PFinance, ERP Labs and ERPify).
 
 ### Do not touch
 
