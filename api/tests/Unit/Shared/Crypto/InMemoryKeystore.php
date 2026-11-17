@@ -8,6 +8,7 @@ use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Application\WrappedDek;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
 use Erpify\Shared\Crypto\Domain\Exception\KeystoreLockRequiresTransaction;
 use Erpify\Shared\Crypto\Domain\KeyState;
 use Erpify\Shared\Crypto\Infrastructure\Persistence\DbalKeystore;
@@ -32,10 +33,31 @@ final class InMemoryKeystore implements Keystore
     /** @var array<string, DestroyReason> */
     private array $tombstoned = [];
 
+    /** @var array<string, WrappedDek|DecryptionFailed> what the batch read answers instead, for a scope a test corrupted */
+    private array $batchOverrides = [];
+
     #[Override]
     public function wrappedDekFor(EncryptionScopeId $scope): ?WrappedDek
     {
         return $this->live[$scope->toString()] ?? null;
+    }
+
+    #[Override]
+    public function wrappedDeksFor(array $scopes): array
+    {
+        $found = [];
+
+        foreach ($scopes as $scope) {
+            $key = $scope->toString();
+
+            if (isset($this->batchOverrides[$key])) {
+                $found[$key] = $this->batchOverrides[$key];
+            } elseif (isset($this->live[$key])) {
+                $found[$key] = $this->live[$key];
+            }
+        }
+
+        return $found;
     }
 
     #[Override]
@@ -75,6 +97,15 @@ final class InMemoryKeystore implements Keystore
             isset($this->live[$key]) => KeyState::Live,
             default => KeyState::Absent,
         };
+    }
+
+    /**
+     * Makes the batch read answer `$entry` for the scope, as the real keystore does for a corrupt live row
+     * ({@see DecryptionFailed}) or for a row holding bytes of its own choosing.
+     */
+    public function corruptInBatchReads(EncryptionScopeId $scope, DecryptionFailed|WrappedDek $entry): void
+    {
+        $this->batchOverrides[$scope->toString()] = $entry;
     }
 
     public function reasonFor(EncryptionScopeId $scope): ?DestroyReason

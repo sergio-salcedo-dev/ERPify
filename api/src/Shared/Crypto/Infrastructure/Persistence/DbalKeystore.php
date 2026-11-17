@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Crypto\Infrastructure\Persistence;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Application\WrappedDek;
@@ -51,23 +52,47 @@ final readonly class DbalKeystore implements Keystore
             return null;
         }
 
-        $wrappedDek = $row['wrapped_dek'] ?? null;
-        $kekVersion = $row['kek_version'] ?? null;
+        return $this->wrappedDekOf($scope, $row);
+    }
 
-        // A live row (destroyed_at IS NULL) with no usable key material is corruption, not a shredded
-        // scope: fail loudly instead of masquerading as an absent key, which a caller would read as
-        // "destroyed" (DekDestroyed) and mistake for a legitimate crypto-shred.
-        if (!\is_string($wrappedDek) || !\is_numeric($kekVersion)) {
-            throw DecryptionFailed::forScope($scope);
+    #[Override]
+    public function wrappedDeksFor(array $scopes): array
+    {
+        if ([] === $scopes) {
+            return [];
         }
 
-        try {
-            $bytes = \sodium_base642bin($wrappedDek, SODIUM_BASE64_VARIANT_ORIGINAL);
-        } catch (SodiumException) {
-            throw DecryptionFailed::forScope($scope);
+        $byName = [];
+
+        foreach ($scopes as $scope) {
+            $byName[$scope->toString()] = $scope;
         }
 
-        return new WrappedDek($bytes, (int) $kekVersion);
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT encryption_scope_id, wrapped_dek, kek_version FROM dek_keystore '
+            . 'WHERE encryption_scope_id IN (:scopes) AND destroyed_at IS NULL',
+            ['scopes' => \array_keys($byName)],
+            ['scopes' => ArrayParameterType::STRING],
+        );
+
+        $found = [];
+
+        foreach ($rows as $row) {
+            $name = $row['encryption_scope_id'] ?? null;
+
+            // A row the query did not ask for cannot come back from an `IN` over the requested names.
+            if (!\is_string($name) || !isset($byName[$name])) {
+                continue;
+            }
+
+            try {
+                $found[$name] = $this->wrappedDekOf($byName[$name], $row);
+            } catch (DecryptionFailed $decryptionFailed) {
+                $found[$name] = $decryptionFailed;
+            }
+        }
+
+        return $found;
     }
 
     #[Override]
@@ -126,5 +151,31 @@ final readonly class DbalKeystore implements Keystore
             'tombstoned' => KeyState::Tombstoned,
             default => KeyState::Absent,
         };
+    }
+
+    /**
+     * @param array<string, mixed> $row a live `dek_keystore` row: `wrapped_dek` and `kek_version`
+     *
+     * @throws DecryptionFailed when the row holds no usable key material
+     */
+    private function wrappedDekOf(EncryptionScopeId $scope, array $row): WrappedDek
+    {
+        $wrappedDek = $row['wrapped_dek'] ?? null;
+        $kekVersion = $row['kek_version'] ?? null;
+
+        // A live row (destroyed_at IS NULL) with no usable key material is corruption, not a shredded
+        // scope: fail loudly instead of masquerading as an absent key, which a caller would read as
+        // "destroyed" (DekDestroyed) and mistake for a legitimate crypto-shred.
+        if (!\is_string($wrappedDek) || !\is_numeric($kekVersion)) {
+            throw DecryptionFailed::forScope($scope);
+        }
+
+        try {
+            $bytes = \sodium_base642bin($wrappedDek, SODIUM_BASE64_VARIANT_ORIGINAL);
+        } catch (SodiumException) {
+            throw DecryptionFailed::forScope($scope);
+        }
+
+        return new WrappedDek($bytes, (int) $kekVersion);
     }
 }

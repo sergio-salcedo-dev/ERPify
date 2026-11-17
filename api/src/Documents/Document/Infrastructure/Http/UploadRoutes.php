@@ -22,6 +22,12 @@ final class UploadRoutes
     /** The audited read of a document's original. Never `shared_`-prefixed: that prefix opts a route out of audit. */
     public const string READ = 'documents_read';
 
+    /** The listing of documents' metadata. Ordinary read: the generic access log writes its activity row. */
+    public const string LIST = 'documents_list';
+
+    /** One document's metadata and its ordered custody trail. Declares `_audit_resource_type` so the row names it. */
+    public const string CUSTODY = 'documents_custody';
+
     private function __construct()
     {
     }

@@ -75,6 +75,12 @@ final class ProbingDocumentCustodyRepository implements DocumentCustodyRepositor
     }
 
     #[Override]
+    public function trailAfter(string $documentId, int $afterSeq, int $limit): array
+    {
+        return $this->inner->trailAfter($documentId, $afterSeq, $limit);
+    }
+
+    #[Override]
     public function anonymiseActor(string $subjectId): int
     {
         if ($this->beforeAnonymise instanceof Closure) {

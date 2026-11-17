@@ -8,6 +8,7 @@ use ArrayObject;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\Exception\CustodySequenceCollision;
+use Erpify\Documents\Document\Domain\Projection\CustodyTrailRow;
 use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
 use Override;
 
@@ -70,6 +71,29 @@ final class InMemoryDocumentCustodyRepository implements DocumentCustodyReposito
         }
 
         $this->rows[] = $custody;
+    }
+
+    #[Override]
+    public function trailAfter(string $documentId, int $afterSeq, int $limit): array
+    {
+        $this->calls[] = 'trail-after';
+
+        $rows = \array_filter(
+            $this->rows,
+            static fn (DocumentCustody $row): bool => $row->documentId() === $documentId && $row->seq() > $afterSeq,
+        );
+        \usort($rows, static fn (DocumentCustody $a, DocumentCustody $b): int => $a->seq() <=> $b->seq());
+
+        return \array_map(
+            static fn (DocumentCustody $row): CustodyTrailRow => new CustodyTrailRow(
+                $row->seq(),
+                $row->event(),
+                $row->actorId(),
+                $row->reason(),
+                $row->createdAt(),
+            ),
+            \array_slice($rows, 0, $limit),
+        );
     }
 
     #[Override]

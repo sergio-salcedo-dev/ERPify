@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Shared\Crypto\Infrastructure;
 
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
+use Erpify\Shared\Crypto\Application\SealedValue;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
+use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use Override;
 use SodiumException;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -50,10 +52,60 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
         $dek = $this->keyring->keyForOpening($scope);
 
         try {
+            return $this->open($scope, $dek, $ciphertext, $aad);
+        } finally {
+            \sodium_memzero($dek);
+        }
+    }
+
+    #[Override]
+    public function decryptMany(array $values): array
+    {
+        $scopes = [];
+
+        foreach ($values as $value) {
+            $scopes[$value->scope->toString()] = $value->scope;
+        }
+
+        $keys = $this->keyring->keysForOpening(\array_values($scopes));
+        $opened = [];
+
+        try {
+            foreach ($values as $position => $value) {
+                $dek = $keys[$value->scope->toString()] ?? DekDestroyed::forScope($value->scope);
+
+                $opened[$position] = \is_string($dek) ? $this->openCatching($value, $dek) : $dek;
+            }
+        } finally {
+            foreach ($keys as $dek) {
+                if (\is_string($dek)) {
+                    \sodium_memzero($dek);
+                }
+            }
+        }
+
+        return $opened;
+    }
+
+    private function openCatching(SealedValue $value, string $dek): DecryptionFailed|string
+    {
+        try {
+            return $this->open($value->scope, $dek, $value->ciphertext, $value->aad);
+        } catch (DecryptionFailed $decryptionFailed) {
+            return $decryptionFailed;
+        }
+    }
+
+    /**
+     * Opens one token under an already-unwrapped key; the caller owns the key and wipes it.
+     *
+     * @throws DecryptionFailed when the token is malformed or authentication fails
+     */
+    private function open(EncryptionScopeId $scope, string $dek, string $ciphertext, string $aad): string
+    {
+        try {
             $raw = \sodium_base642bin($ciphertext, SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
         } catch (SodiumException) {
-            \sodium_memzero($dek);
-
             throw DecryptionFailed::forScope($scope);
         }
 
@@ -61,7 +113,7 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
 
         // A truncated or corrupt stored value can decode to fewer bytes than a nonce; the AEAD open *throws*
         // on a wrong-length nonce (it only returns false for an authentication failure), so catch it and
-        // surface the same integrity signal instead of an unmapped 500 with the DEK left in memory.
+        // surface the same integrity signal instead of an unmapped 500.
         try {
             $plaintext = \sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
                 \substr($raw, $nonceLength),
@@ -70,12 +122,8 @@ final readonly class SodiumEnvelopeEncryptor implements EnvelopeEncryptor
                 $dek,
             );
         } catch (SodiumException) {
-            \sodium_memzero($dek);
-
             throw DecryptionFailed::forScope($scope);
         }
-
-        \sodium_memzero($dek);
 
         if (false === $plaintext) {
             throw DecryptionFailed::forScope($scope);

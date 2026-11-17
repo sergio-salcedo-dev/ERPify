@@ -56,6 +56,7 @@ final readonly class PermissionCatalog implements PublishedPermissions
         'document.write',
         'document.rescan',
         'document.download',
+        'document.custody',
         'users.read',
         'users.invite',
         'users.revokeInvitation',

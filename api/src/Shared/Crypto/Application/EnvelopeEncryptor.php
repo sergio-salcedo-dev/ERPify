@@ -35,6 +35,21 @@ interface EnvelopeEncryptor
     public function decrypt(EncryptionScopeId $scope, string $ciphertext, string $aad): string;
 
     /**
+     * Opens many values at once, each under its own scope, with ONE keystore query for all of them: what a page of
+     * values sealed under different scopes needs, where {@see decrypt()} per value would cost a query each.
+     *
+     * Returns, for every key of `$values` and in the same order, the plaintext or the exception {@see decrypt()}
+     * would have thrown for that value alone: {@see DekDestroyed} when its scope's key is absent or destroyed,
+     * {@see DecryptionFailed} when the key is present and authentication fails or the key row is corrupt. A failure
+     * of one value never throws and never reaches another. Only an outage of the keystore itself throws.
+     *
+     * @param array<array-key, SealedValue> $values
+     *
+     * @return array<array-key, string|DekDestroyed|DecryptionFailed>
+     */
+    public function decryptMany(array $values): array;
+
+    /**
      * Destroys the scope's key, or closes a scope that has none yet, so nothing can be sealed under it again.
      * No production code calls this today: it is kept as the seam the Documents erasure story uses.
      * {@see DestroyReason::AbortedUpload} belongs to the {@see Keystore::destroy()} callers on the upload-abort

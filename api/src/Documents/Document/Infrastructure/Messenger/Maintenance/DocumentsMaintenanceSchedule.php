@@ -22,7 +22,8 @@ use Symfony\Contracts\Cache\CacheInterface;
  * (`UploadLimits::STAGING_ORPHAN_AGE_SECONDS`) is computed with a 60 s reaper cadence; the roll-forward runs every
  * minute so a document whose writer died is promoted, and so scannable, within minutes. The staging sweep removes
  * objects at least twenty minutes old, so five minutes is fine-grained enough; the retention prune works in days
- * and runs hourly; the report observes state that stays wrong until someone repairs it, so it runs daily.
+ * and runs hourly; the storage report and the name report observe state that stays wrong until someone repairs it,
+ * so they run daily.
  *
  * The scan ticks are the scan's drivers, not hints: the scan sweep claims what is due on `next_scan_at`, the lease
  * expiry takes back a scan whose worker died (a 2 minute lease, so a minute is fine-grained enough), and the cap
@@ -36,6 +37,8 @@ use Symfony\Contracts\Cache\CacheInterface;
  *
  * **`stateful()` on `cache.scheduler_checkpoint`** for the reason `IdentityMaintenanceSchedule` gives: the hourly
  * and daily ticks would otherwise be re-anchored by every worker restart and every deploy, and never fire.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") one import per scheduled message
  */
 #[AsSchedule('documents_maintenance')]
 final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInterface
@@ -62,6 +65,7 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
             ->add(RecurringMessage::every('1 hour', new PruneCommittedIntentsMessage()))
             ->add(RecurringMessage::every('1 hour', new ReportDocumentScansMessage()))
             ->add(RecurringMessage::every('1 day', new ReportDocumentStorageMessage()))
+            ->add(RecurringMessage::every('1 day', new ReportDocumentNamesMessage()))
         ;
     }
 }
