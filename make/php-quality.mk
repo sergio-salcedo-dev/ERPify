@@ -275,7 +275,7 @@ php.lint.crypto-read-boundary: ## Encryption-port read-caller registration gate 
 
 ## —— Documents ingest gate —————————————————————————————————————————————————
 
-# Seven classes, each selected BY NAME in its own run (a common prefix goes green on a strict subset):
+# Eight classes, each selected BY NAME in its own run (a common prefix goes green on a strict subset):
 #  - DocumentsTransportBoundaryGateTest: ADR invariant 6 over src/Documents — no HTTP transport type and no
 #    caller-supplied location past Infrastructure; the sealed filename value is the one exclusion. Asserts its own
 #    universe and falsifies its engine on planted sources.
@@ -286,6 +286,10 @@ php.lint.crypto-read-boundary: ## Encryption-port read-caller registration gate 
 #    (docs/runbooks/documents-restore-proof.md); the switch may be declared only in config/packages/documents.yaml,
 #    the value is also read from the compiled prod container (hence the prod-container prerequisite, which keeps
 #    var/cache/prod warm and unwritten under it), and DocumentsIngestGate must read exactly that parameter.
+#  - DocumentsReadProofGateTest: the same rule for `documents.read_enabled`, with the stricter proof the read route
+#    owes — a valid `restore` record AND a valid `drill` record (which carries `ledger_replay_verified`), both for
+#    the declared mechanism — over the tracked file and the compiled prod container, and the read controller must
+#    read exactly that parameter.
 #  - DocumentsSchedulerStorageGateTest: every service that runs the Documents sweeps resolves and mounts the same
 #    document storage as php.
 #  - DocumentScannerLimitsGateTest: api/clamav/clamd.conf keeps StreamMaxLength, MaxFileSize and MaxScanSize at or
@@ -301,6 +305,7 @@ php.lint.documents-ingest: php.lint.prod-container ## Documents ingest gates (bo
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsTransportBoundaryGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsNotAuditedGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsIngestProofGateTest
+	@$(PHP_TEST) bin/phpunit --filter=DocumentsReadProofGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentsSchedulerStorageGateTest
 	@$(PHP_TEST) bin/phpunit --filter=DocumentScannerLimitsGateTest
 	@$(PHP_TEST) bin/phpunit --filter=UploadRoutePathAgreementGateTest

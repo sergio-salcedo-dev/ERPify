@@ -19,4 +19,11 @@ final class DocumentPermission
      * editor, who may file evidence, may not decide that a failed scan is worth trying again.
      */
     public const string RESCAN = 'document.rescan';
+
+    /**
+     * Reads the original of a `Ready` document. Not a tier verb, so no tier carries it and only the ADMIN wildcard
+     * reaches it; `StaticAuthorizationPolicy` declares the row. A non-ADMIN reader, or a rule that an uploader may
+     * download what they filed, is a decision to take there, not a tier to widen.
+     */
+    public const string DOWNLOAD = 'document.download';
 }

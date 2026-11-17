@@ -176,6 +176,12 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    # The read's alarms (a refused read, an aborted transfer) name a document id and a reason slug, and must arrive on a
+    # request that answers 5xx or 410 without flushing the buffered default channel.
+    Erpify\Documents\Document\Application\Read\ReadDocument:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     # The writer's promotion is best effort too: a failure is logged by the document's id and the roll-forward
     # finishes it.
     Erpify\Documents\Document\Application\Upload\UploadEvidence:

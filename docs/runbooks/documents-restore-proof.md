@@ -14,6 +14,11 @@ prod container — without a **valid** record of kind `restore` whose `mechanism
 `documents.backup_mechanism` in that same file. A record for another mechanism does not count. The switch may be
 declared only in `documents.yaml`, and a value injected at deploy time is outside the gate — keep it a literal.
 
+`documents.read_enabled` (same file) opens `GET /api/v1/documents/{id}/content`; while it is false the route answers
+404. It is false in production, and `DocumentsReadProofGateTest` (same target) holds it to the stricter proof: a
+valid `restore` record **and** a valid `drill` record, each whose `mechanism` equals `documents.backup_mechanism`.
+The erasure ledger's override flag, when it exists, closes the route with 410 whatever the switch says.
+
 ## The record
 
 One YAML file per proof under `docs/runbooks/documents-restore-proofs/`, named `<YYYY-MM-DD>-<kind>-<mechanism>.yaml`,
@@ -30,6 +35,7 @@ committed by whoever ran the proof. Every field is required:
 | `metadata_restored` | `true` — the `document`, `document_custody` and `dek_keystore` rows were restored with them |
 | `digest_set_verified` | `true` — every restored document's stored digest was recomputed from the decrypted bytes and matched |
 | `decryption_verified` | `true` — the restored originals decrypted under the restored keys |
+| `ledger_replay_verified` | `drill` only, required and `true` — the erasure ledger was replayed into the restored stack and no document it names as erased was served afterwards; absent or false makes a `drill` invalid |
 | `result` | `passed`; any other value makes the record invalid |
 
 ## Procedure
@@ -40,4 +46,5 @@ committed by whoever ran the proof. Every field is required:
    restored key, recompute the sha256 and compare it with the row's `digest`.
 3. Record the outcome as above and commit it on a branch with the configuration change that names the mechanism.
 
-The read route's gate reads the same directory; the restore drill adds its `drill` record here.
+The read route's gate reads the same directory; the restore drill adds its `drill` record here, with
+`ledger_replay_verified: true`.

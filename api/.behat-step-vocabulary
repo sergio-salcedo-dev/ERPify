@@ -95,11 +95,14 @@
 /^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" equal to "([^"]*)" as part of the property "([^"]*)"$/ => idle
 /^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" not existing as part of the property "([^"]*)"$/ => idle
 /^a document in state "([^"]*)" with id "([^"]*)"$/ => used
+/^a ready document with id "([^"]*)" holding "([^"]*)"$/ => used
 /^the "([^"]*)" should have "([^"]*)" records$/ => idle
 /^the JSON nodes should be equal to \(if path not empty\):$/ => idle
 /^the SQL result as JSON should be:$/ => used
 /^the SQL result as JSON without sorting should be:$/ => idle
+/^the response body should be "([^"]*)"$/ => used
 /^the response status code should not be (?P<responseCode>\d+)$/ => idle
+/^the sealed object of document "([^"]*)" is altered$/ => used
 :count SQL statements of type :type got executed for doctrine connection :connectionName => idle
 :count request(s) got executed across all doctrine connections => used
 :count request(s) got executed for doctrine connection :connectionName => used
@@ -112,6 +115,7 @@
 :number outbox event was created on the queue :queueName => used
 :number outbox events were created => refused
 :number outbox events were created on the queue :queueName => used
+document reads are switched off => used
 evidence ingest is switched off => used
 I add :name header equal to :value => used
 I add :name header equal to the response header :header => used

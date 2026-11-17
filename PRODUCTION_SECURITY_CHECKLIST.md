@@ -2556,7 +2556,6 @@ mitigated state. Accepting one means recording who accepted it and against which
 
   | Issue | Accepted risk | Revisit when | Accepted |
   |---|---|---|---|
-  | [#418](https://github.com/sergio-salcedo-dev/ERPify/issues/418) | `dek-destroyed` / `decryption-failed` carry no marker and map to 500 — correct while no decrypt/read route exists, wrong once one does (`dek-destroyed` becomes an expected post-erasure outcome) | The first caller of a read method of `EnvelopeEncryptor` / `StreamEnvelopeEncryptor` (`decrypt()`, `unseal()`, or any method a port grows) outside `api/src/Shared/Crypto/` — `make php.lint.crypto-read-boundary` reds a name-matched `->method(` call inside `api/src` until it is registered with its test and a `docs/api-error-contract.md` line citing the file (reach and blind spots: the header of `CryptoReadBoundaryGateTest`); the issue stays open until that route ships with a deliberate status | not recorded (opened 2026-07-02; reclassified as a watch 2026-08-13) |
   | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
 
 
@@ -2647,8 +2646,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       altered after its first chunks has already written an authenticated prefix to its sink when the exception
       arrives; only the FINAL tag proves the object is whole. Every consumer therefore treats its sink as discarded
       on any exception, and one that forwards the plaintext as it arrives (an HTTP response, a scanner stream)
-      must decide, before it ships, what a partial delivery means. **Settled for the scan (doc-4), still open for
-      the audited read path (doc-5).** The scan's scanner is the only consumer of the stream and a scan that
+      must decide, before it ships, what a partial delivery means. **Settled for the scan (doc-4) and for the audited
+      read path (doc-5).** The scan's scanner is the only consumer of the stream and a scan that
       ends in an exception posts no verdict at all: a partial plaintext reaches clamd, but clamd's answer is
       read only after the producer completed (`ClamdScanner` sends the zero-length terminator after `unseal()`
       returned), a failed authentication or missing final chunk is `ScanFailed` (`DecryptionFailed`, an alarm,
@@ -2659,8 +2658,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       a scan in flight when a document is erased is aborted by its next heartbeat (30 s) or by
       `DekDestroyed` on the next chunk's key use, whichever first, and its verdict compare-and-set matches
       nothing on an `Erased` row, so the in-flight bytes go to the scanner only and never to a caller. The
-      read path, which forwards plaintext to a caller, still has to serialise readers with erasure (or
-      re-check the scope between chunks): a read-path decision, not something the encryptor can offer. Two neighbours, both accepted by construction:
+      read (`ReadDocument`) settles the partial delivery with two passes: pass 1 unseals into a digest and
+      compares sha256 and size with the row BEFORE the first byte, so a cut, extended or altered object is a
+      refusal with a status, and pass 2 re-hashes while streaming and withholds the last byte until the whole
+      stream matched, so any abort after the headers is a body one byte short of its `Content-Length`. **What
+      stays open is the second face, for the read:** a read already past its key unwrap keeps opening chunks
+      after a concurrent `destroy()` commits, so bytes of an erased document can still reach the caller who was
+      reading when the erasure committed (the abort comes on the next key use or when pass 2 re-checks nothing
+      has changed, and no read is serialised with erasure); reads that start after the tombstone get `gone`.
+      Whether to serialise readers with erasure is the erasure story's decision. Two neighbours, both accepted by construction:
       the plaintext chunk buffers are ordinary PHP strings that are not wiped (of the key material, the DEK and
       the stream state are wiped with `sodium_memzero()` on a best-effort basis, since the copy libsodium returns
       from `init_push()`/`init_pull()` may remain in memory until PHP frees it), and the per-document keys are
@@ -2741,9 +2747,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       production, 404 on both ingest routes), and the proof-record format with its validator
       (`docs/runbooks/documents-restore-proof.md`; `DocumentsIngestProofGateTest` fails when tracked production
       configuration opens ingest without a valid restore proof for the declared backup mechanism). What is not:
-      the backup itself and the first proof, which whoever proves a restore commits. A read route, when one
-      exists, brings its own switch. **Open — owner: whoever provisions the evidence backup; any read route
-      stays switched off until then.**
+      the backup itself and the first proof, which whoever proves a restore commits. The read route exists and
+      brought its own switch, `documents.read_enabled` (false in production, 404 on the route), which
+      `DocumentsReadProofGateTest` holds to a valid `restore` record AND a valid `drill` record with
+      `ledger_replay_verified`, for the declared backup mechanism. **Open — owner: whoever provisions the evidence
+      backup; the read route stays switched off until then.**
+- [ ] **The Documents read route (doc-5): what its audit row, its cost and its switch do not cover.** (1) The
+      `DOCUMENT_READ` row (level `security`, written after pass 1 and before pass 2) records that access was
+      GRANTED, not that the transfer completed, and a read refused after authorisation (410, 409, 5xx) writes no
+      row; an aborted transfer is an `observability` alarm and not an audit row. (2) Every read costs two
+      decrypt passes over up to `MAX_ORIGINAL_BYTES` and the route has no per-caller rate limit, and each read holds a
+      PHP thread for the whole transfer, bounded per stall (a 60 s budget re-armed at every chunk) and not in total,
+      so a slow ADMIN client occupies a thread; the caller set is ADMIN only, which is the bound. (3) `DocumentsReadProofGateTest` reads the tracked configuration and the
+      compiled prod container: a value the deploy environment injects is outside it, and the erasure-ledger
+      override is bound to `NeverSetErasureLedgerOverride` until doc-7 replaces it, which the gate cannot see
+      either (it reads no service alias) — the proof records are the control. **Open — owner: doc-7 for the
+      override adapter; whoever deploys for the injected value.**
 - [ ] **A sealed original filename names whoever it names, and survives a person's erasure until its document
       is erased.** The name travels in the evidence PUT's query, is validated and sealed under the document's own
       scope in the commit transaction, and is never persisted in clear; but it can carry the uploader's name or a

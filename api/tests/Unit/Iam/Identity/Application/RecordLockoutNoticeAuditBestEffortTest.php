@@ -131,7 +131,7 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         // locked identity in the run would go unreported.
         $failure = new RuntimeException('canceling statement due to lock timeout');
         $identityRows = new InMemoryIdentityRowLock();
-        $identityRows->onLock = static fn () => throw $failure;
+        $identityRows->onLock = static fn (): never => throw $failure;
 
         $auditLogger = new RecordingAuditLogger();
         $logger = new RecordingLogger();
@@ -150,7 +150,7 @@ final class RecordLockoutNoticeAuditBestEffortTest extends TestCase
         // report has to say the write got that far rather than blaming the INSERT.
         $failure = new RuntimeException('could not serialize access');
         $identityRows = new InMemoryIdentityRowLock();
-        $identityRows->onRelease = static fn () => throw $failure;
+        $identityRows->onRelease = static fn (): never => throw $failure;
 
         $logger = new RecordingLogger();
 

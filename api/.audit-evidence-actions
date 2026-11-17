@@ -76,6 +76,7 @@ BANK_ACCOUNTS_SEARCHED         => ordinary
 BANK_ACCOUNTS_VIEWED           => ordinary
 BANK_ACCOUNT_IBAN_LOOKUP_MISSED => ordinary
 BANK_ACCOUNT_LOOKED_UP_BY_IBAN  => ordinary
+DOCUMENT_READ                  => ordinary
 GDPR_ERASURE_EXECUTED          => evidence
 GDPR_SUBJECT_ERASED            => evidence
 INVALID_CURRENT_PASSWORD       => ordinary
