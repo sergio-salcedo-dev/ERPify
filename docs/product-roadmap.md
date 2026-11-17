@@ -32,10 +32,11 @@ navegación (`backofficeMenu.ts` alimenta la sidebar):
 3. **Este doc** — la narrativa de fases, los buckets de complejidad y la
    estimación de tiempo. No duplica la lista de submódulos (enlaza a la fuente).
 
-El `status` se marca **explícitamente, tarea a tarea**, al cerrar y verificar
-cada pieza — el backlog arranca sin nada marcado y nunca se pre-marca por
-suposiciones sobre el código (la narrativa de lo ya existente vive en «Estado
-de partida», abajo). Se declara **solo a nivel de submódulo** (omitido =
+El `status` se marca **explícitamente, tarea a tarea y con evidencia** (código
+más un test o un ADR, o una épica cerrada en `_bmad-output/`); la nota junto al
+submódulo dice dónde está esa evidencia o qué falta. Una pieza a medias sigue
+`planned` y su nota cuenta lo que ya existe. Nunca se marca por suposición sobre
+el código. Se declara **solo a nivel de submódulo** (omitido =
 `planned`); el estado de un módulo se **deriva** de sus submódulos
 (`moduleStatus`), de modo que un módulo nunca puede aparentar más avance que
 el trabajo que contiene.
@@ -52,37 +53,55 @@ problemas, proponer soluciones y ejecutar acciones — con o sin aprobación.
 
 ## Estado de partida (lo que ya hay)
 
-Dos verticales completas validan los cimientos de la Fase 0:
+Verificado contra el código el 2026-11-17. El detalle por submódulo, con su
+evidencia, está en `roadmap.ts`.
 
-- **Banks** — CRUD full (búsqueda, filtros, paginación cursor, bulk-delete,
-  subida de ficheros, eventos de dominio, realtime Mercure) en ambos lados,
-  con DDD + hexagonal, tests (PHPUnit/Behat/Vitest/Playwright), PHPStan y el
-  contrato de error RFC 9457. Es la **plantilla de oro** que acelera el resto.
-- **System Health** — endpoint + página de estado.
+- **Hecho:** backbone de eventos (dispatcher, outbox como `event_store` más el
+  transporte Doctrine de Messenger, reintentos, cola de errores, idempotencia,
+  repetición de proyecciones); infraestructura de API (criterios, paginación por
+  cursor, RFC 9457, DTO); autenticación por sesión, RBAC, invitaciones,
+  bloqueo y recuperación de cuenta; auditoría regulatoria con su pantalla;
+  garantías de borrado RGPD con crypto-shredding; imágenes compartidas; backend
+  de Documents (ingesta, antivirus, custodia, lectura auditada); Banks y
+  cuentas bancarias; usuarios; Sentry y logs estructurados; CI con CodeQL,
+  Semgrep y SonarQube; copias de seguridad con simulacro de restauración.
+- **A medias:** multi-tenant (existen `Organization` y `Membership`, pero
+  ninguna tabla de negocio lleva `organization_id`), Documents (sin versionado
+  ni pantalla, con la ingesta apagada), notificaciones (un solo handler de
+  referencia), correlation-id en mensajes asíncronos, retención de auditoría
+  (suelo hecho, archivado no).
+- **Sin empezar:** i18n, modo offline, métricas, exportación de auditoría,
+  prueba de manipulación del log y todas las fases 1.2 a 5 salvo lo anterior.
+  Las 24 rutas de backoffice de esos módulos son páginas de marcador
+  (`PlannedModulePage`).
 
-Cimientos compartidos ya operativos: API Response Standard (RFC 9457),
-paginación/orden/filtros componibles, dispatcher de eventos de dominio,
-pipeline async (Messenger), correlation-id, Sentry (front + back), tabla de
-auditoría `domain_event`, CI (quality + tests) y entornos Compose.
+**Banks** sigue siendo la **plantilla de oro** (DDD + hexagonal, PHPUnit,
+Behat, Vitest, Playwright, PHPStan, RFC 9457) que acelera el resto. El detalle de
+agregados, objetos de valor, invariantes y eventos está en
+[`bounded-contexts.md`](bounded-contexts.md); el contexto Media & Document
+(módulo `0.8`) se reparte entre `Shared/Images` y `Documents`.
 
-Lo grande que **falta** y condiciona todo: el **multi-tenant operativo**. La
-autenticación y el RBAC ya existen (`Iam/`) y el tenant está modelado
-(`Organization`), pero ninguna tabla de negocio lleva `organization_id` todavía —
-es trabajo fundacional de la Fase 0.4.
+Lo grande que **falta** y condiciona todo: el **multi-tenant operativo**
+(Fase H de [`saas-production-roadmap.md`](saas-production-roadmap.md)).
 
 ## Fases
 
 | Fase | Tema | Prioridad | Estado |
 |------|------|-----------|--------|
-| 0 | Fundación de plataforma | Crítica | En curso |
-| 1 | Core ERP operativo | Alta | Pendiente |
+| 0 | Fundación de plataforma | Crítica | Mayormente hecha (faltan i18n, tenant en datos de negocio, offline y métricas) |
+| 1 | Core ERP operativo | Alta | Parcial (usuarios hechos; organización sin interfaz) |
 | 2 | Operaciones avanzadas | Media-Alta | Parcial (Finance: Banks hecho) |
-| 3 | Automation & Intelligence | Alta-Baja | Parcial (notificaciones en curso) |
+| 3 | Automation & Intelligence | Alta-Baja | Parcial (notificaciones: un handler de referencia) |
 | 4 | Analytics & Decision Layer | Media-Baja | Pendiente |
 | 5 | Integration & Platform Extension | Baja | Pendiente |
-| 6 | Platform Ops (CI/CD + Delivery) | Alta-Media | En curso |
+| 6 | Platform Ops (CI/CD + Delivery + seguridad y recuperación) | Alta-Media | En curso |
 
 El desglose de módulos y submódulos de cada fase está en `roadmap.ts`.
+
+Los módulos `0.10` (privacidad y RGPD), `0.11` (endurecimiento de la
+autenticación y recuperación), `0.12` (imágenes compartidas) y `6.4` (seguridad y
+recuperación ante desastres) recogen trabajo ya entregado que no tenía sitio en
+el plan original; no añaden esfuerzo pendiente salvo sus filas `planned`.
 
 El mapa **granular de bounded contexts** (agregados, value objects, invariantes
 y los eventos por los que se integran) está en
@@ -254,6 +273,24 @@ visible como chip en la página — la regla para elegir tarea es **prioridad al
 > `Party` son reorganización, no trabajo nuevo. Modelo completo en
 > [`bounded-contexts.md`](bounded-contexts.md).
 
+> **Reconciliación (2026-11-17) — estado real y ritmo.** (1) El **gasto
+> fundacional ya está en gran parte hecho**: el bucket «Fundacional» (~27 d) incluía
+> auth/RBAC y el factor «auth/RBAC desde cero» de más abajo ya está pagado; sigue
+> pendiente multi-tenant, i18n, offline y notificaciones. (2) Las **cifras no
+> cuadran entre sí y se corrigen aquí**: el total son 169 d y los módulos complejos
+> suman 14 × 6 = 84 d (no «78 de 163», que era la cifra anterior a las
+> reconciliaciones); el recuento de «~39 funcionalidades» no coincide con ningún
+> listado (36 módulos en `roadmap.ts`) y debe leerse como orden de magnitud.
+> (3) **Ritmo medido** (git, 2026-09-22 a 2026-11-17): unos 22 PR por semana, de
+> los que solo ~2 son `feat`; el resto son arreglos, documentación, mantenimiento
+> y subidas de dependencias (~60 % del total). Una vertical de backend entregada de
+> principio a fin tarda **1–2 semanas** (Documents: 12 días y 6 PR de
+> funcionalidad, sin pantalla; Images: del 27 al 31 de agosto). La escala de
+> «~2–6 días por módulo» de la tabla de arriba no se sostiene para verticales con
+> endurecimiento de seguridad y privacidad; hay que recalibrarla con el primer
+> módulo de la Fase 1 que se cierre (CRUD completo con RBAC y auditoría) antes de
+> fiarse del calendario.
+
 ## Estimación de calendario
 
 Dev en solitario, 8 h/día de lunes a viernes (~21 días laborables/mes), con
@@ -274,8 +311,8 @@ Banks (incluyendo auth/RBAC).
 
 Tres factores que mueven mucho la cifra:
 
-1. **Auth/RBAC desde cero** suma ~3-4 semanas si no se reutiliza un bundle.
-2. **Los módulos complejos dominan** (78 de 163 días): el Configurador, los
+1. **Auth/RBAC desde cero** sumaba ~3-4 semanas si no se reutilizaba un bundle (ya construido).
+2. **Los módulos complejos dominan** (84 de 169 días): el Configurador, los
    motores de pricing/comisiones y la facturación con impuestos/PDF pueden
    dispararse según el alcance real.
 3. **El límite no es teclear código** (Claude lo genera rápido), sino revisar,
@@ -317,8 +354,10 @@ fases, no como bloque aparte. Detalle de submódulos en `roadmap.ts` donde apliq
 
 - El backlog (estado, prioridad, dependencias) se edita **solo en `roadmap.ts`**;
   la página in-app y cualquier consumidor futuro derivan de ahí.
-- Al cerrar un submódulo, cambia su `status` a `done` en `roadmap.ts`; al
-  empezarlo, márcalo `in-progress`. Un submódulo sin `status` cuenta como
+- El PR que cierra un submódulo cambia su `status` a `done` en `roadmap.ts` **en
+  ese mismo PR**, con la evidencia en su `note` (un roadmap que nadie actualiza al
+  cerrar trabajo deja de ser verdad: llegó a tener 207 submódulos sin ninguno
+  marcado); al empezarlo, márcalo `in-progress`. Un submódulo sin `status` cuenta como
   `planned`, y el estado del módulo se deriva solo — la barra de progreso se
   recalcula sola (`computeRoadmapProgress`).
 - Actualiza la narrativa de fases / buckets de este doc solo cuando cambie la

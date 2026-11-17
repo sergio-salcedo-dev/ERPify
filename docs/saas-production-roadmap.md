@@ -5,9 +5,14 @@
 > staging/prod separation, safe migrations, zero-downtime cutover, automatic
 > rollback, and a supply-chain security baseline.
 >
-> **Status:** planning only — nothing here is implemented yet. Each phase is a
-> short-lived branch off `main` delivered in small Conventional-Commits slices,
-> matching the cadence used by the prod-hardening work.
+> **Status (verified 2026-11-17):** the baseline below is shipped, and so are the
+> Dependabot bullet of Phase A and the backup, restore-drill and off-site-hook
+> bullets of Phase G. **Nothing else here is implemented yet** (no image publishing,
+> no scan gates, no registry deploy, no staging split, no blue-green, no rollback,
+> no `organization_id`). Each phase is a short-lived branch off `main` delivered
+> in small Conventional-Commits slices, matching the cadence used by the
+> prod-hardening work. Every phase carries its own **Status** line; flip it in the
+> PR that changes it.
 >
 > **Related roadmaps.** This is the *delivery/infra* plan — the "how" of
 > shipping. The **product/feature** roadmap is
@@ -45,9 +50,15 @@ the foundation this roadmap builds on. Do **not** re-plan these:
   (authoritative), [`docs/deployment-guide.md`](deployment-guide.md),
   [`docs/vps-deployment.md`](vps-deployment.md),
   [`docs/erpify-local-test-deployment.md`](erpify-local-test-deployment.md).
-- **CI** — [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs
+- **CI and security checks** — [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs
   quality + tests on push/PR (Docker bake build, PHPUnit/Behat/Vitest/Playwright,
-  Symfony security-checker). It does **not** publish images or deploy.
+  Composer advisories, SonarQube); `codeql.yml` and `accepted-risk-live-state.yml`
+  run beside it, with repository-owned Semgrep rules and the architecture gate
+  tests. It does **not** publish images or deploy.
+- **Backups and disaster recovery** — `make backup.prod` / `restore.prod`
+  ([`scripts/deploy/`](../scripts/deploy/)), a restore drill, retention and an
+  off-site hook, documented in [`docs/vps-deployment.md`](vps-deployment.md). They
+  are **not yet wired into `deploy.sh`** (see Phase C).
 
 ## Carried-forward constraints (frozen)
 
@@ -92,6 +103,8 @@ These gate the later phases — answers change the implementation:
 
 ## Phase A — Supply chain & image publishing
 
+**Status:** partial — Dependabot (`dependabot.yaml`) shipped; `release.yml`, Trivy, gitleaks, SBOM and signing not started.
+
 **Goal:** every merge to `main` and every `vX.Y.Z` tag produces immutable,
 scanned, signed prod images in the registry, addressable by Git SHA.
 
@@ -114,6 +127,8 @@ secret or a fixable CRITICAL CVE fails CI; Dependabot opens update PRs.
 
 ## Phase B — Registry-based deploy (decouple build from deploy)
 
+**Status:** not started — no `IMAGE_TAG` pinning, registry-pull path or last-good tag.
+
 **Goal:** prod runs pre-built, scanned images pulled by tag — no host builds.
 
 - `compose.prod.yaml` already names `image: ${IMAGES_PREFIX:-}app-php-prod`.
@@ -134,6 +149,8 @@ pulls and runs that exact image without building on the host.
 
 ## Phase C — Safe Symfony migrations
 
+**Status:** partial — `deploy.sh` runs migrations with `--all-or-nothing`, and the expand/contract hazard is described in `deployment-guide.md`; the policy is not yet in `docs/rules/database.md`, the backup is not part of the deploy flow, and `docker.up` starts the new image before `db.migrate` rather than gating cutover on it.
+
 **Goal:** migrations never break a running release or block rollback.
 
 - Adopt **expand/contract**: additive/backward-compatible migrations only, so
@@ -153,6 +170,8 @@ pulls and runs that exact image without building on the host.
 serving and the DB untouched; a backup artifact exists per deploy.
 
 ## Phase D — Zero-downtime cutover (Compose-only blue-green)
+
+**Status:** not started — a single Compose stack.
 
 **Goal:** no dropped requests during a release, without an orchestrator.
 
@@ -180,6 +199,8 @@ requests across a deploy.
 
 ## Phase E — Automatic rollback
 
+**Status:** not started — `deploy.sh` has a health check but no rollback subcommand.
+
 **Goal:** a failed release self-reverts to the last known-good image.
 
 - `scripts/deploy/deploy.sh`: a `rollback` subcommand that re-pins the
@@ -196,6 +217,8 @@ auto-rollback on failed smoke`.
 release healthy and serving, unattended.
 
 ## Phase F — Real staging/prod separation
+
+**Status:** not started — `ENV=staging` aliases prod in `make/config.mk`.
 
 **Goal:** staging is a genuinely separate environment, not a prod alias.
 
@@ -215,6 +238,8 @@ from the same image built once.
 
 ## Phase G — Secrets vault & ops baseline (optional / later)
 
+**Status:** partial — backup rotation, the restore drill, the off-site hook and disaster-recovery readiness shipped; the Symfony secrets vault, uptime monitoring and log shipping not started.
+
 - **Symfony secrets vault** — `secrets:set` for app-level secrets, committed
   encrypted, decrypt key (`config/secrets/prod/prod.decrypt.private.php`,
   already gitignored) provided on the host / via a CI secret. Only if secrets
@@ -223,6 +248,8 @@ from the same image built once.
   log shipping, and a deploy/rollback runbook.
 
 ## Phase H — Multi-tenant foundation (`organization_id`)
+
+**Status:** not started — only the tenant aggregate and identity-plane ids exist; `bank`, `event_store` and `audit_log` carry no `organization_id`.
 
 **Goal:** every tenant-owned row is scoped to an organization, enforced at the
 query level, so two customers can never see each other's data.
