@@ -14,7 +14,7 @@ The rules an agent breaks silently when it never opens `CLAUDE.md`. Each names t
 - **Commits** are Conventional Commits with a lower-case, imperative subject; a commit that ships a story names its tag in the subject. (*Commit messages*)
 - **Never hand-edit generated or merged artefacts:** `api/config/reference.php` (`make sf.config.reference`), `api/.route-manifest.json` (`make sf.routes.manifest`), a migration already on `main` (add a new one with `make db.diff`), `vendor/`, `node_modules/`. (*Do not touch*)
 - **Architecture.** Dependencies point inward; no framework imports in `Domain/`; no import across bounded contexts (reference ids, react to events). The persistence strategy of a new aggregate and aggregate boundaries are the user's call — lay out the options, don't pick. (*Architecture*)
-- **Security.** HTTP errors go through the RFC 9457 pipeline, never a hand-built `JsonResponse`. Walk the security checklist for every diffed file. (*Security review on every change*)
+- **Security.** HTTP errors go through the RFC 9457 pipeline, never a hand-built `JsonResponse`. Walk the security checklist for every diffed file, and say in the PR body which attack classes apply or why none does — a silent skip is the failure. State there too which checks you ran and which you could not. (*Security review on every change*)
 - **Comments** explain the non-obvious why of the current code: no "previously…", no story or ticket IDs. (*Code comments*)
 - **Scratch files** go in `tmp/` and are deleted when the task ends — never loose in the tree or in `/tmp`. (*Temporary / scratch files*)
 
