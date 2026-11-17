@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Erasure;
 
+use Erpify\Documents\Document\Application\Erasure\LedgerEntry;
 use Erpify\Documents\Document\Application\Erasure\LedgerUnreadable;
 use Erpify\Documents\Document\Application\Erasure\LedgerWriteFailed;
 use Erpify\Documents\Document\Application\Erasure\LedgerWriteTimedOut;
@@ -26,6 +27,10 @@ use Throwable;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per way the adapter reads or fails
  */
 #[CoversClass(ResticErasureLedger::class)]
+#[CoversClass(LedgerUnreadable::class)]
+#[CoversClass(LedgerEntry::class)]
+#[CoversClass(LedgerWriteFailed::class)]
+#[CoversClass(LedgerWriteTimedOut::class)]
 final class ResticErasureLedgerTest extends TestCase
 {
     private const string SCOPE = '0190e9c2-7b5a-4d40-9c8f-2f9b5d3e1a01';
@@ -296,6 +301,90 @@ final class ResticErasureLedgerTest extends TestCase
         } catch (LedgerWriteTimedOut) {
             $this->assertSame('timeout', $this->loggedCause());
         }
+    }
+
+    #[Test]
+    public function aBinaryThatCannotBeStartedFailsEveryOperationClosedAndLogsItsOwnSlug(): void
+    {
+        // A NUL byte in the path is refused by the operating system before any process exists.
+        $unstartable = "restic\0";
+        $ledger = $this->ledger($unstartable);
+
+        try {
+            $ledger->record(self::SCOPE);
+            $this->fail('A write that could not start is not durable.');
+        } catch (LedgerWriteFailed) {
+            $this->assertSame('cannot-start', $this->loggedCause());
+        }
+
+        foreach ($this->reads() as $read) {
+            try {
+                $read($ledger);
+                $this->fail('A ledger that cannot be listed is unreadable.');
+            } catch (LedgerUnreadable) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    #[Test]
+    public function anUnconfiguredLedgerIsUnreadableToListAndToCheckAndRunsNothing(): void
+    {
+        $marker = $this->directory . '/ran';
+        $ledger = new ResticErasureLedger(null, null, null, null, null, $this->script('touch ' . $marker));
+
+        foreach ($this->reads() as $read) {
+            try {
+                $read($ledger);
+                $this->fail('Nothing is configured, so nothing can be read.');
+            } catch (LedgerUnreadable) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $this->assertFileDoesNotExist($marker, 'restic was never started without a repository');
+    }
+
+    #[Test]
+    public function aListingThatIsNotAJsonArrayIsUnreadable(): void
+    {
+        foreach (['this is not json', '"a string"', '12'] as $output) {
+            $unreadable = false;
+
+            try {
+                $this->ledger($this->script("echo '" . $output . "'"))->entries();
+            } catch (LedgerUnreadable) {
+                $unreadable = true;
+            }
+
+            $this->assertTrue($unreadable, 'A listing that is not an array of snapshots is unreadable: ' . $output);
+        }
+    }
+
+    #[Test]
+    public function aSnapshotWhoseTagsAreNotAListIsNotOneOfOurs(): void
+    {
+        $json = \json_encode(
+            [['time' => '2026-11-17T21:11:10+01:00', 'tags' => 'erased-scope:x']],
+            JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertSame([], $this->ledger($this->script("echo '" . $json . "'"))->entries());
+    }
+
+    /**
+     * The two reads of the ledger, each as a call on one adapter.
+     *
+     * @return list<callable(ResticErasureLedger): mixed>
+     */
+    private function reads(): array
+    {
+        return [
+            static fn (ResticErasureLedger $ledger): array => $ledger->entries(),
+            static function (ResticErasureLedger $ledger): void {
+                $ledger->verifyReadableInFull();
+            },
+        ];
     }
 
     /**

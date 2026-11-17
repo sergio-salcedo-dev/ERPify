@@ -11,6 +11,7 @@ use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\KeyState;
 use Override;
 use RuntimeException;
+use Throwable;
 
 /**
  * The real keystore with a fault injected at the destruction: the erasure transaction has already moved the row and
@@ -20,7 +21,7 @@ use RuntimeException;
  */
 final readonly class DestroyFaultingKeystore implements Keystore
 {
-    public function __construct(private Keystore $inner)
+    public function __construct(private Keystore $inner, private ?Throwable $failure = null)
     {
     }
 
@@ -45,7 +46,7 @@ final readonly class DestroyFaultingKeystore implements Keystore
     #[Override]
     public function destroy(EncryptionScopeId $scope, DestroyReason $reason): bool
     {
-        throw new RuntimeException('An injected fault between the compare-and-set and the destruction.');
+        throw $this->failure ?? new RuntimeException('An injected fault before the destruction.');
     }
 
     #[Override]

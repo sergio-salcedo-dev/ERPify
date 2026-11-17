@@ -44,6 +44,7 @@ final class DocumentTest extends TestCase
         $this->assertSame(self::DIGEST, $document->digest());
         $this->assertSame(4096, $document->sizeBytes());
         $this->assertNull($document->idempotencyKeyHash());
+        $this->assertNull($document->objectDeletedAt(), 'no sealed object has been confirmed deleted');
     }
 
     #[Test]

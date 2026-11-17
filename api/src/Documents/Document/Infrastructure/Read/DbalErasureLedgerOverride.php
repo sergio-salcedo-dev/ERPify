@@ -86,14 +86,11 @@ final readonly class DbalErasureLedgerOverride implements ErasureLedgerOverride,
     #[Override]
     public function standing(): ?StandingOverride
     {
+        // An aggregate always answers one row; the empty fallback only satisfies the driver's `array|false`.
         $row = $this->connection->fetchAssociative(
             'SELECT COUNT(*) AS standing, EXTRACT(EPOCH FROM NOW() - MIN(set_at)) AS age '
             . 'FROM erasure_ledger_override WHERE cleared_at IS NULL',
-        );
-
-        if (false === $row) {
-            return null;
-        }
+        ) ?: [];
 
         $count = $row['standing'] ?? 0;
         $age = $row['age'] ?? 0;

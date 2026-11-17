@@ -8,7 +8,10 @@ use Erpify\Documents\Document\Application\AppendCustody;
 use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
 use Erpify\Documents\Document\Application\Erasure\ErasureLedger;
+use Erpify\Documents\Document\Application\Erasure\LedgerWriteFailed;
+use Erpify\Documents\Document\Application\Erasure\LedgerWriteTimedOut;
 use Erpify\Documents\Document\Domain\DocumentState;
+use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
@@ -20,11 +23,14 @@ use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Scanning\DocumentScanLeases;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentErasures;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentRepository;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Crypto\Domain\Exception\DekDestroyed;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Erasure\FakeErasureLedger;
 use Monolog\Handler\TestHandler;
@@ -47,11 +53,19 @@ use Throwable;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength") one test per ending and per crash point
+ * @SuppressWarnings("PHPMD.TooManyMethods") the same
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
 #[CoversClass(EraseDocument::class)]
 #[CoversClass(ApplyErasure::class)]
 #[CoversClass(DbalDocumentErasures::class)]
+#[CoversClass(ErasureLedgerUnavailable::class)]
+#[CoversClass(ErasureOutcomeUnknown::class)]
+#[CoversClass(LedgerWriteFailed::class)]
+#[CoversClass(LedgerWriteTimedOut::class)]
+#[CoversClass(DoctrineDocumentRepository::class)]
+#[CoversClass(DoctrineUploadIntentRepository::class)]
+#[CoversClass(Document::class)]
 final class EraseDocumentFunctionalTest extends KernelTestCase
 {
     use InterleavesWithASecondConnection;
@@ -208,6 +222,40 @@ final class EraseDocumentFunctionalTest extends KernelTestCase
 
         $this->assertSame('erased', $this->rowOf($document['id'])['state']);
         $this->assertSame('erasure', $this->tombstoneReason($document['scope']));
+    }
+
+    #[Test]
+    #[DataProvider('provideATransactionFailureLogsItsCauseSlugOnlyCases')]
+    public function aTransactionFailureLogsItsCauseSlugOnly(
+        Throwable $failure,
+        string $slug,
+    ): void {
+        $document = $this->plantNamedDocument('plan.pdf');
+        $faulty = $this->eraseWith(keystore: new DestroyFaultingKeystore($this->service(Keystore::class), $failure));
+
+        $this->expectOutcomeUnknown($faulty, $document['id']);
+
+        $record = \array_first($this->log->getRecords());
+        $this->assertInstanceOf(\Monolog\LogRecord::class, $record);
+        $this->assertSame($slug, $record->context['cause'] ?? null);
+        $this->assertStringNotContainsString('SQLSTATE', (string) \json_encode($record->context));
+    }
+
+    /**
+     * @return iterable<string, array{Throwable, string}>
+     */
+    public static function provideATransactionFailureLogsItsCauseSlugOnlyCases(): iterable
+    {
+        yield 'a statement timeout' => [new RuntimeException('SQLSTATE[57014]: canceled'), 'statement-timeout'];
+        yield 'a lock timeout wrapped by the driver' => [
+            new RuntimeException('driver', 0, new RuntimeException('SQLSTATE[55P03]: lock not available')),
+            'lock-timeout',
+        ];
+        yield 'a deadlock the transaction manager translated' => [
+            new TransientTransactionFailure(new RuntimeException('deadlock detected')),
+            'transient-transaction-failure',
+        ];
+        yield 'anything else' => [new RuntimeException('keystore is down'), 'erasure-transaction-failed'];
     }
 
     #[Test]

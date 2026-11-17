@@ -5,29 +5,50 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use DateTimeImmutable;
+use Erpify\Documents\Document\Application\AppendCustody;
+use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
 use Erpify\Documents\Document\Application\Erasure\DeleteErasedObjects;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
 use Erpify\Documents\Document\Application\Erasure\ErasureLedger;
 use Erpify\Documents\Document\Application\Erasure\ErasureOverrideSwitch;
 use Erpify\Documents\Document\Application\Erasure\ErasureProgress;
+use Erpify\Documents\Document\Application\Erasure\LedgerEntry;
 use Erpify\Documents\Document\Application\Erasure\ReplayErasure;
 use Erpify\Documents\Document\Application\Erasure\StandingOverride;
 use Erpify\Documents\Document\Application\Read\ErasureLedgerOverride;
+use Erpify\Documents\Document\Application\Upload\SweepBudget;
 use Erpify\Documents\Document\Domain\DocumentState;
+use Erpify\Documents\Document\Domain\Entity\Document;
+use Erpify\Documents\Document\Domain\Entity\LedgerOverrideRecord;
 use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
+use Erpify\Documents\Document\Domain\Erasure\ErasedObject;
 use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Domain\Erasure\ErasureSystemReason;
 use Erpify\Documents\Document\Domain\Erasure\LedgerOverrideReason;
+use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Domain\Storage\StorageArea;
+use Erpify\Documents\Document\Infrastructure\Cli\CheckErasureLedgerCommand;
 use Erpify\Documents\Document\Infrastructure\Cli\ClearErasureLedgerOverrideCommand;
+use Erpify\Documents\Document\Infrastructure\Cli\ReplayErasureLedgerCommand;
+use Erpify\Documents\Document\Infrastructure\Cli\SetErasureLedgerOverrideCommand;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\CompleteInterruptedErasuresHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\CompleteInterruptedErasuresMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\DeleteErasedObjectsHandler;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\DeleteErasedObjectsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportTombstonedDocumentsHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportTombstonedDocumentsMessage;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentErasures;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalErasureProgress;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentRepository;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineUploadIntentRepository;
+use Erpify\Documents\Document\Infrastructure\Read\DbalErasureLedgerOverride;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Double\Erasure\FakeErasureLedger;
 use Monolog\Handler\TestHandler;
@@ -54,6 +75,7 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength") one test per sweep, command and ending
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity") the same
  * @SuppressWarnings("PHPMD.TooManyMethods") the same
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
  */
@@ -61,6 +83,24 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
 #[CoversClass(ReportTombstonedDocumentsHandler::class)]
 #[CoversClass(DeleteErasedObjects::class)]
 #[CoversClass(ReplayErasure::class)]
+#[CoversClass(ClearErasureLedgerOverrideCommand::class)]
+#[CoversClass(ReplayErasureLedgerCommand::class)]
+#[CoversClass(SetErasureLedgerOverrideCommand::class)]
+#[CoversClass(CheckErasureLedgerCommand::class)]
+#[CoversClass(DbalErasureLedgerOverride::class)]
+#[CoversClass(DbalErasureProgress::class)]
+#[CoversClass(LedgerOverrideRecord::class)]
+#[CoversClass(StandingOverride::class)]
+#[CoversClass(ErasedObject::class)]
+#[CoversClass(LedgerEntry::class)]
+#[CoversClass(ErasureLimits::class)]
+#[CoversClass(ApplyErasure::class)]
+#[CoversClass(DbalDocumentErasures::class)]
+#[CoversClass(DoctrineDocumentRepository::class)]
+#[CoversClass(DoctrineUploadIntentRepository::class)]
+#[CoversClass(EraseDocument::class)]
+#[CoversClass(DeleteErasedObjectsHandler::class)]
+#[CoversClass(Document::class)]
 final class ErasureSweepsFunctionalTest extends KernelTestCase
 {
     use PlantsNamedDocuments;
@@ -506,6 +546,127 @@ final class ErasureSweepsFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function aRowWhoseObjectIsStillThereAfterTheDeleteStaysPendingAndIsNeverMarkedDone(): void
+    {
+        $document = $this->plantErasedDocument();
+        $this->putObject($document['scope'], StorageArea::Final);
+        $retaining = new RetainingDocumentStorage($this->storage());
+
+        $done = (new DeleteErasedObjects($this->service(DocumentErasures::class), $retaining, $this->logger))->run(10);
+
+        $this->assertSame(0, $done);
+        $this->assertNull($this->connection()->fetchOne(
+            'SELECT object_deleted_at FROM document WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id']],
+        ) ?: null, 'a volume that says done is not believed');
+    }
+
+    #[Test]
+    public function theObjectSweepStopsAfterConsecutiveFailuresWithOneLineInsteadOfOnePerRemainingRow(): void
+    {
+        for ($row = 0; $row < SweepBudget::MAX_CONSECUTIVE_FAILURES + 3; ++$row) {
+            $this->putObject($this->plantErasedDocument()['scope'], StorageArea::Final);
+        }
+
+        $failing = (new ScriptedDocumentStorage($this->storage()))->failEveryDelete();
+        $done = (new DeleteErasedObjects($this->service(DocumentErasures::class), $failing, $this->logger))->run(50);
+
+        $this->assertSame(0, $done);
+        $this->assertTrue($this->log->hasRecordThatContains('stopped after consecutive failures', Level::Error));
+        $this->assertCount(
+            SweepBudget::MAX_CONSECUTIVE_FAILURES,
+            \array_filter(
+                $this->log->getRecords(),
+                static fn (LogRecord $record): bool => \str_contains($record->message, 'could not be deleted'),
+            ),
+            'the three rows behind the fifth failure were never tried',
+        );
+    }
+
+    #[Test]
+    public function theObjectSweepTickRunsTheSweepForAMessage(): void
+    {
+        $document = $this->plantErasedDocument();
+        $this->putObject($document['scope'], StorageArea::Final);
+
+        (new DeleteErasedObjectsHandler($this->objectSweep()))(new DeleteErasedObjectsMessage());
+
+        $this->assertFalse($this->storage()->has(StorageArea::Final, $document['scope']));
+    }
+
+    #[Test]
+    public function aCompletionThatFailsIsLoggedPerScopeAndStopsTheTickAfterConsecutiveFailures(): void
+    {
+        $count = SweepBudget::MAX_CONSECUTIVE_FAILURES + 2;
+
+        for ($row = 0; $row < $count; ++$row) {
+            FakeErasureLedger::plant($this->plantNamedDocument('plan.pdf')['scope'], $this->ago(3_600));
+        }
+
+        $handler = new CompleteInterruptedErasuresHandler(
+            $this->service(ErasureLedger::class),
+            $this->service(ErasureProgress::class),
+            $this->faultingReplay(),
+            $this->service(ErasureOverrideSwitch::class),
+            $this->logger,
+        );
+
+        $handler(new CompleteInterruptedErasuresMessage());
+
+        $failures = \array_filter(
+            $this->log->getRecords(),
+            static fn (LogRecord $record): bool => \str_contains($record->message, 'could not be completed'),
+        );
+        $this->assertCount(SweepBudget::MAX_CONSECUTIVE_FAILURES, $failures, 'the scopes behind it were not tried');
+        $this->assertTrue($this->log->hasRecordThatContains('stopped after consecutive failures', Level::Error));
+        $this->assertSame(0, $this->rowsWhere("state = 'erased'"), 'a fault rolled each erasure back');
+    }
+
+    #[Test]
+    public function aReplayThatFailsStopsTheRestoreCommandWithANonZeroExitAndNamesNoScope(): void
+    {
+        $document = $this->plantNamedDocument('plan.pdf');
+        FakeErasureLedger::plant($document['scope']);
+
+        $tester = new CommandTester(new ReplayErasureLedgerCommand(
+            $this->service(ErasureLedger::class),
+            $this->service(ErasureProgress::class),
+            $this->faultingReplay(),
+        ));
+        $tester->execute([]);
+
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString('partly replayed', $tester->getDisplay());
+        $this->assertStringNotContainsString($document['scope'], $tester->getDisplay());
+        $this->assertSame('ready', $this->stateOf($document['id']), 'the failed transaction rolled back');
+    }
+
+    #[Test]
+    public function aReplayThatLeavesAScopeUnfinishedIsAFailureEvenWhenNothingThrew(): void
+    {
+        $progress = $this->createStub(ErasureProgress::class);
+        $progress->method('unfinished')->willReturn(['0190e9c2-7b5a-4d40-9c8f-2f9b5d3e1a01']);
+        $progress->method('notErasedAmong')->willReturn(0);
+        FakeErasureLedger::plant(RandomUuid::v4()->toRfc4122());
+
+        $tester = new CommandTester(new ReplayErasureLedgerCommand(
+            $this->service(ErasureLedger::class),
+            $progress,
+            $this->service(ReplayErasure::class),
+        ));
+        $tester->execute([]);
+
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString('not erased', $tester->getDisplay());
+    }
+
+    #[Test]
+    public function clearingNothingClearsNothing(): void
+    {
+        $this->assertSame([], $this->service(ErasureOverrideSwitch::class)->clear([]));
+    }
+
+    #[Test]
     public function aValueThatIsNotAUuidNeverBreaksTheProgressReadForTheScopesAroundIt(): void
     {
         $erased = $this->plantErasedDocument();
@@ -526,6 +687,27 @@ final class ErasureSweepsFunctionalTest extends KernelTestCase
         );
 
         $this->assertSame(['cleared_at', 'id', 'reason', 'record_ref', 'set_at'], $columns);
+    }
+
+    private function faultingReplay(): ReplayErasure
+    {
+        return new ReplayErasure(
+            new ApplyErasure(
+                $this->service(UploadIntentRepository::class),
+                $this->service(DocumentRepository::class),
+                $this->service(DocumentErasures::class),
+                $this->service(AppendCustody::class),
+                new DestroyFaultingKeystore($this->service(Keystore::class)),
+                $this->service(TransactionManager::class),
+            ),
+            $this->service(DocumentRepository::class),
+            $this->storage(),
+        );
+    }
+
+    private function rowsWhere(string $condition): int
+    {
+        return $this->intOf($this->connection()->fetchOne('SELECT COUNT(*) FROM document WHERE ' . $condition));
     }
 
     private function completion(): CompleteInterruptedErasuresHandler
