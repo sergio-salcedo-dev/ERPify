@@ -31,6 +31,12 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
+// An absent `logoImageId` is read as `null` ("no logo"): the field is optional on the wire, and a missing
+// optional field must not fail the whole page. Any other non-string value is a malformed row.
+function isOptionalLogoImageId(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === "string";
+}
+
 function isBankPrimitives(value: unknown): value is BankPrimitives {
   return (
     isObjectRecord(value) &&
@@ -39,7 +45,8 @@ function isBankPrimitives(value: unknown): value is BankPrimitives {
     typeof value.shortName === "string" &&
     typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string" &&
-    isNonNegativeInteger(value.accountCount)
+    isNonNegativeInteger(value.accountCount) &&
+    isOptionalLogoImageId(value.logoImageId)
   );
 }
 

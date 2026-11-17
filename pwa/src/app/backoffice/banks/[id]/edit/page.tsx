@@ -18,6 +18,7 @@ import { PersistenceAction, ViewStatus } from "@/context/shared/view-state/domai
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { bankRoutes } from "../../_lib/bankRoutes";
 import { BankForm } from "../../_components/BankForm";
+import { BankLogoControl } from "../../_components/BankLogoControl";
 
 type State = ViewStatus;
 
@@ -41,6 +42,9 @@ export default function EditBankPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  // The logo id the screen holds. Seeded from the loaded bank and then set from the write's own
+  // answer, never from a refetch, so a read that lands late cannot restore the id just replaced.
+  const [logoImageId, setLogoImageId] = useState<string | null>(null);
   // Bumped by the form's "Refresh" recovery action (stale 404). Re-runs the
   // load so a bank deleted in parallel lands on the not-found empty state.
   const [reloadToken, setReloadToken] = useState(0);
@@ -57,6 +61,7 @@ export default function EditBankPage() {
     setPrevId(id);
     setState(ViewStatus.LOADING);
     setBank(null);
+    setLogoImageId(null);
     setProblem(null);
   }
 
@@ -69,6 +74,7 @@ export default function EditBankPage() {
         const result = await useCase.run(id);
         if (cancelled) return;
         setBank(result);
+        setLogoImageId(result.logoImageId);
         setState(ViewStatus.READY);
       } catch (err) {
         if (cancelled) return;
@@ -162,6 +168,12 @@ export default function EditBankPage() {
               Update {bank.name}.
             </p>
           </header>
+
+          <BankLogoControl
+            bankId={bank.id}
+            logoImageId={logoImageId}
+            onLogoChange={setLogoImageId}
+          />
 
           <BankForm
             key={bank.id}

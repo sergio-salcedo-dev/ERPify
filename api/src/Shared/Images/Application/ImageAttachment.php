@@ -74,7 +74,7 @@ final readonly class ImageAttachment
                 $holder->attach($ownerId, $newId);
 
                 if ($previousId instanceof ImageId) {
-                    $this->requestRelease($previousId);
+                    $this->release($previousId);
                 }
             });
         } catch (Throwable $throwable) {
@@ -99,14 +99,18 @@ final readonly class ImageAttachment
             }
 
             $holder->attach($ownerId, null);
-            $this->requestRelease($heldId);
+            $this->release($heldId);
         });
     }
 
     /**
-     * Must run inside a transaction: the publish guard refuses anything else.
+     * Queues the destruction of an image whose holder is going away or no longer points at it. Public for the owner
+     * that ends its own life (a deleted bank), which holds the id it read under its own lock and has no replacement
+     * to attach. It opens no transaction and only publishes: it must run inside the one that removes the owner, which
+     * the publish guard enforces by refusing anything else, so the removal and the request commit or roll back
+     * together. The one creating site of `ImageDeletionRequested`.
      */
-    private function requestRelease(ImageId $id): void
+    public function release(ImageId $id): void
     {
         $this->eventBus->publish(new ImageDeletionRequested($id->toString()));
     }
@@ -125,7 +129,7 @@ final readonly class ImageAttachment
                     return;
                 }
 
-                $this->requestRelease($newId);
+                $this->release($newId);
             });
         } catch (Throwable $throwable) {
             $this->logger->warning('images.attachment.compensation_failed', [

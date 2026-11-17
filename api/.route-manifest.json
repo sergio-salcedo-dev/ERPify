@@ -14,6 +14,8 @@
   "backoffice_bank_create": { "path": "/api/v1/backoffice/banks", "methods": ["POST"] },
   "backoffice_bank_delete": { "path": "/api/v1/backoffice/banks/{id}", "methods": ["DELETE"] },
   "backoffice_bank_get": { "path": "/api/v1/backoffice/banks/{id}", "methods": ["GET"] },
+  "backoffice_bank_logo_remove": { "path": "/api/v1/backoffice/banks/{id}/logo", "methods": ["DELETE"] },
+  "backoffice_bank_logo_set": { "path": "/api/v1/backoffice/banks/{id}/logo", "methods": ["PUT"] },
   "backoffice_bank_realtime_authorize": { "path": "/api/v1/backoffice/banks/realtime/authorize", "methods": ["GET"] },
   "backoffice_bank_search": { "path": "/api/v1/backoffice/banks", "methods": ["GET"] },
   "backoffice_bank_update": { "path": "/api/v1/backoffice/banks/{id}", "methods": ["PUT"] },

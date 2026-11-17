@@ -4,6 +4,7 @@ import EditBankPage from "@/app/backoffice/banks/[id]/edit/page";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { ACME as BANK } from "./_fixtures";
+import { BANK_READER, WithSession } from "./_session";
 
 /**
  * Editing a bank that a colleague deleted in parallel: the PUT answers 404
@@ -56,7 +57,11 @@ describe("EditBankPage — stale bank recovery", () => {
 
   it("PUT 404 → Refresh → not-found empty state with focus on the back-to-list CTA", async () => {
     updateRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
-    render(<EditBankPage />);
+    render(
+      <WithSession session={BANK_READER}>
+        <EditBankPage />
+      </WithSession>,
+    );
     await screen.findByTestId("bank-form");
 
     fireEvent.change(screen.getByTestId("bank-form__name"), { target: { value: "Renamed" } });
@@ -81,7 +86,11 @@ describe("EditBankPage — stale bank recovery", () => {
 
   it("Refresh landing on a load error focuses the page container, never <body>", async () => {
     updateRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
-    render(<EditBankPage />);
+    render(
+      <WithSession session={BANK_READER}>
+        <EditBankPage />
+      </WithSession>,
+    );
     await screen.findByTestId("bank-form");
 
     fireEvent.change(screen.getByTestId("bank-form__name"), { target: { value: "Renamed" } });

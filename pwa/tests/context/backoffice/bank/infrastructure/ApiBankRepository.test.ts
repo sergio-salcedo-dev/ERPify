@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { ApiBankRepository } from "@/context/backoffice/bank/infrastructure/ApiBankRepository";
+import {
+  ApiBankRepository,
+  isBankSearchResponse,
+} from "@/context/backoffice/bank/infrastructure/ApiBankRepository";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import { SortDirection } from "@/context/shared/search/domain/SortDirection";
@@ -43,6 +46,35 @@ function queryOf(httpClient: HttpClient): URLSearchParams {
 }
 
 const BASE_CRITERIA: BankSearchCriteria = { filters: [], sort: null, limit: 25 };
+
+describe("ApiBankRepository — logoImageId", () => {
+  const LOGO = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
+
+  it("maps the logo id of a list row and reads null as no logo", async () => {
+    const httpClient = httpClientReturning({
+      data: [
+        { ...primitives, logoImageId: LOGO },
+        { ...primitives, id: "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d", logoImageId: null },
+      ],
+      pagination,
+    });
+
+    const page = await new ApiBankRepository(httpClient).search(BASE_CRITERIA);
+
+    expect(page.banks.map((bank) => bank.logoImageId)).toEqual([LOGO, null]);
+  });
+
+  it("accepts a row with a string, null or absent logoImageId and refuses any other type", () => {
+    for (const logoImageId of [LOGO, null, undefined]) {
+      expect(isBankSearchResponse({ data: [{ ...primitives, logoImageId }], pagination })).toBe(
+        true,
+      );
+    }
+    expect(isBankSearchResponse({ data: [{ ...primitives, logoImageId: 42 }], pagination })).toBe(
+      false,
+    );
+  });
+});
 
 describe("ApiBankRepository.search", () => {
   it("serializes filters, sort and limit — never a page or cursor (W11)", async () => {

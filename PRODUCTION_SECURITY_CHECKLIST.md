@@ -2182,6 +2182,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       role — was measured and refused: it answers 403 to every caller, which deletes the slice rather than
       deferring the decision. The gate matches a property NAME (or an ORM column name) ending in `image_id`, so a
       reference under another spelling, in a join table or in a JSON column is still invisible to it.
+      The first consumer, `Bank::$logoImageId`, is registered under `D1:logo`: audience is the authenticated session,
+      the read is unaudited and the one-hour window stands.
       **And the conditional request inverts the usual self-limiting.** A `304` is gated on the same verified
       read as a `200` — the full object off disk plus its SHA-256 — because the storage port exposes no
       existence predicate; the cost is declared at the controller. What is NOT declared there is that the
@@ -2191,7 +2193,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       sized for page navigation (120/min) while this route is one request per rendered image rather than one
       per navigation — so an office behind one NAT shares it, and a 429 arrives inside an `<img>` as a broken
       image with no diagnosis. The per-identity read budget above bounds one session's loop, never an office's
-      shared address; latent while the route has no consumer, and the epic that wires the first one inherits it.
+      shared address; the bank logo, the first consumer, inherits it on every list page, and each further consumer does.
       **Six — a cached copy outlives the erasure, shortened to an hour rather than closed.** A conforming
       client does not revalidate while the response is fresh, so once the bytes and the row are gone every
       viewer keeps serving the image for up to `max-age` with no request reaching a server that could answer
@@ -2205,6 +2207,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       URLs included"* was written about server routes and CDN-fronted variant URLs, and reading it as
       governing the viewer's own browser cache is an INTERPRETATION — if that reading is confirmed, no finite
       window satisfies it and the answer is `no-store`.
+      **The bank logo adds a second cost of the same kind, accepted on 2026-11-17 (Sergio): a logo-only change pushes
+      nothing.** `Bank::changeLogo()` records no domain event (a decision, not a business fact: the trace is the
+      `BANK_UPDATED` audit diff and the release is `ImageDeletionRequested`), so another client with the bank open
+      shows the old logo until its next load, and once the queue drains that id falls to the placeholder. A
+      rename pushes the CURRENT logo id, resolved at publish time, so it never blanks one. Reopening path: a
+      separate `BankLogoChanged` event preserving null; no production history is lost by adding it later.
       **Seven — the object is materialised whole in one process, bounded by what the row DECLARES.** The
       storage port returns the canonical object as a single string, and a memory exhaustion is a fatal error
       rather than a `Throwable`: the RFC 9457 pipeline would not run and the response would not be Problem
@@ -2241,7 +2249,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Eight — nothing records who read what.** Deliberate, and recorded as D2 of the same ADR: the route name begins
       `shared_`, which is the one exclusion of the generic activity audit that fits object serving, so a
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
-      avatar) and not (a logo), and there is no consumer relation to vote on yet. It is a scope boundary, not
+      avatar) and not (a logo), and the shared route has no consumer relation to vote on (each consumer's policy is its `D1:` paragraph). It is a scope boundary, not
       an oversight — and it means this route has no forensic record of access at all.
       **Nine — the container log has no isolation between the application's channels, so a read failure can
       evict unrelated history.** The default channel and `observability` share one retention budget
@@ -2305,8 +2313,14 @@ mitigated state. Accepting one means recording who accepted it and against which
       `RawBodyRoute::ATTRIBUTE`, spend `ImageRequestThrottle` before it calls the reader, and go through
       `ImageAttachment`: a route that omits the attribute leaves a plaintext spool until the worker serves another
       request, one that reads the body first spends its budget after the cost, and one that bypasses `ImageAttachment`
-      publishes no release — with every gate green. A manifest-driven gate over the image write routes lands with the
-      first consumer route, which is when there is a route to read.
+      publishes no release — with every gate green. **The manifest-driven gate now exists**
+      (`ImageWriteRouteAgreementGateTest`, with the bank logo as its first route; the matcher's own shape stays in `UploadRoutePathAgreementGateTest`): a `PUT` the Caddy `@imageWrite`
+      matcher admits that lacks the attribute, and a route carrying the attribute or reaching `ImageAttachment` that no
+      alternative of the matcher admits, each red it. What it does not see is the ORDER inside a controller — that the
+      throttle is spent before the body is read, which `BankLogoControllerOrderTest` pins for the bank logo only — nor a
+      consumer reaching `ImageAttachment` through a path its reflection does not follow (a service locator, a
+      callable). The through-Caddy proof of the lifted bound is `BankLogoThroughCaddyTest` (a 2 MiB image is stored,
+      a cut body is `411` and stores nothing).
 
 - [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
       on its next tick — unless it commits after the subject's window closed.** The erasure's passes reach
@@ -2425,8 +2439,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       past it sees its request fail rather than a guaranteed 413. The image write routes have their own
       cookie-gated matcher, `@imageWrite`, bounded at `erpify.images.max_input_bytes` (20 MiB) and kept in step
       with its `@boundedBody` exclusion and the three planned public paths by `UploadRoutePathAgreementGateTest`;
-      **until the first consumer mounts a route the matcher is proved on text, and its through-Caddy measurement
-      (a body over 1 MB reaching PHP whole) lands with that story, beside the route.** A body Caddy cuts reaches PHP
+      **the matcher is proved on text, and its through-Caddy measurement (a body over 1 MB reaching PHP whole)
+      is `BankLogoThroughCaddyTest`, beside the bank logo route.** A body Caddy cuts reaches PHP
       as a clean, shorter stream, so what refuses a truncated image is the mandatory `Content-Length` equal to the
       bytes read (`ImageRequestBodyReader`, 411 `image-length-required`), not the bound.
 

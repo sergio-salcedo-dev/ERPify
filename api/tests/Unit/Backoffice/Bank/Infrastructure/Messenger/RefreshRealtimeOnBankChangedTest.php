@@ -8,6 +8,8 @@ use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountCounter;
+use Erpify\Tests\Support\Dig;
+use Erpify\Tests\Unit\Backoffice\Bank\Application\InMemoryBankLogoReader;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankCreatedDomainEventMother;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Event\Mother\BankDeletedDomainEventMother;
@@ -36,7 +38,16 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
 
     private const string UPDATED_AT = '2026-01-02T00:00:00+00:00';
 
+    private const string LOGO = '0190b1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
+
     private ?Update $captured = null;
+
+    private InMemoryBankLogoReader $logos;
+
+    protected function setUp(): void
+    {
+        $this->logos = new InMemoryBankLogoReader();
+    }
 
     public function testPublishesCreatedToCollectionTopicAsPrivate(): void
     {
@@ -62,6 +73,7 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
                 'createdAt' => self::CREATED_AT,
                 'updatedAt' => self::UPDATED_AT,
                 'accountCount' => 0,
+                'logoImageId' => null,
             ],
         ], $this->decoded($update));
     }
@@ -93,8 +105,52 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
                 'createdAt' => self::CREATED_AT,
                 'updatedAt' => self::UPDATED_AT,
                 'accountCount' => 0,
+                'logoImageId' => null,
             ],
         ], $this->decoded($update));
+    }
+
+    /**
+     * A rename records no logo, yet an open detail page replaces its whole state with this payload, so the row must
+     * carry the logo the bank holds now — read once for the event — or the rename would blank it.
+     */
+    public function testARenameCarriesTheLogoTheBankHoldsNow(): void
+    {
+        $this->logos->setLogo(self::BANK_ID, self::LOGO);
+
+        $this->handler()->onBankUpdated(BankUpdatedDomainEventMother::create(
+            self::BANK_ID,
+            BankSnapshotMother::create('Acme Renamed', 'ACME', self::CREATED_AT, self::UPDATED_AT),
+        ));
+
+        $this->assertSame(self::LOGO, Dig::value($this->decoded($this->capturedUpdate()), 'bank', 'logoImageId'));
+        $this->assertSame([self::BANK_ID], $this->logos->asked, 'one lookup per event');
+    }
+
+    public function testACreatedRowCarriesTheLogoAndNullWhenThereIsNone(): void
+    {
+        $this->logos->setLogo(self::BANK_ID, self::LOGO);
+
+        $this->handler()->onBankCreated(BankCreatedDomainEventMother::create(self::BANK_ID));
+
+        $this->assertSame(self::LOGO, Dig::value($this->decoded($this->capturedUpdate()), 'bank', 'logoImageId'));
+    }
+
+    /**
+     * A late `updated` handled after the bank was deleted: the read finds no row and answers null, the row is still
+     * published and the `deleted` one follows.
+     */
+    public function testALateUpdateAfterTheDeleteResolvesANullLogoAndStillPublishes(): void
+    {
+        $this->handler()->onBankUpdated(BankUpdatedDomainEventMother::create(
+            self::BANK_ID,
+            BankSnapshotMother::create('Gone Bank', 'GONE', self::CREATED_AT, self::UPDATED_AT),
+        ));
+
+        $decoded = $this->decoded($this->capturedUpdate());
+        $this->assertSame('bank.updated', Dig::value($decoded, 'type'));
+        // Present and null, never absent: the PWA decoder reads the key.
+        $this->assertNull(Dig::value($decoded, 'bank', 'logoImageId'));
     }
 
     public function testPublishesDeletedWithIdOnlyToCollectionAndPerBankTopics(): void
@@ -136,7 +192,11 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
         $accountCounts = $this->createStub(BankAccountCounter::class);
         $accountCounts->method('countsByBankIds')->willReturn([self::BANK_ID => 3]);
 
-        $handler = new RefreshRealtimeOnBankChanged($hub, new BankAccountCountEnricher($accountCounts));
+        $handler = new RefreshRealtimeOnBankChanged(
+            $hub,
+            new BankAccountCountEnricher($accountCounts),
+            $this->logos,
+        );
         $event = BankUpdatedDomainEventMother::create(
             self::BANK_ID,
             BankSnapshotMother::create(createdAt: self::CREATED_AT, updatedAt: self::UPDATED_AT),
@@ -166,7 +226,11 @@ final class RefreshRealtimeOnBankChangedTest extends TestCase
             $accountCount > 0 ? [self::BANK_ID => $accountCount] : [],
         );
 
-        return new RefreshRealtimeOnBankChanged($hub, new BankAccountCountEnricher($accountCounts));
+        return new RefreshRealtimeOnBankChanged(
+            $hub,
+            new BankAccountCountEnricher($accountCounts),
+            $this->logos,
+        );
     }
 
     private function capturedUpdate(): Update

@@ -37,7 +37,7 @@ final class BankResourceMapperTest extends TestCase
         $resource = $this->mapper()->toDetailResource(new BankWithAccountCount($this->pinnedBank(), 7));
 
         $this->assertSame(
-            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount'],
+            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount', 'logoImageId'],
             \array_keys(\get_object_vars($resource)),
         );
         $this->assertSame(self::BANK_ID, $resource->id);
@@ -46,6 +46,20 @@ final class BankResourceMapperTest extends TestCase
         $this->assertSame(self::CREATED_AT, $resource->createdAt);
         $this->assertSame(self::UPDATED_AT, $resource->updatedAt);
         $this->assertSame(7, $resource->accountCount);
+    }
+
+    public function testListAndDetailCarryTheLogoIdOrNull(): void
+    {
+        $logo = '0190b1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
+        $bank = $this->pinnedBank();
+
+        $this->assertNull($this->mapper()->toListResource(new BankWithAccountCount($bank, 0))->logoImageId);
+        $this->assertNull($this->mapper()->toDetailResource(new BankWithAccountCount($bank, 0))->logoImageId);
+
+        $bank->changeLogo($logo);
+
+        $this->assertSame($logo, $this->mapper()->toListResource(new BankWithAccountCount($bank, 0))->logoImageId);
+        $this->assertSame($logo, $this->mapper()->toDetailResource(new BankWithAccountCount($bank, 0))->logoImageId);
     }
 
     public function testCreateResourceOmitsTheAccountCountKey(): void
@@ -77,7 +91,7 @@ final class BankResourceMapperTest extends TestCase
         $resource = $this->mapper()->toListResource(new BankWithAccountCount($this->pinnedBank(), 3));
 
         $this->assertSame(
-            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount'],
+            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount', 'logoImageId'],
             \array_keys(\get_object_vars($resource)),
         );
         $this->assertSame(3, $resource->accountCount);

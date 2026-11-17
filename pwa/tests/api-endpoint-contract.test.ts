@@ -212,6 +212,10 @@ const METHOD_BY_KEY: Readonly<Record<string, string>> = {
   "BACKOFFICE.BANKS.DELETE": "DELETE",
   "BACKOFFICE.BANKS.DETAILS": "GET",
   "BACKOFFICE.BANKS.LIST": "GET",
+  // Written through the `ImageUploader` port, whose `upload(url)` / `remove(url)` take the URL as a
+  // value, so the call-site walk cannot see either verb; the Playwright and Behat proofs hold them.
+  "BACKOFFICE.BANKS.LOGO_REMOVE": "DELETE",
+  "BACKOFFICE.BANKS.LOGO_SET": "PUT",
   // Reached through `useMercureRealtime`'s `authorizePath` variable, so the call-site walk cannot
   // see either of these; only the completeness direction holds them.
   "BACKOFFICE.BANKS.REALTIME_AUTHORIZE": "GET",

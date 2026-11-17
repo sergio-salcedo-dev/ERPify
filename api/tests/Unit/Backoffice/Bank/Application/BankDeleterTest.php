@@ -180,12 +180,16 @@ final class BankDeleterTest extends TestCase
         ?TransactionManager $transactions = null,
         ?InMemoryBankAccountRepository $accounts = null,
     ): BankDeleter {
+        $eventBus ??= new RecordingEventBus();
+        $transactions ??= new ImmediateTransactionManager();
+
         return new BankDeleter(
             $bankRepository,
             new BankFinder($bankRepository),
             $accounts ?? new InMemoryBankAccountRepository($accountCount, $recount),
-            $eventBus ?? new RecordingEventBus(),
-            $transactions ?? new ImmediateTransactionManager(),
+            $eventBus,
+            $transactions,
+            BankImageAttachments::over($eventBus, $transactions),
         );
     }
 }

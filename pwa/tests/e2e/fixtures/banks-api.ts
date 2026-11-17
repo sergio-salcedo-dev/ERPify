@@ -12,6 +12,8 @@ export interface BankFixture {
    * Defaults to 0 (no accounts → the optimistic delete-guard stays inactive).
    */
   accountCount: number;
+  /** The logo id the bank holds. The API always sends it (`null` when none); omitted here means none. */
+  logoImageId?: string | null;
 }
 
 export const SAMPLE_BANK_A: BankFixture = {

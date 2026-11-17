@@ -6,8 +6,8 @@ export const PERMISSION_WILDCARD = "*" as const;
  * policy and enforces with `#[IsGranted]`. Nothing derives one side from the other, so a mismatch is silent —
  * a gate that never opens, with no error anywhere. Copy the string; never re-spell it.
  *
- * A deliberate subset of the API's vocabulary: it also publishes bank, bankAccount and audit permissions, but
- * nothing here gates on them, and `/me` entries the client does not declare are discarded on the way in.
+ * A deliberate subset of the API's vocabulary: it is the set of permissions the PWA gates on, and `/me` entries the
+ * client does not declare are discarded on the way in. Declare a permission here only when something gates on it.
  *
  * Identity administration is not CRUD: the capabilities are invite, change-status, change-roles, revoke or
  * resend a pending invitation, and the separate GDPR erase — each its own permission, none of them a generic write or
@@ -15,6 +15,7 @@ export const PERMISSION_WILDCARD = "*" as const;
  * minting another administrator is named rather than implied by whoever may invite.
  */
 export const Permission = {
+  BANK_WRITE: "bank.write",
   USERS_READ: "users.read",
   USERS_INVITE: "users.invite",
   USERS_CHANGE_STATUS: "users.changeStatus",

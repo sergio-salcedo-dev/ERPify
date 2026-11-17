@@ -9,6 +9,8 @@ use Erpify\Backoffice\Bank\Domain\Exception\BankNotFoundException;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Event\Domain\EventBus;
+use Erpify\Shared\Images\Application\ImageAttachment;
+use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Persistence\Domain\Exception\ReferentialIntegrityViolation;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -22,10 +24,18 @@ final readonly class BankDeleter
         private BankAccountRepository $bankAccountRepository,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
+        private ImageAttachment $imageAttachment,
     ) {
     }
 
     /**
+     * Fails fast on the bank and its accounts outside any lock, then does the whole removal in ONE transaction that
+     * starts by re-loading the bank `FOR UPDATE`. Everything that depends on what the bank holds is read from that
+     * locked instance — the events it records and the logo it points at — so a concurrent replace of the logo
+     * either committed before the lock was granted (and its id is the one released here) or waits behind this
+     * transaction and finds the bank gone. The release is queued in the same transaction as the removal, so the row
+     * and the request to destroy the logo commit or roll back together.
+     *
      * @throws InvalidUuidException  when $id is not a well-formed UUID (400 invalid-input)
      * @throws BankNotFoundException
      * @throws BankInUseException
@@ -40,16 +50,26 @@ final readonly class BankDeleter
             throw BankInUseException::withAccountCount($id, $accountCount);
         }
 
-        $bank->delete();
-
-        // Pull events before removal so the aggregate is still intact when captured.
-        $domainEvents = $bank->pullDomainEvents();
+        $bankId = (string) $bank->getId();
 
         try {
             // remove + publish in one transaction (closes the dual-write window).
             // See docs/adr/event-store-and-projections.md.
-            $this->transactionManager->transactional(function () use ($bank, $domainEvents): void {
-                $this->bankRepository->remove($bank);
+            $this->transactionManager->transactional(function () use ($bankId): void {
+                $locked = $this->bankFinder->findForUpdate($bankId);
+
+                $locked->delete();
+
+                // Pull events before removal so the aggregate is still intact when captured.
+                $domainEvents = $locked->pullDomainEvents();
+                $logoImageId = $locked->getLogoImageId();
+
+                $this->bankRepository->remove($locked);
+
+                if (null !== $logoImageId) {
+                    $this->imageAttachment->release(ImageId::fromString($logoImageId));
+                }
+
                 $this->eventBus->publish(...$domainEvents);
             });
         } catch (ReferentialIntegrityViolation $referentialIntegrityViolation) {

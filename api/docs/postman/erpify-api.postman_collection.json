@@ -148,6 +148,87 @@
               "response": []
             },
             {
+              "name": "Set or replace bank logo",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "image/png",
+                    "description": "Optional hint. Only image/jpeg, image/png, image/webp or image/gif exactly is used; a label that contradicts the bytes is a 415."
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "file",
+                  "file": {
+                    "src": ""
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id/logo",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks",
+                    ":id",
+                    "logo"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "",
+                      "description": "Bank UUID"
+                    }
+                  ]
+                },
+                "description": "Sets or replaces the bank's logo from the raw bytes of the body (no multipart, no query); pick the image file under Body > binary. Needs bank.write. Content-Length must equal the bytes sent (Postman sets it for a file body): 411 image-length-required otherwise. 200 {\"imageId\": \"<uuid>\"}; the previous logo, if any, is released. 400 invalid-uuid, 404 bank-not-found, 413 image-too-large, 415 image-unsupported-type, 422 image-invalid, 429 rate-limited with Retry-After. The image is read back through Get image bytes."
+              },
+              "response": []
+            },
+            {
+              "name": "Remove bank logo",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/backoffice/banks/:id/logo",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "backoffice",
+                    "banks",
+                    ":id",
+                    "logo"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "",
+                      "description": "Bank UUID"
+                    }
+                  ]
+                },
+                "description": "Removes the bank's logo and queues its release. Idempotent: 204 whether or not the bank held one. Needs bank.write. 404 bank-not-found, 429 rate-limited."
+              },
+              "response": []
+            },
+            {
               "name": "Realtime authorize (Mercure cookie)",
               "request": {
                 "method": "GET",
