@@ -12,8 +12,8 @@ use Symfony\Component\Process\Process;
 
 /**
  * Executing gate over `scripts/seed-foreign-skills.sh`, which `make worktree.create` calls to give a new
- * worktree the foreign skills (`bmad-loop-*`, TEA 3's `bmad-tea*` and `bmod-tea`) only the primary checkout's
- * `.claude/skills` holds.
+ * worktree the foreign skills (`bmad-loop-*`, TEA 3's `bmad-tea*` and `bmod-tea`, Cloudflare's `security-audit`)
+ * only the primary checkout's `.claude/skills` holds.
  *
  * **Why it runs the script.** Its failure is silent where it matters: a worktree missing a skill answers
  * `Unknown command: /bmad-loop-sweep` and idles to its session timeout while `bmad-loop validate` reports
@@ -88,6 +88,23 @@ final class ForeignSkillSeedGateTest extends TestCase
         $this->assertSame("tea trace\n", $this->read('worktree/.claude/skills/bmad-tea-trace/SKILL.md'));
         $this->assertSame("id,path\n", $this->read('worktree/.claude/skills/bmod-tea/knowledge/tea-index.csv'));
         $this->assertDirectoryDoesNotExist($this->fixture . '/worktree/.claude/skills/bmad-teach-me-testing');
+    }
+
+    /**
+     * The audit skill sits outside the `bmad-*` namespace, so no other seed carries it; its validators
+     * live beside `SKILL.md` and the workflow runs them from the skill directory.
+     */
+    #[Test]
+    public function theSecurityAuditSkillIsSeededWithItsValidators(): void
+    {
+        $this->write('main/.claude/skills/security-audit/SKILL.md', "security audit\n");
+        $this->write('main/.claude/skills/security-audit/validate-findings.cjs', "validator\n");
+
+        $run = $this->seed();
+
+        $this->assertSame(0, $run->getExitCode(), $this->explain($run));
+        $this->assertSame("security audit\n", $this->read('worktree/.claude/skills/security-audit/SKILL.md'));
+        $this->assertSame("validator\n", $this->read('worktree/.claude/skills/security-audit/validate-findings.cjs'));
     }
 
     #[Test]

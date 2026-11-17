@@ -14,6 +14,8 @@
 #   bmad-tea, bmad-tea-* TEA 3 (bmad-method-test-architecture-enterprise >= 2),
 #   bmod-tea             a v7 "bmod" the 6.12 installer cannot install; added
 #                        with `npx skills add`, recorded in skills-lock.json.
+#   security-audit       Cloudflare's audit workflow, also `npx skills add`
+#                        (--copy); outside bmad-*, so only the seed reads it.
 #
 # Named rather than derived: `customize.toml` is absent from 18 of the 75 BMad
 # skills, so "no customize.toml => foreign" would exempt real ones. Every other
@@ -23,7 +25,7 @@
 
 foreign_skill() {
 	case "$1" in
-	bmad-loop-* | bmad-tea | bmad-tea-* | bmod-tea) return 0 ;;
+	bmad-loop-* | bmad-tea | bmad-tea-* | bmod-tea | security-audit) return 0 ;;
 	*) return 1 ;;
 	esac
 }
