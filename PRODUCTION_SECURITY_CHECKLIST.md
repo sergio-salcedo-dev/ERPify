@@ -2632,11 +2632,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       rows cannot be copied out, so the list of erasures to repeat is **incomplete by construction** and rests
       on an off-VPS operator log that is itself personal data about erased people; and the reconciler stays
       green throughout. **Closing it needs a ledger of destroyed scope ids that survives outside the restore
-      boundary** (append-only, replicated offsite with the backups, opaque ids only — first check that no
-      scope id is derived from a person id) and a post-restore step that re-destroys every id in it.
-      The future Documents module multiplies the exposure: its per-document keys live in the same table and
-      its blobs are in no database dump, so it does not go live before this has a durable ledger — a rule
-      only this register states, with no gate behind it.
+      boundary** (append-only, opaque ids only — first check that no scope id is derived from a person id) and
+      a post-restore step that re-destroys every id in it. **Closed for Documents (doc-7), still open for the
+      identity, bank-account and audit erasures:** the Documents erasure writes the random scope id to a ledger
+      on a SECOND host (a restic repository behind an append-only REST server, apart from the backup repository
+      — a different repository from the offsite backups, not a copy riding with them), before it destroys the
+      key, and `restore.prod` replays it over the restored database before any writer or sweep restarts, staying
+      in recovery mode when it cannot be read in full (`docs/adr/documents-custody-log.md` D11,
+      `docs/runbooks/documents-erasure-ledger.md`). Whether it holds is proved by the restore drill, which is a
+      person's act: the `drill` proof record is not committed until the owner has run it.
+      The per-document keys live in the same table, and the blobs are in no database dump; the Documents read
+      switch stays closed until a valid `restore` record and a valid `drill` record exist.
       KEK rotation is not an available bound (re-wrap tooling is unshipped, § 1), and keeping the KEK beside an
       old dump makes a resurrected DEK decryptable, so the dump's retention is the only dial.
 - [ ] **The offsite repository's append-only protects against deletion, not disclosure.** The VPS must hold
@@ -2765,9 +2771,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       PHP thread for the whole transfer, bounded per stall (a 60 s budget re-armed at every chunk) and not in total,
       so a slow ADMIN client occupies a thread; the caller set is ADMIN only, which is the bound. (3) `DocumentsReadProofGateTest` reads the tracked configuration and the
       compiled prod container: a value the deploy environment injects is outside it, and the erasure-ledger
-      override is bound to `NeverSetErasureLedgerOverride` until doc-7 replaces it, which the gate cannot see
-      either (it reads no service alias) — the proof records are the control. **Open — owner: doc-7 for the
-      override adapter; whoever deploys for the injected value.**
+      override is a database flag (`erasure_ledger_override`, `DbalErasureLedgerOverride`, bound to the
+      `ErasureLedgerOverride` alias — doc-7), which the gate cannot see either (it reads no service alias) — the proof
+      records are the control. **Open — owner: whoever deploys, for the injected value.**
 - [ ] **A sealed original filename names whoever it names, and survives a person's erasure until its document
       is erased.** The name travels in the evidence PUT's query, is validated and sealed under the document's own
       scope in the commit transaction, and is never persisted in clear; but it can carry the uploader's name or a
@@ -2784,15 +2790,58 @@ mitigated state. Accepting one means recording who accepted it and against which
       name, digest or custody actor (it names the ADMIN who made the call, as every audit row does), is `activity`
       level and ages out with the audit retention. A listing therefore proves
       that a page was served, never which names a caller saw. **Gating is the erasure-ledger override alone:**
-      `documents.read_enabled` does not close these routes (they serve no bytes), so while the ledger adapter is the
-      never-set one, a restore without the ledger would bring back an erased document's key and its name would open
-      here; the override is what answers 410 on both routes, and it is as blind to a value the deploy injects as the
-      read route's. A name that does not open lists `null` with no log line from the request; the alarm is the
+      `documents.read_enabled` does not close these routes (they serve no bytes), so after a restore that proceeded
+      without the ledger an erased document's key is back and its name would open here; the override flag (a database
+      row, doc-7) is what answers 410 on both routes while it is set. A name that does not open lists `null` with no log line from the request; the alarm is the
       daily `ReportDocumentNamesHandler` line on the `observability` channel (counts per cause and at most 20
       document ids, never a name), which opens the head of the table inside a 60 s budget and, when the run did not
       finish, writes a `warning` line with `complete: false` even if no name failed, so a store too large for one run
       is only covered where it reaches and says so. **Accepted — the user,
-      2026-11-17 (ADMIN only; no listing audit row). Open — owner: doc-7 for the override adapter.**
+      2026-11-17 (ADMIN only; no listing audit row).**
+- [ ] **The Documents erasure re-proves the caller's password and the identity erasure route does not (doc-7).**
+      `POST /api/v1/documents/{id}/erase` spends the shared `CurrentPasswordProofThrottle` budget and re-proves the caller's
+      current password before any ledger write (`documents_erase :: credential-affecting`), because a stolen session could
+      otherwise erase documents for good and evicting it undoes nothing. `backoffice_user_erase`, which erases an identity,
+      is the same gap and is classified `ordinary` with no proof; it was not fixed here. **Open — owner: the identity
+      erasure route's next change; the credential-proof gate pins the Documents route and cannot see this one.**
+- [ ] **The digest, size and timestamps of an erased document survive its erasure (doc-7).** Erasure destroys the key,
+      nulls the sealed filename and deletes the sealed object, but the row keeps its sha256 digest, byte size, retention
+      fields and timestamps, and its custody trail stays. Anyone who holds a known file can confirm it is the one
+      that was filed (possession of a known file), and the trail says that an erasure happened, when and under which
+      closed reason. Kept on purpose: the digest is what proves what was held. **Accepted — the owner's design, 2026-11-04.**
+- [ ] **Offsite backups keep the ciphertext of an erased document, and an erasure depends on the offsite channel
+      (doc-7).** The sealed objects of an erased document are deleted from the volume, but a backup of the volume (or a
+      database dump holding the wrapped key) taken before the erasure still holds the ciphertext; the residual closes
+      only by the key staying destroyed on every restore, which is the ledger's job. Because the ledger entry is written
+      to a second host BEFORE the key is destroyed, an erasure cannot be performed while that host is unreachable
+      (`erasure-ledger-unavailable`, 503): erasures are rare and the legal term is a month. **Accepted — the user, 2026-11-05.**
+- [ ] **Whoever holds the erasure ledger's write credential can erase a live document with no voter (doc-7).** The
+      credential and the repository password live on the VPS (the erasure writes the entry; the completion sweep lists
+      the ledger from there), so a VPS compromise yields them, and an entry appended for a LIVE scope is finished by the
+      completion sweep within minutes: the document's key is destroyed and its row `Erased` with the reason
+      `ledger-completion` and no actor. Signing the ledger was declined as YAGNI. A stock append-only REST server has no
+      read-only credential (measured), so the sweep and the restore use the same one. **Accepted — the owner's design.**
+- [ ] **The ledger is listed whole under a 60 s limit, every tick, with no cache (doc-7).** Every restic call runs `--no-cache`
+      and the completion sweep lists ALL snapshots every five minutes, so its cost grows with the number of erasures ever
+      performed and nothing prunes it (an append-only repository cannot be). Measured on a local `rest-server --append-only`
+      (loopback, tmpfs, restic 0.18.1, one run each): `record()` 0.63 s with one entry, 0.56 s at ~200, 0.62 s at ~1,000 and
+      0.73 s at ~5,000; `entries()` 0.55 s, 0.57 s, 0.62 s and 0.79 s. Against the 10 s write timeout and the 60 s listing
+      limit that is two orders of magnitude of room on loopback, **but the numbers carry no network latency**: `snapshots`
+      reads one file per entry, so over a WAN link the listing grows by roughly the round-trip time per entry divided by the
+      connections restic opens. **Accepted growth limit: about 2,000 entries (erasures are rare and the legal term is a month)
+      until the second host is measured over its real link; past it, re-measure before it silently becomes the alarm line
+      "cannot be read in full".** Pagination or a ledger of segments is the design that removes the limit, and is not built.
+      **Open — owner: the owner, at the restore drill (record `snapshots --json` latency from the VPS).**
+- [ ] **The erasure ledger is a single copy, a deleted entry leaves no trace, and a leaked repository password cannot be
+      rotated while the repository is append-only (doc-7).** Losing the ledger fails closed: `restore.prod` stays in
+      recovery mode, and only the documented override lets a restore proceed, accepting that keys destroyed since the
+      backup may be live again (reads answer 410 for as long as the override stands; a person clears it with
+      `documents:erasure:clear-override`, which refuses unless the ledger is readable in full and replayed, and which
+      holds vacuously for a new empty repository, so the decision to clear is the operator's). The append-only server is the only
+      control on a deleted entry — `restic check` of a repository missing a snapshot file finds nothing wrong. `restic key
+      remove` is refused, so rotating the repository password needs an administrator session on the ledger host
+      (`docs/runbooks/documents-erasure-ledger.md`). An independent copy of the four ledger credentials is kept off the
+      VPS and the drill proves the ledger readable from it alone. **Accepted — the user, 2026-11-05 (single copy).**
 - [ ] **Idempotency replay protection ends with the actor's erasure.** The person purge nulls the key hash on
       every upload intent and document of the actor, so a replay of an erased actor's key is a fresh upload.
       **Accepted — the user, 2026-11-04.**

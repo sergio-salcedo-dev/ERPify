@@ -65,6 +65,12 @@ final class DocumentRepositoryThatFailsToReRead implements DocumentRepository
     }
 
     #[Override]
+    public function findIdByScope(string $scopeId): ?string
+    {
+        return $this->inner->findIdByScope($scopeId);
+    }
+
+    #[Override]
     public function markPromoted(string $id): bool
     {
         return $this->inner->markPromoted($id);

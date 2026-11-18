@@ -87,9 +87,12 @@ final class BestEffortReportChannelGateTest extends TestCase
      * observation about this tree rather than a design goal.
      */
     private const array REPORTERS = [
+        'CompleteInterruptedErasuresHandler.php',
         'DbalAuditLogPruner.php',
         'DbalFailedMessagePruner.php',
+        'DeleteErasedObjects.php',
         'DoctrineDatabaseHealthChecker.php',
+        'EraseDocument.php',
         'ExpireScanLeases.php',
         'FlysystemImageStorage.php',
         'ImageAttachment.php',
@@ -113,6 +116,8 @@ final class BestEffortReportChannelGateTest extends TestCase
         'ReportDocumentNamesHandler.php',
         'ReportDocumentScansHandler.php',
         'ReportDocumentStorageHandler.php',
+        'ReportTombstonedDocumentsHandler.php',
+        'ResticErasureLedger.php',
         'RevokeCurrentSessionBestEffort.php',
         'RevokeCurrentSessionController.php',
         'RevokeSessionsBestEffort.php',

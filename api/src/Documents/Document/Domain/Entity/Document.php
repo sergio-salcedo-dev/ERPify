@@ -44,6 +44,7 @@ use InvalidArgumentException;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods") the accessors of one snapshot and its one guard
  * @SuppressWarnings("PHPMD.TooManyMethods") the same
  * @SuppressWarnings("PHPMD.TooManyFields") one row: the document, its intake and the scan lease columns of D8
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength") the same row, with the erased-object marker beside the scan columns
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'document')]
@@ -57,6 +58,12 @@ use InvalidArgumentException;
     name: 'idx_document_scan_due',
     columns: ['next_scan_at'],
     options: ['where' => "(((state)::text = 'received'::text) AND (promoted_at IS NOT NULL))"],
+)]
+// The object-deletion sweep's candidate list: only `Erased` rows whose sealed object is not yet confirmed deleted.
+#[ORM\Index(
+    name: 'idx_document_erased_object_pending',
+    columns: ['id'],
+    options: ['where' => "(((state)::text = 'erased'::text) AND (object_deleted_at IS NULL))"],
 )]
 final class Document extends AggregateRoot
 {
@@ -131,6 +138,21 @@ final class Document extends AggregateRoot
     )]
     // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
     private ?DateTimeImmutable $promotedAt = null;
+
+    /**
+     * Set by the object-deletion sweep once neither the staged nor the final object of an `Erased` row exists, so the
+     * sweep does not probe every erased row for ever. Read-only to the ORM like `promoted_at`: a compare-and-set
+     * statement writes it (`DbalDocumentErasures`), and no custody row records it.
+     */
+    #[ORM\Column(
+        name: 'object_deleted_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
+    private ?DateTimeImmutable $objectDeletedAt = null;
 
     /**
      * The scan's own columns. Like `promoted_at` they are read-only to the ORM: every transition is a DBAL
@@ -341,6 +363,11 @@ final class Document extends AggregateRoot
     public function promotedAt(): ?DateTimeImmutable
     {
         return $this->promotedAt;
+    }
+
+    public function objectDeletedAt(): ?DateTimeImmutable
+    {
+        return $this->objectDeletedAt;
     }
 
     public function nextScanAt(): DateTimeImmutable

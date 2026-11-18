@@ -132,6 +132,12 @@ final class InMemoryUploadIntentRepository implements UploadIntentRepository
     }
 
     #[Override]
+    public function lockByScope(string $scopeId): void
+    {
+        $this->journal?->append('lock-intent-by-scope');
+    }
+
+    #[Override]
     public function hasLiveIntentForScope(string $scopeId): bool
     {
         return false;

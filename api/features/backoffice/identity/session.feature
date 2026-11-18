@@ -20,7 +20,7 @@ Feature: Server-side session registry and admission gate
   # document tier verbs, AUDIT_READER adds the audit grant, and bankAccount.changeStatus arrives through
   # an explicit grant rather than a tier verb. Neither role reaches the identity plane, so the set holds no
   # `users.*` — pinned exhaustively, since the count alone would not catch one capability swapped for another.
-  # Nor does it hold `document.rescan`, `document.download` or `document.custody`: none is a tier verb, so only the
+  # Nor does it hold `document.rescan`, `document.erase`, `document.download` or `document.custody`: none is a tier verb, so only the
   # ADMIN wildcard reaches them.
   Scenario: The signed-in user reads the permissions their roles grant
     When I send a "GET" request to "/me"

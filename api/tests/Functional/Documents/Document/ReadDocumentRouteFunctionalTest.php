@@ -10,9 +10,9 @@ use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Exception\DocumentIntegrityFailure;
 use Erpify\Documents\Document\Infrastructure\Controller\ReadDocumentController;
 use Erpify\Documents\Document\Infrastructure\Http\UploadRoutes;
-use Erpify\Documents\Document\Infrastructure\Read\NeverSetErasureLedgerOverride;
 use Erpify\Documents\Document\Infrastructure\Security\DocumentPermission;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Erasure\InactiveErasureLedgerOverride;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use Erpify\Tests\Support\Dig;
 use Erpify\Tests\Unit\Documents\Document\Infrastructure\Http\RecordingTimeBudget;
@@ -116,7 +116,7 @@ final class ReadDocumentRouteFunctionalTest extends WebTestCase
         $budget = new RecordingTimeBudget();
         $controller = new ReadDocumentController(
             $this->service(ReadDocument::class),
-            new NeverSetErasureLedgerOverride(),
+            new InactiveErasureLedgerOverride(),
             $budget,
             true,
         );

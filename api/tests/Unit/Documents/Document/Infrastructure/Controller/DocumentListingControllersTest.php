@@ -15,13 +15,13 @@ use Erpify\Documents\Document\Domain\Repository\DocumentListingRepository;
 use Erpify\Documents\Document\Infrastructure\Controller\DocumentCustodyController;
 use Erpify\Documents\Document\Infrastructure\Controller\ListDocumentsController;
 use Erpify\Documents\Document\Infrastructure\Http\DocumentListingMapper;
-use Erpify\Documents\Document\Infrastructure\Read\NeverSetErasureLedgerOverride;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Search\Application\Http\SearchQuery;
 use Erpify\Shared\Search\Infrastructure\Http\SearchResponder;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Erasure\InactiveErasureLedgerOverride;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -48,7 +48,7 @@ final class DocumentListingControllersTest extends TestCase
     {
         $this->expectException(MethodNotAllowedHttpException::class);
 
-        $this->listing($this->untouchedListing(), new NeverSetErasureLedgerOverride())(
+        $this->listing($this->untouchedListing(), new InactiveErasureLedgerOverride())(
             Request::create('/documents', Request::METHOD_HEAD),
             new SearchQuery(),
         );
@@ -67,7 +67,7 @@ final class DocumentListingControllersTest extends TestCase
     {
         $this->expectException(MethodNotAllowedHttpException::class);
 
-        $this->trail($this->untouchedListing(), new NeverSetErasureLedgerOverride())(
+        $this->trail($this->untouchedListing(), new InactiveErasureLedgerOverride())(
             Request::create('/documents/x/custody', Request::METHOD_HEAD),
             Uuid::generate(),
             new CustodyTrailQuery(),

@@ -10,11 +10,11 @@ use Erpify\Documents\Document\Domain\Exception\DocumentGone;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
 use Erpify\Documents\Document\Domain\Storage\DocumentStorage;
 use Erpify\Documents\Document\Infrastructure\Controller\ReadDocumentController;
-use Erpify\Documents\Document\Infrastructure\Read\NeverSetErasureLedgerOverride;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\StreamEnvelopeEncryptor;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Erasure\InactiveErasureLedgerOverride;
 use Erpify\Tests\Unit\Documents\Document\Application\InMemoryDocumentRepository;
 use Erpify\Tests\Unit\Documents\Document\Infrastructure\Http\RecordingTimeBudget;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -33,7 +33,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the controller and every collaborator it is built from
  */
 #[CoversClass(ReadDocumentController::class)]
-#[CoversClass(NeverSetErasureLedgerOverride::class)]
 final class ReadDocumentControllerTest extends TestCase
 {
     #[Test]
@@ -76,15 +75,9 @@ final class ReadDocumentControllerTest extends TestCase
         $this->controller(readEnabled: true)(new Request(), Uuid::generate());
     }
 
-    #[Test]
-    public function theAdapterBoundUntilTheLedgerShipsIsNeverSet(): void
-    {
-        $this->assertFalse((new NeverSetErasureLedgerOverride())->isActive());
-    }
-
     private function controller(
         bool $readEnabled,
-        ErasureLedgerOverride $override = new NeverSetErasureLedgerOverride(),
+        ErasureLedgerOverride $override = new InactiveErasureLedgerOverride(),
     ): ReadDocumentController {
         return new ReadDocumentController(
             new ReadDocument(

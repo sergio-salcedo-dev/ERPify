@@ -106,6 +106,18 @@ final class InMemoryDocumentRepository implements DocumentRepository
     }
 
     #[Override]
+    public function findIdByScope(string $scopeId): ?string
+    {
+        foreach ($this->documents as $document) {
+            if ($document->scopeId() === $scopeId) {
+                return $document->documentId();
+            }
+        }
+
+        return null;
+    }
+
+    #[Override]
     public function markPromoted(string $id): bool
     {
         $this->calls[] = 'mark-promoted';

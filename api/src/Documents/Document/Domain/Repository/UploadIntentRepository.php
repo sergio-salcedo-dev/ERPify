@@ -72,6 +72,14 @@ interface UploadIntentRepository
      */
     public function deleteCommittedBefore(DateTimeImmutable $cutoff, int $limit): int;
 
+    /**
+     * Locks every intent of the scope (at most one: the scope id is unique) until the transaction ends, loading
+     * nothing. The first lock of the erasure, because it is the first lock the commit and the reaper take: sharing it
+     * serialises every path that could meet the scope's keystore row. Takes no row when the intent is gone (its
+     * retention sweep ran), which is the case where no upload can be in flight either.
+     */
+    public function lockByScope(string $scopeId): void;
+
     /** Whether an intent in `Declared` or `Streaming` holds the scope. */
     public function hasLiveIntentForScope(string $scopeId): bool;
 

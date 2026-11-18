@@ -135,6 +135,17 @@ final readonly class DoctrineDocumentRepository implements DocumentRepository
     }
 
     #[Override]
+    public function findIdByScope(string $scopeId): ?string
+    {
+        $id = $this->connection->fetchOne(
+            'SELECT id FROM document WHERE scope_id = CAST(:scope_id AS UUID)',
+            ['scope_id' => \strtolower($scopeId)],
+        );
+
+        return \is_string($id) ? $id : null;
+    }
+
+    #[Override]
     public function markPromoted(string $id): bool
     {
         return $this->promotions->markPromoted($id);

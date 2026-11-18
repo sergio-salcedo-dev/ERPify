@@ -21,6 +21,9 @@ final class ScriptedDocumentStorage implements DocumentStorage
     /** @var list<string> */
     public array $deleted = [];
 
+    /** @var list<string> `<area>:<scope>` of every delete that reached the real storage, in order */
+    public array $deletes = [];
+
     /** @var list<string> */
     public array $staged = [];
 
@@ -193,5 +196,6 @@ final class ScriptedDocumentStorage implements DocumentStorage
 
         $this->inner->delete($area, $scopeId);
         $this->deleted[] = $scopeId;
+        $this->deletes[] = $area->value . ':' . $scopeId;
     }
 }

@@ -7,6 +7,8 @@ namespace Erpify\Tests\Unit\Documents\Document\Domain\Entity;
 use Erpify\Documents\Document\Domain\CustodyEvent;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
+use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
+use Erpify\Documents\Document\Domain\Erasure\ErasureSystemReason;
 use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
@@ -24,6 +26,7 @@ use Symfony\Component\Uid\Uuid as RandomUuid;
  * @internal
  *
  * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per invariant of the row
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the row, its events and the two vocabularies of reasons
  */
 #[CoversClass(DocumentCustody::class)]
 #[CoversClass(ErasedPersonMarker::class)]
@@ -120,6 +123,82 @@ final class DocumentCustodyTest extends TestCase
         ) {
             yield $event->value => [$event];
         }
+    }
+
+    #[Test]
+    public function anOperatorErasureNamesTheOperatorAndCarriesAnHttpReason(): void
+    {
+        foreach (ErasureReason::cases() as $reason) {
+            $operator = Uuid::generate();
+
+            $row = DocumentCustody::record(
+                Uuid::generate(),
+                Uuid::generate(),
+                2,
+                CustodyEvent::Erased,
+                $operator,
+                $reason->value,
+            );
+
+            $this->assertSame($operator, $row->actorId());
+            $this->assertSame($reason->value, $row->reason());
+        }
+    }
+
+    #[Test]
+    public function aSystemErasureIsTheSystemsWithANullActorAndASystemReason(): void
+    {
+        foreach (ErasureSystemReason::cases() as $reason) {
+            $row = DocumentCustody::record(
+                Uuid::generate(),
+                Uuid::generate(),
+                2,
+                CustodyEvent::Erased,
+                null,
+                $reason->value,
+            );
+
+            $this->assertNull($row->actorId(), 'the marker keeps its one meaning, a person who was erased');
+            $this->assertSame($reason->value, $row->reason());
+        }
+    }
+
+    #[Test]
+    #[DataProvider('provideAnErasureThatFitsNeitherListIsRefusedCases')]
+    public function anErasureThatFitsNeitherListIsRefused(?string $actor, ?string $reason): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        DocumentCustody::record(Uuid::generate(), Uuid::generate(), 2, CustodyEvent::Erased, $actor, $reason);
+    }
+
+    /**
+     * @return iterable<string, array{?string, ?string}>
+     */
+    public static function provideAnErasureThatFitsNeitherListIsRefusedCases(): iterable
+    {
+        yield 'an operator reason with no operator' => [null, ErasureReason::DataSubjectRequest->value];
+        yield 'a system reason with an operator' => [Uuid::generate(), ErasureSystemReason::LedgerReplay->value];
+        yield 'the marker standing in for the system' => [
+            ErasedPersonMarker::UUID,
+            ErasureSystemReason::LedgerCompletion->value,
+        ];
+        yield 'no reason' => [null, null];
+        yield 'an operator and no reason' => [Uuid::generate(), null];
+        yield 'a reason outside both lists' => [Uuid::generate(), 'because'];
+        yield 'a re-scan reason' => [Uuid::generate(), RescanReason::FailureInvestigated->value];
+    }
+
+    #[Test]
+    public function theHttpReasonsAndTheSystemReasonsShareNoValue(): void
+    {
+        $http = \array_map(static fn (ErasureReason $reason): string => $reason->value, ErasureReason::cases());
+        $system = \array_map(
+            static fn (ErasureSystemReason $reason): string => $reason->value,
+            ErasureSystemReason::cases(),
+        );
+
+        $this->assertSame([], \array_intersect($http, $system));
     }
 
     #[Test]

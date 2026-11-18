@@ -176,6 +176,17 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    # The erasure's own lines (a ledger write that failed or timed out, a sweep that passed over an object, an object past
+    # its bound) name a document id and a count, and must arrive on a request that answers 5xx without flushing the
+    # buffered default channel.
+    Erpify\Documents\Document\Application\Erasure\EraseDocument:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    Erpify\Documents\Document\Application\Erasure\DeleteErasedObjects:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     # The read's alarms (a refused read, an aborted transfer) name a document id and a reason slug, and must arrive on a
     # request that answers 5xx or 410 without flushing the buffered default channel.
     Erpify\Documents\Document\Application\Read\ReadDocument:

@@ -56,6 +56,9 @@ interface DocumentRepository
 
     public function existsForScope(string $scopeId): bool;
 
+    /** The id of the document holding the scope, in whatever state, or null when none does. */
+    public function findIdByScope(string $scopeId): ?string;
+
     /**
      * Sets `promoted_at` to the database clock by compare-and-set — only on a `Received` row whose
      * `promoted_at` is still NULL — and says whether this call set it. The caller that set it is the one

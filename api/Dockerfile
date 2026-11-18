@@ -10,6 +10,11 @@
 
 FROM dunglas/frankenphp@sha256:8a7a935deb33959200628497b8201423c8b777d513a62ac1b69a91c624afdb3d AS frankenphp_upstream
 
+# restic 0.18.1, the erasure ledger's client (docs/adr/documents-custody-log.md D11). A static binary copied out of the
+# upstream image, pinned by the digest of that image rather than by a checksum written by hand: a tag can move, a digest
+# cannot, and the digest is what dependabot's docker ecosystem keeps current.
+FROM restic/restic@sha256:39d9072fb5651c80d75c7a811612eb60b4c06b32ffe87c2e9f3c7222e1797e76 AS restic_upstream
+
 # Base FrankenPHP image
 FROM frankenphp_upstream AS frankenphp_base
 
@@ -56,6 +61,7 @@ RUN install-php-extensions pdo_pgsql
 ###< doctrine/doctrine-bundle ###
 ###< recipes ###
 
+COPY --link --from=restic_upstream /usr/bin/restic /usr/local/bin/restic
 COPY --link frankenphp/conf.d/10-app.ini $PHP_INI_DIR/app.conf.d/
 COPY --link --chmod=755 frankenphp/docker-entrypoint.sh /usr/local/bin/docker-entrypoint
 COPY --link frankenphp/Caddyfile frankenphp/worker.Caddyfile /etc/frankenphp/
@@ -168,6 +174,10 @@ COPY --from=frankenphp_prod_builder /etc/frankenphp/worker.Caddyfile /etc/franke
 COPY --from=frankenphp_prod_builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=frankenphp_prod_builder /usr/bin/file /usr/bin/file
 COPY --from=frankenphp_prod_builder /usr/lib/file/magic.mgc /usr/lib/file/magic.mgc
+
+# The erasure ledger's client: the erase request, the completion sweep and the restore command all run PHP and shell out
+# to it (a static binary, so nothing else needs copying beside it)
+COPY --from=restic_upstream /usr/bin/restic /usr/local/bin/restic
 
 ENV XDG_CONFIG_HOME=/config XDG_DATA_HOME=/data
 
