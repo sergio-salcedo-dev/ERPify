@@ -190,7 +190,11 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
   else — it deletes the session it opened (the append-only `SessionStarted` event stays), and its own intents,
   documents, custody, keys and sealed objects, and only the declare-limiter key of its own identity
   (`DeclareUploadThrottle::keyFor()`), never the shared `cache.rate_limiter` pool — from `tearDown`, so a failed
-  assertion still cleans up. A probe that needs more than its own rows is the defect.
+  assertion still cleans up. A probe that needs more than its own rows is the defect. The bank-logo probe
+  (`BankLogoThroughCaddyTest`) also creates a bank through the API and deletes it through the API, with its stored
+  image and sealed object: what any bank create/delete leaves stays, like the session event — `event_store` rows
+  (append-only), `audit_log` change rows and the `bank_count` movement — and it asserts on the set of image ids it
+  minted, never on `COUNT(*)` of the shared `image` table, which the dev worker moves while it drains a release.
 - **Migrations** → generate via `make db.diff`. You may edit a migration created on the current feature branch; once merged into `main` it is immutable — create a new one instead.
 - **Local browser checks** → when a Playwright/browser navigation to the local HTTPS stack fails with `ERR_CERT_AUTHORITY_INVALID` (self-signed dev cert), don't silently downgrade to curl-only: say you hit it and pause — the user accepts the cert manually in the browser, then you retry the navigation. `curl -k` stays the hard gate, but the live visual check is recoverable this way, not abandoned.
 
