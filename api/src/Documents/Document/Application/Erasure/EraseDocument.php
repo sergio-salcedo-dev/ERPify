@@ -36,8 +36,9 @@ final readonly class EraseDocument
 {
     /**
      * SQLSTATEs a failed erasure transaction is classified by: `55P03` lock_not_available, `57014` query_canceled.
+     * Pairs rather than a map, because PHP turns the all-digit key `'57014'` into an integer.
      */
-    private const array SQLSTATE_CAUSES = ['55P03' => 'lock-timeout', '57014' => 'statement-timeout'];
+    private const array SQLSTATE_CAUSES = [['55P03', 'lock-timeout'], ['57014', 'statement-timeout']];
 
     public function __construct(
         private DocumentRepository $documents,
@@ -126,7 +127,7 @@ final readonly class EraseDocument
      */
     private function slugOf(Throwable $cause): ?string
     {
-        foreach (self::SQLSTATE_CAUSES as $sqlState => $slug) {
+        foreach (self::SQLSTATE_CAUSES as [$sqlState, $slug]) {
             if (\str_contains($cause->getMessage(), $sqlState)) {
                 return $slug;
             }
