@@ -58,19 +58,12 @@ final class ClearErasureLedgerOverrideCommand extends Command
             return Command::SUCCESS;
         }
 
-        try {
-            $this->ledger->verifyReadableInFull();
-            $entries = $this->ledger->entries();
-        } catch (LedgerUnreadable) {
-            $io->error('The erasure ledger cannot be read in full. Nothing was cleared.');
+        $scopeIds = $this->ledgerScopeIds();
 
-            return Command::FAILURE;
-        }
-
-        $scopeIds = \array_map(static fn (LedgerEntry $entry): string => $entry->scopeId, $entries);
-
-        if ([] !== $this->progress->unfinished($scopeIds) || 0 !== $this->progress->notErasedAmong($scopeIds)) {
-            $io->error('The database still holds a scope of the ledger that is not erased. Nothing was cleared.');
+        if (null === $scopeIds || !$this->everyScopeErased($scopeIds)) {
+            $io->error(null === $scopeIds
+                ? 'The erasure ledger cannot be read in full. Nothing was cleared.'
+                : 'The database still holds a scope of the ledger that is not erased. Nothing was cleared.');
 
             return Command::FAILURE;
         }
@@ -88,5 +81,30 @@ final class ClearErasureLedgerOverrideCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Every scope id the ledger holds, or null when it cannot be read in full: a partial read would clear an override
+     * over scopes nobody checked.
+     *
+     * @return list<string>|null
+     */
+    private function ledgerScopeIds(): ?array
+    {
+        try {
+            $this->ledger->verifyReadableInFull();
+
+            return \array_map(static fn (LedgerEntry $entry): string => $entry->scopeId, $this->ledger->entries());
+        } catch (LedgerUnreadable) {
+            return null;
+        }
+    }
+
+    /**
+     * @param list<string> $scopeIds
+     */
+    private function everyScopeErased(array $scopeIds): bool
+    {
+        return [] === $this->progress->unfinished($scopeIds) && 0 === $this->progress->notErasedAmong($scopeIds);
     }
 }

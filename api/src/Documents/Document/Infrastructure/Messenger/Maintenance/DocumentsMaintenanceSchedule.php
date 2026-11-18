@@ -52,6 +52,12 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
 {
     private const string EVERY_MINUTE = '60 seconds';
 
+    private const string EVERY_FIVE_MINUTES = '5 minutes';
+
+    private const string HOURLY = '1 hour';
+
+    private const string DAILY = '1 day';
+
     public function __construct(
         #[Autowire(service: 'cache.scheduler_checkpoint')]
         private CacheInterface $checkpointState,
@@ -65,17 +71,17 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
             ->stateful($this->checkpointState)
             ->add(RecurringMessage::every(self::EVERY_MINUTE, new ReapUploadIntentsMessage()))
             ->add(RecurringMessage::every(self::EVERY_MINUTE, new RollForwardPromotionsMessage()))
-            ->add(RecurringMessage::every('5 minutes', new SweepStagedOrphansMessage()))
+            ->add(RecurringMessage::every(self::EVERY_FIVE_MINUTES, new SweepStagedOrphansMessage()))
             ->add(RecurringMessage::every(self::EVERY_MINUTE, new ScanDueDocumentsMessage()))
             ->add(RecurringMessage::every(self::EVERY_MINUTE, new ExpireScanLeasesMessage()))
-            ->add(RecurringMessage::every('5 minutes', new SweepCappedDocumentsMessage()))
-            ->add(RecurringMessage::every('1 hour', new PruneCommittedIntentsMessage()))
-            ->add(RecurringMessage::every('1 hour', new ReportDocumentScansMessage()))
+            ->add(RecurringMessage::every(self::EVERY_FIVE_MINUTES, new SweepCappedDocumentsMessage()))
+            ->add(RecurringMessage::every(self::HOURLY, new PruneCommittedIntentsMessage()))
+            ->add(RecurringMessage::every(self::HOURLY, new ReportDocumentScansMessage()))
             ->add(RecurringMessage::every(self::EVERY_MINUTE, new DeleteErasedObjectsMessage()))
-            ->add(RecurringMessage::every('5 minutes', new CompleteInterruptedErasuresMessage()))
-            ->add(RecurringMessage::every('1 hour', new ReportTombstonedDocumentsMessage()))
-            ->add(RecurringMessage::every('1 day', new ReportDocumentStorageMessage()))
-            ->add(RecurringMessage::every('1 day', new ReportDocumentNamesMessage()))
+            ->add(RecurringMessage::every(self::EVERY_FIVE_MINUTES, new CompleteInterruptedErasuresMessage()))
+            ->add(RecurringMessage::every(self::HOURLY, new ReportTombstonedDocumentsMessage()))
+            ->add(RecurringMessage::every(self::DAILY, new ReportDocumentStorageMessage()))
+            ->add(RecurringMessage::every(self::DAILY, new ReportDocumentNamesMessage()))
         ;
     }
 }

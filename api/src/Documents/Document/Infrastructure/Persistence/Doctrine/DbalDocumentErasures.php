@@ -126,8 +126,8 @@ final readonly class DbalDocumentErasures implements DocumentErasures
     #[Override]
     public function objectsOverdue(int $olderThanSeconds, int $limit): array
     {
-        /** @var list<string> $ids */
-        $ids = $this->connection->fetchFirstColumn(
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
             'SELECT d.id FROM document d WHERE d.state = :erased AND d.object_deleted_at IS NULL AND EXISTS ('
             . 'SELECT 1 FROM document_custody c WHERE c.document_id = d.id AND c.event = :event '
             . 'AND c.created_at < NOW() - make_interval(secs => :age)) ORDER BY d.id LIMIT :limit',
@@ -139,7 +139,5 @@ final readonly class DbalDocumentErasures implements DocumentErasures
             ],
             ['age' => Types::INTEGER, 'limit' => Types::INTEGER],
         );
-
-        return $ids;
     }
 }

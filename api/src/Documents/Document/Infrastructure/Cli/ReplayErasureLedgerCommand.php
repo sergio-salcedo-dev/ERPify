@@ -47,18 +47,41 @@ final class ReplayErasureLedgerCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
+        $scopeIds = $this->ledgerScopeIds();
 
-        try {
-            $this->ledger->verifyReadableInFull();
-            $entries = $this->ledger->entries();
-        } catch (LedgerUnreadable) {
+        if (null === $scopeIds) {
             $io->error('The erasure ledger cannot be read in full. Nothing was replayed.');
 
             return Command::FAILURE;
         }
 
-        $scopeIds = \array_map(static fn (LedgerEntry $entry): string => $entry->scopeId, $entries);
+        return $this->replayAll($scopeIds, $io);
+    }
 
+    /**
+     * Every scope id the ledger holds, or null when it cannot be read in full: a partial read would replay a prefix and
+     * report it as the whole.
+     *
+     * @return list<string>|null
+     */
+    private function ledgerScopeIds(): ?array
+    {
+        try {
+            $this->ledger->verifyReadableInFull();
+
+            return \array_map(static fn (LedgerEntry $entry): string => $entry->scopeId, $this->ledger->entries());
+        } catch (LedgerUnreadable) {
+            return null;
+        }
+    }
+
+    /**
+     * Replays every scope, then asks the database whether each one is now erased.
+     *
+     * @param list<string> $scopeIds
+     */
+    private function replayAll(array $scopeIds, SymfonyStyle $io): int
+    {
         try {
             foreach ($scopeIds as $scopeId) {
                 $this->replayErasure->replay($scopeId, ErasureSystemReason::LedgerReplay);

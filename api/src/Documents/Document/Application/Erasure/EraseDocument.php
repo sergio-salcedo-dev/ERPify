@@ -34,6 +34,11 @@ use Throwable;
  */
 final readonly class EraseDocument
 {
+    /**
+     * SQLSTATEs a failed erasure transaction is classified by: `55P03` lock_not_available, `57014` query_canceled.
+     */
+    private const array SQLSTATE_CAUSES = ['55P03' => 'lock-timeout', '57014' => 'statement-timeout'];
+
     public function __construct(
         private DocumentRepository $documents,
         private ErasureLedger $ledger,
@@ -105,21 +110,28 @@ final readonly class EraseDocument
     private function causeOf(Throwable $failure): string
     {
         for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            $message = $cause->getMessage();
+            $slug = $this->slugOf($cause);
 
-            if (\str_contains($message, '55P03')) {
-                return 'lock-timeout';
-            }
-
-            if (\str_contains($message, '57014')) {
-                return 'statement-timeout';
-            }
-
-            if ($cause instanceof TransientTransactionFailure) {
-                return 'transient-transaction-failure';
+            if (null !== $slug) {
+                return $slug;
             }
         }
 
         return 'erasure-transaction-failed';
+    }
+
+    /**
+     * The slug one link of the chain answers for, or null when it says nothing: a SQLSTATE in its text wins over its
+     * class, in the order of {@see self::SQLSTATE_CAUSES}.
+     */
+    private function slugOf(Throwable $cause): ?string
+    {
+        foreach (self::SQLSTATE_CAUSES as $sqlState => $slug) {
+            if (\str_contains($cause->getMessage(), $sqlState)) {
+                return $slug;
+            }
+        }
+
+        return $cause instanceof TransientTransactionFailure ? 'transient-transaction-failure' : null;
     }
 }

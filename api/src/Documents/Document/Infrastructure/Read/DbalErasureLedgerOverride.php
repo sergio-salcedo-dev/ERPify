@@ -55,12 +55,10 @@ final readonly class DbalErasureLedgerOverride implements ErasureLedgerOverride,
     #[Override]
     public function unclearedIds(): array
     {
-        /** @var list<string> $ids */
-        $ids = $this->connection->fetchFirstColumn(
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
             'SELECT id FROM erasure_ledger_override WHERE cleared_at IS NULL ORDER BY id',
         );
-
-        return $ids;
     }
 
     #[Override]
@@ -72,15 +70,13 @@ final readonly class DbalErasureLedgerOverride implements ErasureLedgerOverride,
 
         // Named by id and guarded by `cleared_at IS NULL`: an override set after the caller took its snapshot is not in
         // the list, so it is left standing however the call raced it.
-        /** @var list<string> $references */
-        $references = $this->connection->fetchFirstColumn(
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
             'UPDATE erasure_ledger_override SET cleared_at = NOW() '
             . 'WHERE cleared_at IS NULL AND id IN (:ids) RETURNING record_ref',
             ['ids' => $ids],
             ['ids' => ArrayParameterType::STRING],
         );
-
-        return $references;
     }
 
     #[Override]
