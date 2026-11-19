@@ -2,7 +2,7 @@
 title: 'doc-8: Dependent derivatives through the images module'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: '3f96ac340e06e592e058f672c390dee0b7a8c544'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -85,4 +85,11 @@ Three layers, run in parallel as read-only subagents over the diff `3f96ac3..c28
 
 ## Verification
 
-Fresh runs in a local PHP 8.5.12 toolbox over PostgreSQL 18 (this session's container cannot run the compose stack): the full PHPUnit suite with only the twenty pre-existing live-stack gate errors (they need the Caddy edge running); `php.quality` and `php.quality.dry-run` green except `php.lint.route-manifest`, `php.lint.config-reference` and `composer.check.missing-deps`, which could not run here (no `jq`, no `apcu`, no access to the primary checkout's `.git`) and are covered by CI; the migration verified up, down and up, with `doctrine:schema:validate` in sync.
+Fresh runs on head `afc2812`, in a local PHP 8.5.12 toolbox over PostgreSQL 18 (this session's container cannot run the compose stack):
+
+- `php.quality` then `php.quality.dry-run`: PHPStan, PHPMD, phpcs, Rector, CS-Fixer, Deptrac and every `php.lint.*` gate that can run here green. Three could not run here and are left to CI: `php.lint.route-manifest` (no `jq`), `php.lint.config-reference` (the worktree's `.git` points at a primary checkout the toolbox does not mount) and `composer.check.missing-deps` (no `apcu`).
+- Full PHPUnit suite: 5926 tests, no failure; 20 errors, all of them the live-stack gates that need the Caddy edge running, identical to the baseline taken on `main` before this story.
+- The migration up, down and up on the dev and test databases, with `doctrine:schema:validate` in sync.
+- Not run: Behat (no scenario was added; the acceptance is the PHPUnit functional case `DocumentDerivativeLifecycleFunctionalTest`).
+
+`done` waits on the story's done checkpoint (the owner).
