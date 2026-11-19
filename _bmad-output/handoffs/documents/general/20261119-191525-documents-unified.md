@@ -35,9 +35,11 @@ NEXT (in order):
 1. Owner, locally with _bmad/scripts/memlog.py (absent from cloud containers; never hand-edit .memlog.md):
    a) write the doc-9 "successor exclusion refined" line (exact text in the doc-9 story file's Spec Change Log,
       "To apply locally with memlog.py", and in the doc-9 PR body) and re-derive the doc-9 entry of stories.yaml;
-   b) re-point to PR #1268 the references to the deleted plan: stories.yaml:516 (doc-8 entry, "the plan in
-      _bmad-output/handoffs/documents/doc-8/"), .memlog.md:187 (doc-8 spec checkpoint line) and
-      stories/doc-8-dependent-derivatives.md:68 (Spec Change Log).
+   b) DONE in #1272: the references to the deleted plan are re-pointed (stories.yaml doc-8 entry, the doc-8 story
+      file's Spec Change Log) and, since the memlog is append-only, a `(note)` entry appended through memlog.py
+      redirects line 187 to #1267/#1268. memlog.py came from the npm package bmad-method@6.12.4
+      (src/scripts/memlog.py); in a cloud session the doc-9 decision entry was blocked by the session's permission
+      classifier because it records a decision in the owner's name.
 2. Owner: the doc-7 restore drill on the second host and its restore/drill proof records. doc-7 stays `in-review`
    until the drill record is committed; documents.ingest_enabled / read_enabled stay closed in production until then.
 3. Owner, open items carried over (none approved yet):
