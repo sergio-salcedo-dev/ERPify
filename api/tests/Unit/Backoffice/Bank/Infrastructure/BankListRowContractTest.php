@@ -41,7 +41,7 @@ use Symfony\Component\Mercure\Update;
  *
  * @internal
  *
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects") both wire paths, their collaborators and the clock the logo case moves
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") both wire paths, their collaborators and the clock
  */
 #[CoversClass(RefreshRealtimeOnBankChanged::class)]
 #[CoversClass(BankResourceMapper::class)]
