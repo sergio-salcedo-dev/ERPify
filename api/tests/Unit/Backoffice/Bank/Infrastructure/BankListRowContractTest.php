@@ -40,6 +40,8 @@ use Symfony\Component\Mercure\Update;
  * so pinning the created row pins the shape for both lifecycle events.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") both wire paths, their collaborators and the clock the logo case moves
  */
 #[CoversClass(RefreshRealtimeOnBankChanged::class)]
 #[CoversClass(BankResourceMapper::class)]

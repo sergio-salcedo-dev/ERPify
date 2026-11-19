@@ -288,8 +288,8 @@ final class BankLogoFunctionalTest extends KernelTestCase
     {
         try {
             $this->outside->fetchOne('SELECT 1 FROM bank WHERE id = ? FOR UPDATE NOWAIT', [$bankId]);
-        } catch (DriverException $exception) {
-            return $exception->getSQLState();
+        } catch (DriverException $driverException) {
+            return $driverException->getSQLState();
         }
 
         return null;
