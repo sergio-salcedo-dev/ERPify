@@ -10,7 +10,8 @@ use Erpify\Documents\Document\Domain\Upload\RetentionReason;
 use LogicException;
 
 /**
- * One declare's parameters, normalised once so the replay comparison and the insert read the same values.
+ * One declare's parameters, normalised once so the replay comparison and the insert read the same values. The
+ * predecessor is null for a first version and the lower-cased id of the version to succeed otherwise.
  */
 final readonly class Declaration
 {
@@ -22,6 +23,7 @@ final readonly class Declaration
         public RetentionReason $retentionReason,
         public LegalBasis $legalBasis,
         public ?DateTimeImmutable $reviewAt,
+        public ?string $predecessorId = null,
     ) {
         if (null !== $keyHash && null === $sha256) {
             throw new LogicException('An idempotency key requires a declared sha256; the edge validates it.');

@@ -57,6 +57,10 @@ final class DocumentsIngestContext extends AbstractContext implements Context
         $scope = Uuid::generate();
 
         $this->entityManager->getConnection()->executeStatement(
+            'INSERT INTO document_series (id, created_at) VALUES (:id, NOW()) ON CONFLICT DO NOTHING',
+            ['id' => $id],
+        );
+        $this->entityManager->getConnection()->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, next_scan_at, '
             . 'created_at, updated_at) '
             . 'VALUES (:id, :scope, :id, :uploader, :state, :digest, 5, NOW(), NOW(), NOW())',

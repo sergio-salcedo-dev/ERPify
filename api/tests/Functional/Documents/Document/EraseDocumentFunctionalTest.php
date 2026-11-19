@@ -19,6 +19,7 @@ use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
 use Erpify\Documents\Document\Domain\Exception\ErasureOutcomeUnknown;
 use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
 use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Scanning\DocumentScanLeases;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
@@ -482,6 +483,7 @@ final class EraseDocumentFunctionalTest extends KernelTestCase
             $this->service(ErasureLedger::class),
             $apply,
             $this->logger,
+            $this->service(DocumentSeriesRepository::class),
         );
     }
 

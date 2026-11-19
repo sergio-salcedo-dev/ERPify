@@ -8,15 +8,17 @@ use DateTimeImmutable;
 use Erpify\Documents\Document\Domain\CustodyEvent;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
+use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
 /**
- * Files the first version of a document: the snapshot in `Received` and its custody row 1, in one
- * transaction, so a rollback leaves neither.
+ * Files a document — a first version, or a successor of a version the caller locked: the snapshot in `Received` and
+ * its custody row 1, in one transaction, so a rollback leaves neither.
  *
  * It reads no byte and computes no digest: the digest, the size and the scope id arrive from the upload flow
  * that sealed the bytes. The scope id is minted by that flow before the first byte is sealed and is only
@@ -66,9 +68,11 @@ final readonly class ReceiveDocument
     /**
      * Files the document inside the caller's transaction, for a flow that must decide something else under the
      * same locks — the upload commit, which moves its intent to `Committed` in the same unit of work and passes
-     * its transaction's database time as `$receivedAt`.
+     * its transaction's database time as `$receivedAt`. With a predecessor — loaded by the caller under its lock,
+     * after the series lock — the document is filed as its successor in the predecessor's series.
      *
      * @throws ConcurrentUniqueWrite when another document already holds the idempotency key hash
+     * @throws PredecessorNotReady   when the predecessor given is not `Ready`
      */
     public function receiveWithin(
         string $scopeId,
@@ -78,19 +82,32 @@ final readonly class ReceiveDocument
         ?string $idempotencyKeyHash = null,
         ?IntakeMetadata $intake = null,
         ?DateTimeImmutable $receivedAt = null,
+        ?Document $predecessor = null,
     ): Document {
         $documentId = Uuid::generate();
 
-        $document = Document::receive(
-            $documentId,
-            $scopeId,
-            $uploaderId,
-            $digest,
-            $sizeBytes,
-            $idempotencyKeyHash,
-            $intake,
-            $receivedAt,
-        );
+        $document = $predecessor instanceof Document
+            ? Document::succeed(
+                $predecessor,
+                $documentId,
+                $scopeId,
+                $uploaderId,
+                $digest,
+                $sizeBytes,
+                $idempotencyKeyHash,
+                $intake ?? new IntakeMetadata(),
+                $receivedAt ?? SystemClock::now(),
+            )
+            : Document::receive(
+                $documentId,
+                $scopeId,
+                $uploaderId,
+                $digest,
+                $sizeBytes,
+                $idempotencyKeyHash,
+                $intake,
+                $receivedAt,
+            );
         $received = DocumentCustody::record(
             Uuid::generate(),
             $documentId,

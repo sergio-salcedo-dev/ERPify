@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotReadable;
+use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
@@ -23,9 +24,12 @@ use InvalidArgumentException;
  * same transaction as the snapshot change (`docs/adr/documents-custody-log.md`).
  *
  * **Each version is its own aggregate.** `seriesId` links it to its series by a scalar and `predecessorId` to
- * the version it replaces; nothing else about versioning exists. Both are written once and have no setter and
- * no UPDATE path (`updatable: false`): this story only files first versions, so `seriesId` is the row's own
- * id and `predecessorId` is `NULL`, and no series aggregate, cycle check or walk-up exists to maintain them.
+ * the version it replaces. Both are written once and have no setter and no UPDATE path (`updatable: false`): a
+ * first version is its own series with no predecessor ({@see receive()}), and a successor copies the series of the
+ * predecessor it is handed, which the caller has locked and which must be `Ready` ({@see succeed()}). Whether the
+ * predecessor's slot is free is not this aggregate's to know — it spans other versions — and is decided under the
+ * series lock (`DocumentVersionSlots`). Ids are minted, never reused, and a predecessor exists before its successor,
+ * so the links cannot close a cycle.
  *
  * **`scopeId` is random and never derived from the document id.** It names the encryption scope that seals
  * the bytes (`EncryptionScopeId::forDocument()`); a scope derived from the document id would let anyone who
@@ -91,10 +95,8 @@ final class Document extends AggregateRoot
     #[ORM\Column(name: 'series_id', type: Types::GUID, updatable: false)]
     private string $seriesId;
 
-    // Only first versions are filed here; a successor is a different way in, and it brings its own argument.
     #[ORM\Column(name: 'predecessor_id', type: Types::GUID, nullable: true, updatable: false)]
-    // @phpstan-ignore property.unusedType (Doctrine hydrates a successor's id; only first versions are filed here)
-    private ?string $predecessorId = null;
+    private ?string $predecessorId;
 
     #[ORM\Column(name: 'uploader_id', type: Types::GUID)]
     #[PersonSubjectReference(erasedBy: 'src/Documents/Document/Application/PurgeUserDocumentReferences.php')]
@@ -287,6 +289,7 @@ final class Document extends AggregateRoot
         int $sizeBytes,
         ?string $idempotencyKeyHash,
         IntakeMetadata $intake,
+        ?self $predecessor,
         /**
          * When the scan sweep may next claim the document. Filed as the instant the document was received — the
          * upload commit passes its transaction's database time — so one sweep also re-drives a lost first message.
@@ -307,7 +310,8 @@ final class Document extends AggregateRoot
 
         $this->id = $id;
         $this->scopeId = $scopeId;
-        $this->seriesId = $id;
+        $this->seriesId = $predecessor instanceof self ? $predecessor->seriesId : $id;
+        $this->predecessorId = $predecessor?->documentId();
         $this->uploaderId = $uploaderId;
         $this->digest = $digest;
         $this->sizeBytes = $sizeBytes;
@@ -340,7 +344,47 @@ final class Document extends AggregateRoot
             $sizeBytes,
             $idempotencyKeyHash,
             $intake ?? new IntakeMetadata(),
+            null,
             $receivedAt ?? SystemClock::now(),
+        );
+    }
+
+    /**
+     * Files a new version of the predecessor's series in `Received`, linked to it. The predecessor is the row the
+     * caller loaded under its lock, so the series is copied from the database, never from a caller; it must be
+     * `Ready`, because a version that is not yet readable, or no longer is, has nothing a successor could replace.
+     *
+     * @throws PredecessorNotReady when the predecessor is in any state but `Ready`
+     */
+    public static function succeed(
+        self $predecessor,
+        string $id,
+        string $scopeId,
+        string $uploaderId,
+        string $digest,
+        int $sizeBytes,
+        ?string $idempotencyKeyHash,
+        IntakeMetadata $intake,
+        DateTimeImmutable $receivedAt,
+    ): self {
+        if (DocumentState::Ready !== $predecessor->state) {
+            throw PredecessorNotReady::create();
+        }
+
+        if ($predecessor->documentId() === \strtolower($id)) {
+            throw new InvalidArgumentException('A version cannot succeed itself.');
+        }
+
+        return new self(
+            $id,
+            $scopeId,
+            $uploaderId,
+            $digest,
+            $sizeBytes,
+            $idempotencyKeyHash,
+            $intake,
+            $predecessor,
+            $receivedAt,
         );
     }
 

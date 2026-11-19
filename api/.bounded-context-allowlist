@@ -207,3 +207,9 @@ src/Documents/Document/Infrastructure/Controller/EraseDocumentController.php => 
 src/Documents/Document/Infrastructure/Controller/EraseDocumentController.php => Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
 src/Documents/Document/Infrastructure/Controller/EraseDocumentController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
 src/Documents/Document/Infrastructure/Http/EraseDocumentRequest.php => Erpify\Iam\Identity\Infrastructure\Http\ExistingCredential
+# The series erasure re-proves the same way, with the same four collaborators, for the same reason: it is the single
+# erasure run once per version.
+src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Application\ProveActorPassword
+src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Domain\HashedPassword
+src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
+src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
