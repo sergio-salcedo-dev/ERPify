@@ -133,6 +133,7 @@ final class BestEffortReportChannelGateTest extends TestCase
         'SendPasswordChangedEmailBestEffort.php',
         'SendPasswordResetEmailBestEffort.php',
         'SweepCappedDocuments.php',
+        'SweepOrphanDerivatives.php',
         'SweepStagedOrphans.php',
         'SymfonyAuditLogger.php',
         'UploadEvidence.php',

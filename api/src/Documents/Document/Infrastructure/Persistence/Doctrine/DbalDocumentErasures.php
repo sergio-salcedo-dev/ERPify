@@ -117,8 +117,10 @@ final readonly class DbalDocumentErasures implements DocumentErasures
         Uuid::ensure($documentId);
 
         return 1 === $this->connection->executeStatement(
-            'UPDATE document SET object_deleted_at = NULL '
-            . 'WHERE id = CAST(:id AS UUID) AND state = :erased AND object_deleted_at IS NOT NULL',
+            'UPDATE document SET object_deleted_at = NULL, derivatives_released_at = NULL, '
+            . 'derivatives_requested_at = NULL WHERE id = CAST(:id AS UUID) AND state = :erased '
+            . 'AND (object_deleted_at IS NOT NULL OR derivatives_released_at IS NOT NULL '
+            . 'OR derivatives_requested_at IS NOT NULL)',
             ['id' => \strtolower($documentId), 'erased' => DocumentState::Erased->value],
         );
     }

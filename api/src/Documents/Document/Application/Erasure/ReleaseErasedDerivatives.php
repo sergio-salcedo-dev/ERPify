@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Documents\Document\Application\Erasure;
 
+use Closure;
 use Erpify\Documents\Document\Application\Derivative\DocumentDerivativeOrigin;
 use Erpify\Documents\Document\Application\Upload\SweepBudget;
 use Erpify\Documents\Document\Domain\Erasure\DocumentDerivativeReleases;
 use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
+use Erpify\Shared\Images\Application\DerivativeOrigins;
 use Erpify\Shared\Images\Application\ReleaseDerivatives;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -31,28 +33,59 @@ final readonly class ReleaseErasedDerivatives
     public function __construct(
         private DocumentDerivativeReleases $releases,
         private ReleaseDerivatives $releaseDerivatives,
+        private DerivativeOrigins $derivativeOrigins,
         private LoggerInterface $logger,
     ) {
     }
 
     /**
+     * Two passes, each under its own budget: rows due a request get one, and rows whose request is still recent are
+     * only asked whether anything is left, so a release that already happened is confirmed on the next tick instead
+     * of waiting out the interval, and neither pass can take the other's place in a tick.
+     *
      * @return int how many rows this run confirmed released
      */
     public function run(int $limit): int
+    {
+        $released = $this->sweep(
+            $limit,
+            fn (?string $after): array => $this->releases->awaitingDerivativeRelease(
+                ErasureLimits::DERIVATIVE_REREQUEST_SECONDS,
+                $limit,
+                $after,
+            ),
+            $this->releaseOne(...),
+        );
+        $confirmed = $this->sweep(
+            $limit,
+            fn (?string $after): array => $this->releases->awaitingConfirmation(
+                ErasureLimits::DERIVATIVE_REREQUEST_SECONDS,
+                $limit,
+                $after,
+            ),
+            $this->confirmOne(...),
+        );
+
+        $this->alarmOnOverdueDerivatives();
+
+        return $released + $confirmed;
+    }
+
+    /**
+     * @param Closure(?string): list<string> $nextPage
+     * @param Closure(string): bool          $handle   true when the row is confirmed released
+     */
+    private function sweep(int $limit, Closure $nextPage, Closure $handle): int
     {
         $budget = new SweepBudget($limit);
         $after = null;
 
         while (!$budget->exhausted()) {
-            $page = $this->releases->awaitingDerivativeRelease(
-                ErasureLimits::DERIVATIVE_REREQUEST_SECONDS,
-                $limit,
-                $after,
-            );
+            $page = $nextPage($after);
 
             foreach ($page as $documentId) {
                 $after = $documentId;
-                $this->releaseWithin($budget, $documentId);
+                $this->handleWithin($budget, $handle, $documentId);
 
                 if ($budget->exhausted()) {
                     break;
@@ -71,15 +104,16 @@ final readonly class ReleaseErasedDerivatives
             ]);
         }
 
-        $this->alarmOnOverdueDerivatives();
-
         return $budget->finishedCount();
     }
 
-    private function releaseWithin(SweepBudget $budget, string $documentId): void
+    /**
+     * @param Closure(string): bool $handle
+     */
+    private function handleWithin(SweepBudget $budget, Closure $handle, string $documentId): void
     {
         try {
-            $this->releaseOne($documentId) ? $budget->finished() : $budget->passed();
+            $handle($documentId) ? $budget->finished() : $budget->passed();
         } catch (Throwable $throwable) {
             $this->logger->error('The derivatives of an erased document could not be released; the batch goes on.', [
                 'documentId' => $documentId,
@@ -94,6 +128,15 @@ final readonly class ReleaseErasedDerivatives
         if (0 !== $this->releaseDerivatives->of(DocumentDerivativeOrigin::of($documentId))) {
             $this->releases->markDerivativesRequested($documentId);
 
+            return false;
+        }
+
+        return $this->releases->markDerivativesReleased($documentId);
+    }
+
+    private function confirmOne(string $documentId): bool
+    {
+        if ($this->derivativeOrigins->holdsAny(DocumentDerivativeOrigin::of($documentId))) {
             return false;
         }
 

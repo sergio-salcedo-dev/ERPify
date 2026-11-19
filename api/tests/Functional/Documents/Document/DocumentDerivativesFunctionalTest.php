@@ -11,17 +11,21 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Documents\Document\Application\Derivative\DocumentDerivativeOrigin;
 use Erpify\Documents\Document\Application\Derivative\MaterialiseDocumentDerivative;
 use Erpify\Documents\Document\Application\Erasure\ReleaseErasedDerivatives;
+use Erpify\Documents\Document\Application\Erasure\SweepOrphanDerivatives;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Erasure\DocumentDerivativeReleases;
+use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
 use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesMessage;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentDerivativeReleases;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentOriginGuard;
 use Erpify\Shared\Images\Application\DeleteImage;
+use Erpify\Shared\Images\Application\DerivativeOrigins;
 use Erpify\Shared\Images\Application\MaterialiseDerivative;
 use Erpify\Shared\Images\Application\ReleaseDerivatives;
 use Erpify\Shared\Images\Domain\DerivativeOrigin;
+use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\Exception\DerivativeOriginNotLive;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -63,6 +67,7 @@ use Throwable;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods") each public method is one independent answer of the lifecycle
  * @SuppressWarnings("PHPMD.TooManyMethods") the same
  * @SuppressWarnings("PHPMD.ExcessiveClassLength") the same
+ * @SuppressWarnings("PHPMD.ExcessiveClassComplexity") the same
  */
 #[CoversClass(DbalDocumentOriginGuard::class)]
 #[CoversClass(MaterialiseDocumentDerivative::class)]
@@ -226,11 +231,7 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
         $this->service(DeleteImage::class)->delete(ImageId::fromString($imageId));
         $this->assertGone(ImageId::fromString($imageId));
 
-        $this->assertSame(0, $this->sweep()->run(10), 'a row just asked about waits for the retry interval');
-        $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $imageId), 'nothing is queued meanwhile');
-
-        $this->requestedSecondsAgo($document['id'], ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + 60);
-        $this->assertSame(1, $this->sweep()->run(10));
+        $this->assertSame(1, $this->sweep()->run(10), 'confirmed on the next tick, without waiting out the interval');
         $this->assertNotNull($this->releasedAt($document['id']));
         $this->assertSame(0, $this->sweep()->run(10), 'a released row is not asked about again');
         $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $imageId), 'and nothing more is queued');
@@ -360,6 +361,75 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function aRestoreReplayReopensTheDerivativeMarkersInTheStatementThatReopensTheObject(): void
+    {
+        $document = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->eraseRow($document['id'], 30);
+        $this->connection()->executeStatement(
+            'UPDATE document SET derivatives_released_at = NOW(), derivatives_requested_at = NOW() '
+            . 'WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id']],
+        );
+
+        $this->assertTrue($this->service(DocumentErasures::class)->reopenObjectDeletion($document['id']));
+
+        $this->assertNull($this->releasedAt($document['id']));
+        $this->assertNull($this->outside->fetchOne(
+            'SELECT derivatives_requested_at FROM document WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id']],
+        ));
+    }
+
+    #[Test]
+    public function theOrphanSweepReleasesWhatNoLiveDocumentAccountsForAndNamesIt(): void
+    {
+        $absent = Uuid::generate();
+        $ofAbsent = $this->plantDerivativeOf($absent);
+        $confirmed = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->eraseRow($confirmed['id'], 30);
+        $this->connection()->executeStatement(
+            'UPDATE document SET derivatives_released_at = NOW() WHERE id = CAST(:id AS UUID)',
+            ['id' => $confirmed['id']],
+        );
+        $ofConfirmed = $this->plantDerivativeOf($confirmed['id']);
+        $live = $this->plantNamedDocument(null, DocumentState::Ready);
+        $ofLive = $this->materialise($live['id'])->toString();
+        $pending = $this->plantNamedDocument(null, DocumentState::Ready);
+        $ofPending = $this->materialise($pending['id'])->toString();
+        $this->eraseRow($pending['id'], 30);
+
+        $this->assertSame(2, $this->orphanSweep()->run(1));
+
+        $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $ofAbsent), 'a document row that is gone');
+        $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $ofConfirmed), 'a release a restore undid');
+        $this->assertSame(0, ImageReleaseRig::queuedFor($this->outside, $ofLive), 'a Ready document keeps it');
+        $this->assertSame(0, ImageReleaseRig::queuedFor($this->outside, $ofPending), 'the release sweep owns it');
+        $lines = \array_values(\array_filter(
+            $this->log->getRecords(),
+            static fn (LogRecord $record): bool => 'Derivatives were found that no live document accounts for.'
+                === $record->message,
+        ));
+        $this->assertCount(1, $lines);
+        $this->assertSame(Level::Error, $lines[0]->level);
+        $ids = $lines[0]->context['documentIds'] ?? null;
+        $this->assertIsArray($ids);
+        \sort($ids);
+        $expected = [\strtolower($absent), $confirmed['id']];
+        \sort($expected);
+        $this->assertSame($expected, $ids);
+    }
+
+    #[Test]
+    public function theOrphanSweepIsSilentWhenEveryDerivativeHasALiveDocument(): void
+    {
+        $live = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->materialise($live['id']);
+
+        $this->assertSame(0, $this->orphanSweep()->run(10));
+        $this->assertSame([], $this->log->getRecords());
+    }
+
+    #[Test]
     public function theTickRunsTheSweepThroughTheContainersWiring(): void
     {
         $document = $this->plantNamedDocument(null, DocumentState::Ready);
@@ -458,8 +528,48 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
         return new ReleaseErasedDerivatives(
             $this->service(DocumentDerivativeReleases::class),
             $this->release(),
+            $this->origins(),
             new Logger('test', [$this->log]),
         );
+    }
+
+    private function orphanSweep(): SweepOrphanDerivatives
+    {
+        return new SweepOrphanDerivatives(
+            $this->origins(),
+            $this->service(DocumentDerivativeReleases::class),
+            $this->release(),
+            new Logger('test', [$this->log]),
+        );
+    }
+
+    private function origins(): DerivativeOrigins
+    {
+        return new DerivativeOrigins(new DoctrineImageRepository($this->service(EntityManagerInterface::class)));
+    }
+
+    /**
+     * A derivative row and its bytes written straight through the repository and the storage, past the guard: the
+     * shape a restore or a document row that vanished leaves behind, which no admitted path can produce.
+     */
+    private function plantDerivativeOf(string $documentId): string
+    {
+        $bytes = 'derivative-bytes';
+        $image = new Image(
+            ImageId::generate(),
+            \hash('sha256', $bytes),
+            'image/png',
+            1,
+            1,
+            \strlen($bytes),
+            DocumentDerivativeOrigin::of($documentId),
+        );
+        $this->service(ImageStorage::class)->store($image->id(), $bytes);
+        $this->service(TransactionManager::class)->transactional(function () use ($image): void {
+            $this->service(ImageRepository::class)->save($image);
+        });
+
+        return $image->id()->toString();
     }
 
     /**

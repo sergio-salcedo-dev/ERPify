@@ -270,3 +270,4 @@ tests/Unit/Gate/ForeignSkillSeedGateTest.php :: home
 tests/Unit/Gate/BmadSkillsSyncGuardrailGateTest.php :: home
 tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home
 tests/Unit/Gate/SubjectAuditWriteSerialisationGateTest.php :: home
+tests/Unit/Documents/Document/Domain/Erasure/DerivativeReleaseBoundsTest.php :: mirrored :: src/Documents/Document/Domain/Erasure

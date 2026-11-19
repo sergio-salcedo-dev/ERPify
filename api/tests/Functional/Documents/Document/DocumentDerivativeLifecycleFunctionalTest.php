@@ -7,7 +7,6 @@ namespace Erpify\Tests\Functional\Documents\Document;
 use Erpify\Documents\Document\Application\Derivative\MaterialiseDocumentDerivative;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
 use Erpify\Documents\Document\Application\Read\ReadDocument;
-use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesMessage;
@@ -128,7 +127,6 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
 
         $this->releaseTick();
         $this->deliverQueuedDeletions();
-        $this->retryIntervalPassed($documentId);
         $this->releaseTick();
 
         $this->readImage($derivative);
@@ -179,18 +177,6 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
         $this->connection()->executeStatement(
             'DELETE FROM audit_log WHERE action IN (:read, :generic)',
             ['read' => ReadDocument::AUDIT_ACTION, 'generic' => 'ROUTE_DOCUMENTS_READ'],
-        );
-    }
-
-    /**
-     * The sweep asks about a document again only once the transport's retries are over; the clock is moved, not waited.
-     */
-    private function retryIntervalPassed(string $documentId): void
-    {
-        $this->connection()->executeStatement(
-            'UPDATE document SET derivatives_requested_at = NOW() - make_interval(secs => :age) '
-            . 'WHERE id = CAST(:id AS UUID)',
-            ['id' => $documentId, 'age' => ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + 60],
         );
     }
 

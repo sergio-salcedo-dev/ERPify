@@ -51,4 +51,12 @@ interface ImageRepository
      * @return list<ImageId>
      */
     public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array;
+
+    /**
+     * The distinct ids of the origins of type `$type` that images still derive from, ascending after `$afterId` when
+     * given, at most `$limit`: what an owner sweeps to find derivatives its own records no longer account for.
+     *
+     * @return list<string>
+     */
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array;
 }

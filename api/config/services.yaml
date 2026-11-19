@@ -191,6 +191,10 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    Erpify\Documents\Document\Application\Erasure\SweepOrphanDerivatives:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     # A derivative of a document is admitted under this context's own guard, named rather than autowired by type:
     # `OriginGuard` is a port every context that keeps derivatives implements, so a second implementer must not turn
     # this into an ambiguous autowire, nor silently into the other context's guard.

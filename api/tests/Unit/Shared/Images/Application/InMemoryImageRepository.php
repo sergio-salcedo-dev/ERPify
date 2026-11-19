@@ -67,4 +67,26 @@ final class InMemoryImageRepository implements ImageRepository
 
         return \array_map(ImageId::fromString(...), \array_slice($ids, 0, $limit));
     }
+
+    #[Override]
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array
+    {
+        $ids = [];
+
+        foreach ($this->rows as $image) {
+            $origin = $image->origin();
+
+            if (null === $origin || $origin->type !== $type) {
+                continue;
+            }
+
+            if (null === $afterId || \strcmp($origin->id, $afterId) > 0) {
+                $ids[$origin->id] = $origin->id;
+            }
+        }
+
+        \sort($ids);
+
+        return \array_slice($ids, 0, $limit);
+    }
 }

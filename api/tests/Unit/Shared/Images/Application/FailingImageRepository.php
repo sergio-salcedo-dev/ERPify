@@ -40,4 +40,10 @@ final class FailingImageRepository implements ImageRepository
     {
         return [];
     }
+
+    #[Override]
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array
+    {
+        return [];
+    }
 }

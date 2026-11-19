@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Documents\Document\Infrastructure\Persistence\Doctrine;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Types;
 use Erpify\Documents\Document\Domain\CustodyEvent;
@@ -86,6 +87,59 @@ final readonly class DbalDocumentDerivativeReleases implements DocumentDerivativ
                 'limit' => $limit,
             ],
             ['age' => Types::INTEGER, 'limit' => Types::INTEGER],
+        );
+    }
+
+    #[Override]
+    public function awaitingConfirmation(int $rerequestAfterSeconds, int $limit, ?string $afterId = null): array
+    {
+        $after = null === $afterId ? '' : ' AND id > CAST(:after AS UUID)';
+        $parameters = ['erased' => DocumentState::Erased->value, 'wait' => $rerequestAfterSeconds, 'limit' => $limit];
+
+        if (null !== $afterId) {
+            Uuid::ensure($afterId);
+            $parameters['after'] = \strtolower($afterId);
+        }
+
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
+            'SELECT id FROM document WHERE state = :erased AND derivatives_released_at IS NULL '
+            . 'AND derivatives_requested_at >= NOW() - make_interval(secs => :wait)'
+            . $after . ' ORDER BY id LIMIT :limit',
+            $parameters,
+            ['wait' => Types::INTEGER, 'limit' => Types::INTEGER],
+        );
+    }
+
+    #[Override]
+    public function statesOf(array $documentIds): array
+    {
+        if ([] === $documentIds) {
+            return [];
+        }
+
+        foreach ($documentIds as $documentId) {
+            Uuid::ensure($documentId);
+        }
+
+        /** @var array<string, string> $states */
+        $states = $this->connection->fetchAllKeyValue(
+            'SELECT id, state FROM document WHERE id IN (:ids)',
+            ['ids' => \array_map(strtolower(...), $documentIds)],
+            ['ids' => ArrayParameterType::STRING],
+        );
+
+        return $states;
+    }
+
+    #[Override]
+    public function releaseConfirmed(string $documentId): bool
+    {
+        Uuid::ensure($documentId);
+
+        return false !== $this->connection->fetchOne(
+            'SELECT 1 FROM document WHERE id = CAST(:id AS UUID) AND derivatives_released_at IS NOT NULL',
+            ['id' => \strtolower($documentId)],
         );
     }
 }

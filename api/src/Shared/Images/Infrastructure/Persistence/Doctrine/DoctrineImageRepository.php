@@ -82,4 +82,24 @@ final readonly class DoctrineImageRepository implements ImageRepository
 
         return \array_map(ImageId::fromString(...), $ids);
     }
+
+    #[Override]
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array
+    {
+        $parameters = ['type' => $type, 'limit' => $limit];
+        $afterClause = '';
+
+        if (null !== $afterId) {
+            $parameters['after'] = \strtolower($afterId);
+            $afterClause = ' AND origin_id > CAST(:after AS UUID)';
+        }
+
+        /** @phpstan-var list<string> */
+        return $this->entityManager->getConnection()->fetchFirstColumn(
+            'SELECT DISTINCT origin_id FROM image WHERE origin_type = :type' . $afterClause
+            . ' ORDER BY origin_id LIMIT :limit',
+            $parameters,
+            ['limit' => Types::INTEGER],
+        );
+    }
 }

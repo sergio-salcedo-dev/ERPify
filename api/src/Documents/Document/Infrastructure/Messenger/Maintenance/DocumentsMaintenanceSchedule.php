@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Documents\Document\Infrastructure\Messenger\Maintenance;
 
+use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Scheduler\Attribute\AsSchedule;
@@ -31,12 +32,14 @@ use Symfony\Contracts\Cache\CacheInterface;
  * and then finishes the one in flight, which is why it fits the margin the reaper's cadence is computed on. The
  * scan report is hourly: it observes documents that wait for a person or an outage, in hours.
  *
- * The erasure adds four. The erased-object sweep (60 s) is the single owner of an erased row's sealed object; the
+ * The erasure adds five. The erased-object sweep (60 s) is the single owner of an erased row's sealed object; the
  * completion sweep (5 min, longer than the margin it judges entries by) finishes an erasure whose ledger entry landed
  * and whose transaction did not, and reports a standing ledger override while it stands (it clears nothing); the
  * tombstone reconciler (hourly) alarms on a row that is not `Erased` whose key is destroyed. The derivative release
  * (5 min) queues the deletion of what still derives from an erased document until a pass finds nothing, and alarms on
- * derivatives that outlive their bound; a pass is cheap and the 6 h bound is far away. All four stay stopped
+ * derivatives that outlive their bound; a pass is cheap and the 8 h bound is far away. The orphan derivative sweep
+ * (every four hours, the re-request interval) walks the origins images still carry and releases those no live document
+ * accounts for. All five stay stopped
  * while a restore holds the stack, which is what keeps a restored database from being swept before the ledger is
  * replayed.
  *
@@ -60,6 +63,9 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
 
     private const string DAILY = '1 day';
 
+    /** The orphan sweep runs on the re-request interval, so it never repeats a request still being retried. */
+    private const string DERIVATIVE_ORPHAN_PERIOD = ErasureLimits::DERIVATIVE_REREQUEST_SECONDS . ' seconds';
+
     public function __construct(
         #[Autowire(service: 'cache.scheduler_checkpoint')]
         private CacheInterface $checkpointState,
@@ -82,6 +88,7 @@ final readonly class DocumentsMaintenanceSchedule implements ScheduleProviderInt
             ->add(RecurringMessage::every(self::EVERY_MINUTE, new DeleteErasedObjectsMessage()))
             ->add(RecurringMessage::every(self::EVERY_FIVE_MINUTES, new CompleteInterruptedErasuresMessage()))
             ->add(RecurringMessage::every(self::EVERY_FIVE_MINUTES, new ReleaseErasedDerivativesMessage()))
+            ->add(RecurringMessage::every(self::DERIVATIVE_ORPHAN_PERIOD, new SweepOrphanDerivativesMessage()))
             ->add(RecurringMessage::every(self::HOURLY, new ReportTombstonedDocumentsMessage()))
             ->add(RecurringMessage::every(self::DAILY, new ReportDocumentStorageMessage()))
             ->add(RecurringMessage::every(self::DAILY, new ReportDocumentNamesMessage()))

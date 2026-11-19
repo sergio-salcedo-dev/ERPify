@@ -50,4 +50,10 @@ final readonly class TrackedImageRepository implements ImageRepository
     {
         return $this->rows->idsByOrigin($origin, $limit, $after);
     }
+
+    #[Override]
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array
+    {
+        return $this->rows->originIdsOfType($type, $limit, $afterId);
+    }
 }

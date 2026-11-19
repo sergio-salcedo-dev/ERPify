@@ -39,4 +39,10 @@ final class UnreadableImageRepository implements ImageRepository
     {
         throw new StubPersistenceFailure('the rows could not be read');
     }
+
+    #[Override]
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array
+    {
+        throw new StubPersistenceFailure('the rows could not be read');
+    }
 }

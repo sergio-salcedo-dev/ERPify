@@ -18,6 +18,7 @@ use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReportTombsto
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\RollForwardPromotionsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ScanDueDocumentsMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\SweepCappedDocumentsMessage;
+use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\SweepOrphanDerivativesMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\SweepStagedOrphansMessage;
 use Erpify\Tests\Support\ScheduledTicks;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -60,6 +61,7 @@ final class DocumentsMaintenanceScheduleTest extends TestCase
                 RollForwardPromotionsMessage::class . ' @ every 60 seconds',
                 ScanDueDocumentsMessage::class . ' @ every 60 seconds',
                 SweepCappedDocumentsMessage::class . ' @ every 5 minutes',
+                SweepOrphanDerivativesMessage::class . ' @ every 14400 seconds',
                 SweepStagedOrphansMessage::class . ' @ every 5 minutes',
             ],
             ScheduledTicks::describe($schedule),

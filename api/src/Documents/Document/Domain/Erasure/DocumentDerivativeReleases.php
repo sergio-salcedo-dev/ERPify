@@ -31,6 +31,30 @@ interface DocumentDerivativeReleases
     public function markDerivativesRequested(string $documentId): bool;
 
     /**
+     * Ids of `Erased` rows whose release was requested within the last `$rerequestAfterSeconds` and is not confirmed
+     * yet, ascending after `$afterId` when given: the rows the sweep only asks whether anything is left, so a release
+     * that already happened is confirmed on the next tick rather than at the next request.
+     *
+     * @return list<string>
+     */
+    public function awaitingConfirmation(int $rerequestAfterSeconds, int $limit, ?string $afterId = null): array;
+
+    /**
+     * Whether the row's release was already confirmed, so images still carrying its origin are ones nothing will ask
+     * about again.
+     */
+    public function releaseConfirmed(string $documentId): bool;
+
+    /**
+     * The state of each of `$documentIds` that still has a row, keyed by id; an id with no row is absent.
+     *
+     * @param list<string> $documentIds
+     *
+     * @return array<string, string>
+     */
+    public function statesOf(array $documentIds): array;
+
+    /**
      * Records that no image derives from the row any more. Only an `Erased` row whose marker is still empty takes it,
      * so a repeat reports false and changes nothing.
      */
