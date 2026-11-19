@@ -118,7 +118,8 @@ final readonly class DbalDocumentErasures implements DocumentErasures
 
         return 1 === $this->connection->executeStatement(
             'UPDATE document SET object_deleted_at = NULL, derivatives_released_at = NULL, '
-            . 'derivatives_requested_at = NULL WHERE id = CAST(:id AS UUID) AND state = :erased '
+            . 'derivatives_requested_at = NULL, erasure_reopened_at = NOW() '
+            . 'WHERE id = CAST(:id AS UUID) AND state = :erased '
             . 'AND (object_deleted_at IS NOT NULL OR derivatives_released_at IS NOT NULL '
             . 'OR derivatives_requested_at IS NOT NULL)',
             ['id' => \strtolower($documentId), 'erased' => DocumentState::Erased->value],
@@ -132,7 +133,8 @@ final readonly class DbalDocumentErasures implements DocumentErasures
         return $this->connection->fetchFirstColumn(
             'SELECT d.id FROM document d WHERE d.state = :erased AND d.object_deleted_at IS NULL AND EXISTS ('
             . 'SELECT 1 FROM document_custody c WHERE c.document_id = d.id AND c.event = :event '
-            . 'AND c.created_at < NOW() - make_interval(secs => :age)) ORDER BY d.id LIMIT :limit',
+            . 'AND GREATEST(c.created_at, d.erasure_reopened_at) < NOW() - make_interval(secs => :age)) '
+            . 'ORDER BY d.id LIMIT :limit',
             [
                 'erased' => DocumentState::Erased->value,
                 'event' => CustodyEvent::Erased->value,

@@ -363,6 +363,36 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function aReopenedErasureIsOverdueOnlyOnceTheBoundHasPassedSinceTheReopen(): void
+    {
+        $document = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->eraseRow($document['id'], ErasureLimits::DERIVATIVE_ALARM_SECONDS + 60);
+        $this->connection()->executeStatement(
+            'UPDATE document SET derivatives_released_at = NOW() WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id']],
+        );
+        $releases = $this->service(DocumentDerivativeReleases::class);
+
+        $this->assertTrue($this->service(DocumentErasures::class)->reopenObjectDeletion($document['id']));
+        $this->assertSame(
+            [],
+            $releases->derivativesOverdue(ErasureLimits::DERIVATIVE_ALARM_SECONDS, 10),
+            'a restore does not make an old erasure overdue at once',
+        );
+
+        $this->connection()->executeStatement(
+            'UPDATE document SET erasure_reopened_at = NOW() - make_interval(secs => :age) '
+            . 'WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id'], 'age' => ErasureLimits::DERIVATIVE_ALARM_SECONDS + 60],
+        );
+        $this->assertSame(
+            [$document['id']],
+            $releases->derivativesOverdue(ErasureLimits::DERIVATIVE_ALARM_SECONDS, 10),
+            'past the bound since the reopen it is overdue again',
+        );
+    }
+
+    #[Test]
     public function aRestoreReplayReopensTheDerivativeMarkersInTheStatementThatReopensTheObject(): void
     {
         $document = $this->plantNamedDocument(null, DocumentState::Ready);
@@ -375,6 +405,10 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
 
         $this->assertTrue($this->service(DocumentErasures::class)->reopenObjectDeletion($document['id']));
 
+        $this->assertNotNull($this->outside->fetchOne(
+            'SELECT erasure_reopened_at FROM document WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id']],
+        ), 'the reopen is stamped');
         $this->assertNull($this->releasedAt($document['id']));
         $this->assertNull($this->outside->fetchOne(
             'SELECT derivatives_requested_at FROM document WHERE id = CAST(:id AS UUID)',

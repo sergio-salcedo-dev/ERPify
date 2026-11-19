@@ -94,7 +94,7 @@ A second adversarial pass (Blind Hunter, read-only subagent, this session) read 
 | The first origin page could not use the partial index | real | patch: the query repeats `origin_id IS NOT NULL` |
 | The bounds test ignored the ticks between the `Erased` row and the confirmation | real | patch: three release-tick periods added; the Doctrine `redeliver_timeout` after a dead worker stated as deliberately unbudgeted |
 | One `releaseConfirmed()` query per `Erased` origin | real | patch: `statesOf()` answers the confirmation with the state, and the port method is gone |
-| A restore reopens every erased row and the alarm, measured from the original `Erased` custody row, fires for each until the sweep drains them | real | decision-needed: put to the owner |
+| A restore reopens every erased row and the alarm, measured from the original `Erased` custody row, fires for each until the sweep drains them | real | patch, decided by the owner (option A): `document.erasure_reopened_at`, stamped by the reopen statement; both erasure alarms measure from `GREATEST(custody Erased, erasure_reopened_at)` |
 
 ## Verification
 

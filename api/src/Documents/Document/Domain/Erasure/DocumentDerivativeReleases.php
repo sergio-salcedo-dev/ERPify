@@ -57,8 +57,9 @@ interface DocumentDerivativeReleases
     public function markDerivativesReleased(string $documentId): bool;
 
     /**
-     * Ids of `Erased` rows whose derivatives are still not confirmed released although the erasure was recorded at
-     * least `$olderThanSeconds` ago: legible renderings of a document the system said it erased.
+     * Ids of `Erased` rows whose derivatives are still not confirmed released although the erasure was recorded, and
+     * any restore reopened it, at least `$olderThanSeconds` ago: legible renderings of a document the system said it
+     * erased.
      *
      * @return list<string>
      */

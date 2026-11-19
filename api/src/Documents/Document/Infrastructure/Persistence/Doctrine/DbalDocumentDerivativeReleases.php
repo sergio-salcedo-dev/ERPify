@@ -79,7 +79,8 @@ final readonly class DbalDocumentDerivativeReleases implements DocumentDerivativ
         return $this->connection->fetchFirstColumn(
             'SELECT d.id FROM document d WHERE d.state = :erased AND d.derivatives_released_at IS NULL AND EXISTS ('
             . 'SELECT 1 FROM document_custody c WHERE c.document_id = d.id AND c.event = :event '
-            . 'AND c.created_at < NOW() - make_interval(secs => :age)) ORDER BY d.id LIMIT :limit',
+            . 'AND GREATEST(c.created_at, d.erasure_reopened_at) < NOW() - make_interval(secs => :age)) '
+            . 'ORDER BY d.id LIMIT :limit',
             [
                 'erased' => DocumentState::Erased->value,
                 'event' => CustodyEvent::Erased->value,

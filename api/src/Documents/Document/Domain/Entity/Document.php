@@ -190,6 +190,21 @@ final class Document extends AggregateRoot
     private ?DateTimeImmutable $derivativesRequestedAt = null;
 
     /**
+     * When a restore replay last reopened the row's erasure markers. Both erasure alarms measure their bound from the
+     * later of this and the `Erased` custody row, so a restore does not turn every erased row it reopened into an
+     * overdue one before the sweeps have had their turn. Read-only to the ORM like the markers above.
+     */
+    #[ORM\Column(
+        name: 'erasure_reopened_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a statement writes it)
+    private ?DateTimeImmutable $erasureReopenedAt = null;
+
+    /**
      * The scan's own columns. Like `promoted_at` they are read-only to the ORM: every transition is a DBAL
      * compare-and-set (`DbalDocumentScanLeases`) evaluated by the database clock, so no managed instance is ever
      * the writer and a stale one cannot overwrite a newer lease.
@@ -413,6 +428,11 @@ final class Document extends AggregateRoot
     public function derivativesRequestedAt(): ?DateTimeImmutable
     {
         return $this->derivativesRequestedAt;
+    }
+
+    public function erasureReopenedAt(): ?DateTimeImmutable
+    {
+        return $this->erasureReopenedAt;
     }
 
     public function nextScanAt(): DateTimeImmutable
