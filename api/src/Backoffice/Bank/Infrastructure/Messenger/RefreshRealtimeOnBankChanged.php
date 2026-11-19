@@ -9,6 +9,7 @@ use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankUpdatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\MercureBankTopic;
+use Erpify\Backoffice\Bank\Domain\Repository\BankLogoReader;
 use JsonException;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
@@ -28,6 +29,7 @@ final readonly class RefreshRealtimeOnBankChanged
     public function __construct(
         private HubInterface $hub,
         private BankAccountCountEnricher $accountCountEnricher,
+        private BankLogoReader $bankLogoReader,
     ) {
     }
 
@@ -88,9 +90,11 @@ final readonly class RefreshRealtimeOnBankChanged
 
     /**
      * Maps the event id and domain-event primitives to the PWA `BankPrimitives` shape. The id is the
-     * aggregate id (envelope), no longer part of the payload. Safe `??` access keeps the contract
-     * resilient if the event payload ever changes; `accountCount` is resolved at publish time so the
-     * PWA never receives `undefined`.
+     * aggregate id (envelope), not a payload field. Safe `??` access keeps the contract
+     * resilient if the event payload ever changes; `accountCount` and `logoImageId` are resolved at publish time
+     * so the PWA never receives `undefined`. The logo is not part of the event (a logo change records none), so it is
+     * read from the row: a rename must carry the logo the bank holds now, because an open detail page replaces its
+     * whole state with this payload and would otherwise blank it. A bank already gone resolves null.
      *
      * @param array<string, string|null> $primitives
      *
@@ -105,6 +109,7 @@ final readonly class RefreshRealtimeOnBankChanged
             'createdAt' => $primitives['createdAt'] ?? null,
             'updatedAt' => $primitives['updatedAt'] ?? null,
             'accountCount' => $this->accountCountEnricher->countFor($bankId),
+            'logoImageId' => $this->bankLogoReader->logoImageIdOf($bankId),
         ];
     }
 }

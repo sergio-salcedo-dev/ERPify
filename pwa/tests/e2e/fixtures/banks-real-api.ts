@@ -20,6 +20,8 @@ export interface ApiBank {
   shortName: string;
   createdAt: string;
   updatedAt: string;
+  /** Only the list and detail views carry it; the create and update views do not. */
+  logoImageId?: string | null;
 }
 
 const BANKS_PATH = "/api/v1/backoffice/banks";

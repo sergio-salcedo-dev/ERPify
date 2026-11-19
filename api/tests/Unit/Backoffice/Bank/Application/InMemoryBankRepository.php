@@ -22,6 +22,12 @@ final class InMemoryBankRepository implements BankRepository
     /** @var list<Bank> */
     public array $saved = [];
 
+    /** How many times a caller asked for the bank with its row lock. */
+    public int $lockedLoads = 0;
+
+    /** The bank is gone by the time the lock is asked for, whatever {@see findById()} answered before. */
+    public bool $vanishesBeforeTheLock = false;
+
     public function __construct(
         private readonly ?Bank $bank = null,
     ) {
@@ -43,5 +49,13 @@ final class InMemoryBankRepository implements BankRepository
     public function findById(string $id): ?Bank
     {
         return $this->bank;
+    }
+
+    #[Override]
+    public function findByIdForUpdate(string $id): ?Bank
+    {
+        ++$this->lockedLoads;
+
+        return $this->vanishesBeforeTheLock ? null : $this->bank;
     }
 }

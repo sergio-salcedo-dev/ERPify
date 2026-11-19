@@ -18,6 +18,12 @@ use Symfony\Component\Process\Process;
  * declared, the document a completed upload filed with its custody, its key and its sealed object, and the one
  * session it signed in with. The live-stack probes are the one place the suite touches the runtime database, and
  * they do it through the running application, on their own rows (`docs/rules/testing.md`).
+ *
+ * The bank-logo probe (`BankLogoThroughCaddyTest`) is one of them and creates a bank through the API, then deletes it
+ * through the API. Besides the bank row that leaves what any bank create/delete leaves: its `event_store` rows
+ * (append-only), its `audit_log` change rows, the `bank_count` read-model movement, and — for the probe that stores a
+ * logo — an `image` row and its object, whose release the delete queues for the dev worker to drain. None of those is
+ * removed by hand; they are the application's own trail of the requests the probe made.
  */
 final class DevStackUploadRows
 {
@@ -135,6 +141,29 @@ final class DevStackUploadRows
         ]);
 
         return $handle;
+    }
+
+    /**
+     * The ids of the `image` rows the dev stack holds right now, to show that a refused or cut image write stored none.
+     * A set rather than a count, because the dev worker drains released images while a probe runs and a count can
+     * move either way for reasons that are not the probe's: what matters is that no id appeared that was not there
+     * before.
+     *
+     * @return list<string>
+     */
+    public function imageIds(): array
+    {
+        $ids = [];
+
+        foreach ($this->connection()->fetchFirstColumn('SELECT id FROM image') as $id) {
+            if (!\is_string($id)) {
+                throw new RuntimeException('The image table answered an id that is not a string.');
+            }
+
+            $ids[] = $id;
+        }
+
+        return $ids;
     }
 
     public function stateOf(string $intentId): mixed

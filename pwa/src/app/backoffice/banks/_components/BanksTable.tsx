@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
-import { DataTable, StatusBadge, TruncatedText } from "@/components/erpify";
+import { DataTable, ImageDisplay, StatusBadge, TruncatedText } from "@/components/erpify";
 import type { DataTableColumn, DataTableSelection, DataTableSort } from "@/components/erpify";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
 import { safeHref } from "@/context/shared/navigation/domain/safeHref";
@@ -35,7 +35,19 @@ const renderCodeCell = (row: Bank) => (
   />
 );
 
-const renderNameCell = (row: Bank) => <TruncatedText value={row.name} />;
+// The logo is decorative here (alt=""): the name sits beside it, so the image adds no second accessible
+// name. Its id is `row.id`-keyed like every other per-row address.
+const renderNameCell = (row: Bank) => (
+  <div className="flex min-w-0 items-center gap-2">
+    <ImageDisplay
+      imageId={row.logoImageId}
+      alt=""
+      className="size-7 rounded-md"
+      testId={`banks-table__logo-${row.id}`}
+    />
+    <TruncatedText value={row.name} className="min-w-0 flex-1" />
+  </div>
+);
 
 // Banks carry no domain status field; the list-level status is recency: a
 // recently-created bank reads "New", everything else "Active". The badge

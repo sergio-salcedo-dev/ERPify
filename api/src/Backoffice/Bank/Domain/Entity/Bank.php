@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Domain\Entity;
 
 use DateTimeInterface;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Domain\Event\BankDeletedDomainEvent;
@@ -35,6 +36,14 @@ final class Bank extends AggregateRoot implements AuditedEntity
      * the column at INSERT time.
      */
     private const int MAX_NAME_LENGTH = 255;
+
+    /**
+     * The opaque id of the logo `Shared/Images` serves, never a reference to its row: no `ManyToOne` and no
+     * foreign key, so a bank and its image live and die by their own protocols. It is changed only through
+     * {@see changeLogo()}, and no clone path of this aggregate copies it.
+     */
+    #[ORM\Column(name: 'logo_image_id', type: Types::GUID, nullable: true)]
+    private ?string $logoImageId = null;
 
     private function __construct(
         string $id,
@@ -116,6 +125,11 @@ final class Bank extends AggregateRoot implements AuditedEntity
         return $this->shortName;
     }
 
+    public function getLogoImageId(): ?string
+    {
+        return $this->logoImageId;
+    }
+
     public function auditResource(): AuditResource
     {
         return AuditResource::of('Bank', $this->id());
@@ -160,6 +174,22 @@ final class Bank extends AggregateRoot implements AuditedEntity
             null,
             $now,
         ));
+    }
+
+    /**
+     * A decision, not a business event: nothing is recorded and {@see BankSnapshot} stays as it is, because the
+     * audit diff already carries the change (`logoImageId` and `updatedAt` land in the `BANK_UPDATED` row) and the
+     * release of the replaced image is its own queued request. Holding the id it already holds is a no-op that
+     * bumps nothing, so a repeated write stays idempotent.
+     */
+    public function changeLogo(?string $logoImageId): void
+    {
+        if ($this->logoImageId === $logoImageId) {
+            return;
+        }
+
+        $this->logoImageId = $logoImageId;
+        $this->updatedAt = SystemClock::now();
     }
 
     public function delete(): void

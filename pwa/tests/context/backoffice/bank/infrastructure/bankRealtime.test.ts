@@ -74,6 +74,30 @@ describe("parseBankRealtimeEvent", () => {
     }
   });
 
+  it("keeps logoImageId through parsing, for both created and updated rows", () => {
+    const logoImageId = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
+    for (const type of ["bank.created", "bank.updated"] as const) {
+      const event = parseBankRealtimeEvent({ type, bank: { ...primitives, logoImageId } });
+      expect(event?.kind).toBe(type === "bank.created" ? "created" : "updated");
+      if (event && event.kind !== "deleted") {
+        expect(event.bank.logoImageId).toBe(logoImageId);
+      }
+    }
+  });
+
+  it("turns an absent, null or non-string logoImageId into null rather than dropping the event", () => {
+    for (const logoImageId of [undefined, null, 42, ""]) {
+      const event = parseBankRealtimeEvent({
+        type: "bank.updated",
+        bank: { ...primitives, logoImageId },
+      });
+      expect(event?.kind).toBe("updated");
+      if (event?.kind === "updated") {
+        expect(event.bank.logoImageId).toBeNull();
+      }
+    }
+  });
+
   it("still rejects a payload missing a core identity field", () => {
     const { id: _, ...withoutId } = primitives;
     expect(parseBankRealtimeEvent({ type: "bank.created", bank: withoutId })).toBeNull();

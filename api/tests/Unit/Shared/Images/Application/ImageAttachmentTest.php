@@ -21,6 +21,7 @@ use Erpify\Tests\Unit\Shared\Images\Application\Double\SavedInUnits;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\TrackedImageRepository;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\TransactionalEventBus;
 use Erpify\Tests\Unit\Shared\Images\Infrastructure\RecordingLogger;
+use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -193,6 +194,51 @@ final class ImageAttachmentTest extends TestCase
 
         $this->assertNull($holder->holds(self::OWNER));
         $this->assertSame([$held->toString()], $this->bus->queuedIds());
+    }
+
+    /**
+     * `release()` is what an owner that ends its own life calls: it queues the request and opens no transaction of
+     * its own, so inside the owner's unit it commits or rolls back with the removal.
+     */
+    #[Test]
+    public function releasingQueuesOneRequestInsideTheCallersUnitOfWorkAndOpensNoneOfItsOwn(): void
+    {
+        $id = ImageId::generate();
+        $attachment = $this->attachment();
+
+        $this->transactions->transactional(static function () use ($attachment, $id): void {
+            $attachment->release($id);
+        });
+
+        $this->assertSame([$id->toString()], $this->bus->queuedIds());
+        $this->assertContainsOnlyInstancesOf(ImageDeletionRequested::class, $this->bus->published);
+        $this->assertSame(1, $this->transactions->started, 'only the caller opened a unit of work');
+    }
+
+    #[Test]
+    public function aReleaseTheCallersUnitOfWorkRollsBackLeavesNothingQueued(): void
+    {
+        $attachment = $this->attachment();
+
+        try {
+            $this->transactions->transactional(static function () use ($attachment): never {
+                $attachment->release(ImageId::generate());
+
+                throw new RuntimeException('the owner could not be removed');
+            });
+        } catch (RuntimeException) {
+            // expected
+        }
+
+        $this->assertSame([], $this->bus->queuedIds());
+    }
+
+    #[Test]
+    public function releasingOutsideATransactionIsRefusedByThePublishGuard(): void
+    {
+        $this->expectException(LogicException::class);
+
+        $this->attachment()->release(ImageId::generate());
     }
 
     #[Test]

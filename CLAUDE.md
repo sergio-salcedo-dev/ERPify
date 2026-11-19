@@ -186,12 +186,18 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
   declared. All check for a `_test` marker in the NAME, so a runtime database spelled that way would satisfy
   them; none is.
   **The one sanctioned touch of the runtime database is a live-stack probe** (`DevStackUploadRows`, used by the
-  through-Caddy upload gates in `tests/Functional/Shared/Monitoring/`): it drives the RUNNING application, which
+  through-Caddy upload gates in `tests/Functional/Shared/Monitoring/` and by
+  `tests/Functional/Backoffice/Bank/BankLogoThroughCaddyTest.php`): it drives the RUNNING application, which
   serves the dev database, so it can only act through that application. It owns the rows it creates and nothing
   else — it deletes the session it opened (the append-only `SessionStarted` event stays), and its own intents,
   documents, custody, keys and sealed objects, and only the declare-limiter key of its own identity
   (`DeclareUploadThrottle::keyFor()`), never the shared `cache.rate_limiter` pool — from `tearDown`, so a failed
-  assertion still cleans up. A probe that needs more than its own rows is the defect.
+  assertion still cleans up. A probe that needs more than its own rows is the defect. The bank-logo probe
+  (`BankLogoThroughCaddyTest`) also creates a bank through the API and deletes it through the API, which queues the
+  release of the image it stored for the dev worker to drain: what any bank create/delete leaves stays, like the
+  session event — `event_store` rows (append-only), `audit_log` change rows, the `bank_count` movement and the
+  notification mail `bank.created` sends — and it asserts that the `image` table's id set gains no member, never on
+  `COUNT(*)` of that shared table, which the dev worker moves while it drains a release.
 - **Migrations** → generate via `make db.diff`. You may edit a migration created on the current feature branch; once merged into `main` it is immutable — create a new one instead.
 - **Local browser checks** → when a Playwright/browser navigation to the local HTTPS stack fails with `ERR_CERT_AUTHORITY_INVALID` (self-signed dev cert), don't silently downgrade to curl-only: say you hit it and pause — the user accepts the cert manually in the browser, then you retry the navigation. `curl -k` stays the hard gate, but the live visual check is recoverable this way, not abandoned.
 

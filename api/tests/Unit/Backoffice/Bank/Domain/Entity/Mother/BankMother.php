@@ -28,4 +28,15 @@ final class BankMother
 
         return $bank;
     }
+
+    /**
+     * A stored bank that already holds a logo, with no event pending and `updatedAt` at the clock the test pinned.
+     */
+    public static function withLogo(string $logoImageId, string $id = self::DEFAULT_ID): Bank
+    {
+        $bank = self::drained($id);
+        $bank->changeLogo($logoImageId);
+
+        return $bank;
+    }
 }

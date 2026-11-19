@@ -53,4 +53,19 @@ describe("Bank detail — redesign", () => {
     render(<BankDetailPage />);
     expect(await screen.findByTestId("banks-detail__new-badge")).toHaveTextContent("New");
   });
+
+  it("shows the logo the bank holds beside the name, and the placeholder when it holds none", async () => {
+    const logoImageId = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01";
+    run.mockResolvedValue(Bank.fromPrimitives({ ...BANK, logoImageId }));
+    const { unmount } = render(<BankDetailPage />);
+    const image = await screen.findByTestId("banks-detail__logo__image");
+    expect(image).toHaveAttribute("src", expect.stringContaining(logoImageId));
+    expect(image).toHaveAttribute("alt", "");
+    unmount();
+
+    run.mockResolvedValue(BANK);
+    render(<BankDetailPage />);
+    expect(await screen.findByTestId("banks-detail__logo__placeholder")).toBeInTheDocument();
+    expect(screen.queryByTestId("banks-detail__logo__image")).toBeNull();
+  });
 });

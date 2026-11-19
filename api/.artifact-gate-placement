@@ -138,6 +138,7 @@ tests/Unit/Gate/AuditMetadataVocabularyLivenessGateTest.php :: home
 tests/Unit/Gate/AuditPruneStatementGateTest.php :: home
 tests/Unit/Gate/AuditRedactionSentinelParityTest.php :: home
 tests/Unit/Gate/AuditWriteOperationParityTest.php :: home
+tests/Unit/Gate/BankLogoControllerOrderTest.php :: home
 tests/Unit/Gate/BehatStepVocabularyGateTest.php :: home
 tests/Unit/Gate/BehatCoverageScopeGateTest.php :: home
 tests/Unit/Gate/BehatSuiteCoverageGateTest.php :: home
@@ -176,6 +177,7 @@ tests/Unit/Gate/EnumWireContractGateTest.php :: home
 tests/Unit/Gate/EventDispatchGateTest.php :: home
 tests/Unit/Gate/FailedMessagePruneStatementGateTest.php :: home
 tests/Unit/Gate/ImageDeletionRequestedPublisherGateTest.php :: home
+tests/Unit/Gate/ImageWriteRouteAgreementGateTest.php :: home
 tests/Unit/Gate/IntNarrowingConfinementGateTest.php :: home
 tests/Unit/Gate/MailAssemblyBoundaryGateTest.php :: home
 tests/Unit/Gate/MessengerSendBoundaryGateTest.php :: home
@@ -234,6 +236,7 @@ tests/Unit/Gate/IbanSeparatorContractGateTest.php :: undecided :: asks a validat
 
 # Matched by the shape heuristic (kernel-free, reaching files outside its directory), but its subject is the
 # running Caddy and the dev application behind it, not an artifact read as data.
+tests/Functional/Backoffice/Bank/BankLogoThroughCaddyTest.php :: functional :: the running stack's Caddy, a bank created through its API and the access log
 tests/Functional/Shared/Monitoring/UploadFilenameAccessLogContainmentGateTest.php :: functional :: the running stack's Caddy, its access log and the container-log mirror
 tests/Functional/Shared/Monitoring/UploadSpoolConcurrencyGateTest.php :: functional :: the running stack's Caddy and two concurrent uploads through it
 

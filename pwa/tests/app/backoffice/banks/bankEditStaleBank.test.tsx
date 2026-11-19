@@ -4,6 +4,7 @@ import EditBankPage from "@/app/backoffice/banks/[id]/edit/page";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { ACME as BANK } from "./_fixtures";
+import { BANK_READER, BANK_WRITER, WithSession } from "./_session";
 
 /**
  * Editing a bank that a colleague deleted in parallel: the PUT answers 404
@@ -21,10 +22,12 @@ vi.mock("next/navigation", async () => ({
 
 const findRun = vi.hoisted(() => vi.fn());
 const updateRun = vi.hoisted(() => vi.fn());
+const upload = vi.hoisted(() => vi.fn());
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({
     BackOfficeFindBank: { run: findRun },
     BackOfficeUpdateBank: { run: updateRun },
+    ImageUploader: { upload, remove: vi.fn() },
   }),
 );
 
@@ -56,7 +59,11 @@ describe("EditBankPage — stale bank recovery", () => {
 
   it("PUT 404 → Refresh → not-found empty state with focus on the back-to-list CTA", async () => {
     updateRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
-    render(<EditBankPage />);
+    render(
+      <WithSession session={BANK_READER}>
+        <EditBankPage />
+      </WithSession>,
+    );
     await screen.findByTestId("bank-form");
 
     fireEvent.change(screen.getByTestId("bank-form__name"), { target: { value: "Renamed" } });
@@ -81,7 +88,11 @@ describe("EditBankPage — stale bank recovery", () => {
 
   it("Refresh landing on a load error focuses the page container, never <body>", async () => {
     updateRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
-    render(<EditBankPage />);
+    render(
+      <WithSession session={BANK_READER}>
+        <EditBankPage />
+      </WithSession>,
+    );
     await screen.findByTestId("bank-form");
 
     fireEvent.change(screen.getByTestId("bank-form__name"), { target: { value: "Renamed" } });
@@ -95,5 +106,28 @@ describe("EditBankPage — stale bank recovery", () => {
 
     await waitFor(() => expect(screen.getByTestId("banks-edit")).toHaveFocus());
     expect(screen.queryByTestId("bank-form")).toBeNull();
+  });
+
+  it("a logo write answering 404 reloads onto the not-found state, as the form's Refresh does", async () => {
+    upload.mockRejectedValue(new HttpError(STALE_PROBLEM));
+    render(
+      <WithSession session={BANK_WRITER}>
+        <EditBankPage />
+      </WithSession>,
+    );
+    await screen.findByTestId("banks-edit__logo");
+
+    findRun.mockRejectedValue(new HttpError(STALE_PROBLEM));
+    fireEvent.change(screen.getByTestId("banks-edit__logo-field__input"), {
+      target: {
+        files: [new File([new Uint8Array([137, 80, 78, 71])], "logo.png", { type: "image/png" })],
+      },
+    });
+
+    const backToList = await screen.findByTestId("banks-edit__back-to-list");
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("banks-edit__not-found")).toBeInTheDocument();
+    expect(screen.queryByTestId("banks-edit__logo")).toBeNull();
+    await waitFor(() => expect(backToList).toHaveFocus());
   });
 });
