@@ -513,7 +513,7 @@
     its residuals; retries re-query by origin; late arrivals are deleted; add the orphan sweep
     and the alarm (re-release 4 h, alarm 8 h, derived from the async
     retry_strategy including jitter). ADR D4 is decided keep (record it, with its reopening condition).
-    The spec checkpoint is closed by the plan in _bmad-output/handoffs/documents/doc-8/ as reconciled with the
+    The spec checkpoint is closed by the doc-8 plan (#1267, #1268; out of the tree since #1272) as reconciled with the
     delivered design (docs/adr/images-vs-documents-conservation-contract.md D8). Owns the end-to-end acceptance scenario of the SPEC success signal: an uploaded
     drawing is stored byte-identical, is unreadable until scanned, and after erasure leaves digest
     and custody while every derivative is gone.
