@@ -17,6 +17,11 @@ use Symfony\Component\Yaml\Yaml;
  * Each wait is taken at its worst: the full delay plus Symfony's jitter (0.1 unless the strategy says otherwise),
  * then capped, as `MultiplierRetryStrategy::getWaitingTime()` caps it.
  *
+ * The alarm's clock starts at the `Erased` custody row, not at the first request, so it also owes the release tick
+ * three periods: the one that sends the first request, the one that repeats it, and the one that confirms nothing is
+ * left. It does not budget the Doctrine transport's `redeliver_timeout` (an hour by default) after a worker dies
+ * mid-attempt: a dead worker is a fault the alarm is right to surface.
+ *
  * @internal
  */
 #[CoversNothing]
@@ -26,6 +31,11 @@ final class DerivativeReleaseBoundsTest extends TestCase
 
     private const float SYMFONY_DEFAULT_JITTER = 0.1;
 
+    /** The release tick's period in `DocumentsMaintenanceSchedule`, pinned by its own test. */
+    private const int RELEASE_TICK_SECONDS = 300;
+
+    private const int TICKS_BEFORE_CONFIRMATION = 3;
+
     #[Test]
     public function aReRequestComesOnlyAfterEveryRetryOfTheLastOneIsOver(): void
     {
@@ -33,10 +43,11 @@ final class DerivativeReleaseBoundsTest extends TestCase
     }
 
     #[Test]
-    public function theAlarmWaitsForTheReRequestAndEveryRetryOfIt(): void
+    public function theAlarmWaitsForTheReRequestEveryRetryOfItAndTheTicksBetween(): void
     {
         $this->assertGreaterThanOrEqual(
-            ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + $this->retryHorizonSeconds(),
+            ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + $this->retryHorizonSeconds()
+            + self::TICKS_BEFORE_CONFIRMATION * self::RELEASE_TICK_SECONDS,
             ErasureLimits::DERIVATIVE_ALARM_SECONDS,
         );
     }

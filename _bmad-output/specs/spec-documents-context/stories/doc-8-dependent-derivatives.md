@@ -84,6 +84,18 @@ Three layers, run in parallel as read-only subagents over the diff `3f96ac3..c28
 | Publisher wording, read-route ADR D1, architecture bullet, source tree, `CAP-n` and register-type comments in `src`, inline FQCN, problem-mapping test, alarm 20-id cap test, reporter list order | Acceptance | real | patch |
 | `services.yaml` bindings of the unconsumed seam witnessed by no test | Acceptance | real | defer: the first producer consumes the seam, and the container then compiles the binding |
 
+A second adversarial pass (Blind Hunter, read-only subagent, this session) read the reconciliation delta `714af5b..eae725a`. No GRAVE; it confirmed the period string parses, the bounds arithmetic, the UUID casing, the `DISTINCT` keyset paging, that the orphan sweep cannot release a live derivative (no `document` row is hard-deleted and `Ready` leaves only to `Erased`) and that `reopenObjectDeletion`'s widened answer reaches no caller that reads it.
+
+| Finding | Verdict | Route |
+|---|---|---|
+| An origin whose last derivative went between the page read and its release was logged as an orphan | real | patch: counted only when the release queued something |
+| A page read failing mid-walk lost the line for the origins already released | real | patch: the summary is written in a `finally` |
+| `run(0)` never ended | real, latent | patch: a limit under one is refused |
+| The first origin page could not use the partial index | real | patch: the query repeats `origin_id IS NOT NULL` |
+| The bounds test ignored the ticks between the `Erased` row and the confirmation | real | patch: three release-tick periods added; the Doctrine `redeliver_timeout` after a dead worker stated as deliberately unbudgeted |
+| One `releaseConfirmed()` query per `Erased` origin | real | patch: `statesOf()` answers the confirmation with the state, and the port method is gone |
+| A restore reopens every erased row and the alarm, measured from the original `Erased` custody row, fires for each until the sweep drains them | real | decision-needed: put to the owner |
+
 ## Verification
 
 Fresh runs on head `afc2812`, in a local PHP 8.5.12 toolbox over PostgreSQL 18 (this session's container cannot run the compose stack):

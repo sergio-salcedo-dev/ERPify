@@ -96,8 +96,9 @@ final readonly class DoctrineImageRepository implements ImageRepository
 
         /** @phpstan-var list<string> */
         return $this->entityManager->getConnection()->fetchFirstColumn(
-            'SELECT DISTINCT origin_id FROM image WHERE origin_type = :type' . $afterClause
-            . ' ORDER BY origin_id LIMIT :limit',
+            // `origin_id IS NOT NULL` repeats the partial index's predicate so the planner can prove it and use it.
+            'SELECT DISTINCT origin_id FROM image WHERE origin_type = :type AND origin_id IS NOT NULL'
+            . $afterClause . ' ORDER BY origin_id LIMIT :limit',
             $parameters,
             ['limit' => Types::INTEGER],
         );

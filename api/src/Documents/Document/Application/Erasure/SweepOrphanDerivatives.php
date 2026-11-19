@@ -9,6 +9,7 @@ use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Erasure\DocumentDerivativeReleases;
 use Erpify\Shared\Images\Application\DerivativeOrigins;
 use Erpify\Shared\Images\Application\ReleaseDerivatives;
+use InvalidArgumentException;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -36,12 +37,34 @@ final readonly class SweepOrphanDerivatives
     }
 
     /**
+     * The summary line is written even when a page read fails mid-walk, so the origins already released are never
+     * left unreported; the failure itself then propagates to the caller.
+     *
      * @return int how many orphaned origins this run released
      */
     public function run(int $limit): int
     {
+        if ($limit < 1) {
+            throw new InvalidArgumentException('The orphan sweep pages by at least one origin.');
+        }
+
         $orphans = [];
         $failures = 0;
+
+        try {
+            $this->walk($limit, $orphans, $failures);
+        } finally {
+            $this->report($orphans, $failures);
+        }
+
+        return \count($orphans);
+    }
+
+    /**
+     * @param list<string> $orphans
+     */
+    private function walk(int $limit, array &$orphans, int &$failures): void
+    {
         $after = null;
 
         do {
@@ -51,13 +74,15 @@ final readonly class SweepOrphanDerivatives
             foreach ($page as $documentId) {
                 $after = $documentId;
 
-                if (!$this->isOrphan($documentId, $states[$documentId] ?? null)) {
+                if (!$this->isOrphan($states[$documentId] ?? null)) {
                     continue;
                 }
 
                 try {
-                    $this->releaseDerivatives->of(DocumentDerivativeOrigin::of($documentId));
-                    $orphans[] = $documentId;
+                    // An origin whose last derivative went between the page read and now released nothing: no anomaly.
+                    if (0 < $this->releaseDerivatives->of(DocumentDerivativeOrigin::of($documentId))) {
+                        $orphans[] = $documentId;
+                    }
                 } catch (Throwable $throwable) {
                     ++$failures;
                     $this->logger->error('The orphaned derivatives of a document could not be released.', [
@@ -67,32 +92,41 @@ final readonly class SweepOrphanDerivatives
                 }
             }
         } while (\count($page) === $limit);
-
-        if ([] !== $orphans || 0 !== $failures) {
-            $this->logger->error('Derivatives were found that no live document accounts for.', [
-                'count' => \count($orphans) + $failures,
-                'released' => \count($orphans),
-                'documentIds' => \array_slice($orphans, 0, self::IDS_PER_LINE),
-            ]);
-        }
-
-        return \count($orphans);
     }
 
-    private function isOrphan(string $documentId, ?string $state): bool
+    /**
+     * @param list<string> $orphans
+     */
+    private function report(array $orphans, int $failures): void
+    {
+        if ([] === $orphans && 0 === $failures) {
+            return;
+        }
+
+        $this->logger->error('Derivatives were found that no live document accounts for.', [
+            'count' => \count($orphans) + $failures,
+            'released' => \count($orphans),
+            'documentIds' => \array_slice($orphans, 0, self::IDS_PER_LINE),
+        ]);
+    }
+
+    /**
+     * @param array{state: string, releaseConfirmed: bool}|null $state
+     */
+    private function isOrphan(?array $state): bool
     {
         if (null === $state) {
             return true;
         }
 
-        if (DocumentState::Ready->value === $state) {
+        if (DocumentState::Ready->value === $state['state']) {
             return false;
         }
 
-        if (DocumentState::Erased->value !== $state) {
+        if (DocumentState::Erased->value !== $state['state']) {
             return true;
         }
 
-        return $this->releases->releaseConfirmed($documentId);
+        return $state['releaseConfirmed'];
     }
 }

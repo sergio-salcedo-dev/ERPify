@@ -38,6 +38,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\Shared\Images\Fixtures\ImageReleaseRig;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\UndeletableImageStorage;
 use FilesystemIterator;
+use InvalidArgumentException;
 use LogicException;
 use Monolog\Handler\TestHandler;
 use Monolog\Level;
@@ -77,6 +78,7 @@ use Throwable;
 #[CoversClass(MaterialiseDerivative::class)]
 #[CoversClass(DoctrineImageRepository::class)]
 #[CoversClass(DbalDocumentDerivativeReleases::class)]
+#[CoversClass(SweepOrphanDerivatives::class)]
 final class DocumentDerivativesFunctionalTest extends KernelTestCase
 {
     use PlantsNamedDocuments;
@@ -430,6 +432,50 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function anOriginWhoseLastDerivativeWentBeforeItsReleaseIsNoAnomaly(): void
+    {
+        $confirmed = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->eraseRow($confirmed['id'], 30);
+        $this->connection()->executeStatement(
+            'UPDATE document SET derivatives_released_at = NOW() WHERE id = CAST(:id AS UUID)',
+            ['id' => $confirmed['id']],
+        );
+
+        $this->assertSame(0, $this->orphanSweep([[$confirmed['id']]])->run(10));
+        $this->assertSame([], $this->log->getRecords());
+    }
+
+    #[Test]
+    public function aPageReadThatFailsStillReportsTheOrphansAlreadyReleased(): void
+    {
+        $absent = Uuid::generate();
+        $this->plantDerivativeOf($absent);
+        $failure = new RuntimeException('page read failed');
+
+        $this->assertSame(
+            $failure,
+            $this->thrownBy(fn (): int => $this->orphanSweep([[\strtolower($absent)], $failure])->run(1)),
+        );
+
+        $lines = \array_values(\array_filter(
+            $this->log->getRecords(),
+            static fn (LogRecord $record): bool => 'Derivatives were found that no live document accounts for.'
+                === $record->message,
+        ));
+        $this->assertCount(1, $lines);
+        $this->assertSame([\strtolower($absent)], $lines[0]->context['documentIds'] ?? null);
+    }
+
+    #[Test]
+    public function theOrphanSweepRefusesAnEmptyPage(): void
+    {
+        $this->assertInstanceOf(
+            InvalidArgumentException::class,
+            $this->thrownBy(fn (): int => $this->orphanSweep()->run(0)),
+        );
+    }
+
+    #[Test]
     public function theTickRunsTheSweepThroughTheContainersWiring(): void
     {
         $document = $this->plantNamedDocument(null, DocumentState::Ready);
@@ -533,10 +579,18 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
         );
     }
 
-    private function orphanSweep(): SweepOrphanDerivatives
+    /**
+     * @param list<list<string>|Throwable>|null $pages the origin pages to walk instead of the table's, when given
+     */
+    private function orphanSweep(?array $pages = null): SweepOrphanDerivatives
     {
+        $origins = null === $pages ? $this->origins() : new DerivativeOrigins(new ScriptedOriginPages(
+            new DoctrineImageRepository($this->service(EntityManagerInterface::class)),
+            $pages,
+        ));
+
         return new SweepOrphanDerivatives(
-            $this->origins(),
+            $origins,
             $this->service(DocumentDerivativeReleases::class),
             $this->release(),
             new Logger('test', [$this->log]),

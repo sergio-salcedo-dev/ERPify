@@ -40,17 +40,13 @@ interface DocumentDerivativeReleases
     public function awaitingConfirmation(int $rerequestAfterSeconds, int $limit, ?string $afterId = null): array;
 
     /**
-     * Whether the row's release was already confirmed, so images still carrying its origin are ones nothing will ask
-     * about again.
-     */
-    public function releaseConfirmed(string $documentId): bool;
-
-    /**
-     * The state of each of `$documentIds` that still has a row, keyed by id; an id with no row is absent.
+     * The state of each of `$documentIds` that still has a row, keyed by id, with whether its release was already
+     * confirmed — images still carrying the origin of such a row are ones nothing will ask about again. An id with no
+     * row is absent.
      *
      * @param list<string> $documentIds
      *
-     * @return array<string, string>
+     * @return array<string, array{state: string, releaseConfirmed: bool}>
      */
     public function statesOf(array $documentIds): array;
 

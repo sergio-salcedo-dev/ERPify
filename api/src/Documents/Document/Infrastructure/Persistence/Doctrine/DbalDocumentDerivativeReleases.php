@@ -122,24 +122,22 @@ final readonly class DbalDocumentDerivativeReleases implements DocumentDerivativ
             Uuid::ensure($documentId);
         }
 
-        /** @var array<string, string> $states */
-        $states = $this->connection->fetchAllKeyValue(
-            'SELECT id, state FROM document WHERE id IN (:ids)',
+        $states = [];
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT id, state, derivatives_released_at IS NOT NULL AS released FROM document WHERE id IN (:ids)',
             ['ids' => \array_map(strtolower(...), $documentIds)],
             ['ids' => ArrayParameterType::STRING],
         );
 
+        foreach ($rows as $row) {
+            $id = $row['id'] ?? null;
+            $state = $row['state'] ?? null;
+
+            if (\is_string($id) && \is_string($state)) {
+                $states[$id] = ['state' => $state, 'releaseConfirmed' => true === ($row['released'] ?? null)];
+            }
+        }
+
         return $states;
-    }
-
-    #[Override]
-    public function releaseConfirmed(string $documentId): bool
-    {
-        Uuid::ensure($documentId);
-
-        return false !== $this->connection->fetchOne(
-            'SELECT 1 FROM document WHERE id = CAST(:id AS UUID) AND derivatives_released_at IS NOT NULL',
-            ['id' => \strtolower($documentId)],
-        );
     }
 }
