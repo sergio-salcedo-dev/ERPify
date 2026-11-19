@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import EditBankPage from "@/app/backoffice/banks/[id]/edit/page";
 import { Bank } from "@/context/backoffice/bank/domain/Bank";
-import { ACME } from "./_fixtures";
+import { ACME, BETA } from "./_fixtures";
 import { BANK_READER, BANK_WRITER, WithSession } from "./_session";
 
 /**
@@ -15,9 +15,12 @@ const BANK_ID = ACME.id;
 const OLD_LOGO = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a01";
 const NEW_LOGO = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a02";
 
+const FIRST_ROUTE_ID = "11111111-1111-4111-8111-111111111111";
+const SECOND_ROUTE_ID = "22222222-2222-4222-8222-222222222222";
+const route = vi.hoisted(() => ({ id: "11111111-1111-4111-8111-111111111111" }));
 vi.mock("next/navigation", async () => ({
   ...(await import("./_mocks")).routerMock(),
-  useParams: () => ({ id: "11111111-1111-4111-8111-111111111111" }),
+  useParams: () => ({ id: route.id }),
 }));
 
 const findRun = vi.hoisted(() => vi.fn());
@@ -58,6 +61,7 @@ const PNG = () => new File([new Uint8Array([137, 80, 78, 71])], "logo.png", { ty
 describe("EditBankPage — logo control", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    route.id = FIRST_ROUTE_ID;
     findRun.mockResolvedValue(bankHolding(OLD_LOGO));
   });
 
@@ -127,5 +131,42 @@ describe("EditBankPage — logo control", () => {
       ),
     );
     expect(screen.getByTestId("bank-form__name")).toHaveValue("Typed, not saved");
+  });
+
+  it("drops the answer of an upload that settles after the route moved to another bank", async () => {
+    let settle: (answer: { imageId: string }) => void = () => {};
+    upload.mockImplementation(
+      () =>
+        new Promise<{ imageId: string }>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    findRun.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === SECOND_ROUTE_ID
+          ? Bank.fromPrimitives({ ...BETA, logoImageId: null })
+          : bankHolding(OLD_LOGO),
+      ),
+    );
+    const { rerender } = renderPage();
+    await screen.findByTestId("banks-edit__logo");
+    pick(PNG());
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+
+    route.id = SECOND_ROUTE_ID;
+    rerender(
+      <WithSession session={BANK_WRITER}>
+        <EditBankPage />
+      </WithSession>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("banks-edit__subtitle")).toHaveTextContent(BETA.name),
+    );
+    settle({ imageId: NEW_LOGO });
+
+    await waitFor(() => expect(findRun).toHaveBeenCalledWith(SECOND_ROUTE_ID));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByTestId("banks-edit__logo-field__preview__placeholder")).toBeInTheDocument();
+    expect(screen.queryByTestId("banks-edit__logo-field__preview__image")).toBeNull();
   });
 });

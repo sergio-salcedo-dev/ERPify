@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
  * directions, read from the router's own inventory (`api/.route-manifest.json`) and from each route's source:
  *
  *  - a `PUT` the matcher admits must carry `RawBodyRoute::ATTRIBUTE`, or the plaintext spool of its body is never
- *    destroyed;
+ *    destroyed, and must reach `ImageAttachment`, or the image it replaces is never released;
  *  - a `PUT` that carries the attribute or reaches `ImageAttachment` must be admitted by the matcher, or the edge cuts
  *    its body at 1MB and the application stores a truncated image — which can still decode.
  *
@@ -72,9 +72,9 @@ final class ImageWriteRouteAgreementGateTest extends TestCase
 
     /**
      * The checker over planted routes, so every red it can produce is provoked: a `PUT` the matcher admits with no
-     * attribute, a `PUT` carrying the attribute that the matcher misses, and a `PUT` reaching `ImageAttachment`
-     * that the matcher misses — the truncated-image case. A `DELETE` reaching the attachment, an unrelated `PUT` and a
-     * route that agrees are the negatives.
+     * attribute, a `PUT` the matcher admits that bypasses `ImageAttachment`, a `PUT` carrying the attribute that the
+     * matcher misses, and a `PUT` reaching `ImageAttachment` that the matcher misses — the truncated-image case. A
+     * `DELETE` reaching the attachment, an unrelated `PUT` and a route that agrees are the negatives.
      */
     #[Test]
     public function theAgreementCheckReddensEachWayTheTwoCanDisagree(): void
@@ -100,6 +100,14 @@ final class ImageWriteRouteAgreementGateTest extends TestCase
         $this->assertCount(1, $bare);
         $this->assertStringContainsString('bare', $bare[0]);
         $this->assertStringContainsString('carries no ' . RawBodyRoute::ATTRIBUTE, $bare[0]);
+
+        $bypassing = ImageRouteAgreement::problems(
+            ['bypassing' => $this->route(self::LIFTED, ['PUT'], true, false)],
+            $pattern,
+        );
+        $this->assertCount(1, $bypassing);
+        $this->assertStringContainsString('bypassing', $bypassing[0]);
+        $this->assertStringContainsString('never released', $bypassing[0]);
 
         $spooled = ImageRouteAgreement::problems(
             ['spooled' => $this->route(self::NOT_LIFTED, ['PUT'], true, false)],

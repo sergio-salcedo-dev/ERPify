@@ -92,6 +92,9 @@ export function isBankSingleResponse(value: unknown): value is BankSingleRespons
 // DTO on the server, and the create/update ones are deliberately the narrowest bank view —
 // the count belongs to the read views, which compose it from the account projection. So the
 // field is optional here, and a write response that omits it is valid rather than malformed.
+// The same holds for `logoImageId`, which no write view carries: the `Bank` a create/update
+// returns reads 0 accounts and no logo whatever the bank holds, so it is never a read model to
+// replace a screen's state with — reload through `find()` for that.
 function isBankWriteSingleResponse(
   value: unknown,
 ): value is { data: Omit<BankPrimitives, "accountCount"> & { accountCount?: number } } {

@@ -15,8 +15,10 @@ use Throwable;
 
 /**
  * Sets, replaces and removes the single image an aggregate holds, and is the one place a release of an image is
- * requested. A consumer owns its column and its route; it never creates the deletion request itself, which is why
- * no consumer story edits the publisher registry.
+ * created. A consumer owns its column and its route; it never constructs the deletion request itself, which is why
+ * no consumer edits the publisher registry. An owner that ends its own life asks for the release of the id it holds
+ * through {@see self::release()}, and only for that id: the publisher gate pins where the request is constructed, not
+ * which id a caller passes, so releasing an id another owner holds is refused by review, not by a gate.
  *
  * **The order is the protocol.** The bytes are stored first ({@see UploadImage}, outside any transaction, because no
  * rollback can undo a write to storage). One transaction then takes the owner row `FOR UPDATE`, reads the id it

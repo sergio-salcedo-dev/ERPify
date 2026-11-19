@@ -16,11 +16,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * The order of a bank logo write is the contract, and nothing but convention keeps it
- * (`PRODUCTION_SECURITY_CHECKLIST.md`
- * §7, image item twelve (c)): authentication is the firewall's, `bank.write` the attribute's, and inside the action the
- * bank is looked up (id syntax, then existence) BEFORE the budget is spent, and the budget is spent BEFORE the body is
- * read — a refusal on any earlier step stores nothing and costs no read, and a route that read first would spend its
- * budget after the cost.
+ * (`PRODUCTION_SECURITY_CHECKLIST.md` §7, image item twelve (c)): authentication is the firewall's, `bank.write` the
+ * attribute's, and inside the action the bank is looked up (id syntax, then existence) BEFORE the budget is spent, and
+ * the budget is spent BEFORE the body is read — a refusal on any earlier step stores nothing and costs no read, and a
+ * route that read first would spend its budget after the cost.
  *
  * Read from the action's own source, call by call: it proves the calls appear in that order in the method, never that
  * every path takes them, nor that a helper reached through another class keeps the order.

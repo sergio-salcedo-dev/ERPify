@@ -112,10 +112,14 @@ final class ImageFixtureContext extends AbstractContext
     #[Given('the bank :bankId holds that image as its logo')]
     public function theBankHoldsThatImageAsItsLogo(string $bankId): void
     {
-        $this->entityManager->getConnection()->executeStatement(
+        $updated = $this->entityManager->getConnection()->executeStatement(
             'UPDATE bank SET logo_image_id = :image WHERE id = :bank',
             ['image' => $this->identifier()->toString(), 'bank' => $bankId],
         );
+
+        if (1 !== $updated) {
+            throw new RuntimeException(\sprintf('No bank %s was seeded, so it cannot hold that image.', $bankId));
+        }
     }
 
     #[When('I send a :method request for that image')]

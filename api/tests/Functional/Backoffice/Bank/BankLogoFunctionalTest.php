@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Functional\Backoffice\Bank;
 
+use Doctrine\DBAL\Exception\DriverException;
 use Erpify\Backoffice\Bank\Application\BankDeleter;
 use Erpify\Backoffice\Bank\Application\BankLogoHolder;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
@@ -204,6 +205,28 @@ final class BankLogoFunctionalTest extends KernelTestCase
     }
 
     /**
+     * The lock the whole protocol rests on is a real row lock: while one transaction holds the bank through
+     * `findByIdForUpdate()`, a second connection cannot take it, and once that transaction ends it can. The races
+     * above run one writer inside the other's window on one connection, so they prove the refresh, never the lock.
+     */
+    #[Test]
+    public function theLockingReadHoldsTheBankRowAgainstASecondConnectionUntilItsTransactionEnds(): void
+    {
+        $bankId = $this->seedBank(null);
+        $connection = $this->entityManager->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $this->assertInstanceOf(Bank::class, $this->service(BankRepository::class)->findByIdForUpdate($bankId));
+            $this->assertSame('55P03', $this->lockStateFromOutside($bankId), 'the locking read took no row lock');
+        } finally {
+            $connection->rollBack();
+        }
+
+        $this->assertNull($this->lockStateFromOutside($bankId), 'the row stayed locked after the transaction ended');
+    }
+
+    /**
      * The locking read reaches the database through a refresh: a bank already managed with one logo, changed by another
      * connection, is removed from under the id the database holds, not the stale one in the identity map.
      */
@@ -255,5 +278,20 @@ final class BankLogoFunctionalTest extends KernelTestCase
         $this->assertNull($this->heldBy($bankId));
         $this->assertSame(1, $this->queuedFor($logo));
         $this->assertSame(1, $this->queuedTotal());
+    }
+
+    /**
+     * @return string|null the SQLSTATE a non-waiting lock attempt from the second connection failed with, or null
+     *                     when it took the lock
+     */
+    private function lockStateFromOutside(string $bankId): ?string
+    {
+        try {
+            $this->outside->fetchOne('SELECT 1 FROM bank WHERE id = ? FOR UPDATE NOWAIT', [$bankId]);
+        } catch (DriverException $exception) {
+            return $exception->getSQLState();
+        }
+
+        return null;
     }
 }

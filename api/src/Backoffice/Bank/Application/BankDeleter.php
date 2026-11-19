@@ -36,7 +36,7 @@ final readonly class BankDeleter
      * transaction and finds the bank gone. The release is queued in the same transaction as the removal, so the row
      * and the request to destroy the logo commit or roll back together.
      *
-     * @throws InvalidUuidException  when $id is not a well-formed UUID (400 invalid-input)
+     * @throws InvalidUuidException  when $id is not a well-formed UUID (400 invalid-uuid)
      * @throws BankNotFoundException
      * @throws BankInUseException
      */

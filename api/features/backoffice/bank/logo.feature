@@ -74,6 +74,8 @@ Feature: Set, replace and remove the logo of a bank
     And the response status code should be 404
     And I execute the SQL query "SELECT id FROM image"
     And there should have 1 records in SQL result
+    And I execute the SQL query "SELECT b.id FROM bank b JOIN image i ON i.id = b.logo_image_id WHERE b.id = '10901090-0000-7000-8000-000000000003'"
+    And there should have 1 records in SQL result
 
   Scenario: A second upload replaces the first and queues the release of the one it replaces
     Given I execute the SQL query "INSERT INTO bank (id, name, name_normalized, short_name, created_at, updated_at) VALUES ('10901090-0000-7000-8000-000000000004', 'Twice Bank', 'twice bank', 'TWB', NOW(), NOW()) ON CONFLICT DO NOTHING" on connection "seed"

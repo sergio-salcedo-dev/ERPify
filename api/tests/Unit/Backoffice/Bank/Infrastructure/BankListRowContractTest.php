@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\Bank\Infrastructure;
 
+use DateTimeInterface;
 use Erpify\Backoffice\Bank\Application\BankAccountCountEnricher;
 use Erpify\Backoffice\Bank\Application\BankWithAccountCount;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Event\BankCreatedDomainEvent;
 use Erpify\Backoffice\Bank\Infrastructure\Http\BankResourceMapper;
 use Erpify\Backoffice\Bank\Infrastructure\Messenger\RefreshRealtimeOnBankChanged;
+use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Tests\Double\Clock\FixedClock;
 use Erpify\Tests\Support\Dig;
+use Erpify\Tests\Support\PHPUnit\FreezeSystemClockExtension;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\InMemoryBankAccountCounter;
 use Erpify\Tests\Unit\Backoffice\Bank\Application\InMemoryBankLogoReader;
 use Erpify\Tests\Unit\Backoffice\Bank\Domain\Entity\Mother\BankMother;
@@ -58,6 +62,10 @@ final class BankListRowContractTest extends TestCase
     /**
      * The logo is the one field the realtime side does not take from the event, so it is the one that could drift:
      * both sides carry it, with the same value, and `null` is pinned for a bank without one.
+     *
+     * The logo change lands at a later instant than the event it is published with, so the one field the two rows may
+     * disagree on is `updatedAt`: the realtime row keeps the event's, the HTTP row reads the bank's. That divergence is
+     * asserted rather than hidden behind a clock that never moves.
      */
     public function testBothRowsCarryTheLogoIdAndNullForABankWithoutOne(): void
     {
@@ -70,13 +78,21 @@ final class BankListRowContractTest extends TestCase
         $this->assertNull(Dig::value($this->httpListRow($bank), 'logoImageId'));
 
         $logo = '0190b1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
-        $bank->changeLogo($logo);
+        SystemClock::set(FixedClock::at(SystemClock::now()->modify('+1 second')->format(DateTimeInterface::ATOM)));
 
-        $this->assertSame($logo, Dig::value($this->httpListRow($bank), 'logoImageId'));
-        $this->assertSame(
-            $this->httpListRow($bank),
-            $this->realtimeBankRow($event, new InMemoryBankLogoReader([$bank->getId() ?? '' => $logo])),
-        );
+        try {
+            $bank->changeLogo($logo);
+        } finally {
+            FreezeSystemClockExtension::pin();
+        }
+
+        $http = $this->httpListRow($bank);
+        $realtime = $this->realtimeBankRow($event, new InMemoryBankLogoReader([$bank->getId() ?? '' => $logo]));
+
+        $this->assertSame($logo, Dig::value($http, 'logoImageId'));
+        $this->assertNotSame($http['updatedAt'] ?? null, $realtime['updatedAt'] ?? null);
+        unset($http['updatedAt'], $realtime['updatedAt']);
+        $this->assertSame($http, $realtime);
     }
 
     /**

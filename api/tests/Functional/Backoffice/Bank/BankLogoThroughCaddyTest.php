@@ -90,11 +90,17 @@ final class BankLogoThroughCaddyTest extends TestCase
 
     protected function tearDown(): void
     {
-        if (null !== $this->bankId) {
-            $this->json('DELETE', '/api/v1/backoffice/banks/' . $this->bankId, null);
+        parent::tearDown();
+
+        if (null === $this->bankId) {
+            return;
         }
 
-        parent::tearDown();
+        [$status, $body] = $this->json('DELETE', '/api/v1/backoffice/banks/' . $this->bankId, null);
+
+        if (204 !== $status) {
+            $this->fail(\sprintf('The probe left bank %s in the dev database (%d): %s', $this->bankId, $status, $body));
+        }
     }
 
     #[Test]

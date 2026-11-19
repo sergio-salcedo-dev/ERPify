@@ -18,7 +18,7 @@ final readonly class BankFinder
     }
 
     /**
-     * A malformed id is a request-target syntax error, surfaced as 400 `invalid-input`
+     * A malformed id is a request-target syntax error, surfaced as 400 `invalid-uuid`
      * (via {@see InvalidUuidException}); a well-formed id with no matching row is 404.
      *
      * @throws InvalidUuidException  when $id is not a well-formed RFC 4122 UUID

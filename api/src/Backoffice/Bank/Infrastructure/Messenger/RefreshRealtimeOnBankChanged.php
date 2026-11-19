@@ -90,7 +90,7 @@ final readonly class RefreshRealtimeOnBankChanged
 
     /**
      * Maps the event id and domain-event primitives to the PWA `BankPrimitives` shape. The id is the
-     * aggregate id (envelope), no longer part of the payload. Safe `??` access keeps the contract
+     * aggregate id (envelope), not a payload field. Safe `??` access keeps the contract
      * resilient if the event payload ever changes; `accountCount` and `logoImageId` are resolved at publish time
      * so the PWA never receives `undefined`. The logo is not part of the event (a logo change records none), so it is
      * read from the row: a rename must carry the logo the bank holds now, because an open detail page replaces its

@@ -54,6 +54,16 @@ export default function EditBankPage() {
   // (mirrors the detail page's pendingRefreshFocusRef pattern).
   const pendingRefreshFocusRef = useRef(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // The bank the screen shows now. An upload started on another bank's screen settles after the
+  // route moved on, and its answer must not land on this one.
+  const currentIdRef = useRef(id);
+  useEffect(() => {
+    currentIdRef.current = id;
+  }, [id]);
+  const reloadStaleBank = () => {
+    pendingRefreshFocusRef.current = true;
+    setReloadToken((token) => token + 1);
+  };
 
   // Reset state when ID changes to avoid synchronous setState in useEffect
   const [prevId, setPrevId] = useState(id);
@@ -172,17 +182,17 @@ export default function EditBankPage() {
           <BankLogoControl
             bankId={bank.id}
             logoImageId={logoImageId}
-            onLogoChange={setLogoImageId}
+            onLogoChange={(next) => {
+              if (currentIdRef.current === bank.id) setLogoImageId(next);
+            }}
+            onStaleBank={reloadStaleBank}
           />
 
           <BankForm
             key={bank.id}
             mode={PersistenceAction.UPDATING}
             initial={{ id: bank.id, name: bank.name, shortName: bank.shortName }}
-            onStaleBank={() => {
-              pendingRefreshFocusRef.current = true;
-              setReloadToken((token) => token + 1);
-            }}
+            onStaleBank={reloadStaleBank}
           />
         </>
       ) : null}

@@ -105,6 +105,7 @@ context:
 - **Wire shape.** `PUT` answers the bare `{"imageId"}` of `wire-contract.md` (a `JsonResponse`, no `data` envelope: the ic-2 `ApiImageUploader` guards that shape), while the bank list and detail keep the `data` envelope with `logoImageId`.
 - **429 is not a Behat scenario.** The per-identity write budget resets per request in the Behat lane, so `BankLogoThrottledFunctionalTest` spends the real budget on the real routes and asserts the refusal, including that a wrong or missing `Content-Length` answers 429 and never 411 (the reader was not reached).
 - **Review layers.** Four read-only layers ran on this worktree, in one session, before the pull request existed: Blind Hunter, Edge Case Hunter, the verification-gap layer and an Acceptance Auditor (the third layer `CLAUDE.md` names). They are listed below; no pull request existed yet, so there were no review threads to read. The spec itself went through two external read-only review rounds before implementation.
+- **PR review.** The three layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) ran again, read-only and in parallel, on pull request #1266 at `0e45eb3` in a separate worktree, with the triage log below as their input. The pull request had no review threads. Their findings are the second table of the Review Triage Log; every `patch` was applied on the branch.
 
 ## Spec Change Log
 
@@ -136,7 +137,25 @@ Four read-only layers ran on the worktree diff against `baseline_commit`, in par
 | Logo lookup throwing in the realtime handler aborts the publish (Edge) | false | The existing `accountCount` read has the same failure mode, and swallowing it would publish a null logo that blanks an open detail page: worse than a retried message |
 | Route and controller detection in `ImageRouteAgreement` is textual (`#[Route(`) and follows only class-typed constructor arguments (Edge); `BankLogoControllerOrderTest` reads the order with `strpos` over text including comments (Edge) | low | Declared blind spots of a text gate; a hostile comment or an interface-typed collaborator is not a case the tree has, and the fixes (reflection, tokenising) are larger than a direct correction. Rejected |
 | Test docblocks restate "what a green does not prove" a second time (Acceptance) | low | Gate headers do the same across the tree; the residual itself is in §7. Rejected |
-| `CLAUDE.md` and `docs/rules/testing.md` should name the rows the bank probe leaves in the dev database (Acceptance) | defer (unverified-severity: n/a) | The fix edits agent-context files. The code-site half is done in the `DevStackUploadRows` docblock; the rest waits for the user's decision |
+| `CLAUDE.md` and `docs/rules/testing.md` should name the rows the bank probe leaves in the dev database (Acceptance) | applied | Commit `995ba3b` edited both; its inaccuracies were corrected by the PR review below |
+
+### PR review (#1266)
+
+| Finding | Verdict | Evidence / route |
+|---|---|---|
+| Nothing proves `findByIdForUpdate` takes a row lock: every race runs on one connection, so dropping `setLockMode` stays green (Blind, Edge) | medium | Patch: `theLockingReadHoldsTheBankRowAgainstASecondConnectionUntilItsTransactionEnds` takes the lock and asserts a second connection's `FOR UPDATE NOWAIT` fails with `55P03`, then succeeds after the rollback |
+| `ImageRouteAgreement` misses an admitted `PUT` that carries the attribute and never reaches `ImageAttachment`; §7 twelve(c) read as closed (Acceptance) | medium | Patch: third problem branch plus a planted `bypassing` case; twelve(c) rewritten as current state, naming the order and the reflection reach as what stays convention |
+| A manifest `PUT` the sweep cannot match to a named `#[Route]` reads as carrying nothing, so the "not admitted" direction passes unseen (Blind) | low | Patch: `facts()` refuses it. Every manifest `PUT` today resolves (`UploadRoutes::CONTENT` is a constant the attribute instantiates) |
+| `CLAUDE.md` / `docs/rules/testing.md`: images hold no sealed object, the probe asserts the id set gains no member, the `bank.created` mail stays, and the probe lives outside `Shared/Monitoring` (Acceptance) | medium | Patch: both texts corrected |
+| A logo write answering 404 leaves the edit screen on a deleted bank with a retry that can only 404 (Edge) | low | Patch: `BankLogoControl` takes `onStaleBank` and reloads like the form; `bankEditStaleBank.test.tsx` covers it and fails without the call |
+| An upload settling after the route moved to another bank sets that bank's logo on screen (Blind) | low | Patch: the page drops an answer for a bank it no longer shows; `bankLogoControl.test.tsx` covers it and fails without the guard |
+| The Behat seed step `the bank :bankId holds that image as its logo` succeeds over 0 rows (Blind, Edge) | low | Patch: it throws unless exactly one row changed |
+| The through-Caddy probe ignores the status of its own bank `DELETE` (Acceptance, Edge) | low | Patch: `tearDown` fails naming the bank it left |
+| `BankListRowContractTest` compares the whole rows after a logo change, true only because the clock never moves (Edge) | low | Patch: the change lands one second later; `updatedAt` is asserted to differ and every other field to match |
+| The replace scenario never shows the bank holds the new id (Acceptance) | low | Patch: a join of `bank.logo_image_id` to the surviving `image` row |
+| `ImageAttachment::release()` is public, and the class docblock still says a consumer never requests a release (Blind) | low | The spec decided `release()` public (see the first table). Patch: the docblock states that only the id the owner holds is passed, held by review, not by a gate |
+| A `Bank` returned by `create()`/`update()` reads "no logo" (Blind) | low | The spec forbids a logo on the write resources, and `accountCount` already reads 0 there. Patch: `ApiBankRepository` documents that a write result is never a read model |
+| Change-relative phrase in `RefreshRealtimeOnBankChanged`; `invalid-input` for `invalid-uuid` in `BankDeleter`/`BankFinder`; docblock and registry ordering cosmetics; §7 line widths (Acceptance) | low | Patch |
 
 ## Design Notes
 

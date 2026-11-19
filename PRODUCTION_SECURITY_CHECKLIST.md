@@ -2249,8 +2249,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       **Eight — nothing records who read what.** Deliberate, and recorded as D2 of the same ADR: the route name begins
       `shared_`, which is the one exclusion of the generic activity audit that fits object serving, so a
       successful read writes no `audit_log` row. A single `resource_type` cannot be both person-denoting (an
-      avatar) and not (a logo), and the shared route has no consumer relation to vote on (each consumer's policy is its `D1:` paragraph). It is a scope boundary, not
-      an oversight — and it means this route has no forensic record of access at all.
+      avatar) and not (a logo), and the shared route has no consumer relation to vote on (each consumer's policy is
+      its `D1:` paragraph). It is a scope boundary, not an oversight — and it means this route has no forensic
+      record of access at all.
       **Nine — the container log has no isolation between the application's channels, so a read failure can
       evict unrelated history.** The default channel and `observability` share one retention budget
       (`json-file`, 10m x 5) and eviction is **by volume, not by ownership or age**, so a sustained failure on
@@ -2309,18 +2310,18 @@ mitigated state. Accepting one means recording who accepted it and against which
       request is refused before routing**: the per-IP `anonymous_api` 429 answers at priority 512 on `kernel.request`,
       and a `PUT` under the lifted 20 MiB matcher whose path has no route ends in the router's 404. Neither carries
       `RawBodyRoute::ATTRIBUTE`, so the plaintext spool survives until the worker serves another request. The
-      Documents twin has the same hole. (c) Nothing but convention makes a consumer's route carry
-      `RawBodyRoute::ATTRIBUTE`, spend `ImageRequestThrottle` before it calls the reader, and go through
-      `ImageAttachment`: a route that omits the attribute leaves a plaintext spool until the worker serves another
-      request, one that reads the body first spends its budget after the cost, and one that bypasses `ImageAttachment`
-      publishes no release — with every gate green. **The manifest-driven gate now exists**
-      (`ImageWriteRouteAgreementGateTest`, with the bank logo as its first route; the matcher's own shape stays in `UploadRoutePathAgreementGateTest`): a `PUT` the Caddy `@imageWrite`
-      matcher admits that lacks the attribute, and a route carrying the attribute or reaching `ImageAttachment` that no
-      alternative of the matcher admits, each red it. What it does not see is the ORDER inside a controller — that the
-      throttle is spent before the body is read, which `BankLogoControllerOrderTest` pins for the bank logo only — nor a
-      consumer reaching `ImageAttachment` through a path its reflection does not follow (a service locator, a
-      callable). The through-Caddy proof of the lifted bound is `BankLogoThroughCaddyTest` (a 2 MiB image is stored,
-      a cut body is `411` and stores nothing).
+      Documents twin has the same hole. (c) What holds a consumer's route to the seam is a gate for the edge and a
+      convention for the order. `ImageWriteRouteAgreementGateTest` reads the router's inventory and each route's
+      source and reds a `PUT` the Caddy `@imageWrite` matcher admits that lacks `RawBodyRoute::ATTRIBUTE` (its
+      plaintext spool would survive until the worker serves another request) or never reaches `ImageAttachment` (it
+      would publish no release), and a route carrying the attribute or reaching `ImageAttachment` that no alternative
+      of the matcher admits; the matcher's own shape stays in `UploadRoutePathAgreementGateTest`. It does not see the
+      ORDER inside a controller: that the throttle is spent before the body is read is pinned by
+      `BankLogoControllerOrderTest` for the bank logo only, so any other consumer that reads the body first spends
+      its budget after the cost with every gate green. Nor does it see a consumer reaching `ImageAttachment` through
+      a path its reflection does not follow (a service locator, a callable, a property it does not take by
+      constructor type). The through-Caddy proof of the lifted bound is `BankLogoThroughCaddyTest` (a 2 MiB image is
+      stored, a cut body is `411` and stores nothing).
 
 - [ ] **A row naming the subject, committed by a request already in flight, is rewritten by the erasure re-sweep
       on its next tick — unless it commits after the subject's window closed.** The erasure's passes reach

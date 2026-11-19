@@ -14,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * The rule engine of `ImageWriteRouteAgreementGateTest`: what each route of the router's inventory carries that the
- * edge has to agree with, and the two ways a route and the Caddyfile's `@imageWrite` matcher can disagree.
+ * edge has to agree with, and the ways a route and the Caddyfile's `@imageWrite` matcher can disagree.
  *
  * A route is described by four facts — its public path and methods (the committed manifest, which is the prod router)
  * and, read from its own source, whether it carries {@see RawBodyRoute::ATTRIBUTE} and whether its controller reaches
@@ -60,9 +60,10 @@ final class ImageRouteAgreement
     }
 
     /**
-     * The disagreements, one sentence each: a `PUT` the matcher admits that carries no raw-body attribute, and a `PUT`
-     * that carries it or reaches the attachment service that the matcher does not admit. A route without `PUT` is owed
-     * nothing — the matcher names the method, and a `DELETE` has no body to bound or to spool.
+     * The disagreements, one sentence each: a `PUT` the matcher admits that carries no raw-body attribute, a `PUT` the
+     * matcher admits that never reaches the attachment service, and a `PUT` that carries the attribute or reaches the
+     * attachment service that the matcher does not admit. A route without `PUT` is owed nothing — the matcher names the
+     * method, and a `DELETE` has no body to bound or to spool.
      *
      * @param array<string, RouteFacts> $facts
      *
@@ -90,7 +91,8 @@ final class ImageRouteAgreement
     }
 
     /**
-     * Every manifest route with its facts, keyed by route name.
+     * Every manifest route with its facts, keyed by route name. A `PUT` the sweep cannot match to a named `#[Route]`
+     * is refused rather than read as carrying nothing, which would pass the "not admitted" direction unseen.
      *
      * @return array<string, RouteFacts>
      */
@@ -106,9 +108,19 @@ final class ImageRouteAgreement
         $facts = [];
 
         foreach ($manifest as $name => $entry) {
+            $methods = \array_values(\array_filter(Dig::array($entry, 'methods'), \is_string(...)));
+
+            if (\in_array('PUT', $methods, true) && !isset($declared[$name])) {
+                throw new RuntimeException(\sprintf(
+                    'The PUT route %s is in the manifest but no named #[Route] under api/src declares it, so the sweep '
+                    . 'cannot read what it carries.',
+                    $name,
+                ));
+            }
+
             $facts[(string) $name] = [
                 'path' => Dig::string($entry, 'path'),
-                'methods' => \array_values(\array_filter(Dig::array($entry, 'methods'), \is_string(...))),
+                'methods' => $methods,
                 'carriesRawBody' => $declared[$name]['carriesRawBody'] ?? false,
                 'reachesImageAttachment' => $declared[$name]['reachesImageAttachment'] ?? false,
             ];
@@ -129,6 +141,15 @@ final class ImageRouteAgreement
                 $name,
                 $fact['path'],
                 RawBodyRoute::ATTRIBUTE,
+            );
+        }
+
+        if ($admitted && !$fact['reachesImageAttachment']) {
+            return \sprintf(
+                'The @imageWrite matcher admits the PUT route %s (%s), which never reaches ImageAttachment: it writes '
+                . 'an image outside the seam, so the image it replaces is never released.',
+                $name,
+                $fact['path'],
             );
         }
 
