@@ -12,10 +12,11 @@ use Erpify\Documents\Document\Application\Derivative\DocumentDerivativeOrigin;
 use Erpify\Documents\Document\Application\Derivative\MaterialiseDocumentDerivative;
 use Erpify\Documents\Document\Application\Erasure\ReleaseErasedDerivatives;
 use Erpify\Documents\Document\Domain\DocumentState;
-use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
+use Erpify\Documents\Document\Domain\Erasure\DocumentDerivativeReleases;
 use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesMessage;
+use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentDerivativeReleases;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentOriginGuard;
 use Erpify\Shared\Images\Application\DeleteImage;
 use Erpify\Shared\Images\Application\MaterialiseDerivative;
@@ -31,6 +32,7 @@ use Erpify\Shared\Images\Infrastructure\Persistence\Doctrine\DoctrineImageReposi
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\Shared\Images\Fixtures\ImageReleaseRig;
+use Erpify\Tests\Unit\Shared\Images\Application\Double\UndeletableImageStorage;
 use FilesystemIterator;
 use LogicException;
 use Monolog\Handler\TestHandler;
@@ -69,6 +71,7 @@ use Throwable;
 #[CoversClass(ReleaseDerivatives::class)]
 #[CoversClass(MaterialiseDerivative::class)]
 #[CoversClass(DoctrineImageRepository::class)]
+#[CoversClass(DbalDocumentDerivativeReleases::class)]
 final class DocumentDerivativesFunctionalTest extends KernelTestCase
 {
     use PlantsNamedDocuments;
@@ -109,7 +112,7 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     }
 
     #[Test]
-    public function aReadyDocumentAdmitsADerivativeThatCarriesItsOriginAndIsReadable(): void
+    public function aReadyDocumentAdmitsADerivativeThatCarriesItsOriginAndKeepsItsBytes(): void
     {
         $document = $this->plantNamedDocument(null, DocumentState::Ready);
 
@@ -223,6 +226,10 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
         $this->service(DeleteImage::class)->delete(ImageId::fromString($imageId));
         $this->assertGone(ImageId::fromString($imageId));
 
+        $this->assertSame(0, $this->sweep()->run(10), 'a row just asked about waits for the retry interval');
+        $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $imageId), 'nothing is queued meanwhile');
+
+        $this->requestedSecondsAgo($document['id'], ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + 60);
         $this->assertSame(1, $this->sweep()->run(10));
         $this->assertNotNull($this->releasedAt($document['id']));
         $this->assertSame(0, $this->sweep()->run(10), 'a released row is not asked about again');
@@ -230,18 +237,90 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     }
 
     #[Test]
-    public function aReleaseLostFromTheQueueIsQueuedAgainOnTheNextTick(): void
+    public function aReleaseLostFromTheQueueIsQueuedAgainOnceTheRetryIntervalHasPassed(): void
     {
         $document = $this->plantNamedDocument(null, DocumentState::Ready);
         $imageId = $this->materialise($document['id'])->toString();
         $this->eraseRow($document['id'], 30);
         $this->sweep()->run(10);
-
         ImageReleaseRig::purge($this->outside);
-        $this->sweep()->run(10);
 
+        $this->sweep()->run(10);
+        $this->assertSame(0, ImageReleaseRig::queuedFor($this->outside, $imageId), 'not while a retry may still run');
+
+        $this->requestedSecondsAgo($document['id'], ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + 60);
+        $this->sweep()->run(10);
         $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $imageId), 're-derived from the origin');
         $this->assertNull($this->releasedAt($document['id']));
+    }
+
+    #[Test]
+    public function aRowWaitingForItsRetryIntervalLeavesTheTickToTheRowsAfterIt(): void
+    {
+        $waiting = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->materialise($waiting['id']);
+        $this->eraseRow($waiting['id'], 30);
+        $this->sweep()->run(1);
+        $later = $this->plantNamedDocument(null, DocumentState::Ready);
+        $this->eraseRow($later['id'], 30);
+
+        $this->sweep()->run(1);
+
+        $this->assertNotNull($this->releasedAt($later['id']), 'the pending row did not take its place');
+    }
+
+    #[Test]
+    public function theAlarmNamesAtMostTwentyDocumentsAndCountsThemAll(): void
+    {
+        for ($i = 0; $i < 21; ++$i) {
+            $document = $this->plantNamedDocument(null, DocumentState::Ready);
+            $this->materialise($document['id']);
+            $this->eraseRow($document['id'], ErasureLimits::DERIVATIVE_ALARM_SECONDS + 60);
+        }
+
+        $this->sweep()->run(50);
+
+        $alarms = \array_values(\array_filter(
+            $this->log->getRecords(),
+            static fn (LogRecord $record): bool => self::ALARM === $record->message,
+        ));
+        $this->assertCount(1, $alarms);
+        $this->assertSame(21, $alarms[0]->context['count'] ?? null);
+        $ids = $alarms[0]->context['documentIds'] ?? null;
+        $this->assertIsArray($ids);
+        $this->assertCount(20, $ids);
+    }
+
+    #[Test]
+    public function theGuardRefusesToJoinACallersTransaction(): void
+    {
+        $document = $this->plantNamedDocument(null, DocumentState::Ready);
+
+        $failure = $this->thrownBy(fn () => $this->service(TransactionManager::class)->transactional(
+            fn () => $this->service(TransactionManager::class)->transactional(
+                fn (): bool => $this->guard()->admits(DocumentDerivativeOrigin::of($document['id'])),
+            ),
+        ));
+
+        $this->assertInstanceOf(LogicException::class, $failure);
+    }
+
+    #[Test]
+    public function aRefusedDerivativeWhoseBytesCannotBeDeletedQueuesTheirDeletionDurably(): void
+    {
+        $document = $this->plantNamedDocument(null, DocumentState::Erased);
+        $storage = new UndeletableImageStorage();
+
+        $this->assertInstanceOf(
+            DerivativeOriginNotLive::class,
+            $this->thrownBy(
+                fn (): ImageId => $this->materialiser($storage)->materialise($document['id'], $this->png()),
+            ),
+        );
+
+        $stored = \array_keys($storage->objects);
+        $this->assertCount(1, $stored);
+        $this->assertSame(1, ImageReleaseRig::queuedFor($this->outside, $stored[0]), 'committed, seen from outside');
     }
 
     #[Test]
@@ -320,14 +399,15 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     /**
      * Built from the container's own collaborators: nothing consumes the seam yet, so the container drops it.
      */
-    private function materialiser(): MaterialiseDocumentDerivative
+    private function materialiser(?ImageStorage $storage = null): MaterialiseDocumentDerivative
     {
         return new MaterialiseDocumentDerivative(
             new MaterialiseDerivative(
                 $this->processor(),
-                $this->service(ImageStorage::class),
+                $storage ?? $this->service(ImageStorage::class),
                 $this->service(ImageRepository::class),
                 $this->service(TransactionManager::class),
+                (new ImageReleaseRig($this->service(EntityManagerInterface::class)))->eventBus(),
                 new NullLogger(),
             ),
             $this->guard(),
@@ -376,7 +456,7 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
     private function sweep(): ReleaseErasedDerivatives
     {
         return new ReleaseErasedDerivatives(
-            $this->service(DocumentErasures::class),
+            $this->service(DocumentDerivativeReleases::class),
             $this->release(),
             new Logger('test', [$this->log]),
         );
@@ -401,6 +481,15 @@ final class DocumentDerivativesFunctionalTest extends KernelTestCase
                 'reason' => 'ledger-completion',
                 'age' => $secondsAgo,
             ],
+        );
+    }
+
+    private function requestedSecondsAgo(string $documentId, int $seconds): void
+    {
+        $this->connection()->executeStatement(
+            'UPDATE document SET derivatives_requested_at = NOW() - make_interval(secs => :age) '
+            . 'WHERE id = CAST(:id AS UUID)',
+            ['id' => $documentId, 'age' => $seconds],
         );
     }
 

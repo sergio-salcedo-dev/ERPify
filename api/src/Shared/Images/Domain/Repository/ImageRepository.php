@@ -44,10 +44,11 @@ interface ImageRepository
     public function findById(ImageId $id): ?Image;
 
     /**
-     * The ids of the images that derive from `$origin`, ascending, at most `$limit`. Read fresh on every call: the
-     * release re-derives what to delete from the rows that exist, never from a list built once.
+     * The ids of the images that derive from `$origin`, ascending, after `$after` when given, at most `$limit`. Read
+     * fresh on every call: the release re-derives what to delete from the rows that exist, never from a list built
+     * once.
      *
      * @return list<ImageId>
      */
-    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array;
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array;
 }

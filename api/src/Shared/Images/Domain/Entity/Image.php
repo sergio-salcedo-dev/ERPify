@@ -161,6 +161,15 @@ final readonly class Image
         return $this->byteSize;
     }
 
+    /**
+     * Whether the image derives from another resource, read without rebuilding the origin: the read route asks it on
+     * every request, and a stored tag the value object would refuse must not turn that answer into a 500.
+     */
+    public function isDependent(): bool
+    {
+        return null !== $this->originId;
+    }
+
     public function origin(): ?DerivativeOrigin
     {
         if (null === $this->originType || null === $this->originId) {

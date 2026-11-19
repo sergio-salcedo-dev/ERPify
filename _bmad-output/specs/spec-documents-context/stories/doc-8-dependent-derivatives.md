@@ -63,7 +63,26 @@ context:
 ## Spec Change Log
 
 - 2026-11-19: SPEC's "Documents is the holder of its derivative ids" read as "owns their lifecycle"; the holding is recorded once, on the derivative's origin (ADR D8).
+- 2026-11-19: I/O matrix row 1 superseded: a dependent image is never served by `GET /api/v1/images/{id}`, which any authenticated session may call while a document is ADMIN-only and audited; the route answers 404 for it before and after erasure. CAP-5's "variant URL answers 404 or 410" therefore holds by construction, and the substantive witness of the erasure is the row's absence and `ImageBytesNotFound` (asserted in `DocumentDerivativeLifecycleFunctionalTest`). Fail-closed decided here because no producer exists; reopening it is the first producer's decision (ADR D8, §7 item Five).
+- 2026-11-19 (review): a failure whose outcome is unknown re-reads the row and deletes bytes no committed row holds, handing a failed delete to the transport — `MaterialiseDerivative` becomes the third registered publisher of `ImageDeletionRequested`. The guard refuses to join a caller's transaction. The release sweep asks about a document again only four hours after its last request (`document.derivatives_requested_at`), `ReleaseDerivatives` pages through every derivative in one call, the migration marks documents erased before it as released, and the read route asks `Image::isDependent()` rather than rebuilding the origin.
+
+## Review Triage Log
+
+Three layers, run in parallel as read-only subagents over the diff `3f96ac3..c280f53` in this session, before the PR was opened. The Blind Hunter is the adversarial pass the SPEC and ADR `images-vs-documents-conservation-contract.md` (Consequences) require for derivative lifecycle work. None found a GRAVE defect; the race between the guard's `FOR SHARE` and the erasure's `FOR UPDATE` was checked independently by all three and held.
+
+| Finding | Layers | Verdict | Route |
+|---|---|---|---|
+| Bytes left behind on an unknown-outcome failure, and a failed discard logged by class only | Blind, Edge, Acceptance | real | patch: re-read the row, delete if absent, queue a deletion on a failed delete, log the image id |
+| Unbounded re-requests and starved candidates while a deletion keeps failing | Blind, Edge, Acceptance | real | patch: `derivatives_requested_at`, 4 h re-request interval (bounded, documented in §7 Four) |
+| A document with many derivatives drains 100 per tick | Blind | real | patch: page inside `ReleaseDerivatives::of()` |
+| False alarm over documents erased before the migration | Blind, Edge | real | patch: backfill `derivatives_released_at` |
+| Read route could answer 500 on a stored tag the value object refuses | Edge | real | patch: `Image::isDependent()` |
+| A guard inside a caller's transaction holds the erasure and closes a shared manager | Edge | real | patch: the guard refuses nesting |
+| Image storage restored separately brings back row-less derivative bytes | Blind, Edge | real, no fix here | recorded: §7 Two |
+| Frozen matrix row 1 versus the fail-closed route | Blind, Edge, Acceptance | real | Spec Change Log above |
+| Publisher wording, read-route ADR D1, architecture bullet, source tree, `CAP-n` and register-type comments in `src`, inline FQCN, problem-mapping test, alarm 20-id cap test, reporter list order | Acceptance | real | patch |
+| `services.yaml` bindings of the unconsumed seam witnessed by no test | Acceptance | real | defer: the first producer consumes the seam, and the container then compiles the binding |
 
 ## Verification
 
-To be filled from fresh runs before the PR.
+Fresh runs in a local PHP 8.5.12 toolbox over PostgreSQL 18 (this session's container cannot run the compose stack): the full PHPUnit suite with only the twenty pre-existing live-stack gate errors (they need the Caddy edge running); `php.quality` and `php.quality.dry-run` green except `php.lint.route-manifest`, `php.lint.config-reference` and `composer.check.missing-deps`, which could not run here (no `jq`, no `apcu`, no access to the primary checkout's `.git`) and are covered by CI; the migration verified up, down and up, with `doctrine:schema:validate` in sync.

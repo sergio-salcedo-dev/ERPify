@@ -7,12 +7,14 @@ namespace Erpify\Tests\Functional\Documents\Document;
 use Erpify\Documents\Document\Application\Derivative\MaterialiseDocumentDerivative;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
 use Erpify\Documents\Document\Application\Read\ReadDocument;
+use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesMessage;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ScanDueDocumentsHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ScanDueDocumentsMessage;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentOriginGuard;
+use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Images\Application\DeleteImage;
 use Erpify\Shared\Images\Application\MaterialiseDerivative;
 use Erpify\Shared\Images\Domain\Event\ImageDeletionRequested;
@@ -42,10 +44,10 @@ use Throwable;
 /**
  * The acceptance of the Documents spec's success signal, end to end and through the routes a caller uses: an
  * uploaded drawing is stored byte-identical, is unreadable until scanned, and after its erasure leaves its digest and
- * its custody while every derivative is gone — its row, its stored bytes and its route. Each step runs the production
- * collaborator (the scan tick, the erasure, the release tick, the image deletion handler); only the scanner and the
- * ledger are the test environment's doubles, and the deletion request is taken off the in-memory `async` transport and
- * handed to the real handler, which is what a worker does.
+ * its custody while every derivative is gone — its row and its stored bytes; the image route never served it. Each
+ * step runs the production collaborator (the scan tick, the erasure, the release tick, the image deletion handler);
+ * only the scanner and the ledger are the test environment's doubles, and the deletion request is taken off the
+ * in-memory `async` transport and handed to the real handler, which is what a worker does.
  *
  * @internal
  *
@@ -126,6 +128,7 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
 
         $this->releaseTick();
         $this->deliverQueuedDeletions();
+        $this->retryIntervalPassed($documentId);
         $this->releaseTick();
 
         $this->readImage($derivative);
@@ -179,6 +182,18 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
         );
     }
 
+    /**
+     * The sweep asks about a document again only once the transport's retries are over; the clock is moved, not waited.
+     */
+    private function retryIntervalPassed(string $documentId): void
+    {
+        $this->connection()->executeStatement(
+            'UPDATE document SET derivatives_requested_at = NOW() - make_interval(secs => :age) '
+            . 'WHERE id = CAST(:id AS UUID)',
+            ['id' => $documentId, 'age' => ErasureLimits::DERIVATIVE_REREQUEST_SECONDS + 60],
+        );
+    }
+
     private function releaseTick(): void
     {
         ($this->service(ReleaseErasedDerivativesHandler::class))(new ReleaseErasedDerivativesMessage());
@@ -228,6 +243,7 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
                 $this->service(ImageStorage::class),
                 $this->service(ImageRepository::class),
                 $this->service(TransactionManager::class),
+                $this->service(EventBus::class),
                 new NullLogger(),
             ),
             new DbalDocumentOriginGuard($this->connection()),

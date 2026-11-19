@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Application;
 
+use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
+use Erpify\Shared\Images\Domain\Event\ImageDeletionRequested;
 use Erpify\Shared\Images\Domain\Exception\DerivativeOriginNotLive;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\ImageProcessor;
@@ -27,10 +29,13 @@ use Throwable;
  * then inserts the row. The guard's lock conflicts with whatever ends the origin's life, so a derivative either
  * commits before that end — and the owner's release finds it by origin — or is refused after it.
  *
- * **A refusal keeps nothing.** The row was never inserted, so the stored bytes are deleted before the refusal
- * propagates. Any other failure leaves them where they are: whether that transaction committed is not known from here,
- * and deleting the bytes under a row that did commit would leave the derivative unreadable rather than released. That
- * residue is the one {@see UploadImage} already accepts, bytes with no row.
+ * **Bytes with no row are not left behind.** Whatever failed after the store — a refusal, a lost connection, a
+ * timeout behind the owner's lock — the row is read again: a row that committed (its acknowledgement lost) is a
+ * derivative its owner releases by origin, so its bytes stay; an absent row means the bytes belong to nothing, so they
+ * are deleted, and when that delete fails a deletion request is queued, which the transport retries. The failure the
+ * caller sees is always the original one.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the upload pipeline plus the compensation's own event and log
  */
 final readonly class MaterialiseDerivative
 {
@@ -39,6 +44,7 @@ final readonly class MaterialiseDerivative
         private ImageStorage $imageStorage,
         private ImageRepository $imageRepository,
         private TransactionManager $transactionManager,
+        private EventBus $eventBus,
         private LoggerInterface $logger,
     ) {
     }
@@ -75,28 +81,61 @@ final readonly class MaterialiseDerivative
 
                 $this->imageRepository->save($image);
             });
-        } catch (DerivativeOriginNotLive $derivativeOriginNotLive) {
-            $this->discard($image->id());
+        } catch (Throwable $throwable) {
+            $this->discardUnlessKept($image->id());
 
-            throw $derivativeOriginNotLive;
+            throw $throwable;
         }
 
         return $image->id();
     }
 
     /**
-     * Best effort: a delete that fails leaves the residue named above and is logged by class, and the refusal is what
-     * the caller sees.
+     * A row that cannot be read decides nothing: the bytes stay and the id is logged, since deleting them could strand
+     * a row that did commit. The failed transaction closed the manager and the transaction manager replaced it, so the
+     * read reaches the database rather than an identity map holding the rolled-back row.
      */
-    private function discard(ImageId $id): void
+    private function discardUnlessKept(ImageId $id): void
     {
         try {
-            $this->imageStorage->delete($id);
+            $kept = $this->imageRepository->findById($id) instanceof Image;
         } catch (Throwable $throwable) {
-            $this->logger->warning('images.derivative.discard_failed', [
-                'event' => 'images.derivative.discard_failed',
-                'exceptionClass' => $throwable::class,
-            ]);
+            $this->report('images.derivative.discard_undecided', $id, $throwable);
+
+            return;
         }
+
+        if ($kept) {
+            return;
+        }
+
+        try {
+            $this->imageStorage->delete($id);
+        } catch (Throwable) {
+            $this->queueDeletion($id);
+        }
+    }
+
+    private function queueDeletion(ImageId $id): void
+    {
+        try {
+            $this->transactionManager->transactional(function () use ($id): void {
+                $this->eventBus->publish(new ImageDeletionRequested($id->toString()));
+            });
+        } catch (Throwable $throwable) {
+            $this->report('images.derivative.discard_failed', $id, $throwable);
+        }
+    }
+
+    /**
+     * The image id is the one handle an operator has on the bytes; it names a rendering of a document, never a person.
+     */
+    private function report(string $event, ImageId $id, Throwable $throwable): void
+    {
+        $this->logger->warning($event, [
+            'event' => $event,
+            'imageId' => $id->toString(),
+            'exceptionClass' => $throwable::class,
+        ]);
     }
 }

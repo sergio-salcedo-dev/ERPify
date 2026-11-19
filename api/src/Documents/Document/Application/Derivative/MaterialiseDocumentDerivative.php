@@ -12,8 +12,7 @@ use SensitiveParameter;
 
 /**
  * The seam a renderer of this context calls to keep a rendering of a document — a page preview, a thumbnail — as an
- * image that dies with it (CAP-5). No renderer exists yet; this is the one way in when one does, so the origin and the
- * guard are this context's, never the caller's.
+ * image that dies with it. It is the one way in, so the origin and the guard are this context's, never the caller's.
  *
  * Only a `Ready` document admits a derivative: its content has a clean verdict, and its erasure has not started. An
  * erasure that commits first refuses the derivative; one that commits after finds it through the release sweep.

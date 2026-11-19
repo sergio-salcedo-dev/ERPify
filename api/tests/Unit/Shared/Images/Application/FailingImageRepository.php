@@ -36,7 +36,7 @@ final class FailingImageRepository implements ImageRepository
     }
 
     #[Override]
-    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array
     {
         return [];
     }

@@ -55,26 +55,4 @@ interface DocumentErasures
      * @return list<string>
      */
     public function objectsOverdue(int $olderThanSeconds, int $limit): array;
-
-    /**
-     * Ids of `Erased` rows whose derivatives have not been confirmed released, ascending after `$afterId` when given.
-     * A candidate list: the release sweep asks the images module about each and sets the marker.
-     *
-     * @return list<string>
-     */
-    public function awaitingDerivativeRelease(int $limit, ?string $afterId = null): array;
-
-    /**
-     * Records that no image derives from the row any more. Only an `Erased` row whose marker is still empty takes it,
-     * so a repeat reports false and changes nothing.
-     */
-    public function markDerivativesReleased(string $documentId): bool;
-
-    /**
-     * Ids of `Erased` rows whose derivatives are still not confirmed released although the erasure was recorded at
-     * least `$olderThanSeconds` ago: legible renderings of a document the system said it erased.
-     *
-     * @return list<string>
-     */
-    public function derivativesOverdue(int $olderThanSeconds, int $limit): array;
 }

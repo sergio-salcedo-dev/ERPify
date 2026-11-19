@@ -151,9 +151,20 @@ final class ImageTest extends TestCase
         \sort($methodNames);
 
         $this->assertSame(
-            ['__construct', 'byteSize', 'createdAt', 'digest', 'height', 'id', 'mediaType', 'origin', 'width'],
+            [
+                '__construct',
+                'byteSize',
+                'createdAt',
+                'digest',
+                'height',
+                'id',
+                'isDependent',
+                'mediaType',
+                'origin',
+                'width',
+            ],
             $methodNames,
-            'eight readers and the constructor — no mutator, and no method that classifies the image',
+            'nine readers and the constructor — no mutator, and no method that reclassifies the image',
         );
     }
 }

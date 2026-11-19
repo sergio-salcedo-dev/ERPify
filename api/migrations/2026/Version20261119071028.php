@@ -17,6 +17,9 @@ final class Version20261119071028 extends AbstractMigration
     public function up(Schema $schema): void
     {
         $this->addSql('ALTER TABLE document ADD derivatives_released_at TIMESTAMP(6) WITH TIME ZONE DEFAULT NULL');
+        $this->addSql('ALTER TABLE document ADD derivatives_requested_at TIMESTAMP(6) WITH TIME ZONE DEFAULT NULL');
+        // No image carries an origin before this migration, so every document already erased has none to release.
+        $this->addSql("UPDATE document SET derivatives_released_at = NOW() WHERE state = 'erased'");
         $this->addSql('CREATE INDEX idx_document_erased_derivatives_pending ON document (id) WHERE (((state)::text = \'erased\'::text) AND (derivatives_released_at IS NULL))');
         $this->addSql('ALTER TABLE image ADD origin_type VARCHAR(64) DEFAULT NULL');
         $this->addSql('ALTER TABLE image ADD origin_id UUID DEFAULT NULL');
@@ -29,6 +32,7 @@ final class Version20261119071028 extends AbstractMigration
     {
         $this->addSql('DROP INDEX idx_document_erased_derivatives_pending');
         $this->addSql('ALTER TABLE document DROP derivatives_released_at');
+        $this->addSql('ALTER TABLE document DROP derivatives_requested_at');
         $this->addSql('ALTER TABLE image DROP CONSTRAINT chk_image_origin_paired');
         $this->addSql('DROP INDEX idx_image_origin');
         $this->addSql('ALTER TABLE image DROP origin_type');

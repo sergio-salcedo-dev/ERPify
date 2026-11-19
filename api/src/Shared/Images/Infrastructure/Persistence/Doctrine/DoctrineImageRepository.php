@@ -62,12 +62,21 @@ final readonly class DoctrineImageRepository implements ImageRepository
     }
 
     #[Override]
-    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array
     {
+        $parameters = ['type' => $origin->type, 'id' => $origin->id, 'limit' => $limit];
+        $afterClause = '';
+
+        if ($after instanceof ImageId) {
+            $parameters['after'] = $after->toString();
+            $afterClause = ' AND id > CAST(:after AS UUID)';
+        }
+
         /** @var list<string> $ids */
         $ids = $this->entityManager->getConnection()->fetchFirstColumn(
-            'SELECT id FROM image WHERE origin_type = :type AND origin_id = CAST(:id AS UUID) ORDER BY id LIMIT :limit',
-            ['type' => $origin->type, 'id' => $origin->id, 'limit' => $limit],
+            'SELECT id FROM image WHERE origin_type = :type AND origin_id = CAST(:id AS UUID)'
+            . $afterClause . ' ORDER BY id LIMIT :limit',
+            $parameters,
             ['limit' => Types::INTEGER],
         );
 

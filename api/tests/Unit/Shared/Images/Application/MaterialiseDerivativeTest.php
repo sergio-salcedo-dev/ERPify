@@ -14,11 +14,14 @@ use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\ImageProcessor;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
 use Erpify\Shared\Images\Domain\Storage\ImageStorage;
+use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Unit\Shared\Images\Application\Double\LostAcknowledgementTransactionManager;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\RefusingImageProcessor;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\RollbackingTransactionManager;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\SavedInUnits;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\ScriptedOriginGuard;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\TrackedImageRepository;
+use Erpify\Tests\Unit\Shared\Images\Application\Double\TransactionalEventBus;
 use Erpify\Tests\Unit\Shared\Images\Application\Double\UndeletableImageStorage;
 use Erpify\Tests\Unit\Shared\Images\Infrastructure\RecordingLogger;
 use Override;
@@ -26,6 +29,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LogLevel;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -48,6 +52,8 @@ final class MaterialiseDerivativeTest extends TestCase
 
     private RecordingLogger $logger;
 
+    private TransactionalEventBus $bus;
+
     #[Override]
     protected function setUp(): void
     {
@@ -56,6 +62,7 @@ final class MaterialiseDerivativeTest extends TestCase
         $this->rows = new InMemoryImageRepository();
         $this->savedInUnits = new SavedInUnits();
         $this->logger = new RecordingLogger();
+        $this->bus = new TransactionalEventBus($this->transactions);
     }
 
     #[Test]
@@ -93,7 +100,7 @@ final class MaterialiseDerivativeTest extends TestCase
     }
 
     #[Test]
-    public function aRefusalWhoseDeleteFailsIsStillTheRefusalAndTheResidueIsLoggedByClass(): void
+    public function aRefusalWhoseDeleteFailsQueuesTheDeletionInsteadOfLeavingTheBytes(): void
     {
         $storage = new UndeletableImageStorage();
 
@@ -102,23 +109,72 @@ final class MaterialiseDerivativeTest extends TestCase
                 ->materialise($this->origin(), new ScriptedOriginGuard(false, $this->transactions), 'raw'),
         ));
 
-        $this->assertCount(1, $storage->objects, 'the residue: bytes with no row');
-        $this->assertCount(1, $this->logger->records);
-        $this->assertSame(LogLevel::WARNING, $this->logger->records[0]['level']);
-        $this->assertSame('images.derivative.discard_failed', $this->logger->records[0]['message']);
-        $this->assertArrayHasKey('exceptionClass', $this->logger->records[0]['context']);
-        $this->assertArrayNotHasKey('imageId', $this->logger->records[0]['context'], 'no id reaches the log');
+        $this->assertSame(\array_keys($storage->objects), $this->bus->queuedIds(), 'the deletion is queued, in a unit');
+        $this->assertSame([], $this->logger->records);
     }
 
     #[Test]
-    public function aFailureWhoseOutcomeIsUnknownLeavesTheBytesWhereTheyAre(): void
+    public function aRefusalWhoseDeleteAndQueueBothFailIsReportedWithTheImageId(): void
+    {
+        $storage = new UndeletableImageStorage();
+        $this->bus->failsWith = new RuntimeException('the queue is down');
+
+        $this->assertInstanceOf(DerivativeOriginNotLive::class, $this->thrownBy(
+            fn (): ImageId => $this->materialise(storage: $storage)
+                ->materialise($this->origin(), new ScriptedOriginGuard(false, $this->transactions), 'raw'),
+        ));
+
+        $this->assertCount(1, $this->logger->records);
+        $this->assertSame(LogLevel::WARNING, $this->logger->records[0]['level']);
+        $this->assertSame('images.derivative.discard_failed', $this->logger->records[0]['message']);
+        $this->assertSame(
+            \array_keys($storage->objects)[0] ?? null,
+            $this->logger->records[0]['context']['imageId'] ?? null,
+            'the one handle an operator has on the residue',
+        );
+        $this->assertSame(RuntimeException::class, $this->logger->records[0]['context']['exceptionClass'] ?? null);
+    }
+
+    #[Test]
+    public function aFailedWriteWhoseRowIsConfirmedAbsentDeletesTheBytes(): void
     {
         $this->assertInstanceOf(StubPersistenceFailure::class, $this->thrownBy(
             fn (): ImageId => $this->materialise(repository: new FailingImageRepository())
                 ->materialise($this->origin(), new ScriptedOriginGuard(true, $this->transactions), 'raw'),
         ));
 
-        $this->assertCount(1, $this->storage->objects, 'bytes under a row that may have committed are not deleted');
+        $this->assertSame([], $this->storage->objects, 'bytes no row holds belong to nothing');
+    }
+
+    #[Test]
+    public function aCommitWhoseAcknowledgementWasLostKeepsItsBytesForTheOriginsRelease(): void
+    {
+        $transactions = new LostAcknowledgementTransactionManager($this->transactions, 1);
+
+        $this->assertInstanceOf(Throwable::class, $this->thrownBy(
+            fn (): ImageId => $this->materialise(transactions: $transactions)
+                ->materialise($this->origin(), new ScriptedOriginGuard(true, $this->transactions), 'raw'),
+        ));
+
+        $this->assertCount(1, $this->rows->rows, 'the row committed');
+        $this->assertCount(1, $this->storage->objects, 'so its bytes stay: the origin releases them by origin');
+        $this->assertSame([], $this->bus->queuedIds());
+    }
+
+    #[Test]
+    public function aRowThatCannotBeReadDecidesNothingAndTheIdIsReported(): void
+    {
+        $this->assertInstanceOf(Throwable::class, $this->thrownBy(
+            fn (): ImageId => $this->materialise(repository: new UnreadableImageRepository())
+                ->materialise($this->origin(), new ScriptedOriginGuard(false, $this->transactions), 'raw'),
+        ));
+
+        $this->assertCount(1, $this->storage->objects, 'the bytes stay: deleting them could strand a committed row');
+        $this->assertSame('images.derivative.discard_undecided', $this->logger->records[0]['message'] ?? null);
+        $this->assertSame(
+            \array_keys($this->storage->objects),
+            [$this->logger->records[0]['context']['imageId'] ?? null],
+        );
     }
 
     #[Test]
@@ -144,12 +200,14 @@ final class MaterialiseDerivativeTest extends TestCase
         ?ImageProcessor $processor = null,
         ?ImageStorage $storage = null,
         ?ImageRepository $repository = null,
+        ?TransactionManager $transactions = null,
     ): MaterialiseDerivative {
         return new MaterialiseDerivative(
             $processor ?? new StubImageProcessor(new CanonicalImage('canonical', 'image/png', 4, 4)),
             $storage ?? $this->storage,
             $repository ?? new TrackedImageRepository($this->rows, $this->transactions, $this->savedInUnits),
-            $this->transactions,
+            $transactions ?? $this->transactions,
+            $this->bus,
             $this->logger,
         );
     }

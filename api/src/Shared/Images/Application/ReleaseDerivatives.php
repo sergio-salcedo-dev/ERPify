@@ -17,16 +17,17 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  *
  * **What to delete is re-derived on every call, never remembered.** The ids are read from the rows that exist now, so
  * a request lost to a dead letter is issued again by the next call, and the owner learns that the origin is clear only
- * from a call that found nothing. A call that finds an image whose deletion is already in flight queues it again;
- * {@see DeleteImage} is idempotent, so the duplicate is harmless.
+ * from a call that found nothing. A call that finds an image whose deletion is still in flight queues it again, so
+ * the owner spaces its calls past the transport's retry horizon; {@see DeleteImage} is idempotent, so a duplicate is
+ * harmless.
  *
- * The second place that requests a release, beside {@see ImageAttachment}: `ImageDeletionRequestedPublisherGateTest`
- * pins the set.
+ * One of the places that request a release, with {@see ImageAttachment} and {@see MaterialiseDerivative}:
+ * `ImageDeletionRequestedPublisherGateTest` pins the set.
  */
 final readonly class ReleaseDerivatives
 {
-    /** Ids queued per call; an origin holding more is finished by the following calls. */
-    public const int BATCH = 100;
+    /** Ids read per page; one call pages through every derivative of the origin. */
+    public const int PAGE = 100;
 
     public function __construct(
         private ImageRepository $imageRepository,
@@ -41,13 +42,21 @@ final readonly class ReleaseDerivatives
     public function of(DerivativeOrigin $origin): int
     {
         return $this->transactionManager->transactional(function () use ($origin): int {
-            $ids = $this->imageRepository->idsByOrigin($origin, self::BATCH);
+            $queued = 0;
+            $after = null;
 
-            foreach ($ids as $id) {
-                $this->eventBus->publish(new ImageDeletionRequested($id->toString()));
-            }
+            do {
+                $page = $this->imageRepository->idsByOrigin($origin, self::PAGE, $after);
 
-            return \count($ids);
+                foreach ($page as $id) {
+                    $this->eventBus->publish(new ImageDeletionRequested($id->toString()));
+                    $after = $id;
+                }
+
+                $queued += \count($page);
+            } while (self::PAGE === \count($page));
+
+            return $queued;
         });
     }
 }

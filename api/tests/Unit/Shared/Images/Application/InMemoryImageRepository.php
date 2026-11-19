@@ -45,15 +45,21 @@ final class InMemoryImageRepository implements ImageRepository
     }
 
     #[Override]
-    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array
     {
         $ids = [];
 
         foreach ($this->rows as $image) {
             $held = $image->origin();
+            $id = $image->id()->toString();
 
-            if (null !== $held && $held->type === $origin->type && $held->id === $origin->id) {
-                $ids[] = $image->id()->toString();
+            if (
+                null !== $held
+                && $held->type === $origin->type
+                && $held->id === $origin->id
+                && (!$after instanceof ImageId || \strcmp($id, $after->toString()) > 0)
+            ) {
+                $ids[] = $id;
             }
         }
 

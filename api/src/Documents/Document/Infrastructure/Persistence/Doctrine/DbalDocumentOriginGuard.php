@@ -9,6 +9,7 @@ use Erpify\Documents\Document\Application\Derivative\DocumentDerivativeOrigin;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Shared\Images\Application\OriginGuard;
 use Erpify\Shared\Images\Domain\DerivativeOrigin;
+use LogicException;
 use Override;
 
 /**
@@ -29,6 +30,12 @@ final readonly class DbalDocumentOriginGuard implements OriginGuard
     public function admits(DerivativeOrigin $origin): bool
     {
         RequiresActiveTransaction::ensure($this->connection, 'Admitting a document derivative');
+
+        // Inside a caller's own unit of work the lock would last until THAT commits, holding the erasure behind
+        // whatever else it does, and a refusal would close the manager that unit still needs.
+        if ($this->connection->getTransactionNestingLevel() > 1) {
+            throw new LogicException('Admitting a document derivative must own its transaction, not join one.');
+        }
 
         if (DocumentDerivativeOrigin::TYPE !== $origin->type) {
             return false;

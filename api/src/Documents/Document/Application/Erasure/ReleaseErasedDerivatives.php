@@ -6,20 +6,21 @@ namespace Erpify\Documents\Document\Application\Erasure;
 
 use Erpify\Documents\Document\Application\Derivative\DocumentDerivativeOrigin;
 use Erpify\Documents\Document\Application\Upload\SweepBudget;
-use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
+use Erpify\Documents\Document\Domain\Erasure\DocumentDerivativeReleases;
 use Erpify\Documents\Document\Domain\Erasure\ErasureLimits;
 use Erpify\Shared\Images\Application\ReleaseDerivatives;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
- * Ends the derivatives of erased documents (CAP-5). This context decides when a derivative dies; the images module only
+ * Ends the derivatives of erased documents. This context decides when a derivative dies; the images module only
  * queues the deletion of what still derives from the document, re-read on every call (ADR D8).
  *
  * It runs after the erasure committed, never inside it: byte removal is not a side effect of the owner's transaction
  * (invariant 4), and the erasure transaction has a statement budget of its own. A row's marker is set only by a call
- * that found nothing left to release — a confirmed absence — so a request lost to a dead letter is queued again on the
- * next tick rather than recorded as done.
+ * that found nothing left to release — a confirmed absence — so a request lost to a dead letter is queued again once
+ * the retry interval has passed rather than recorded as done. That interval bounds what a deletion that keeps failing
+ * produces, and keeps a row still pending from taking a later one's place in a tick.
  */
 final readonly class ReleaseErasedDerivatives
 {
@@ -28,7 +29,7 @@ final readonly class ReleaseErasedDerivatives
     private const int IDS_PER_LINE = 20;
 
     public function __construct(
-        private DocumentErasures $erasures,
+        private DocumentDerivativeReleases $releases,
         private ReleaseDerivatives $releaseDerivatives,
         private LoggerInterface $logger,
     ) {
@@ -43,7 +44,11 @@ final readonly class ReleaseErasedDerivatives
         $after = null;
 
         while (!$budget->exhausted()) {
-            $page = $this->erasures->awaitingDerivativeRelease($limit, $after);
+            $page = $this->releases->awaitingDerivativeRelease(
+                ErasureLimits::DERIVATIVE_REREQUEST_SECONDS,
+                $limit,
+                $after,
+            );
 
             foreach ($page as $documentId) {
                 $after = $documentId;
@@ -87,15 +92,17 @@ final readonly class ReleaseErasedDerivatives
     private function releaseOne(string $documentId): bool
     {
         if (0 !== $this->releaseDerivatives->of(DocumentDerivativeOrigin::of($documentId))) {
+            $this->releases->markDerivativesRequested($documentId);
+
             return false;
         }
 
-        return $this->erasures->markDerivativesReleased($documentId);
+        return $this->releases->markDerivativesReleased($documentId);
     }
 
     private function alarmOnOverdueDerivatives(): void
     {
-        $overdue = $this->erasures->derivativesOverdue(
+        $overdue = $this->releases->derivativesOverdue(
             ErasureLimits::DERIVATIVE_ALARM_SECONDS,
             self::ALARM_SCAN_LIMIT,
         );

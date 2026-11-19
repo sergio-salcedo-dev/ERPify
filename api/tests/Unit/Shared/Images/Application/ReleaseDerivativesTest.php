@@ -76,15 +76,29 @@ final class ReleaseDerivativesTest extends TestCase
     }
 
     #[Test]
-    public function oneCallQueuesAtMostOneBatch(): void
+    public function oneCallPagesThroughEveryDerivativeOfTheOrigin(): void
     {
         $origin = new DerivativeOrigin('Documents.Document', self::ORIGIN_ID);
+        $total = 2 * ReleaseDerivatives::PAGE + 1;
 
-        for ($i = 0; $i <= ReleaseDerivatives::BATCH; ++$i) {
+        for ($i = 0; $i < $total; ++$i) {
             $this->derivativeOf($origin);
         }
 
-        $this->assertSame(ReleaseDerivatives::BATCH, $this->release()->of($origin));
+        $this->assertSame($total, $this->release()->of($origin));
+        $this->assertCount($total, \array_unique($this->bus->queuedIds()), 'each one once');
+    }
+
+    #[Test]
+    public function anOriginHoldingExactlyOnePageIsReadOnceMoreAndFinishes(): void
+    {
+        $origin = new DerivativeOrigin('Documents.Document', self::ORIGIN_ID);
+
+        for ($i = 0; $i < ReleaseDerivatives::PAGE; ++$i) {
+            $this->derivativeOf($origin);
+        }
+
+        $this->assertSame(ReleaseDerivatives::PAGE, $this->release()->of($origin));
     }
 
     private function release(): ReleaseDerivatives

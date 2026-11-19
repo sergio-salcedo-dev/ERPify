@@ -35,7 +35,7 @@ final class UnreadableImageRepository implements ImageRepository
     }
 
     #[Override]
-    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array
     {
         throw new StubPersistenceFailure('the rows could not be read');
     }

@@ -61,6 +61,14 @@ final class ErasureLimits
      */
     public const int DERIVATIVE_ALARM_SECONDS = 21_600;
 
+    /**
+     * How long the release sweep waits before asking again for a document whose derivatives it already queued: past
+     * the async transport's retry horizon (about three hours), so a request still being retried is not duplicated, and
+     * a request lost to a dead letter is issued again before the alarm bound. It bounds what a deletion that keeps
+     * failing writes to `event_store` and the queue to one request per image every four hours.
+     */
+    public const int DERIVATIVE_REREQUEST_SECONDS = 14_400;
+
     private function __construct()
     {
     }

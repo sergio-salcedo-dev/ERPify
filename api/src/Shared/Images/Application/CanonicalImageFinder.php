@@ -68,7 +68,7 @@ final readonly class CanonicalImageFinder
         // A dependent image is its origin's data — a page of a contract is evidence, not a logo — so the route that
         // serves fungible images to any session never serves one, and answers as for an absent image so it confirms
         // nothing. Its owner decides who reads it, through a route of its own (ADR D8).
-        if (!$image instanceof Image || $image->origin() instanceof \Erpify\Shared\Images\Domain\DerivativeOrigin) {
+        if (!$image instanceof Image || $image->isDependent()) {
             throw ImageNotAvailable::forRequestedImage();
         }
 

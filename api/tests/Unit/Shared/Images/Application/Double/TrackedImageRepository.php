@@ -46,8 +46,8 @@ final readonly class TrackedImageRepository implements ImageRepository
     }
 
     #[Override]
-    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array
     {
-        return $this->rows->idsByOrigin($origin, $limit);
+        return $this->rows->idsByOrigin($origin, $limit, $after);
     }
 }
