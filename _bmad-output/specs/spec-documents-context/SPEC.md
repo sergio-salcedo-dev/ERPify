@@ -38,7 +38,7 @@ A mandate and a vision. The ERP targets construction, which produces technical d
 - **CAP-7**
   - **intent:** A new version is a new immutable original linked to its predecessor, never a modification.
   - **success:** Both versions are retrievable with distinct digests until erased; erasing one leaves the other's link to it as a readable tombstone.
-- **CAP-8**
+- **CAP-8** (deferred, out of this epic: see Deferred capabilities)
   - **intent:** Scanned PDFs yield a searchable text derivative.
   - **success:** A phrase present only in a scanned page is found by search; the text derivative dies with its document.
 - **CAP-9**
@@ -81,6 +81,10 @@ A mandate and a vision. The ERP targets construction, which produces technical d
 - Every story touching erasure, key destruction or derivative lifecycle (doc-1, doc-2, doc-3, doc-7, doc-8 and doc-9) records an adversarial pass; the three-layer review is owed per story.
 - **Decided (the user, 2026-11-05): an alarm is one scheduled-report `error` line**, modelled on `ReportDeadLetterBacklogHandler` and carrying ids and counts only (never an actor, a filename or a key hash). The stuck-document, missing-object, tombstone, derivative and keystore-growth alarms of the stories are that line; no metric surface is built.
 
+## Deferred capabilities
+
+- **CAP-8, OCR and search (decided by the owner, 2026-11-19).** It leaves the epic as an argued deferral: no consumer exists. Its shape is recorded so it is not rediscovered: decrypt-and-scan search with a mandatory metadata filter, a hard candidate cap and a measured latency contract; the phrase in a `POST` body, never a query string, a log, Sentry or audit metadata; ids only, no fragments; one audit row per search with its hit count; ADMIN only. OCR runs on doc-11's rendering sidecar with Tesseract, never in a PHP container holding the KEK; the text lives in a separate `document_text` table without D8 leases, swept on `Erased`; it depends on doc-4 and doc-7, not doc-8. Discarded: a blind index now, an `UNLOGGED` plaintext index (`pg_dump` dumps unlogged data by default), Tika. Reopened by a named use case and a corpus size; past about 10^4 candidates after the filter, a blind index under its own ADR.
+
 ## Non-goals
 
 - No code, schema or route is produced by this spec; it fixes guidelines and a story order.
@@ -104,7 +108,6 @@ A first `Documents` story can start from this folder without reopening the fungi
 ## Open Questions
 
 - **`restore.prod` and the ledger drill.** The properties and the first adapter are decided above. Open: the change to `restore.prod` that stops writers and sweeps, replays the ledger, verifies and only then re-enables, and the restore drill that proves the key does not return. The contract is fixed by the pending backup and restore policy (the owner's item) and doc-7 is blocked until it is; doc-7 itself delivers the change and the drill.
-- **CAP-8 search surface.** No story owns the surface that finds the extracted text, and the text derivative must live in `Documents`, not in the images module (Non-goals). It is sealed under the document's scope, with no plaintext `tsvector` or index, because a backup could bring back what an erased document's index held. Decided when doc-10 is scheduled.
 - **Custody against a PostgreSQL administrator.** Hash-chaining or external anchoring stays the revisit trigger of `docs/adr/regulatory-audit-trail.md` (A.8.15), not a decision made here. If hash-chaining is adopted later, the actor stays outside the hash so the sanctioned anonymising `UPDATE` does not rewrite the chain.
 - **Version-slot mechanism.** Decided by doc-9 (see the version bullet).
 - **Provisional constants.** The scan ones (attempt cap, outage-return cap and its alarm threshold, claim deadline, scan lease, heartbeat interval, backoff ladder and jitter, probe timeout, scan sweep cadence, and the stuck-document alarm bound, which must exceed the outage-return horizon) are starting values that the doc-4 spike fixes while it checks the `clamd` limits against `MAX_ORIGINAL_BYTES`; the upload ones (in-flight caps, provisionally 2 per actor and 4 globally; `Declared` TTL, provisionally 24 hours; `Committed` retention window, provisionally 7 days; upload lease, heartbeat interval, minimum accepted throughput and margin behind the upload deadline, staging age-sweep margin, reaper cadence) are fixed by the doc-3 spike. The remaining bounds and their owners: live `Declared` intents per actor (provisional 10, doc-3, over it the rate-limit problem type), the roll-forward sweep age (doc-3), the alarm bounds for a `Quarantined` or `ScanFailed` document (doc-4), for an `Erased` object not yet deleted and the completion-sweep margin (doc-7) and for a derivative that outlives its document (doc-8). A `clamd` limit below the constant is a new decision.

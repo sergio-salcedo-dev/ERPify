@@ -511,8 +511,10 @@
   invoke_dev_with: >-
     Owes a recorded adversarial pass. Inherit docs/adr/image-deletion-signal-transport.md and
     its residuals; retries re-query by origin; late arrivals are deleted; add the orphan sweep
-    and the alarm (its bound is fixed here). This is the ADR D4 rename trigger: record the decision
-    on Images. Owns the end-to-end acceptance scenario of the SPEC success signal: an uploaded
+    and the alarm (re-release 4 h, alarm 8 h, derived from the async
+    retry_strategy including jitter). ADR D4 is decided keep (record it, with its reopening condition).
+    The spec checkpoint is closed by the plan in _bmad-output/handoffs/documents/doc-8/ as reconciled with the
+    delivered design (docs/adr/images-vs-documents-conservation-contract.md D8). Owns the end-to-end acceptance scenario of the SPEC success signal: an uploaded
     drawing is stored byte-identical, is unreadable until scanned, and after erasure leaves digest
     and custody while every derivative is gone.
 - id: "doc-9"
@@ -523,19 +525,16 @@
     (SPEC); the mechanism that refuses a second live successor is decided here.
   invoke_dev_with: >-
     Touches erasure semantics, so it owes a recorded adversarial pass. Each version is its own
-    aggregate (decided); the series is a scalar id plus a read projection. Authorise the caller on
-    the predecessor with a voter before sealing, and answer absent and forbidden alike. The chain is
+    aggregate (decided); the series is a scalar id plus a read projection. Authorise the caller with document.write (RBAC; no row-level voter), and answer an absent
+    predecessor like a non-Ready one. The chain is
     linear: the new-version transaction takes the new scope's keystore row and then FOR UPDATE on
     the predecessor after the new bytes are sealed (never across the stream), rechecks Ready; the
     loser of a successor race maps to a conflict and its bytes fall into the aborted-upload class.
     The size bounds of doc-3 (zero-length refusal, MAX_ORIGINAL_BYTES, the body bounds) apply to
-    this path too, since it also seals. First decide the successor-exclusion mechanism and record it
-    in the Documents ADR: a holds_slot flag with a partial unique index on predecessor_id and a
-    locked walk-up over the contiguous Erased ancestors on every transition that takes or frees the
-    slot (the verdict, cap-return, cap-sweep, operator-reopen and erasure paths of doc-4 and doc-7
-    then change), or a series row whose head pointer moves by one UPDATE under the row lock (the
-    assistant's lean, since it removes the walk-up). A version_no with UNIQUE (series_id,
-    version_no) alone does not refuse two concurrent successors. Whichever is chosen keeps the SPEC
+    this path too, since it also seals. The successor-exclusion mechanism is decided: a series row whose head pointer
+    moves by one UPDATE under the series row lock; record it in the Documents ADR with its lock placement (see
+    the memlog) and state that it removes the locked writing walk, not the walk. A version_no with UNIQUE
+    (series_id, version_no) alone does not refuse two concurrent successors. The mechanism keeps the SPEC
     properties (including the cascade that frees a contiguous run of Erased nodes when its last live
     descendant goes, series_id copied from the locked predecessor row, one winner among concurrent
     reopens, the design's lock placed in the global order with the reopen taking the predecessor or
@@ -553,13 +552,40 @@
     Permission, and its problem types go into docs/api-error-contract.md (make
     php.lint.error-contract). The series projection orders by creation. A tombstone keeps id, digest, size, the
     retention fields (retention_reason, legal_basis, review_at), the key hash, series_id, predecessor_id, state and timestamps and nothing
-    that names a person. Record the series-erasure residual in PRODUCTION_SECURITY_CHECKLIST.md
+    that names a person; uploader_id stays on the row under the person purge's ownership, and the series
+    projection omits it for an Erased node. Record the series-erasure residual in PRODUCTION_SECURITY_CHECKLIST.md
     section 7.
-- id: "doc-10"
-  title: OCR of scanned PDFs
+- id: "doc-11"
+  title: Preview producer on a secret-free rendering sidecar
   description: >-
-    Extract searchable text from Ready scanned PDFs as a derivative that dies with its document
-    (CAP-8). Depends on doc-4 and doc-8.
+    Render page previews of Ready documents as dependent derivatives through MaterialiseDocumentDerivative, on a
+    rendering sidecar this story builds, and serve them through a Documents read route with a voter, the Ready
+    gate and an audit row. Depends on doc-8 and doc-12.
   invoke_dev_with: >-
-    Reads the original through the same decrypt stream as the scanner: no plaintext on
-    persistent storage (a tmpfs for tool temp files, swap off).
+    Reads the original through the same decrypt stream as the scanner: no plaintext on persistent storage
+    (tmpfs for tool temp files, swap off, core dumps off), digest-pinned image, backend network only, and the
+    sidecar holds no secret (never the KEK). The new reader registers in CryptoReadBoundaryGateTest::READERS.
+    Re-check the ADR D4 rename decision. Owes a recorded adversarial pass.
+- id: "doc-12"
+  title: First consumer — BankAccount evidence and the PWA surface
+  description: >-
+    Attach evidence documents to a bank account (the first consumer the SPEC names) through UploadEvidence,
+    referencing the document by id, and ship the PWA surface to upload, list and download them, with the
+    misfiling guard of docs/adr/images-vs-documents-conservation-contract.md D3 decided at this first UI that
+    offers both entry points. Depends on doc-8.
+  invoke_dev_with: >-
+    First browser client of the raw two-step upload: prove streaming, the exact Content-Length, the filename
+    in the query (encodeURIComponent, mirrored redaction) and progress against the real Caddy bounds. The
+    BankAccount aggregate references the document by id only (no object graph crosses a module boundary).
+    Persistence is decided (memlog): a separate BankAccountEvidence link table in the BankAccount module (id,
+    bank_account_id, document_id, kind, attached_at; UNIQUE (bank_account_id, document_id); both foreign keys
+    without cascade and NOT DEFERRABLE, the one to document a justified Level 2), no attached_by, three
+    non-person policy lines, an AuditedEntity with a new non-person audit resource type, no event. Retention is
+    fixed per kind by the consumer and verified on the server through a seam Documents publishes (422 on a
+    mismatch); the bank ownership certificate is contract-execution under legitimate-interests with no
+    review_at. The D3 guard: distinct English labels and help, and on the image control of that screen a notice
+    that the image is re-encoded, pointing to Attach evidence; ic-5 inherits it. Erasing an account with a
+    linked document that is not Erased answers 409; decide at the checkpoint whether EraseBankAccountSubject
+    takes the same 409 or erases the documents first. ADMIN only. Names and states come through a read port
+    Documents publishes (DocumentNameOpener), with its line in api/.bounded-context-allowlist and its mirror in
+    deptrac skip_violations. Owes a recorded adversarial pass.
