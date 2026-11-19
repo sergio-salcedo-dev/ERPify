@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Application;
 
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -31,5 +32,11 @@ final class UnreadableImageRepository implements ImageRepository
     public function findById(ImageId $id): ?Image
     {
         throw new StubPersistenceFailure('the row could not be read');
+    }
+
+    #[Override]
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    {
+        throw new StubPersistenceFailure('the rows could not be read');
     }
 }

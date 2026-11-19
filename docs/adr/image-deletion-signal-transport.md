@@ -53,4 +53,4 @@ The one publisher is `ImageAttachment` (`Shared/Images/Application`), through wh
 
 - `api/.persistent-transport-policy` carries `Shared.Image => person :: docs/adr/image-deletion-signal-transport.md`.
 - The event's payload stays empty: only the identifier travels, as the envelope's aggregate id. Anything added to `toPrimitives()` is retained by both sinks above.
-- The residuals in D3 belong to the consuming epic to close or accept; they are recorded here so that epic does not rediscover them.
+- The residuals in D3 belong to the consuming epic to close or accept; they are recorded here so that epic does not rediscover them. For **derivatives** the second one is closed by re-derivation rather than by the transport: their release is issued from the origin column on every tick until a re-query finds nothing (`images-vs-documents-conservation-contract.md` D8), so a dead-lettered request is issued again. It stays open for every other holder.

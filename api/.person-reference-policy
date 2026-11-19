@@ -219,6 +219,10 @@ Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$id => non-person
 # type IS `Types::GUID`, so a custom `image_id` type would drop the column out of the sweep entirely and this
 # classification would go unasked for rather than being made and checked.
 Erpify\Shared\Images\Domain\Entity\Image::$id => non-person
+# The origin a dependent image derives from (ADR `images-vs-documents-conservation-contract.md` D8). The only tag that
+# exists is `Documents.Document`, whose id names a document, never a person. A future origin type that denotes a natural
+# person makes this column hold person ids and reopens this line.
+Erpify\Shared\Images\Domain\Entity\Image::$originId => non-person
 
 # The Documents context's own keys. A document is evidence of something, never a person: `$id` and `$seriesId`
 # denote the conservation contract (a series is the first version's own id), `$predecessorId` another version of

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Shared\Images\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -57,5 +59,18 @@ final readonly class DoctrineImageRepository implements ImageRepository
     public function findById(ImageId $id): ?Image
     {
         return $this->entityManager->find(Image::class, $id->toString());
+    }
+
+    #[Override]
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    {
+        /** @var list<string> $ids */
+        $ids = $this->entityManager->getConnection()->fetchFirstColumn(
+            'SELECT id FROM image WHERE origin_type = :type AND origin_id = CAST(:id AS UUID) ORDER BY id LIMIT :limit',
+            ['type' => $origin->type, 'id' => $origin->id, 'limit' => $limit],
+            ['limit' => Types::INTEGER],
+        );
+
+        return \array_map(ImageId::fromString(...), $ids);
     }
 }

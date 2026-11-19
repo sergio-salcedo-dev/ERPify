@@ -61,4 +61,22 @@ final readonly class LockProbingErasures implements DocumentErasures
     {
         return $this->inner->objectsOverdue($olderThanSeconds, $limit);
     }
+
+    #[Override]
+    public function awaitingDerivativeRelease(int $limit, ?string $afterId = null): array
+    {
+        return $this->inner->awaitingDerivativeRelease($limit, $afterId);
+    }
+
+    #[Override]
+    public function markDerivativesReleased(string $documentId): bool
+    {
+        return $this->inner->markDerivativesReleased($documentId);
+    }
+
+    #[Override]
+    public function derivativesOverdue(int $olderThanSeconds, int $limit): array
+    {
+        return $this->inner->derivativesOverdue($olderThanSeconds, $limit);
+    }
 }

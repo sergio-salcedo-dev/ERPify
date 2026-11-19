@@ -65,6 +65,12 @@ use InvalidArgumentException;
     columns: ['id'],
     options: ['where' => "(((state)::text = 'erased'::text) AND (object_deleted_at IS NULL))"],
 )]
+// The derivative release sweep's candidate list: only `Erased` rows whose derivatives are not yet confirmed released.
+#[ORM\Index(
+    name: 'idx_document_erased_derivatives_pending',
+    columns: ['id'],
+    options: ['where' => "(((state)::text = 'erased'::text) AND (derivatives_released_at IS NULL))"],
+)]
 final class Document extends AggregateRoot
 {
     /**
@@ -153,6 +159,21 @@ final class Document extends AggregateRoot
     )]
     // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
     private ?DateTimeImmutable $objectDeletedAt = null;
+
+    /**
+     * Set by the derivative release sweep once a re-query by this document's origin finds no image left, so the sweep
+     * does not ask about every erased row for ever. A confirmed absence, never "requests queued". Read-only to the ORM
+     * like `object_deleted_at`: a compare-and-set statement writes it (`DbalDocumentErasures`).
+     */
+    #[ORM\Column(
+        name: 'derivatives_released_at',
+        type: Types::DATETIMETZ_IMMUTABLE,
+        nullable: true,
+        insertable: false,
+        updatable: false,
+    )]
+    // @phpstan-ignore property.unusedType (Doctrine hydrates it; a compare-and-set statement writes it)
+    private ?DateTimeImmutable $derivativesReleasedAt = null;
 
     /**
      * The scan's own columns. Like `promoted_at` they are read-only to the ORM: every transition is a DBAL
@@ -368,6 +389,11 @@ final class Document extends AggregateRoot
     public function objectDeletedAt(): ?DateTimeImmutable
     {
         return $this->objectDeletedAt;
+    }
+
+    public function derivativesReleasedAt(): ?DateTimeImmutable
+    {
+        return $this->derivativesReleasedAt;
     }
 
     public function nextScanAt(): DateTimeImmutable

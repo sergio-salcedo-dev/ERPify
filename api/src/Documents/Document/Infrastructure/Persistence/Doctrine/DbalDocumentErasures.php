@@ -140,4 +140,54 @@ final readonly class DbalDocumentErasures implements DocumentErasures
             ['age' => Types::INTEGER, 'limit' => Types::INTEGER],
         );
     }
+
+    #[Override]
+    public function awaitingDerivativeRelease(int $limit, ?string $afterId = null): array
+    {
+        $after = null === $afterId ? '' : ' AND id > CAST(:after AS UUID)';
+        $parameters = ['erased' => DocumentState::Erased->value, 'limit' => $limit];
+
+        if (null !== $afterId) {
+            Uuid::ensure($afterId);
+            $parameters['after'] = \strtolower($afterId);
+        }
+
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
+            'SELECT id FROM document WHERE state = :erased AND derivatives_released_at IS NULL'
+            . $after . ' ORDER BY id LIMIT :limit',
+            $parameters,
+            ['limit' => Types::INTEGER],
+        );
+    }
+
+    #[Override]
+    public function markDerivativesReleased(string $documentId): bool
+    {
+        Uuid::ensure($documentId);
+
+        return 1 === $this->connection->executeStatement(
+            'UPDATE document SET derivatives_released_at = NOW() '
+            . 'WHERE id = CAST(:id AS UUID) AND state = :erased AND derivatives_released_at IS NULL',
+            ['id' => \strtolower($documentId), 'erased' => DocumentState::Erased->value],
+        );
+    }
+
+    #[Override]
+    public function derivativesOverdue(int $olderThanSeconds, int $limit): array
+    {
+        /** @phpstan-var list<string> */
+        return $this->connection->fetchFirstColumn(
+            'SELECT d.id FROM document d WHERE d.state = :erased AND d.derivatives_released_at IS NULL AND EXISTS ('
+            . 'SELECT 1 FROM document_custody c WHERE c.document_id = d.id AND c.event = :event '
+            . 'AND c.created_at < NOW() - make_interval(secs => :age)) ORDER BY d.id LIMIT :limit',
+            [
+                'erased' => DocumentState::Erased->value,
+                'event' => CustodyEvent::Erased->value,
+                'age' => $olderThanSeconds,
+                'limit' => $limit,
+            ],
+            ['age' => Types::INTEGER, 'limit' => Types::INTEGER],
+        );
+    }
 }

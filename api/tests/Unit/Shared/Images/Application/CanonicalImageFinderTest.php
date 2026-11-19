@@ -6,6 +6,8 @@ namespace Erpify\Tests\Unit\Shared\Images\Application;
 
 use Erpify\Shared\Images\Application\CanonicalImageBytes;
 use Erpify\Shared\Images\Application\CanonicalImageFinder;
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
+use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Read\ImageNotAvailable;
 use Erpify\Shared\Images\Domain\Read\UnservableImage;
@@ -53,6 +55,27 @@ final class CanonicalImageFinderTest extends TestCase
         $this->expectException(ImageNotAvailable::class);
 
         ImageFinderHarness::finder(new InMemoryImageRepository(), $storage)->find(ImageId::generate());
+    }
+
+    public function testADependentImageIsNotServedByThisRouteAndStorageIsNeverAsked(): void
+    {
+        // A derivative of evidence is its origin's data: the route any session may call answers as for an absent
+        // image, before a byte is read, whether or not its bytes are there.
+        $repository = new InMemoryImageRepository();
+        $dependent = new Image(
+            ImageId::generate(),
+            \hash('sha256', ImageFinderHarness::BYTES),
+            'image/webp',
+            10,
+            10,
+            \strlen(ImageFinderHarness::BYTES),
+            new DerivativeOrigin('Documents.Document', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e01'),
+        );
+        $repository->save($dependent);
+
+        $this->expectException(ImageNotAvailable::class);
+
+        ImageFinderHarness::finder($repository, new PermanentlyFailingImageStorage())->find($dependent->id());
     }
 
     public function testAConfirmedByteAbsenceIsTheSameAnswerAsAnAbsentRow(): void

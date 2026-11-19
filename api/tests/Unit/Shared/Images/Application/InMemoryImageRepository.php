@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Application;
 
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -41,5 +42,23 @@ final class InMemoryImageRepository implements ImageRepository
     public function findById(ImageId $id): ?Image
     {
         return $this->rows[$id->toString()] ?? null;
+    }
+
+    #[Override]
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    {
+        $ids = [];
+
+        foreach ($this->rows as $image) {
+            $held = $image->origin();
+
+            if (null !== $held && $held->type === $origin->type && $held->id === $origin->id) {
+                $ids[] = $image->id()->toString();
+            }
+        }
+
+        \sort($ids);
+
+        return \array_map(ImageId::fromString(...), \array_slice($ids, 0, $limit));
     }
 }

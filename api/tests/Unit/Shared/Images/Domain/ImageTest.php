@@ -130,7 +130,7 @@ final class ImageTest extends TestCase
             $constructor->getParameters(),
         );
 
-        $this->assertSame(['id', 'digest', 'mediaType', 'width', 'height', 'byteSize'], $parameterNames);
+        $this->assertSame(['id', 'digest', 'mediaType', 'width', 'height', 'byteSize', 'origin'], $parameterNames);
 
         $propertyNames = \array_map(
             static fn (ReflectionProperty $property): string => $property->getName(),
@@ -139,9 +139,9 @@ final class ImageTest extends TestCase
         \sort($propertyNames);
 
         $this->assertSame(
-            ['byteSize', 'createdAt', 'digest', 'height', 'id', 'mediaType', 'width'],
+            ['byteSize', 'createdAt', 'digest', 'height', 'id', 'mediaType', 'originId', 'originType', 'width'],
             $propertyNames,
-            'the persisted state is exactly the seven fields; a new property is a new column',
+            'the persisted state is exactly the nine fields (the origin pair is ADR D8); a new property is a column',
         );
 
         $methodNames = \array_map(
@@ -151,9 +151,9 @@ final class ImageTest extends TestCase
         \sort($methodNames);
 
         $this->assertSame(
-            ['__construct', 'byteSize', 'createdAt', 'digest', 'height', 'id', 'mediaType', 'width'],
+            ['__construct', 'byteSize', 'createdAt', 'digest', 'height', 'id', 'mediaType', 'origin', 'width'],
             $methodNames,
-            'seven readers and the constructor — no mutator, and no method that classifies the image',
+            'eight readers and the constructor — no mutator, and no method that classifies the image',
         );
     }
 }

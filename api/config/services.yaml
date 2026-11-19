@@ -187,6 +187,17 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    Erpify\Documents\Document\Application\Erasure\ReleaseErasedDerivatives:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    # A derivative of a document is admitted under this context's own guard, named rather than autowired by type:
+    # `OriginGuard` is a port every context that keeps derivatives implements, so a second implementer must not turn
+    # this into an ambiguous autowire, nor silently into the other context's guard.
+    Erpify\Documents\Document\Application\Derivative\MaterialiseDocumentDerivative:
+        arguments:
+            $documentOriginGuard: '@Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentOriginGuard'
+
     # The read's alarms (a refused read, an aborted transfer) name a document id and a reason slug, and must arrive on a
     # request that answers 5xx or 410 without flushing the buffered default channel.
     Erpify\Documents\Document\Application\Read\ReadDocument:
@@ -230,6 +241,11 @@ services:
     # The compensation's own failure is the one signal that a stored object has no owner and no release queued, so
     # it goes to the always-on stream like the other best-effort reporters.
     Erpify\Shared\Images\Application\ImageAttachment:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
+    # A refused derivative whose bytes could not be deleted is reported the same way.
+    Erpify\Shared\Images\Application\MaterialiseDerivative:
         arguments:
             $logger: '@monolog.logger.observability'
 

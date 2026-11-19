@@ -54,6 +54,13 @@ final class ErasureLimits
     /** How long a sealed object may outlive its row's `Erased` custody entry before the alarm names it. */
     public const int OBJECT_ALARM_SECONDS = 3_600;
 
+    /**
+     * How long an erased document's derivatives may stay unconfirmed released after its `Erased` custody entry before
+     * the alarm names it: twice the async transport's retry horizon (about three hours), so a deletion request still
+     * being retried never trips it (ADR `images-vs-documents-conservation-contract.md` D8).
+     */
+    public const int DERIVATIVE_ALARM_SECONDS = 21_600;
+
     private function __construct()
     {
     }

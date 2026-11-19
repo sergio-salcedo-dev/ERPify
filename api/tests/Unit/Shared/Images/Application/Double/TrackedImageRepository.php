@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Images\Application\Double;
 
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -42,5 +43,11 @@ final readonly class TrackedImageRepository implements ImageRepository
     public function findById(ImageId $id): ?Image
     {
         return $this->rows->findById($id);
+    }
+
+    #[Override]
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit): array
+    {
+        return $this->rows->idsByOrigin($origin, $limit);
     }
 }

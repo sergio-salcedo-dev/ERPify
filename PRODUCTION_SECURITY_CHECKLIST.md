@@ -2809,6 +2809,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       fields and timestamps, and its custody trail stays. Anyone who holds a known file can confirm it is the one
       that was filed (possession of a known file), and the trail says that an erasure happened, when and under which
       closed reason. Kept on purpose: the digest is what proves what was held. **Accepted — the owner's design, 2026-11-04.**
+- [ ] **Derivatives of a document: what the release closes and what it leaves (doc-8).** A derivative is an `image`
+      row carrying the origin `Documents.Document`, admitted only for a `Ready` document under `FOR SHARE`, and
+      released after the erasure by a 5-minute tick that re-queries by origin until none is left, with an `error` line
+      six hours after the `Erased` custody row (ADR `images-vs-documents-conservation-contract.md` D8). Four things
+      stay open. **One — bytes with no row.** A crash between the store and the insert, and a refused derivative whose
+      compensating delete fails (`images.derivative.discard_failed`, logged by class only), leave stored bytes that no
+      origin query can find: the same unswept bucket as item one of the `Shared/Images` residuals above. **Two — the
+      classification of `image.origin_id`.** It is `non-person` because the only origin type names a document; a future
+      origin type denoting a natural person makes it a person column, and only review would notice. **Three —
+      duplicate requests.** While a deletion is in flight the tick queues it again every five minutes, so a request the
+      transport retries for its whole budget is queued about three dozen times; `DeleteImage` is idempotent and the
+      volume is bounded, nothing more. **Four — nobody can read a derivative.** The fungible image route refuses an
+      image with an origin (fail closed, since any authenticated session may call it while a document is ADMIN-only and
+      audited), and no route of the owner exists; the first producer story decides who reads a preview and under which
+      audit. The `ImageId` of a derivative also stays in `event_store` for ever, as item four of the `Shared/Images`
+      residuals says for every image. **Open — owner: the Documents epic (the first derivative producer).**
 - [ ] **Offsite backups keep the ciphertext of an erased document, and an erasure depends on the offsite channel
       (doc-7).** The sealed objects of an erased document are deleted from the volume, but a backup of the volume (or a
       database dump holding the wrapped key) taken before the erasure still holds the ciphertext; the residual closes

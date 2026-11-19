@@ -53,6 +53,9 @@ final class ImageWriterSurfaceGateTest extends TestCase
         // The canonicalization pipeline's own output: the media type comes from `MediaTypeEncoderFactory`,
         // which can only produce one of the four encoders it knows, so the column is closed by construction.
         'Shared/Images/Application/UploadImage.php',
+        // Another context's derivative (ADR D8): its bytes go through the same `ImageProcessor`, so the media type
+        // is the same closed set; the only extra column is the origin its caller supplies, under that caller's guard.
+        'Shared/Images/Application/MaterialiseDerivative.php',
     ];
 
     #[Test]
