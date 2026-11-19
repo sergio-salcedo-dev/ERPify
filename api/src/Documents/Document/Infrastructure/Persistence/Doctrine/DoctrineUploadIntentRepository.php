@@ -229,6 +229,18 @@ final readonly class DoctrineUploadIntentRepository implements UploadIntentRepos
     }
 
     #[Override]
+    public function lockByScope(string $scopeId): void
+    {
+        Uuid::ensure($scopeId);
+        RequiresActiveTransaction::ensure($this->connection, 'Locking the upload intent of a scope');
+
+        $this->connection->fetchOne(
+            'SELECT id FROM upload_intent WHERE scope_id = CAST(:scope_id AS UUID) FOR UPDATE',
+            ['scope_id' => \strtolower($scopeId)],
+        );
+    }
+
+    #[Override]
     public function hasLiveIntentForScope(string $scopeId): bool
     {
         return 0 < $this->count(

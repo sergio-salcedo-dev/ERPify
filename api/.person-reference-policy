@@ -229,6 +229,10 @@ Erpify\Documents\Document\Domain\Entity\Document::$seriesId => non-person
 Erpify\Documents\Document\Domain\Entity\Document::$predecessorId => non-person
 Erpify\Documents\Document\Domain\Entity\DocumentCustody::$id => non-person
 Erpify\Documents\Document\Domain\Entity\DocumentCustody::$documentId => non-person
+# The erasure ledger's override record: its `$id` and the random `$recordRef` the script prints name the use of the
+# override, and the record holds no operator — who set it lives in the off-host operator log, never in this table.
+Erpify\Documents\Document\Domain\Entity\LedgerOverrideRecord::$id => non-person
+Erpify\Documents\Document\Domain\Entity\LedgerOverrideRecord::$recordRef => non-person
 Erpify\Documents\Document\Domain\Entity\UploadIntent::$id => non-person
 Erpify\Documents\Document\Domain\Entity\UploadIntent::$scopeId => non-person
 Erpify\Documents\Document\Domain\Entity\UploadIntent::$documentId => non-person

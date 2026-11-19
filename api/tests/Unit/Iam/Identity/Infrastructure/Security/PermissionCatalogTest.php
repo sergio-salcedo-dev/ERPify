@@ -37,6 +37,7 @@ final class PermissionCatalogTest extends TestCase
         'bankAccount.changeStatus',
         'document.custody',
         'document.download',
+        'document.erase',
         'document.rescan',
         'document.write',
         'users.read',

@@ -79,7 +79,7 @@ final class BoundedContainerLogRetentionGateTest extends TestCase
      */
     private const array EXPECTED_SERVICES = [
         'compose.yaml' => ['php', 'database', 'pwa', 'messenger_worker', 'scanner'],
-        'compose.dev.yaml' => ['mailpit', 'php', 'pwa', 'database', 'messenger_worker', 'scanner'],
+        'compose.dev.yaml' => ['mailpit', 'php', 'pwa', 'database', 'messenger_worker', 'scanner', 'ledger'],
         'compose.prod.yaml' => ['php', 'pwa', 'database', 'messenger_worker', 'scheduler_worker', 'scanner'],
         'compose.rehearsal.yaml' => ['mailpit'],
     ];

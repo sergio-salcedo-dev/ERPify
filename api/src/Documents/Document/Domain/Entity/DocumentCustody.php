@@ -9,6 +9,8 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Documents\Document\Domain\CustodyEvent;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
+use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
+use Erpify\Documents\Document\Domain\Erasure\ErasureSystemReason;
 use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
@@ -26,7 +28,8 @@ use InvalidArgumentException;
  * immutable (`docs/adr/documents-custody-log.md`).
  *
  * A NULL actor is the system. It is NULL for the scan's own facts (the first claim, every verdict, the cap sweep)
- * and never for an operator decision, which names the operator.
+ * and for the erasure a restore replay or the completion sweep finishes, and never for an operator decision, which
+ * names the operator.
  *
  * `seq` numbers a document's rows from 1 with no gap among committed rows; it is computed under the lock on
  * the document row and `UNIQUE (document_id, seq)` is the second defence. Rows are never deleted: the foreign
@@ -67,7 +70,7 @@ final readonly class DocumentCustody
         #[ORM\Column(name: 'actor_id', type: Types::GUID, nullable: true)]
         #[PersonSubjectReference(erasedBy: 'src/Documents/Document/Application/PurgeUserDocumentReferences.php')]
         private ?string $actorId,
-        /** Why an operator reopened a scan; set for {@see CustodyEvent::RescanRequested} and NULL for every other fact. */
+        /** Why an operator reopened a scan or a document was erased; NULL for every other fact. */
         #[ORM\Column(length: 64, nullable: true)]
         private ?string $reason = null,
     ) {
@@ -144,6 +147,8 @@ final readonly class DocumentCustody
     /**
      * The one point every row passes: the scan's own facts are the system's (NULL actor, never a person), an operator
      * decision names the operator and carries a reason from the closed list, and no other fact carries a reason.
+     * An erasure is either an operator's (an {@see ErasureReason} and the operator) or the system's (an
+     * {@see ErasureSystemReason} and NULL): the two vocabularies never mix, so the reason alone says which it was.
      */
     private function ensureActorAndReasonFitTheEvent(): void
     {
@@ -156,6 +161,12 @@ final readonly class DocumentCustody
 
         if ($bySystem && null !== $this->actorId) {
             throw new InvalidArgumentException("A scan fact is the system's and names no actor.");
+        }
+
+        if (CustodyEvent::Erased === $this->event) {
+            $this->ensureErasureFits();
+
+            return;
         }
 
         if (CustodyEvent::RescanRequested === $this->event) {
@@ -171,7 +182,25 @@ final readonly class DocumentCustody
         }
 
         if (null !== $this->reason) {
-            throw new InvalidArgumentException('Only a re-scan carries a reason.');
+            throw new InvalidArgumentException('Only a re-scan or an erasure carries a reason.');
+        }
+    }
+
+    private function ensureErasureFits(): void
+    {
+        $operator = null === $this->reason ? null : ErasureReason::tryFrom($this->reason);
+        $system = null === $this->reason ? null : ErasureSystemReason::tryFrom($this->reason);
+
+        if (!$operator instanceof ErasureReason && !$system instanceof ErasureSystemReason) {
+            throw new InvalidArgumentException('An erasure carries a reason from exactly one closed list.');
+        }
+
+        if ($operator instanceof ErasureReason && null === $this->actorId) {
+            throw new InvalidArgumentException('An operator erasure names the operator.');
+        }
+
+        if ($system instanceof ErasureSystemReason && null !== $this->actorId) {
+            throw new InvalidArgumentException("A system erasure is the system's and names no actor.");
         }
     }
 }

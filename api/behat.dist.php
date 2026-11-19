@@ -14,6 +14,7 @@ use Erpify\Kernel;
 use Erpify\Tests\Support\AcceptanceEntryPoints;
 use Erpify\Tests\Behat\Context\DoctrineContext;
 use Erpify\Tests\Behat\Context\DocumentsCustodyContext;
+use Erpify\Tests\Behat\Context\DocumentsErasureContext;
 use Erpify\Tests\Behat\Context\DocumentsIngestContext;
 use Erpify\Tests\Behat\Context\DocumentsReadContext;
 use Erpify\Tests\Behat\Context\EntityManagerContext;
@@ -121,6 +122,7 @@ return (new Config())
                     PrivacyContext::class,
                     ImageFixtureContext::class,
                     DocumentsCustodyContext::class,
+                    DocumentsErasureContext::class,
                     DocumentsIngestContext::class,
                     DocumentsReadContext::class,
                 ),

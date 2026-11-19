@@ -99,6 +99,13 @@
 /^the document "([^"]*)" has (\d+) custody rows$/ => used
 /^the key of document "([^"]*)" is destroyed$/ => used
 /^the people named by the custody rows of document "([^"]*)" have been erased$/ => used
+/^the erasure ledger holds the scope of document "([^"]*)"$/ => used
+/^the key of document "([^"]*)" is not tombstoned$/ => used
+/^the key of document "([^"]*)" is tombstoned as an erasure$/ => used
+the erasure ledger cannot make an entry durable => used
+the erasure ledger holds no entry => used
+the erasure ledger override is set => used
+the erasure ledger write times out after the entry landed => used
 /^a ready document with id "([^"]*)" holding "([^"]*)"$/ => used
 /^the "([^"]*)" should have "([^"]*)" records$/ => idle
 /^the JSON nodes should be equal to \(if path not empty\):$/ => idle

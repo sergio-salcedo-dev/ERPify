@@ -101,6 +101,12 @@ final readonly class FaultingLockIntentRepository implements UploadIntentReposit
     }
 
     #[Override]
+    public function lockByScope(string $scopeId): void
+    {
+        $this->inner->lockByScope($scopeId);
+    }
+
+    #[Override]
     public function hasLiveIntentForScope(string $scopeId): bool
     {
         return $this->inner->hasLiveIntentForScope($scopeId);

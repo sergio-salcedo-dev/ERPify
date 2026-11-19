@@ -8,7 +8,7 @@
 .PHONY: php.unit php.unit.coverage \
 		php.behat php.behat.coverage \
 		php.test \
-		php.bench php.scanner.integration
+		php.bench php.scanner.integration php.ledger.integration
 
 ## —— PHP Unit ——
 
@@ -39,6 +39,18 @@ php.scanner.integration: ## Real-clamd integration test (opt-in; starts the `sca
 	@status=0; \
 	$(PHP_TEST) env RUN_SCANNER_INTEGRATION=1 php -d memory_limit=512M bin/phpunit --group scanner || status=$$?; \
 	$(DOCKER_COMPOSE) --profile scanner stop scanner; \
+	exit $$status
+
+# The real-restic test, opt-in. The default suite binds a fake ledger and the adapter's unit test runs against a stand-in
+# `restic` script; this starts the `ledger` compose profile (an append-only `rest-server` on the compose network), waits for
+# its healthcheck, and runs the `ledger` group with RUN_LEDGER_INTEGRATION set. It measures what only a real repository can:
+# the write-and-list round trip, that a `restic forget` does not remove an entry, and that a corrupted snapshot file makes
+# the ledger unreadable. Needs the php image built with restic (`make docker.build`). Not a member of any quality sweep or of CI.
+php.ledger.integration: ## Real restic + append-only rest-server integration test (opt-in; starts the `ledger` profile, stops it afterwards)
+	$(DOCKER_COMPOSE) --profile ledger up --wait --no-build --detach ledger
+	@status=0; \
+	$(PHP_TEST) env RUN_LEDGER_INTEGRATION=1 php -d memory_limit=512M bin/phpunit --group ledger || status=$$?; \
+	$(DOCKER_COMPOSE) --profile ledger stop ledger; \
 	exit $$status
 
 # Clover report for SonarCloud (sonar.php.coverage.reportPaths). Runs with

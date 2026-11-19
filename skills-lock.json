@@ -1,81 +1,89 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "bmad-tea": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea/SKILL.md",
-      "computedHash": "98a005a0bade4e3363f71f39ae2ec145c3f28a67f3f661bd718163b0f158e6da"
+      "computedHash": "b8a2568aec1b648b93d6f3e53a4055c995c831cab9a17b7b60344da59a672185"
     },
     "bmad-tea-automate": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-automate/SKILL.md",
-      "computedHash": "072e74826f7c8dacee330bd6c80d1437242db6a044cbf7271ab717d3941fe258"
+      "computedHash": "ecbf921cf9ee366fdbfe5e21d1ccf1f37cbcfb6a5a6615a59df099e29b11e5f2"
     },
     "bmad-tea-evaluate": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-evaluate/SKILL.md",
-      "computedHash": "a4283028b76ef8f436bef7c90d2e7370d0522be240878565eb25791aaa61c94a"
+      "computedHash": "d124073c8bcd470a762c722f4bcfbbe189739c9a920302f2c8ecca075f53d45c"
     },
     "bmad-tea-framework": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-framework/SKILL.md",
-      "computedHash": "cf9193f8b7174bbd99b5a62860229fe944e13c68758085be7ec5a04f00b36039"
+      "computedHash": "7f379de3528388834feda839384bc03eb3805a6fef139b234e3b1b628092f077"
     },
     "bmad-tea-nfr": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-nfr/SKILL.md",
-      "computedHash": "a19bc394ce05cd910f61badd5269103c5e2df6d801e185fea0da6e87da993b0f"
+      "computedHash": "cadcd57fa412ff60209edd03f519f5f2700b9974255964c79bdfda6a732395bf"
     },
     "bmad-tea-teach-me-testing": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-teach-me-testing/SKILL.md",
-      "computedHash": "7a8fc26ee5d738cf3e2473dd1deb7ceef773daf4f8097539737cfe5f5abd384e"
+      "computedHash": "5085a49f7f2cd1af0ab0aa2483ae293846399fbb5a2c2ed32f4ec8da913fb7c9"
     },
     "bmad-tea-test-design": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-test-design/SKILL.md",
-      "computedHash": "7cdc5685c16653ff01a071930af8af3e9199c8adceb83261f502971a8b610a54"
+      "computedHash": "a03592fd6d97db06d1edb70d5940ee7864e241f4ceb8d52d2fae7327f15fa4ab"
     },
     "bmad-tea-test-review": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-test-review/SKILL.md",
-      "computedHash": "77db8ca6a380739a4f24863c3de067ce859a6c10250134cb3151c50b95367ebf"
+      "computedHash": "367440074082ca03b3f1106c8a5a39066574fb928cdac72a1a1f42cf4a316d90"
     },
     "bmad-tea-trace": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmad-tea-trace/SKILL.md",
-      "computedHash": "6c125fb64d49756b638ecaa49c1bc71134791d5ef96f5c61a1c915883aa02a45"
+      "computedHash": "819218b510ef29f7733b2562c5308dc45c000ba2685e86935c5cd511072122f3"
     },
     "bmod-tea": {
       "source": "bmad-code-org/bmad-method-test-architecture-enterprise",
       "ref": "v3.4.0",
       "sourceType": "github",
       "skillPath": "skills/bmod-tea/SKILL.md",
-      "computedHash": "f478b77d2e296457588a48f5ec19105746617a0c7e32dfb116435ccc3817c62e"
+      "computedHash": "f388892181abf547339158140e113dfff2a1276114865c7f45283bf3baf220cc"
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5",
+      "installMode": "copy"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/react-best-practices/SKILL.md",
-      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+      "computedHash": ""
     }
   }
 }

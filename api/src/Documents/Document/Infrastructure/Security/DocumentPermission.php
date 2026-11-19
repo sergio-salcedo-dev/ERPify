@@ -21,6 +21,12 @@ final class DocumentPermission
     public const string RESCAN = 'document.rescan';
 
     /**
+     * Erases a document from any non-terminal state: its key is destroyed and its sealed object deleted, so only the
+     * ADMIN wildcard reaches it, as with `document.rescan` — no tier carries the verb and no explicit grant row exists.
+     */
+    public const string ERASE = 'document.erase';
+
+    /**
      * Reads the original of a `Ready` document. Not a tier verb, so no tier carries it and only the ADMIN wildcard
      * reaches it; `StaticAuthorizationPolicy` declares the row. A non-ADMIN reader, or a rule that an uploader may
      * download what they filed, is a decision to take there, not a tier to widen.

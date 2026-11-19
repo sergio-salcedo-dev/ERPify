@@ -12,7 +12,10 @@
 # before you ever need it for real. The dump is fully verified up front, so a
 # corrupt backup is caught before any live data is touched, and the run refuses
 # to proceed without an explicit confirmation. The writers are restarted on any
-# exit, so a failed restore never leaves the app headless.
+# exit, so a failed restore never leaves the app headless — EXCEPT when the
+# erasure ledger could not be replayed over the restored database: then the stack
+# stays in recovery mode (writers and the scheduler stopped) until the ledger is
+# readable or the documented override is set.
 #
 # Environment guard: when SERVER_NAME (from the env file) is anything other than
 # an explicitly local host the run is treated as PRODUCTION and requires a second
@@ -27,6 +30,9 @@
 #   COMPOSE_PROJECT_NAME   compose project             (default: from the env file, lib/prod-env.sh)
 #   RESTORE_YES            set to 1 to skip confirmation — NON-production only
 #   ALLOW_PROD_RESTORE     set to 1 to permit a restore when SERVER_NAME is non-local
+#   ERASURE_LEDGER_OVERRIDE  ledger_unreachable | ledger_corrupt | ledger_lost — proceed although the erasure ledger
+#                          could not be replayed, accepting that keys destroyed since the backup may be live again.
+#                          Production asks for a typed phrase. Reads answer 410 until a readable ledger is replayed.
 #
 # Usage: scripts/deploy/restore-prod.sh <stamp>   (or `STAMP=<stamp> make restore.prod`)
 set -euo pipefail
@@ -121,7 +127,7 @@ if [[ "$IS_PROD" == "1" ]]; then
   log_warn "Mandatory checks before you continue:"
   log_warn "  1. A fresh backup of the CURRENT state exists (run 'make backup.prod' first)."
   log_warn "  2. '$STAMP' is the intended recovery point (check the sizes/date above)."
-  log_warn "  3. A maintenance window is in effect — php/messenger_worker WILL be stopped (downtime)."
+  log_warn "  3. A maintenance window is in effect — php, messenger_worker and the scheduler WILL be stopped (downtime)."
   log_warn "  4. The offsite copy of '$STAMP' is intact, in case this restore goes wrong."
   log_warn "  5. You are on the correct host (project '$COMPOSE_PROJECT_NAME')."
   if [[ "${ALLOW_PROD_RESTORE:-}" != "1" ]]; then
@@ -139,24 +145,49 @@ elif [[ "${RESTORE_YES:-}" != "1" ]]; then
     "Type the project name ($COMPOSE_PROJECT_NAME) to proceed: "
 fi
 
-# —— Restore (stop writers → DB → start writers) ——————————————————————————
+# —— Restore (stop writers → DB → replay the erasure ledger → start writers) ——
 # Once the writers are down, every exit path MUST bring them back: a failure
 # mid-restore (pg_restore error, Ctrl-C) otherwise leaves the
 # app headless. The trap restarts them on any exit; `compose start` is
 # idempotent, so the happy path clearing the flag below just makes it a no-op.
+#
+# ONE exit is the exception, and it is the point of the ledger: once pg_restore
+# has SUCCEEDED, a database that the erasure ledger has not been replayed over may
+# hold a document whose key was destroyed after the backup and is live again here.
+# Until the replay succeeds (or an operator sets the documented override) the
+# stack stays in RECOVERY MODE: writers and the scheduler — whose sweeps delete
+# objects and complete erasures — stay stopped, so nothing is served, scanned or
+# swept over that database. `hold_stack` is set only once pg_restore returned 0 and
+# cleared only by the replay or the override: a pg_restore that failed rolled the
+# database back to what it was, so its writers are restarted like any other failure.
+writers=(php messenger_worker)
+# The prod stack runs the Documents sweeps in their own scheduler; the rehearsal
+# overlay has none (its messenger_worker consumes the schedule), so ask Compose.
+# Captured first, then searched: under pipefail a `grep -q` that exits on its first match can hand
+# `compose config` a SIGPIPE, and the pipeline would then report "not found" for a service that is there.
+services="$(compose config --services)"
+if grep -qx scheduler_worker <<< "$services"; then
+  writers+=(scheduler_worker)
+fi
 writers_stopped=0
+hold_stack=0
 restart_writers() {
   [[ "$writers_stopped" == "1" ]] || return 0
-  log_info "Restarting writers (php, messenger_worker) …"
-  compose start php messenger_worker \
-    || log_error "could not restart writers — start them manually: 'compose start php messenger_worker'."
+  if [[ "$hold_stack" == "1" ]]; then
+    log_warn "RECOVERY MODE: ${writers[*]} stay stopped — the erasure ledger was not replayed over this database."
+    log_warn "Re-run the restore once the ledger is readable, or set the documented override (docs/runbooks/documents-erasure-ledger.md)."
+    return 0
+  fi
+  log_info "Restarting writers (${writers[*]}) …"
+  compose start "${writers[@]}" \
+    || log_error "could not restart writers — start them manually: 'compose start ${writers[*]}'."
 }
 trap restart_writers EXIT
 trap 'exit 130' INT TERM
 
-log_info "Stopping writers (php, messenger_worker) …"
+log_info "Stopping writers (${writers[*]}) …"
 writers_stopped=1
-compose stop php messenger_worker
+compose stop "${writers[@]}"
 
 # --single-transaction wraps the whole restore (including the --clean DROPs) in
 # one BEGIN/COMMIT: any error rolls the database back to its pre-restore state
@@ -167,9 +198,54 @@ log_info "Restoring database from $db_file …"
 # would pass the host's empty values.
 # shellcheck disable=SC2016
 compose exec -T database sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction' < "$db_file"
+# Reached only when pg_restore returned 0 (set -e): from here the database is the dump's, whatever the ledger says.
+hold_stack=1
 
-log_info "Starting writers (php, messenger_worker) …"
-compose start php messenger_worker
+# —— Erasure ledger (recovery mode until it is replayed) ——————————————————————
+# The ledger lives off this host and outside Postgres's restore domain, so a
+# restore to an older dump cannot bring back a key it recorded as destroyed
+# unless the replay is skipped. The replay runs in a ONE-OFF php container, never
+# in a writer: the writers are down. It exits non-zero when the ledger is not
+# readable in full (`restic check --read-data`, and no skipped snapshot) or when
+# a scope it names is still not erased afterwards.
+log_info "Replaying the erasure ledger over the restored database (writers and sweeps stay stopped) …"
+if compose run --rm --no-deps -T php php bin/console documents:erasure:replay-ledger; then
+  hold_stack=0
+  log_success "Erasure ledger replayed."
+elif [[ -n "${ERASURE_LEDGER_OVERRIDE:-}" ]]; then
+  # The documented override: the ledger is a single copy off this host, and losing it fails closed. This lets the
+  # restore proceed ACCEPTING that a key destroyed since the backup may be live again. While the flag is set every
+  # Documents read, listing and trail answers 410; it clears itself only after a completion run has replayed a
+  # readable ledger and found nothing not erased. The row holds a closed reason and a random reference, never a
+  # name: write that reference, your identity and the date in the off-host operator log.
+  case "$ERASURE_LEDGER_OVERRIDE" in
+    ledger_unreachable | ledger_corrupt | ledger_lost) ;;
+    *)
+      log_error "ERASURE_LEDGER_OVERRIDE must be one of: ledger_unreachable, ledger_corrupt, ledger_lost."
+      exit 1
+      ;;
+  esac
+  log_warn "The erasure ledger could not be replayed. Override requested: $ERASURE_LEDGER_OVERRIDE."
+  log_warn "Erased documents' keys may be live again in this database; reads answer 410 until the ledger is replayed."
+  if [[ "$IS_PROD" == "1" ]]; then
+    confirm_tty "override erasure ledger $COMPOSE_PROJECT_NAME $STAMP" \
+      "Type 'override erasure ledger $COMPOSE_PROJECT_NAME $STAMP' to accept that and proceed: "
+  elif [[ "${RESTORE_YES:-}" != "1" ]]; then
+    confirm_tty "$COMPOSE_PROJECT_NAME" "Type the project name ($COMPOSE_PROJECT_NAME) to override the ledger: "
+  fi
+  compose run --rm --no-deps -T php php bin/console documents:erasure:set-override "$ERASURE_LEDGER_OVERRIDE" \
+    || { log_error "the override could not be recorded — the stack stays in recovery mode."; exit 1; }
+  hold_stack=0
+  log_warn "Override recorded. Write the reference above, your identity and today's date in the off-host operator log."
+else
+  log_error "RECOVERY MODE: the erasure ledger could not be replayed over the restored database."
+  log_error "The stack stays stopped. Make the ledger readable and re-run this restore (it is repeatable), or accept the"
+  log_error "loss with ERASURE_LEDGER_OVERRIDE=<ledger_unreachable|ledger_corrupt|ledger_lost> (docs/runbooks/documents-erasure-ledger.md)."
+  exit 1
+fi
+
+log_info "Starting writers (${writers[*]}) …"
+compose start "${writers[@]}"
 writers_stopped=0
 
 log_success "Restore of $STAMP complete."

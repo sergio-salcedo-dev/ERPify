@@ -616,6 +616,13 @@ deptrac:
             - Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
         Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand:
             - Erpify\Organization\Membership\Application\GrantMembership
+        Erpify\Documents\Document\Infrastructure\Controller\EraseDocumentController:
+            - Erpify\Iam\Identity\Application\ProveActorPassword
+            - Erpify\Iam\Identity\Domain\HashedPassword
+            - Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
+            - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
+        Erpify\Documents\Document\Infrastructure\Http\EraseDocumentRequest:
+            - Erpify\Iam\Identity\Infrastructure\Http\ExistingCredential
         Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener:
             - Erpify\Iam\Session\Application\StartSession
             - Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable

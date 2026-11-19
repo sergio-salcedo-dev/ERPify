@@ -31,6 +31,7 @@
   "backoffice_user_search": { "path": "/api/v1/backoffice/users", "methods": ["GET"] },
   "backoffice_user_unlock": { "path": "/api/v1/backoffice/users/{id}/unlock", "methods": ["POST"] },
   "documents_custody": { "path": "/api/v1/documents/{id}/custody", "methods": ["GET"] },
+  "documents_erase": { "path": "/api/v1/documents/{id}/erase", "methods": ["POST"] },
   "documents_list": { "path": "/api/v1/documents", "methods": ["GET"] },
   "documents_read": { "path": "/api/v1/documents/{id}/content", "methods": ["GET"] },
   "documents_rescan": { "path": "/api/v1/documents/{id}/rescan", "methods": ["POST"] },
