@@ -623,6 +623,11 @@ deptrac:
             - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
         Erpify\Documents\Document\Infrastructure\Http\EraseDocumentRequest:
             - Erpify\Iam\Identity\Infrastructure\Http\ExistingCredential
+        Erpify\Documents\Document\Infrastructure\Controller\EraseDocumentSeriesController:
+            - Erpify\Iam\Identity\Application\ProveActorPassword
+            - Erpify\Iam\Identity\Domain\HashedPassword
+            - Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
+            - Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
         Erpify\Iam\Identity\Infrastructure\Security\SessionMintingSuccessListener:
             - Erpify\Iam\Session\Application\StartSession
             - Erpify\Iam\Session\Domain\Exception\SessionStoreUnavailable

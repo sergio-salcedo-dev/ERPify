@@ -12,6 +12,7 @@ use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
+use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
 use Erpify\Documents\Document\Infrastructure\Controller\EraseDocumentController;
 use Erpify\Documents\Document\Infrastructure\Http\EraseDocumentRequest;
 use Erpify\Documents\Document\Infrastructure\Http\UploadResourceMapper;
@@ -194,6 +195,7 @@ final class EraseDocumentControllerTest extends TestCase
                 $transactions,
             ),
             new NullLogger(),
+            $this->createStub(DocumentSeriesRepository::class),
         );
 
         return new EraseDocumentController(

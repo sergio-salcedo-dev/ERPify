@@ -6,12 +6,15 @@ namespace Erpify\Documents\Document\Application\Upload;
 
 use DateTimeImmutable;
 use Erpify\Documents\Document\Application\Upload\Command\DeclareUploadCommand;
+use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\UploadIntent;
 use Erpify\Documents\Document\Domain\Exception\DeclaredSizeOutOfRange;
 use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
+use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\Exception\UploadCapacityExhausted;
 use Erpify\Documents\Document\Domain\Exception\UploadInProgress;
+use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Upload\DocumentScopeId;
@@ -19,6 +22,7 @@ use Erpify\Documents\Document\Domain\Upload\LegalBasis;
 use Erpify\Documents\Document\Domain\Upload\RetentionReason;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\UploadLimits;
+use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use LogicException;
@@ -37,6 +41,9 @@ use LogicException;
  * the key rolls the insert back and answers instead. That re-read is what covers the window after the intent's
  * retention sweep, when only the document still holds the key.
  *
+ * **Versions.** A new version is the same declare naming a predecessor: the intent records it, a replay compares it
+ * like every other declared parameter, and an obviously refused successor is answered here before a byte is sent.
+ *
  * **Caps.** The per-actor rate limit is the HTTP edge's; the cap on live `Declared` intents per actor is this
  * use case's, counted under a per-actor advisory lock so two declares cannot both see room for one.
  *
@@ -49,6 +56,7 @@ final readonly class DeclareUpload
         private DocumentRepository $documents,
         private IdempotencyKeyHasher $keyHasher,
         private TransactionManager $transactionManager,
+        private DocumentVersionSlots $slots,
     ) {
     }
 
@@ -60,6 +68,37 @@ final readonly class DeclareUpload
      */
     public function declare(DeclareUploadCommand $command, string $actorId): DeclareUploadOutcome
     {
+        return $this->declareFor($command, $actorId, null);
+    }
+
+    /**
+     * Declares a new version of `$predecessorId`: the same declare, with the predecessor recorded on the intent and
+     * compared on a replay. A new intent is refused at once when the predecessor is absent or not `Ready`, or when a
+     * live version already holds its slot, so a caller does not stream 100 MiB to be told so at the commit; both are
+     * read without a lock and only advisory, since the commit decides again under the series lock.
+     *
+     * @throws DeclaredSizeOutOfRange  when the size is zero or above the cap
+     * @throws IdempotencyKeyConflict  when the key was used with different parameters
+     * @throws UploadInProgress        when the key's upload is streaming right now
+     * @throws UploadCapacityExhausted when the actor holds too many live declared intents
+     * @throws PredecessorNotReady     when the predecessor is absent or not `Ready`
+     * @throws VersionSlotTaken        when a live version already succeeds the predecessor
+     */
+    public function declareVersion(
+        DeclareUploadCommand $command,
+        string $actorId,
+        string $predecessorId,
+    ): DeclareUploadOutcome {
+        Uuid::ensure($predecessorId);
+
+        return $this->declareFor($command, $actorId, \strtolower($predecessorId));
+    }
+
+    private function declareFor(
+        DeclareUploadCommand $command,
+        string $actorId,
+        ?string $predecessorId,
+    ): DeclareUploadOutcome {
         $size = $command->size;
 
         if (null === $size || $size < 1 || $size > UploadLimits::MAX_ORIGINAL_BYTES) {
@@ -83,6 +122,7 @@ final readonly class DeclareUpload
             $command->retentionReason,
             $command->legalBasis,
             $command->normalisedReviewAt(),
+            $predecessorId,
         );
 
         try {
@@ -122,6 +162,10 @@ final readonly class DeclareUpload
             throw UploadCapacityExhausted::create();
         }
 
+        if (null !== $declaration->predecessorId) {
+            $this->ensureSlotLooksFree($declaration->predecessorId);
+        }
+
         $intent = UploadIntent::declare(
             Uuid::generate(),
             $declaration->actorId,
@@ -133,6 +177,7 @@ final readonly class DeclareUpload
             $declaration->legalBasis,
             $declaration->reviewAt,
             $now,
+            $declaration->predecessorId,
         );
 
         if (!$this->intents->insertUnlessKeyTaken($intent)) {
@@ -201,7 +246,8 @@ final readonly class DeclareUpload
         Declaration $declaration,
         ?UploadIntent $intent,
     ): DeclareUploadOutcome {
-        $same = $document->sizeBytes() === $declaration->size
+        $same = $document->predecessorId() === $declaration->predecessorId
+            && $document->sizeBytes() === $declaration->size
             && $document->digest() === $declaration->sha256
             && $document->retentionReason() === $declaration->retentionReason->value
             && $document->legalBasis() === $declaration->legalBasis->value
@@ -222,7 +268,25 @@ final readonly class DeclareUpload
             $declaration->retentionReason,
             $declaration->legalBasis,
             $declaration->reviewAt,
+            $declaration->predecessorId,
         );
+    }
+
+    /**
+     * The new-version declare's early refusal, read without a lock: an absent predecessor answers like a non-`Ready`
+     * one, and a live successor already below it answers the slot conflict.
+     */
+    private function ensureSlotLooksFree(string $predecessorId): void
+    {
+        $predecessor = $this->documents->findById($predecessorId);
+
+        if (!$predecessor instanceof Document || DocumentState::Ready !== $predecessor->state()) {
+            throw PredecessorNotReady::create();
+        }
+
+        if ($this->slots->isSlotHeld($predecessorId)) {
+            throw VersionSlotTaken::create();
+        }
     }
 
     /**

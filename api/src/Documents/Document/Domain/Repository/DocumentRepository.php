@@ -17,7 +17,8 @@ use Erpify\Shared\Persistence\Domain\Exception\ConcurrentUniqueWrite;
 interface DocumentRepository
 {
     /**
-     * Inserts a new document with its first custody row, so both exist or neither does.
+     * Inserts a new document with its first custody row, so both exist or neither does. A first version also inserts
+     * the row of its new series first, the row the series' later takes lock.
      *
      * @throws ConcurrentUniqueWrite when the actor-scoped idempotency key hash is already held by another document
      */

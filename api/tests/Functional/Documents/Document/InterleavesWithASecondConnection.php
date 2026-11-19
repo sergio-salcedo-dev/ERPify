@@ -52,6 +52,10 @@ trait InterleavesWithASecondConnection
     {
         $id = Uuid::generate();
         $connection->executeStatement(
+            'INSERT INTO document_series (id, created_at) VALUES (:id, NOW()) ON CONFLICT DO NOTHING',
+            ['id' => $id],
+        );
+        $connection->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, next_scan_at, '
             . 'created_at, updated_at) '
             . "VALUES (:id, :scope, :id, :uploader, 'received', :digest, 10, NOW(), NOW(), NOW())",

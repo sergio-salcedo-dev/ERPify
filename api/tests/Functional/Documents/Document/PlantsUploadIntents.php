@@ -56,14 +56,17 @@ trait PlantsUploadIntents
         ?string $keyHash = null,
         ?string $scopeId = null,
         ?string $documentId = null,
+        ?string $predecessorId = null,
     ): PlantedIntent {
         $id = Uuid::generate();
         $scope = $scopeId ?? RandomUuid::v4()->toRfc4122();
 
         $this->intentConnection()->executeStatement(
-            'INSERT INTO upload_intent (id, actor_id, scope_id, document_id, committed_at, state, declared_size, '
+            'INSERT INTO upload_intent (id, actor_id, scope_id, document_id, predecessor_id, committed_at, state, '
+            . 'declared_size, '
             . 'declared_sha256, key_hash, retention_reason, legal_basis, created_at, ttl_expires_at, claimed_at, '
             . 'lease_expires_at, upload_deadline_at) VALUES (:id, :actor, :scope, CAST(:document AS UUID), '
+            . 'CAST(:predecessor AS UUID), '
             . 'CASE WHEN CAST(:document AS UUID) IS NULL THEN NULL ELSE NOW() END, :state, 10, :sha, :key, '
             . "'technical-file', 'contract', NOW(), NOW() + INTERVAL '1 day', "
             . 'CASE WHEN :claimed THEN NOW() ELSE NULL END, '
@@ -74,6 +77,7 @@ trait PlantsUploadIntents
                 'actor' => $actorId,
                 'scope' => $scope,
                 'document' => $documentId,
+                'predecessor' => $predecessorId,
                 'state' => $state->value,
                 'sha' => null === $keyHash ? null : \hash('sha256', 'x'),
                 'key' => $keyHash,

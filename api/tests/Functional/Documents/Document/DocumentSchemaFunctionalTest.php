@@ -193,8 +193,12 @@ final class DocumentSchemaFunctionalTest extends KernelTestCase
         $insert = 'INSERT INTO document '
             . '(id, scope_id, series_id, uploader_id, state, digest, size_bytes, next_scan_at, created_at, updated_at) '
             . "VALUES (:id, :scope, :id, :uploader, 'received', :digest, 1, NOW(), NOW(), NOW())";
+        $first = Uuid::generate();
+        $second = Uuid::generate();
+        $this->plantSeries($first);
+        $this->plantSeries($second);
         $this->connection()->executeStatement($insert, [
-            'id' => Uuid::generate(),
+            'id' => $first,
             'scope' => $scope,
             'uploader' => Uuid::generate(),
             'digest' => \hash('sha256', 'a'),
@@ -203,7 +207,7 @@ final class DocumentSchemaFunctionalTest extends KernelTestCase
         $this->expectException(UniqueConstraintViolationException::class);
 
         $this->connection()->executeStatement($insert, [
-            'id' => Uuid::generate(),
+            'id' => $second,
             'scope' => $scope,
             'uploader' => Uuid::generate(),
             'digest' => \hash('sha256', 'b'),

@@ -74,20 +74,20 @@ final class CredentialProofGateTest extends TestCase
     }
 
     /**
-     * The Documents erasure is the seventh pinned route: it cannot be undone even from a backup and the listing
-     * enumerates what it can reach, so a stolen session must not be enough. Reclassifying it `ordinary` passes every
-     * other assertion here, so the classification itself is pinned. `backoffice_user_erase` is the same gap, named and
-     * left `ordinary` on purpose (`PRODUCTION_SECURITY_CHECKLIST.md` §7).
+     * The Documents erasures are the seventh and eighth pinned routes — one document, and every version of a series:
+     * neither can be undone even from a backup and the listing enumerates what they can reach, so a stolen session
+     * must not be enough. Reclassifying one `ordinary` passes every other assertion here, so the classification itself
+     * is pinned. `backoffice_user_erase` is the same gap, named and left `ordinary` on purpose
+     * (`PRODUCTION_SECURITY_CHECKLIST.md` §7).
      */
     public function testTheDocumentsErasureStaysClassifiedAsCredentialAffecting(): void
     {
         $registry = $this->policy()->registry();
 
-        $this->assertSame(
-            CredentialProofRules::CREDENTIAL_AFFECTING,
-            $registry['documents_erase']['class'] ?? null,
-            'documents_erase',
-        );
+        foreach (['documents_erase', 'documents_series_erase'] as $route) {
+            $this->assertSame(CredentialProofRules::CREDENTIAL_AFFECTING, $registry[$route]['class'] ?? null, $route);
+        }
+
         $this->assertSame(
             CredentialProofRules::ORDINARY,
             $registry['backoffice_user_erase']['class'] ?? null,
