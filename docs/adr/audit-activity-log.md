@@ -319,15 +319,22 @@ tras el `DELETE` de cada nivel y bajo el mismo advisory lock, los pone a `NULL` 
 pasaron el umbral **de su propio nivel** —el mismo `AuditRetentionThreshold` que aplica el `DELETE`, hoy
 365 días en `security`—, nunca un literal:
 `UPDATE audit_log SET ip = NULL, user_agent = NULL WHERE id IN (SELECT id … AND action IN (:exempt) AND
-actor_erased = FALSE AND (ip IS NOT NULL OR user_agent IS NOT NULL) ORDER BY id FOR UPDATE)`.
+actor_erased = FALSE AND NOT (actor_type = 'anonymous' AND resource_erased) AND (ip IS NOT NULL OR user_agent IS
+NOT NULL) ORDER BY id FOR UPDATE)`.
 - `NULL` y no `[REDACTED]`: el centinela significa «lo anonimizó un eje de borrado», y la retención no lo es.
-- `actor_erased = FALSE`: no reescribe una fila que el pase de actor ya resolvió, cuyo centinela es la
-  evidencia de ese pase.
-- Adquiere en `id` ascendente, como el `DELETE` y los dos ejes de borrado, y no escribe `level`,
+- Nunca reescribe una fila que otra política ya resolvió, y dos escriben el centinela: `actor_erased = FALSE`
+  la aparta de las que redactó el pase de actor, y `NOT (actor_type = 'anonymous' AND resource_erased)` de las
+  que redactó el de recurso, las únicas en que ese pase lo escribe. No `resource_erased = FALSE` a secas: un
+  `GDPR_SUBJECT_ERASED` nombra a su sujeto como recurso, así que ese pase le sube la marca dejando intacta la
+  dirección real del administrador, y esta sentencia tiene que alcanzarla.
+- Adquiere en `id` ascendente —el orden que el `DELETE` y el pase de actor se imponen a sí mismos y que
+  `DbalAuditSubjectRowLock` impone al de recurso en los caminos que lo toman— y no escribe `level`,
   `occurred_on` ni `action`, así que no acorta un lote del `DELETE`. Sin `LIMIT`: tras el `DELETE` de su nivel
   sólo las filas exentas quedan más allá del umbral. Medido en PostgreSQL 18 sobre población sembrada y
   `ANALYZE`ada: bitmap scan de `audit_log_level_idx` y sort por `id`, nunca un seq scan; por eso no hay índice
   parcial atado a `ACTIONS`, que exigiría una migración cada vez que el conjunto cambie.
+- Los niveles corren en el orden de `AuditLevel::cases()`: un nivel cuya sentencia falle una y otra vez detiene
+  el `DELETE` y el vaciado de todos los posteriores hasta que se arregle (la forma ya existía para el `DELETE`).
 Dentro de la ventana la única vía de eliminación sigue siendo el pase de actor, que casa por `actor_id`: la
 ruta de *identidad* se **rechaza** mientras el sujeto conserve `ADMIN` (409
 `administrator-erasure-requires-demotion`), y el comando `audit:gdpr:erase` no lleva esa puerta. Los caminos

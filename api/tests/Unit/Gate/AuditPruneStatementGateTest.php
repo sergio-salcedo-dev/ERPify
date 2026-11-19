@@ -41,8 +41,8 @@ use PHPUnit\Framework\TestCase;
  *
  * **What a green proves:** `src` deletes from `audit_log` in one statement, and that statement and the
  * pruner's metadata clear still carry the ordering and the lock, the clear writes `NULL` rather than the
- * erasure sentinel and stays off rows an actor erasure resolved. Not that the prune runs, not that a caller
- * reaches it, and not which rows the clear's predicate admits — that is `ErasureEvidenceRetentionFunctionalTest`.
+ * erasure sentinel and stays off rows either erasure pass redacted. Not that the prune runs, not that a caller
+ * reaches it, and not which rows the clear's predicate admits — that is `ExemptRowRequestMetadataFunctionalTest`.
  *
  * @internal
  */
@@ -101,6 +101,12 @@ final class AuditPruneStatementGateTest extends TestCase
             $statements,
             'The metadata clear no longer skips rows the actor-axis erasure resolved, so it would overwrite '
             . "that pass's sentinel — its only evidence on the row — with NULL.",
+        );
+        $this->assertMatchesRegularExpression(
+            '/NOT\s+\(actor_type\s*=\s*:anonymous\s+AND\s+resource_erased\)/',
+            $statements,
+            'The metadata clear no longer skips rows the resource-axis erasure redacted — anonymous-actor rows '
+            . "with `resource_erased` — so it would overwrite that pass's sentinel, its only evidence, with NULL.",
         );
         $this->assertMatchesRegularExpression(
             "/'ORDER\\s+BY\\s+id\\s+FOR\\s+UPDATE'/",

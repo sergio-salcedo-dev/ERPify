@@ -117,8 +117,9 @@ and `GDPR_ERASURE_EXECUTED` are exempt from the prune (`AuditErasureEvidence`), 
 expire before the thing it attests — the `dek_keystore` tombstone is eternal and the reconciler anti-joins the
 two with no date bound. So a year after the fact the
 pseudonymised `change` rows survive four more years while the record of who *read* them has
-aged out, and the record of who pseudonymised them survives indefinitely — carrying that administrator's `ip`
-and `user_agent` with it on the HTTP path. That asymmetry is a property of the current retention policy, not of this decision, and it is the
+aged out, and the record of who pseudonymised them survives indefinitely — keeping that administrator's
+`actor_id`, while the `ip` and `user_agent` it carries on the HTTP path are nulled once it is past the `security`
+threshold. That asymmetry is a property of the current retention policy, not of this decision, and it is the
 first thing to re-examine if the trail is ever asked to answer an assessor about access rather than about data.
 
 **What is deliberately not claimed.** The trail is **not tamper-evident**. No hash chain, signature or checksum

@@ -56,19 +56,25 @@ final class AuditPrunePlanFunctionalTest extends KernelTestCase
     /** Evidence rows already past the `security` threshold — the only rows the metadata clear may reach. */
     private const int EXEMPT_PAST_THRESHOLD_ROWS = 200;
 
+    /** Rows past the threshold the `DELETE` meets, one in ten of them evidence it has to skip. */
+    private const int BACKLOG_ROWS = 20000;
+
     #[Test]
     public function theDeleteBatchAcquiresItsLocksInIdOrder(): void
     {
         [$sql, $parameters, $types] = $this->statementThePrunerEmits('DELETE');
 
-        $plan = $this->planFor($sql, $parameters, $types);
+        $plan = $this->planFor($sql, $parameters, $types, backlogRows: self::BACKLOG_ROWS);
         $this->assertStringContainsString(
             'LockRows',
             $plan,
             'The batching SELECT no longer locks the rows it selects, so its ordering orders nothing: the '
             . 'outer DELETE re-locks in the order of whatever node unique-ified the subquery. Plan: ' . $plan,
         );
-        $this->assertOrdersById($this->planFor($this->innerSelectOf($sql), $parameters, $types), 'DELETE');
+        $this->assertOrdersById(
+            $this->planFor($this->innerSelectOf($sql), $parameters, $types, backlogRows: self::BACKLOG_ROWS),
+            'DELETE',
+        );
     }
 
     /**
@@ -76,7 +82,7 @@ final class AuditPrunePlanFunctionalTest extends KernelTestCase
      * this population on PostgreSQL 18: a bitmap scan of `audit_log_level_idx (level, occurred_on)` sorted on
      * `id`, because after the `DELETE` of its level only evidence rows are past the threshold — the range the
      * index serves is every evidence row of that level ever written, already-cleared ones included, which grows
-     * by one row per erasure. That is why no partial index over the exempt actions was added: the planner
+     * by one row per erasure. That is why the table carries no partial index over the exempt actions: the planner
      * already avoids the table, and an index tied to {@see \Erpify\Shared\Audit\Domain\AuditErasureEvidence}
      * would have to be rewritten by a migration whenever that set changes.
      */
@@ -92,6 +98,14 @@ final class AuditPrunePlanFunctionalTest extends KernelTestCase
             'The metadata clear no longer locks the rows it selects, so its ordering orders nothing: the outer '
             . 'UPDATE locks in the order of whatever node unique-ified the subquery, and the clear can deadlock '
             . 'against the actor-axis erasure, which acquires ascending by `id`. Plan: ' . $plan,
+        );
+        // The whole statement too, not only its subquery: the outer side may join the subquery's ids against
+        // a sequential scan of `audit_log` instead of probing the primary key.
+        $this->assertStringNotContainsString(
+            '"Seq Scan"',
+            $plan,
+            'The metadata clear joins against a sequential scan of `audit_log`. It runs daily with no LIMIT, so '
+            . 'that is a full read of the largest table in the schema under the prune lock. Plan: ' . $plan,
         );
 
         $inner = $this->planFor($this->innerSelectOf($sql), $parameters, $types);
@@ -186,14 +200,17 @@ final class AuditPrunePlanFunctionalTest extends KernelTestCase
      * The plan is a costed choice, so asking about it over whatever the shared database happens to hold makes
      * the answer a property of the ambient data rather than of the statement — measured on the sibling
      * `FailedMessagePrunePlanFunctionalTest`, where the same mutation was green under one population and red
-     * under another. So the population is seeded here in the shape the clear meets after the `DELETE` of its
-     * level — a year of ordinary `security` rows and a tail of evidence rows past the threshold — `ANALYZE`d so
-     * the planner is not costing against stale statistics, and rolled back with the statistics.
+     * under another. So the population is seeded here: a year of ordinary `security` rows and a tail of
+     * evidence rows past the threshold, which is what the clear meets after the `DELETE` of its level, plus —
+     * for the `DELETE` — a backlog of ordinary rows past the threshold, so its batch is a real sweep rather
+     * than an empty drain. It is `ANALYZE`d so the planner is not costing against stale statistics, then rolled
+     * back. The rollback discards the rows and the `pg_statistic` histograms, but not `reltuples`/`relpages`,
+     * which `ANALYZE` writes in place: those keep counting the seeded rows until the next (auto)`ANALYZE`.
      *
      * @param array<string, mixed> $parameters
      * @param BoundTypes           $types
      */
-    private function planFor(string $statement, array $parameters, array $types): string
+    private function planFor(string $statement, array $parameters, array $types, int $backlogRows = 0): string
     {
         self::bootKernel();
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
@@ -202,7 +219,7 @@ final class AuditPrunePlanFunctionalTest extends KernelTestCase
         $connection->beginTransaction();
 
         try {
-            $this->seed($connection);
+            $this->seed($connection, $backlogRows);
 
             $plan = $connection->fetchOne('EXPLAIN (FORMAT JSON) ' . $statement, $parameters, $types);
 
@@ -216,24 +233,37 @@ final class AuditPrunePlanFunctionalTest extends KernelTestCase
         }
     }
 
-    private function seed(Connection $connection): void
+    /**
+     * Each insert walks `g` downwards while its age shrinks with `g`, so within an insert and across the
+     * inserts — oldest first — a later `uuidv7()` id always carries a later `occurred_on`, the way the
+     * writer's ids track it.
+     */
+    private function seed(Connection $connection, int $backlogRows): void
     {
-        // Oldest first, so `uuidv7()` ids track `occurred_on` the way the writer's do.
         $insert = 'INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, metadata, ip, '
-            . "user_agent, occurred_on) SELECT uuidv7(), 'security', :action, 'user', gen_random_uuid(), "
-            . "gen_random_uuid(), '{}', '192.0.2.1', 'seeded', CAST(:anchor AS TIMESTAMPTZ) - "
-            . 'make_interval(days => :offset + (g % :spread)) FROM generate_series(:rows, 1, -1) AS g';
-        $integers = ['offset' => Types::INTEGER, 'spread' => Types::INTEGER, 'rows' => Types::INTEGER];
+            . "user_agent, occurred_on) SELECT uuidv7(), 'security', "
+            . 'CASE WHEN g % :exemptEvery = 0 THEN :exempt ELSE :ordinary END, '
+            . "'user', gen_random_uuid(), gen_random_uuid(), '{}', '192.0.2.1', 'seeded', "
+            . 'CAST(:anchor AS TIMESTAMPTZ) - make_interval(days => :offset + (g * :spread) / :rows) '
+            . 'FROM generate_series(:rows, 1, -1) AS g';
+        $integers = [
+            'exemptEvery' => Types::INTEGER,
+            'offset' => Types::INTEGER,
+            'spread' => Types::INTEGER,
+            'rows' => Types::INTEGER,
+        ];
+        $past = ['exempt' => 'GDPR_SUBJECT_ERASED', 'anchor' => self::ANCHOR, 'offset' => 366, 'spread' => 400];
 
+        // Past the threshold: evidence only, or — with the backlog — one evidence row in ten among ordinary ones.
+        $connection->executeStatement($insert, $past + (
+            0 < $backlogRows
+            ? ['ordinary' => 'BANK_ACCOUNTS_VIEWED', 'exemptEvery' => 10, 'rows' => $backlogRows]
+            : ['ordinary' => 'GDPR_SUBJECT_ERASED', 'exemptEvery' => 1, 'rows' => self::EXEMPT_PAST_THRESHOLD_ROWS]
+        ), $integers);
         $connection->executeStatement($insert, [
-            'action' => 'GDPR_SUBJECT_ERASED',
-            'anchor' => self::ANCHOR,
-            'offset' => 366,
-            'spread' => 400,
-            'rows' => self::EXEMPT_PAST_THRESHOLD_ROWS,
-        ], $integers);
-        $connection->executeStatement($insert, [
-            'action' => 'BANK_ACCOUNTS_VIEWED',
+            'exempt' => 'BANK_ACCOUNTS_VIEWED',
+            'ordinary' => 'BANK_ACCOUNTS_VIEWED',
+            'exemptEvery' => 1,
             'anchor' => self::ANCHOR,
             'offset' => 0,
             'spread' => 364,

@@ -63,9 +63,10 @@
 #     statement, and reaches it in the INNER select where it has to be, is pinned by
 #     `tests/Functional/Shared/Audit/ErasureEvidenceRetentionFunctionalTest.php` against real Postgres — not
 #     here, and not by any count in this file.
-#   - IT SAYS NOTHING ABOUT RETENTION LENGTH. `evidence` means exempt from the sweep entirely. A bounded
-#     floor — the shape `AuditErasureEvidence` weighed and declined for `GDPR_ERASURE_EXECUTED` — would need
-#     its own spelling here, and adding one is a decision about data minimisation, not a spelling change.
+#   - IT SAYS NOTHING ABOUT RETENTION LENGTH. `evidence` means exempt from deletion (request metadata still
+#     nulled at the level's threshold). A bounded floor — the shape `docs/adr/audit-activity-log.md` D4 weighed
+#     and declined for `GDPR_ERASURE_EXECUTED` — would need its own spelling here, and adding one is a decision
+#     about data minimisation, not a spelling change.
 # ---------------------------------------------------------------------------------------------------------
 
 ACCESS_DENIED                  => ordinary

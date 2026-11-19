@@ -35,14 +35,12 @@ namespace Erpify\Shared\Audit\Domain;
  * evidence is for. The other two are not: once the row is past the threshold of its own level — the same
  * {@see AuditRetentionThreshold} the prune's `DELETE` applies there — the same run sets both to `NULL`, so the
  * window that minimises every other row's request metadata reaches these too. `NULL` rather than
- * {@see AuditRedaction::SENTINEL}, because retention is not an erasure axis, and a row the actor-axis erasure
- * already resolved keeps that pass's sentinel. Inside the window the only removal path is that erasure, which
- * matches by `actor_id`; the identity route to it refuses a subject still carrying `ADMIN`, while the operator
- * CLI `audit:gdpr:erase` carries no role check. The CLI paths write both columns `NULL` on the rows they mint,
- * running off-request as `system`.
+ * {@see AuditRedaction::SENTINEL}, because retention is not an erasure axis, and a row an erasure pass already
+ * redacted keeps that pass's sentinel.
  *
- * Why the two actions share one exemption although their correct retention differs, and what reopens the
- * choice of threshold, is `docs/adr/audit-activity-log.md` D4.
+ * Why the two actions share one exemption although their correct retention differs, what removes the
+ * metadata inside the window, and what reopens the choice of threshold: `docs/adr/audit-activity-log.md` D4
+ * and `PRODUCTION_SECURITY_CHECKLIST.md` §7.
  */
 final class AuditErasureEvidence
 {

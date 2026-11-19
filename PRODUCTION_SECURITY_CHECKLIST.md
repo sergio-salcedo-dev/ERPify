@@ -344,11 +344,17 @@ you change anything here.
       is past the threshold of **its own level** — the `AuditRetentionThreshold` the `DELETE`
       applies there (365 days for `security` today), never a literal — by a second statement
       in `DbalAuditLogPruner` under the same advisory lock. It writes `NULL`, never the
-      `[REDACTED]` sentinel, and skips `actor_erased` rows, so an actor erasure's evidence on
-      the row survives it. Pinned by `ErasureEvidenceRetentionFunctionalTest` (cleared past the
-      level's threshold, untouched inside it, untouched once actor-erased),
-      `AuditPruneStatementGateTest` (`ORDER BY id FOR UPDATE`, `NULL`, `actor_erased = FALSE`)
-      and `AuditPrunePlanFunctionalTest` (a `LockRows` over an `id` order, no sequential scan).
+      `[REDACTED]` sentinel, and never rewrites a row an erasure pass already redacted —
+      `actor_erased` rows (the actor pass) and anonymous-actor rows with `resource_erased`
+      (the resource pass, the only rows it writes the sentinel on) — so that pass's evidence on
+      the row survives it. The levels run in `AuditLevel::cases()` order, so a level whose
+      statement keeps failing stops the `DELETE` and the clear of every later level until it
+      is fixed; the run fails loudly, it does not skip. Pinned by
+      `ExemptRowRequestMetadataFunctionalTest` (cleared past the level's threshold, untouched
+      at and inside it, untouched once an erasure pass redacted it, and no row left matching
+      the predicate per level), `AuditPruneStatementGateTest` (`ORDER BY id FOR UPDATE`,
+      `NULL`, both redaction terms, the `action` term) and `AuditPrunePlanFunctionalTest`
+      (a `LockRows` over an `id` order, no sequential scan in the statement or its subquery).
       **Inside the window the only removal path is the actor-axis erasure**, which matches by
       `actor_id`. **Say the precondition with it, or the sentence promises a route that is
       refused:** _identity_ erasure is rejected while the subject still carries `ADMIN` (409
