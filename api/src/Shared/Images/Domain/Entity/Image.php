@@ -8,13 +8,15 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\ImageId;
 use InvalidArgumentException;
 
 /**
- * A fungible image and its canonical representation — dimensions, media type, digest of the
- * canonical bytes. Carries no bytes, no owner, no filename, no URL and no conservation-contract
- * classification (D3: there is no method, command or endpoint anywhere that could reclassify one
+ * An image and its canonical representation — dimensions, media type, digest of the canonical
+ * bytes — and, for a dependent image, the {@see DerivativeOrigin} it derives from and dies with (ADR
+ * D5, D8); an image without one is fungible. Carries no bytes, no owner, no filename, no URL and no
+ * conservation-contract classification (D3: there is no method, command or endpoint anywhere that could reclassify one
  * from fungible to evidence — the only supported path for treating the same content as evidence is
  * re-uploading it as a new resource of a future `Documents` context).
  *
@@ -41,6 +43,13 @@ use InvalidArgumentException;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'image')]
+// The release's re-query by origin. Partial, because fungible images, the large majority, carry no origin; the
+// predicate is spelled as PostgreSQL prints it back, since the schema comparison matches it as text.
+#[ORM\Index(
+    name: 'idx_image_origin',
+    columns: ['origin_type', 'origin_id'],
+    options: ['where' => '(origin_id IS NOT NULL)'],
+)]
 final readonly class Image
 {
     private const int DIGEST_HEX_LENGTH = 64;
@@ -62,6 +71,19 @@ final readonly class Image
     #[ORM\Column(name: 'created_at', type: Types::DATETIMETZ_IMMUTABLE)]
     private DateTimeImmutable $createdAt;
 
+    /**
+     * Both origin columns are set together or not at all (a `CHECK` in the migration), and never change: an image
+     * fixed to its origin cannot be reclassified, by the same absence of a mutation surface that keeps D3 true.
+     */
+    #[ORM\Column(name: 'origin_type', length: DerivativeOrigin::TYPE_MAX_LENGTH, nullable: true)]
+    private ?string $originType;
+
+    /**
+     * A plain `Types::GUID`, so the column stays inside the person-reference sweep (`api/.person-reference-policy`).
+     */
+    #[ORM\Column(name: 'origin_id', type: Types::GUID, nullable: true)]
+    private ?string $originId;
+
     public function __construct(
         ImageId $id,
         #[ORM\Column(length: self::DIGEST_HEX_LENGTH)]
@@ -74,6 +96,7 @@ final readonly class Image
         private int $height,
         #[ORM\Column(name: 'byte_size', type: Types::INTEGER)]
         private int $byteSize,
+        ?DerivativeOrigin $origin = null,
     ) {
         // `D` is load-bearing: without it `$` also matches before a trailing newline, so 63 hex digits
         // followed by "\n" are 64 characters that satisfy both halves of this guard.
@@ -99,6 +122,8 @@ final readonly class Image
 
         $this->id = $id->toString();
         $this->createdAt = SystemClock::now();
+        $this->originType = $origin?->type;
+        $this->originId = $origin?->id;
     }
 
     public function id(): ImageId
@@ -134,5 +159,23 @@ final readonly class Image
     public function byteSize(): int
     {
         return $this->byteSize;
+    }
+
+    /**
+     * Whether the image derives from another resource, read without rebuilding the origin: the read route asks it on
+     * every request, and a stored tag the value object would refuse must not turn that answer into a 500.
+     */
+    public function isDependent(): bool
+    {
+        return null !== $this->originId;
+    }
+
+    public function origin(): ?DerivativeOrigin
+    {
+        if (null === $this->originType || null === $this->originId) {
+            return null;
+        }
+
+        return new DerivativeOrigin($this->originType, $this->originId);
     }
 }

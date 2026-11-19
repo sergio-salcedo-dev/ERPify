@@ -300,6 +300,7 @@ The re-login that follows a successful change is [`ReauthenticateDeviceBestEffor
 | Per-identity-and-route write budget spent | **429 `rate-limited`** with `Retry-After` (`image_write_per_identity_route`) | `ImageRequestThrottle` |
 | Per-identity read budget spent on `GET /api/v1/images/{imageId}` | **429 `rate-limited`** with `Retry-After` (`image_read_per_identity_route`) | `ImageRequestThrottle` |
 | Storage or processing failure of ours | **5xx**, unchanged: `ImageProcessingFailed` keeps no marker, `ImageStorageException` keeps its own | `ImageProcessingFailed` |
+| A derivative whose origin's guard refuses it (absent, not readable yet, or erased — ADR `images-vs-documents-conservation-contract.md` D8); raised by `MaterialiseDerivative`, which no route calls yet | **409 `image-origin-not-live`** (`Conflict`); no row, and the stored bytes are deleted before it propagates | `DerivativeOriginNotLive` |
 
 No exception above carries a context, so no problem body quotes the bytes, a declared media type or an image id. A decodable polyglot is not an error: it is re-encoded and stored, and what is guaranteed is that the stored bytes carry no trailing payload.
 

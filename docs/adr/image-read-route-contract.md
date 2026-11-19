@@ -14,7 +14,7 @@ The route is therefore an **infrastructure proof**, not a product API: it shows 
 
 ### D1 — Authentication is the whole frontier, provisionally; there is no ownership voter
 
-The route requires a full session (`IS_AUTHENTICATED_FULLY`, the firewall's `^/api` rule) and carries no `#[IsGranted]`: any authenticated caller may read any image. The intended meaning is **not** "any back-office user may read any image for ever" but "authentication is the complete frontier only for a consumer whose own policy says so". The first consumer, the bank logo, is `D1:logo` below; each further consumer owes its own paragraph.
+The route requires a full session (`IS_AUTHENTICATED_FULLY`, the firewall's `^/api` rule) and carries no `#[IsGranted]`: any authenticated caller may read any fungible image. A dependent image — one carrying an origin — is never served here (`images-vs-documents-conservation-contract.md` D8). The intended meaning is **not** "any back-office user may read any image for ever" but "authentication is the complete frontier only for a consumer whose own policy says so". The first consumer, the bank logo, is `D1:logo` below; each further consumer owes its own paragraph.
 
 Three properties hold alongside it and are pinned by tests:
 

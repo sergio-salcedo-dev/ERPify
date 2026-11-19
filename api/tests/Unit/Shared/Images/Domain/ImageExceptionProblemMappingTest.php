@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Shared\Images\Domain;
 
 use Erpify\Shared\ErrorContract\Infrastructure\Http\ProblemDetailsFactory;
+use Erpify\Shared\Images\Domain\Exception\DerivativeOriginNotLive;
 use Erpify\Shared\Images\Domain\Exception\EmptyImageInput;
 use Erpify\Shared\Images\Domain\Exception\ImageDecodingFailed;
 use Erpify\Shared\Images\Domain\Exception\ImageLengthRequired;
@@ -59,6 +60,11 @@ final class ImageExceptionProblemMappingTest extends TestCase
         yield 'a declaration that contradicts the bytes' => [UnsupportedImageFormat::mimeMismatch(), 415, $unsupported];
         yield 'no declared length' => [ImageLengthRequired::missing(), 411, $length];
         yield 'a length that is not the bytes read' => [ImageLengthRequired::notEqualToBytesRead(), 411, $length];
+        yield 'a derivative whose origin refused it' => [
+            DerivativeOriginNotLive::create(),
+            409,
+            'image-origin-not-live',
+        ];
     }
 
     public function testAProcessingFaultOfOursStaysA5xx(): void

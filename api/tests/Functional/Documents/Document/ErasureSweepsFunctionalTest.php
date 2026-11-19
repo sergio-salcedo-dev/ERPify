@@ -274,6 +274,28 @@ final class ErasureSweepsFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function aRestoreReopenedErasureIsOverdueOnlyOnceTheBoundHasPassedSinceTheReopen(): void
+    {
+        $document = $this->plantErasedDocument(erasedSecondsAgo: ErasureLimits::OBJECT_ALARM_SECONDS + 60);
+        $erasures = $this->service(DocumentErasures::class);
+        $erasures->markObjectDeleted($document['id']);
+
+        $this->assertTrue($erasures->reopenObjectDeletion($document['id']));
+        $this->assertSame(
+            [],
+            $erasures->objectsOverdue(ErasureLimits::OBJECT_ALARM_SECONDS, 10),
+            'a restore does not make an old erasure overdue at once',
+        );
+
+        $this->connection()->executeStatement(
+            'UPDATE document SET erasure_reopened_at = NOW() - make_interval(secs => :age) '
+            . 'WHERE id = CAST(:id AS UUID)',
+            ['id' => $document['id'], 'age' => ErasureLimits::OBJECT_ALARM_SECONDS + 60],
+        );
+        $this->assertSame([$document['id']], $erasures->objectsOverdue(ErasureLimits::OBJECT_ALARM_SECONDS, 10));
+    }
+
+    #[Test]
     public function aYoungErasureWithItsObjectStillThereRaisesNoAlarm(): void
     {
         $document = $this->plantErasedDocument(erasedSecondsAgo: 30);
