@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Images\Domain\Repository;
 
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 
@@ -41,4 +42,21 @@ interface ImageRepository
      * not there" reports an erasure that never happened.
      */
     public function findById(ImageId $id): ?Image;
+
+    /**
+     * The ids of the images that derive from `$origin`, ascending, after `$after` when given, at most `$limit`. Read
+     * fresh on every call: the release re-derives what to delete from the rows that exist, never from a list built
+     * once.
+     *
+     * @return list<ImageId>
+     */
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array;
+
+    /**
+     * The distinct ids of the origins of type `$type` that images still derive from, ascending after `$afterId` when
+     * given, at most `$limit`: what an owner sweeps to find derivatives its own records no longer account for.
+     *
+     * @return list<string>
+     */
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array;
 }

@@ -6,13 +6,14 @@ Feature: Get banks
   Scenario: Get a single bank by id
     When I send a "GET" request to "/backoffice/banks/11111111-1111-7000-8000-000000000001"
     Then the response status code should be 200
-    And the JSON node "data" should have 6 elements
+    And the JSON node "data" should have 7 elements
     And the JSON node "data.name" should be equal to "JPMorgan Chase"
     And the JSON node "data.shortName" should be equal to "JPM"
     And the JSON node "data.id" should be equal to "11111111-1111-7000-8000-000000000001"
     And the JSON node "data.createdAt" should not be null
     And the JSON node "data.updatedAt" should not be null
     And the JSON node "data.accountCount" should be equal to the number 1
+    And the JSON node "data.logoImageId" should be null
     And 3 requests got executed only for doctrine connection "default"
 
   Scenario: Get a bank with no associated accounts reports a zero account count

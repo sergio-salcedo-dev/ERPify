@@ -54,6 +54,22 @@ final class ErasureLimits
     /** How long a sealed object may outlive its row's `Erased` custody entry before the alarm names it. */
     public const int OBJECT_ALARM_SECONDS = 3_600;
 
+    /**
+     * How long the release sweep waits before asking again for a document whose derivatives it already queued: past
+     * the async transport's retry horizon (about three hours), so a request still being retried is not duplicated, and
+     * a request lost to a dead letter is issued again before the alarm bound. It bounds what a deletion that keeps
+     * failing writes to `event_store` and the queue to one request per image every four hours.
+     */
+    public const int DERIVATIVE_REREQUEST_SECONDS = 14_400;
+
+    /**
+     * How long an erased document's derivatives may stay unconfirmed released after its `Erased` custody entry before
+     * the alarm names it: past a re-request plus a whole retry horizon after it, so the second request has had every
+     * attempt the transport gives it before anyone is told (ADR `images-vs-documents-conservation-contract.md` D8).
+     * Both bounds are checked against the async `retry_strategy` by `DerivativeReleaseBoundsTest`.
+     */
+    public const int DERIVATIVE_ALARM_SECONDS = 28_800;
+
     private function __construct()
     {
     }

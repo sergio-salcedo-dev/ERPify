@@ -18,7 +18,7 @@ final readonly class BankFinder
     }
 
     /**
-     * A malformed id is a request-target syntax error, surfaced as 400 `invalid-input`
+     * A malformed id is a request-target syntax error, surfaced as 400 `invalid-uuid`
      * (via {@see InvalidUuidException}); a well-formed id with no matching row is 404.
      *
      * @throws InvalidUuidException  when $id is not a well-formed RFC 4122 UUID
@@ -29,6 +29,27 @@ final readonly class BankFinder
         Uuid::ensure($id);
 
         $bank = $this->bankRepository->findById($id);
+
+        if (!$bank instanceof Bank) {
+            throw BankNotFoundException::withId($id);
+        }
+
+        return $bank;
+    }
+
+    /**
+     * The bank held under its row lock (`FOR UPDATE`) until the surrounding transaction ends, read from the database
+     * and never from the identity map. Must run inside a transaction. A bank that vanished since an earlier unlocked
+     * read is the same 404 as one that never existed.
+     *
+     * @throws InvalidUuidException  when $id is not a well-formed RFC 4122 UUID
+     * @throws BankNotFoundException when no bank exists for the given $id
+     */
+    public function findForUpdate(string $id): Bank
+    {
+        Uuid::ensure($id);
+
+        $bank = $this->bankRepository->findByIdForUpdate($id);
 
         if (!$bank instanceof Bank) {
             throw BankNotFoundException::withId($id);

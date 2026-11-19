@@ -14,6 +14,7 @@ import {
   CopyButton,
   CorrelationIdChip,
   EmptyState,
+  ImageDisplay,
   MutationError,
   ProblemDisplay,
   StatusBadge,
@@ -269,6 +270,12 @@ function BankDetailReady({
         data-testid="banks-detail__header"
       >
         <div className="flex min-w-0 items-start gap-3">
+          <ImageDisplay
+            imageId={bank.logoImageId}
+            alt=""
+            className="size-14 rounded-lg"
+            testId="banks-detail__logo"
+          />
           <div className="min-w-0">
             {/* The detail page is the canonical home of the full value:
                 the title wraps the whole name, however many lines it

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\Bank\Domain\Repository\BankRepository;
 use Erpify\Backoffice\Bank\Domain\Repository\BankSearchRepository;
@@ -78,6 +80,29 @@ final readonly class DoctrineBankRepository implements
     public function findById(string $id): ?Bank
     {
         return $this->entityManager->find(Bank::class, $id);
+    }
+
+    /**
+     * A DQL read rather than `find()`: `find()` answers from the identity map first, so a manager that already holds
+     * this bank would hand back a snapshot of a row another transaction has since changed or deleted, and the lock
+     * would freeze a state nobody read. A query always reaches the database, and `HINT_REFRESH` overwrites a managed
+     * instance with the state the lock just froze.
+     */
+    #[Override]
+    public function findByIdForUpdate(string $id): ?Bank
+    {
+        $bank = $this->entityManager->createQueryBuilder()
+            ->select('b')
+            ->from(Bank::class, 'b')
+            ->where('b.id = :id')
+            ->setParameter('id', $id)
+            ->getQuery()
+            ->setLockMode(LockMode::PESSIMISTIC_WRITE)
+            ->setHint(Query::HINT_REFRESH, true)
+            ->getOneOrNullResult()
+        ;
+
+        return $bank instanceof Bank ? $bank : null;
     }
 
     /**

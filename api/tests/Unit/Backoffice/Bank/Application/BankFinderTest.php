@@ -39,4 +39,35 @@ final class BankFinderTest extends TestCase
 
         (new BankFinder(new InMemoryBankRepository()))->find('not-a-uuid');
     }
+
+    public function testFindForUpdateReturnsTheBankReadUnderItsLock(): void
+    {
+        $bank = BankMother::create();
+        $repository = new InMemoryBankRepository($bank);
+
+        $this->assertSame($bank, (new BankFinder($repository))->findForUpdate(BankMother::DEFAULT_ID));
+        $this->assertSame(1, $repository->lockedLoads);
+    }
+
+    public function testFindForUpdateOfABankThatVanishedIsNotFound(): void
+    {
+        $repository = new InMemoryBankRepository(BankMother::create());
+        $repository->vanishesBeforeTheLock = true;
+
+        $this->expectException(BankNotFoundException::class);
+
+        (new BankFinder($repository))->findForUpdate(BankMother::DEFAULT_ID);
+    }
+
+    public function testFindForUpdateRejectsAMalformedIdBeforeTouchingTheRepository(): void
+    {
+        $repository = new InMemoryBankRepository();
+
+        try {
+            (new BankFinder($repository))->findForUpdate('not-a-uuid');
+            $this->fail('A malformed id must be refused.');
+        } catch (InvalidUuidException) {
+            $this->assertSame(0, $repository->lockedLoads);
+        }
+    }
 }

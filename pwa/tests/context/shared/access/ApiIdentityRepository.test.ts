@@ -85,6 +85,21 @@ describe("ApiIdentityRepository.me", () => {
     expect(identity?.permissions).toEqual(["users.read"]);
   });
 
+  it("keeps bank.write, the permission the bank logo control gates on", async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: {
+        id: "0190aaaa-bbbb-7ccc-8ddd-0e1f2a3b4c5d",
+        email: "a@b.com",
+        roles: ["ADMIN"],
+        permissions: ["bank.read", "bank.write"],
+      },
+    });
+
+    const identity = await new ApiIdentityRepository(httpClientGetting(get)).me();
+
+    expect(identity?.permissions).toEqual(["bank.write"]);
+  });
+
   // A wildcard is a client-side convenience the server never emits: `*` is not a permission it can express.
   it("does not invent a wildcard from a full permission set", async () => {
     const get = vi.fn().mockResolvedValue({

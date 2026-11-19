@@ -6,7 +6,7 @@
 
 ## Context
 
-The first slice of `Shared/Images` ships the pipeline, the `Image` aggregate, the storage port and one read route, and **no consumer**: `Bank.logoImageId` and `User.avatarImageId` are the intended ones and neither exists. The module holds identity, digest, media type and dimensions — never an owner, a filename or a classification — so it cannot tell a company logo from a person's face, by construction rather than by omission.
+The first slice of `Shared/Images` ships the pipeline, the `Image` aggregate, the storage port and one read route, and **no consumer** of its own: the first (`Bank.logoImageId`, see `D1:logo`) arrived with the consumer epic and `User.avatarImageId` is the next intended one. The module holds identity, digest, media type and dimensions — never an owner, a filename or a classification — so it cannot tell a company logo from a person's face, by construction rather than by omission.
 
 The route is therefore an **infrastructure proof**, not a product API: it shows that canonical bytes cross the module boundary without exposing where they live. Every decision below follows from that one fact, and each carries the condition under which it stops holding. Current-state description of the route: [`../architecture-api.md`](../architecture-api.md) ("Shared image read surface").
 
@@ -14,7 +14,7 @@ The route is therefore an **infrastructure proof**, not a product API: it shows 
 
 ### D1 — Authentication is the whole frontier, provisionally; there is no ownership voter
 
-The route requires a full session (`IS_AUTHENTICATED_FULLY`, the firewall's `^/api` rule) and carries no `#[IsGranted]`: any authenticated caller may read any image. The intended meaning is **not** "any back-office user may read any image for ever" but "while no consumer with its own policy exists, authentication is the complete frontier". It is scoped to this slice and ends with it.
+The route requires a full session (`IS_AUTHENTICATED_FULLY`, the firewall's `^/api` rule) and carries no `#[IsGranted]`: any authenticated caller may read any fungible image. A dependent image — one carrying an origin — is never served here (`images-vs-documents-conservation-contract.md` D8). The intended meaning is **not** "any back-office user may read any image for ever" but "authentication is the complete frontier only for a consumer whose own policy says so". The first consumer, the bank logo, is `D1:logo` below; each further consumer owes its own paragraph.
 
 Three properties hold alongside it and are pinned by tests:
 
@@ -24,6 +24,8 @@ Three properties hold alongside it and are pinned by tests:
 - **The read and write routes carry a per-identity-and-route budget.** `GET /api/v1/images/{imageId}` spends `image_read_per_identity_route` (600 per minute, keyed by an HMAC of the identity and the route) before anything is looked up, a `304` included, because a `304` costs the same verified read as a `200`. The number is sized against a list page, where N rows cost N reads, and sits beside the per-IP `anonymous_api` bucket rather than replacing it.
 
 A registered consumer is a `file::property` line in the gate's `REGISTRY` and an anchor paragraph in this section; the list of anchors is this section itself.
+
+**`D1:logo` — the bank logo (`Bank::$logoImageId`).** Audience: the authenticated session, through this shared route and no other. A logo is a company mark, not personal data, and a session that can read a bank row has nothing to gain by being refused its logo; an owner-scoped route would add a per-row lookup to every list page for no policy it could enforce. Audit: the read writes no row (D2); were D2 ever to audit it, a `BankLogo` type would be non-person. The write is traced by the entity's own `BANK_UPDATED` diff, which holds the id and the timestamp and no bytes. Cache: the one-hour window of D3 stands, so a replaced or removed logo stays visible to a client that fetched it for up to an hour, and an open client that is not told of a logo-only change shows the old id until its next load (`PRODUCTION_SECURITY_CHECKLIST.md` §7 item six). Write: `bank.write`, through `PUT`/`DELETE /api/v1/backoffice/banks/{id}/logo`. The Resource DTOs carry the id as a presence flag and a cache key, never a URL.
 
 **Discarded: a generic ownership voter.** There is no consumer relation to vote on, so a voter would be a permission invented ahead of the thing it governs, and its semantics would be guessed rather than derived.
 

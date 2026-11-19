@@ -9,8 +9,8 @@ ERPify/
 │   │   ├── Kernel.php              # Symfony kernel (entry)
 │   │   ├── Backoffice/
 │   │   │   ├── Bank/               # Bank bounded context
-│   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/)
-│   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
+│   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/); the logo: BankLogoHolder (ImageHolder over Shared/Images), BankLogoSetter/Remover
+│   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free); BankLogoReader read port
 │   │   │   │   └── Infrastructure/ # Controller, Http, Messenger (event subscribers `<Effect>On<Event>`, see docs/rules/cqrs-naming.md), Persistence, Projection, Security
 │   │   │   ├── BankAccount/        # BankAccount context — references Bank by id only (no object graph crosses the boundary; see docs/adr/bank-bankaccount-modeling.md)
 │   │   │   │   ├── Application/    # Use cases, DTOs
@@ -19,7 +19,7 @@ ERPify/
 │   │   │   └── Health/
 │   │   │       └── Infrastructure/Controller
 │   │   ├── Documents/
-│   │   │   └── Document/           # evidence-class binaries — Document snapshot + append-only document_custody log, upload intent + UploadEvidence ingest (declare + raw-body PUT), DocumentStorage port + filesystem adapter, maintenance schedule, erasure owner behind Shared/Privacy — adr/documents-custody-log.md (`Domain/Scanning`, `Application/Scanning`, `Infrastructure/Scanning`: the scan sweep over leased compare-and-sets, the `MalwareScanner` port and its clamd adapter; D8 of docs/adr/documents-custody-log.md; `Application/Erasure`, `Domain/Erasure`, `Infrastructure/Erasure`: the operator erasure (`EraseDocument`, `ApplyErasure`), the `ErasureLedger` port and its restic adapter, `ReplayErasure` (restore and completion only), the erased-object sweep, the ledger override and the erasure commands under `Infrastructure/Cli`; D11; `Application/Listing`, `Application/Query`, `Domain/Projection`: the metadata listing and the custody trail — `DocumentNameOpener` batch-opens sealed names, `ListDocuments`, `ReadCustodyTrail`, the `afterSeq` query and the read-model rows; D10)
+│   │   │   └── Document/           # evidence-class binaries — Document snapshot + append-only document_custody log, upload intent + UploadEvidence ingest (declare + raw-body PUT), DocumentStorage port + filesystem adapter, maintenance schedule, erasure owner behind Shared/Privacy — adr/documents-custody-log.md (`Domain/Scanning`, `Application/Scanning`, `Infrastructure/Scanning`: the scan sweep over leased compare-and-sets, the `MalwareScanner` port and its clamd adapter; D8 of docs/adr/documents-custody-log.md; `Application/Erasure`, `Domain/Erasure`, `Infrastructure/Erasure`: the operator erasure (`EraseDocument`, `ApplyErasure`), the `ErasureLedger` port and its restic adapter, `ReplayErasure` (restore and completion only), the erased-object sweep, the ledger override and the erasure commands under `Infrastructure/Cli`; D11; `Application/Listing`, `Application/Query`, `Domain/Projection`: the metadata listing and the custody trail — `DocumentNameOpener` batch-opens sealed names, `ListDocuments`, `ReadCustodyTrail`, the `afterSeq` query and the read-model rows; D10; `Application/Derivative`: `MaterialiseDocumentDerivative`, the one way a rendering of a document is kept as an image carrying the document's origin, admitted under `DbalDocumentOriginGuard` — the release after erasure is `Application/Erasure/ReleaseErasedDerivatives`; adr/images-vs-documents-conservation-contract.md D8)
 │   │   ├── Frontoffice/
 │   │   │   ├── Dev/Infrastructure/Controller
 │   │   │   ├── Health/Infrastructure/Controller
@@ -78,7 +78,7 @@ ERPify/
 │   │   │   ├── _components/        # App-shell components (route-private)
 │   │   │   ├── (auth)/             # Auth route group (login, accept-invitation, forgot/reset-password, recovery)
 │   │   │   ├── (errors)/           # Error/maintenance route group (offline, rate-limited, unauthenticated, …)
-│   │   │   ├── backoffice/         # Backoffice shell + 32 feature route segments (banks, users, invoices, … — many scaffolded shells)
+│   │   │   ├── backoffice/         # Backoffice shell + 32 feature route segments (banks, users, invoices, … — many scaffolded shells); the bank logo control is `banks/_components/BankLogoControl.tsx`
 │   │   │   └── status/             # Public status page (reuses FrontOffice health use case)
 │   │   ├── components/
 │   │   │   ├── ui/                 # Base UI primitives (@base-ui/react) + shared UI

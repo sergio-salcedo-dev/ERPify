@@ -52,7 +52,12 @@ final class ImageConsumerAuthorizationGateTest extends TestCase
      *
      * @var array<string, string>
      */
-    private const array REGISTRY = [];
+    private const array REGISTRY = [
+        'Backoffice/Bank/Domain/Entity/Bank.php::logoImageId' => 'D1:logo',
+        'Backoffice/Bank/Domain/Entity/Bank.php::column:logo_image_id' => 'D1:logo',
+        'Backoffice/Bank/Application/Resource/BankListResource.php::logoImageId' => 'D1:logo',
+        'Backoffice/Bank/Application/Resource/BankDetailResource.php::logoImageId' => 'D1:logo',
+    ];
 
     /**
      * A declared or promoted property: a visibility word (with PHP 8.4's `(set)` / `(get)` asymmetric form) or `var`

@@ -85,6 +85,20 @@ final class ImageDeletionRequestedPublisherGateTest extends TestCase
             'useCase' => 'Shared/Images/Application/ImageAttachment.php',
             'test' => 'Functional/Shared/Images/ImageAttachmentFunctionalTest.php',
         ],
+        // The release of a derivative after its origin ended (ADR D8): called by the owner's sweep, outside the
+        // owner's end-of-life transaction. Its test publishes through the probe queue inside a unit that is rolled
+        // back and reads from a second connection that nothing was queued.
+        // A derivative's own compensation (ADR D8): bytes no committed row holds, whose direct delete failed, are
+        // handed to the transport. Its test refuses a derivative over a storage that cannot delete and reads the
+        // queued request from a second connection.
+        'Shared/Images/Application/MaterialiseDerivative.php' => [
+            'useCase' => 'Shared/Images/Application/MaterialiseDerivative.php',
+            'test' => 'Functional/Documents/Document/DocumentDerivativesFunctionalTest.php',
+        ],
+        'Shared/Images/Application/ReleaseDerivatives.php' => [
+            'useCase' => 'Shared/Images/Application/ReleaseDerivatives.php',
+            'test' => 'Functional/Documents/Document/DocumentDerivativesFunctionalTest.php',
+        ],
     ];
 
     private const string RECIPE = 'A file that creates ImageDeletionRequested owes an observation '

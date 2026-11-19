@@ -187,6 +187,33 @@ class HttpRequestContext extends AbstractContext
     }
 
     /**
+     * Sends `$bytes` as the raw, binary body of a request. A PyString cannot carry an image, and a step cannot be
+     * told how long its body is, so the declared `Content-Length` is added here unless the scenario already chose one
+     * (a refusal scenario sets a wrong one) or asks for none.
+     */
+    public function sendRawBytes(string $method, string $url, string $bytes, bool $declareLength): void
+    {
+        $declared = \array_filter(
+            \array_keys($this->headers),
+            static fn (int|string $name): bool => 'content-length' === \strtolower((string) $name),
+        );
+        $added = $declareLength && [] === $declared;
+
+        if ($added) {
+            $this->headers['Content-Length'] = (string) \strlen($bytes);
+        }
+
+        try {
+            $this->iSendARequestTo($method, $url, null, new PyStringNode([$bytes], 0));
+        } finally {
+            // Only the length this call declared is taken back: one the scenario chose stays for its later requests.
+            if ($added) {
+                unset($this->headers['Content-Length']);
+            }
+        }
+    }
+
+    /**
      * Sends an HTTP request with parameters.
      */
     #[Given('I send a :method request to :url with parameters:')]

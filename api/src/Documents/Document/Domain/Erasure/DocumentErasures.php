@@ -43,14 +43,16 @@ interface DocumentErasures
     public function markObjectDeleted(string $documentId): bool;
 
     /**
-     * Empties the marker of an `Erased` row so the deletion sweep takes its object up again: a restore replays an
-     * erasure over objects that came back from a backup the marker knows nothing about.
+     * Empties the markers of an `Erased` row so the sweeps take it up again: a restore replays an erasure over objects
+     * and derivatives that came back from a backup the markers know nothing about. One statement for the sealed object
+     * and the derivatives, so the replay's statement budget is unchanged. It also stamps the reopen, from which the
+     * alarms then measure their bound.
      */
     public function reopenObjectDeletion(string $documentId): bool;
 
     /**
-     * Ids of `Erased` rows whose object is still not confirmed deleted although the erasure was recorded at least
-     * `$olderThanSeconds` ago: the sealed bytes of a document the system said it erased.
+     * Ids of `Erased` rows whose object is still not confirmed deleted although the erasure was recorded, and any
+     * restore reopened it, at least `$olderThanSeconds` ago: the sealed bytes of a document the system said it erased.
      *
      * @return list<string>
      */

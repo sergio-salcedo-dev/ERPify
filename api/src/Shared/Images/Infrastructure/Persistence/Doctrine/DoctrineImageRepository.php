@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Erpify\Shared\Images\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Shared\Images\Domain\DerivativeOrigin;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -57,5 +59,48 @@ final readonly class DoctrineImageRepository implements ImageRepository
     public function findById(ImageId $id): ?Image
     {
         return $this->entityManager->find(Image::class, $id->toString());
+    }
+
+    #[Override]
+    public function idsByOrigin(DerivativeOrigin $origin, int $limit, ?ImageId $after = null): array
+    {
+        $parameters = ['type' => $origin->type, 'id' => $origin->id, 'limit' => $limit];
+        $afterClause = '';
+
+        if ($after instanceof ImageId) {
+            $parameters['after'] = $after->toString();
+            $afterClause = ' AND id > CAST(:after AS UUID)';
+        }
+
+        /** @var list<string> $ids */
+        $ids = $this->entityManager->getConnection()->fetchFirstColumn(
+            'SELECT id FROM image WHERE origin_type = :type AND origin_id = CAST(:id AS UUID)'
+            . $afterClause . ' ORDER BY id LIMIT :limit',
+            $parameters,
+            ['limit' => Types::INTEGER],
+        );
+
+        return \array_map(ImageId::fromString(...), $ids);
+    }
+
+    #[Override]
+    public function originIdsOfType(string $type, int $limit, ?string $afterId = null): array
+    {
+        $parameters = ['type' => $type, 'limit' => $limit];
+        $afterClause = '';
+
+        if (null !== $afterId) {
+            $parameters['after'] = \strtolower($afterId);
+            $afterClause = ' AND origin_id > CAST(:after AS UUID)';
+        }
+
+        /** @phpstan-var list<string> */
+        return $this->entityManager->getConnection()->fetchFirstColumn(
+            // `origin_id IS NOT NULL` repeats the partial index's predicate so the planner can prove it and use it.
+            'SELECT DISTINCT origin_id FROM image WHERE origin_type = :type AND origin_id IS NOT NULL'
+            . $afterClause . ' ORDER BY origin_id LIMIT :limit',
+            $parameters,
+            ['limit' => Types::INTEGER],
+        );
     }
 }

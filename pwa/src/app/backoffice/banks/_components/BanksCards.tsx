@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Bank } from "@/context/backoffice/bank/domain/Bank";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
-import { StatusBadge, TruncatedText, useIsTruncated } from "@/components/erpify";
+import { ImageDisplay, StatusBadge, TruncatedText, useIsTruncated } from "@/components/erpify";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/components/cn";
@@ -126,8 +126,16 @@ export function BanksCards({
                   className="banks-cards__actions relative z-10 ml-auto"
                 />
               </div>
-              <div className="banks-cards__title px-4 group-data-[size=sm]/card:px-3">
-                <BankCardName bank={bank} detailHref={detailHref} />
+              <div className="banks-cards__title flex items-start gap-3 px-4 group-data-[size=sm]/card:px-3">
+                <ImageDisplay
+                  imageId={bank.logoImageId}
+                  alt=""
+                  className="size-10 rounded-md"
+                  testId={`banks-cards__logo-${bank.id}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <BankCardName bank={bank} detailHref={detailHref} />
+                </div>
               </div>
               <div className="banks-cards__status px-4 group-data-[size=sm]/card:px-3">
                 {recent ? (

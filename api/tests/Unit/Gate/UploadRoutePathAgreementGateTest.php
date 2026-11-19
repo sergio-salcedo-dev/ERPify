@@ -24,8 +24,10 @@ use Symfony\Component\Yaml\Yaml;
  * The image write routes (logo, avatar, bank-account image) have their own matcher in the same file, bounded at
  * `erpify.images.max_input_bytes` and cookie-gated the same way. The matcher is proved on the three public shapes
  * written below, which hold independently of any router, and on any manifest route that looks like one: a consumer's
- * route either matches or reds this gate. What a text gate cannot show — a body over 1MB reaching PHP whole — is a
- * measurement through the running Caddy, and belongs beside the route it measures.
+ * route either matches or reds this gate. The other direction — a route that carries `RawBodyRoute::ATTRIBUTE` or
+ * reaches `ImageAttachment` while the matcher misses it — is `ImageWriteRouteAgreementGateTest`'s. What a text gate
+ * cannot show — a body over 1MB reaching PHP whole — is a measurement through the running Caddy, and belongs beside
+ * the route it measures (`BankLogoThroughCaddyTest`).
  *
  * @internal
  */
@@ -218,9 +220,10 @@ final class UploadRoutePathAgreementGateTest extends TestCase
     }
 
     /**
-     * Forward guard, vacuous until a consumer mounts a route: a `PUT` the router declares on `…/{id}/logo`,
-     * `…/{id}/avatar` or `…/{id}/image` is an image write, so its public path must be one the matcher lifts the bound
-     * for — otherwise the edge cuts the body at 1MB and the application sees a clean, shorter stream.
+     * Forward guard, by name: a `PUT` the router declares on `…/{id}/logo`, `…/{id}/avatar` or `…/{id}/image` is an
+     * image write, so its public path must be one the matcher lifts the bound for — otherwise the edge cuts the body at
+     * 1MB and the application sees a clean, shorter stream. The name-free guard over what a route carries is
+     * `ImageWriteRouteAgreementGateTest`.
      */
     #[Test]
     public function everyImageWriteRouteTheRouterDeclaresIsOneTheMatcherLifts(): void

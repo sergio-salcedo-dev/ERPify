@@ -57,7 +57,7 @@ final readonly class CanonicalImageFinder
      * A permanent storage failure is deliberately absent from this list: it escapes untranslated, so it
      * answers 500 rather than inviting a retry that cannot help.
      *
-     * @throws ImageNotAvailable           the row is absent, or its bytes demonstrably are
+     * @throws ImageNotAvailable           the row is absent or dependent, or its bytes demonstrably are absent
      * @throws ImageTemporarilyUnavailable the substrate failed in a retryable way
      * @throws UnservableImage             the object is too large to serve, or fails its own digest
      */
@@ -65,7 +65,10 @@ final readonly class CanonicalImageFinder
     {
         $image = $this->images->findById($id);
 
-        if (!$image instanceof Image) {
+        // A dependent image is its origin's data — a page of a contract is evidence, not a logo — so the route that
+        // serves fungible images to any session never serves one, and answers as for an absent image so it confirms
+        // nothing. Its owner decides who reads it, through a route of its own (ADR D8).
+        if (!$image instanceof Image || $image->isDependent()) {
             throw ImageNotAvailable::forRequestedImage();
         }
 

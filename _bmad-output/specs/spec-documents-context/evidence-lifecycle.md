@@ -58,5 +58,5 @@ Invariants over the table:
 | Coordinated derivative deletion | CAP-5; doc-8 |
 | Metadata | CAP-6; doc-6 |
 | Versioning | CAP-7; doc-9 |
-| OCR of scanned PDFs | CAP-8; doc-10 |
+| OCR of scanned PDFs | CAP-8; deferred out of the epic (SPEC, Deferred capabilities) |
 | (new) audited read path | CAP-9; doc-5 |
