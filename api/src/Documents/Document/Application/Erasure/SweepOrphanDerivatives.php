@@ -115,18 +115,11 @@ final readonly class SweepOrphanDerivatives
      */
     private function isOrphan(?array $state): bool
     {
-        if (null === $state) {
-            return true;
-        }
-
-        if (DocumentState::Ready->value === $state['state']) {
-            return false;
-        }
-
-        if (DocumentState::Erased->value !== $state['state']) {
-            return true;
-        }
-
-        return $state['releaseConfirmed'];
+        return match ($state['state'] ?? null) {
+            null => true,
+            DocumentState::Ready->value => false,
+            DocumentState::Erased->value => $state['releaseConfirmed'],
+            default => true,
+        };
     }
 }
