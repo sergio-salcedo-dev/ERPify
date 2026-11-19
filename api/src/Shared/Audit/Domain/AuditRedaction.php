@@ -12,6 +12,11 @@ namespace Erpify\Shared\Audit\Domain;
  * `User-Agent` header has no value either. Collapsing both onto NULL would destroy the only evidence
  * that something was there and was removed on purpose.
  *
+ * NULL has one more writer, and it is not an erasure: the retention prune clears `ip`/`user_agent` on the
+ * rows it exempts from deletion, writing NULL and never this sentinel. Such a row is recognisable by its
+ * columns — an action in {@see AuditErasureEvidence::ACTIONS}, `occurred_on` past its level's threshold and
+ * `actor_erased = FALSE` — so a NULL there reads as "past retention", not as "never captured".
+ *
  * Whether a statement may write it over a NULL is that statement's own call, and the two differ for a
  * reason worth knowing. The actor-axis erasure matches only rows the erased person authored, so every
  * column it overwrites belonged to that one person and the sentinel misattributes nothing. The
