@@ -25,11 +25,28 @@ DECIDED THIS SESSION (2026-11-19, by the owner):
   stays 3. Supersedes the head pointer of memlog line 190 (design B). Recorded in the doc-9 ADR decision and story
   file; the memlog line is NOT written yet (see NEXT 1).
 
-IN PROGRESS:
-- doc-9 and #718 implemented by subagents, each stopping after php.quality + affected tests + a local commit; then the
-  orchestrator runs the three review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) in parallel,
-  read-only; the implementer applies every patch, records the adversarial pass, pushes and opens its PR. Never merge
-  without the owner's per-PR permission.
+IN PROGRESS (state at 2026-11-19 ~20:40 UTC):
+- #718 DONE: PR #1273 (6c8266af + 83704953), three review layers run and 15 patches applied, CI fully green,
+  `Closes #718`; waits only for the owner's merge permission. After it merges the §7 accepted-risk register is empty.
+- doc-9 IMPLEMENTED, NOT REVIEWED: branch feat/documents-versioning-24nf pushed at 356c636a (68 files) WITHOUT a PR.
+  Gates: full PHPUnit green except the live-stack Caddy tests, Behat features/documents green (70 scenarios),
+  php.quality green except php.stan, which failed only on the toolbox's cache path (full-tree PHPStan from /app/api
+  green). The three review layers were launched and STOPPED by the owner (subscription limit) before reporting:
+  rerun all three (Blind, Edge, Acceptance) in parallel, read-only, on 356c636a; the implementer's 12 design
+  decisions are listed in the story file `stories/doc-9-document-versioning.md`, pass them as already known.
+  Owed in the same PR together with the layers' patches (owner's direction 2026-11-19: reduce accepted risks to zero,
+  doc-9's §7 block must not end as "Accepted"):
+  1) series erasure terminates: at start it takes the series row lock once and marks the series closed
+     (e.g. document_series.closed_at); TakeVersionSlot refuses a take on a closed series. Outside the per-version
+     erasure transactions, so TRANSACTION_LOCKS stays 3. Test: a version filed during a series erasure is refused.
+  2) the false 409 is the option-C contract, not a risk: reword it in §7/ADR D12 as a retryable conflict.
+  3) DECIDED by the owner: POST /api/v1/documents/{id}/versions requires document.write AND the document read
+     permission (still RBAC, no row-level voter); remove that residual from §7.
+  4) the series page naming uploaders to ADMIN mirrors the listing: state it, do not mark it accepted.
+  Remove the "Accepted — the owner's design" line: the owner accepted option C, not these residuals.
+  Then record the adversarial pass in the story file, push, open the PR (REST; GraphQL blocked), never merge.
+- Local leftovers in the dead container (irrelevant after it is gone): toolbox containers erpify-24nf-*, image
+  erpify-dvro-toolbox.
 
 NEXT (in order):
 1. Owner, locally with _bmad/scripts/memlog.py (absent from cloud containers; never hand-edit .memlog.md):
