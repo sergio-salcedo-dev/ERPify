@@ -2,7 +2,7 @@
 title: 'doc-8: Dependent derivatives through the images module'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-review'
+status: 'done'
 baseline_commit: '3f96ac340e06e592e058f672c390dee0b7a8c544'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -105,4 +105,4 @@ Fresh runs on head `afc2812`, in a local PHP 8.5.12 toolbox over PostgreSQL 18 (
 - The migration up, down and up on the dev and test databases, with `doctrine:schema:validate` in sync.
 - Not run: Behat (no scenario was added; the acceptance is the PHPUnit functional case `DocumentDerivativeLifecycleFunctionalTest`).
 
-`done` waits on the story's done checkpoint (the owner).
+`done` set by the owner on 2026-11-19, after #1269 merged.
