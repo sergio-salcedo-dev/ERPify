@@ -22,9 +22,6 @@ final readonly class ImageProblemType
     /** `Content-Length` missing, or not equal to the bytes read: 411. */
     public const string LENGTH_REQUIRED = 'image-length-required';
 
-    /** The origin of a derivative is absent, not readable yet, or erased: 409. */
-    public const string ORIGIN_NOT_LIVE = 'image-origin-not-live';
-
     private function __construct()
     {
     }
