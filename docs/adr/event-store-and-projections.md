@@ -354,8 +354,8 @@ persistida a una persona —y el `aggregate_id` de un evento cuyo agregado **es*
 (`api/.person-reference-policy`, CLAUDE.md → «Persisting a person's id»).
 
 **Decisión: el log deja de ser estrictamente inmutable y pasa a ser _append-only con un conjunto cerrado de
-mutaciones de primera clase_ — hoy exactamente una sobre `event_store`, cuatro entre los dos logs, cerradas por
-el gate descrito más abajo (§ «Qué cierra el conjunto»).** Es la misma forma que
+mutaciones de primera clase_ — hoy exactamente una sobre `event_store`, cinco sentencias en cuatro ficheros entre
+los dos logs, cerradas por el gate descrito más abajo (§ «Qué cierra el conjunto»).** Es la misma forma que
 [`audit-activity-log.md`](./audit-activity-log.md) ya adoptó para el log hermano de PII, y **no introduce un
 principio nuevo**: lo extiende al log de negocio.
 
@@ -464,9 +464,10 @@ un rebuild. Un read model que pase ese gate sigue expuesto al fallo que este pá
 que decían «append-only» a secas dicen «append-only, con un conjunto cerrado de mutaciones sancionadas»,
 como ya hace `audit_log`.
 
-**Qué cierra el conjunto: un gate, sobre las dos tablas a la vez.** El conjunto tiene **cuatro miembros** entre
-los dos logs —este `UPDATE event_store` (`DbalEventStoreSubjectAnonymiser`), los dos `UPDATE audit_log` de los
-ejes actor y recurso y el `DELETE` de la poda de [`audit-activity-log.md`](./audit-activity-log.md) D4—, y
+**Qué cierra el conjunto: un gate, sobre las dos tablas a la vez.** El conjunto tiene **cinco sentencias en cuatro
+ficheros** entre los dos logs —este `UPDATE event_store` (`DbalEventStoreSubjectAnonymiser`), los dos `UPDATE
+audit_log` de los ejes actor y recurso, y el `DELETE` de la poda de [`audit-activity-log.md`](./audit-activity-log.md)
+D4 y su `UPDATE` que vacía `ip`/`user_agent` de las filas exentas—, y
 `SanctionedLogMutationGateTest` los declara como constante y exige **igualdad** con lo que `api/src` emite:
 cualquier `UPDATE`, `DELETE`, `TRUNCATE`, `MERGE` o upsert (`INSERT … ON CONFLICT … DO UPDATE`) nuevo sobre
 cualquiera de las dos tablas lo pone rojo nombrando el fichero, y también la desaparición de un miembro, que es

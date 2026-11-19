@@ -101,17 +101,22 @@ migrated database, and the reverse). Neither proves that a `contains` field read
   completed erased nothing) and any `Document:` scope (the document's own rows reconcile it); every other
   destroyed key still answers to an evidence row.
   The row carries PII (`actor_id`, `ip`, `user_agent`), so the bounded window is also GDPR data
-  minimisation — **on every row the window still covers.** On an exempt row it is not, and that is the price
-  of the exemption rather than an oversight: those rows keep the same triple indefinitely, and their only
-  removal path is the actor-axis erasure below, which matches on `actor_id` and so reaches an acting
-  administrator's row only if that administrator's trail is erased. Only the *identity* route is gated: it
-  is **refused while they carry `ADMIN`**, so it needs a demotion first, which the ≥1-admin invariant permits
-  only while a second active administrator **exists**, and needs that administrator to **perform** it, since
-  a self-targeted role change is refused (409 `self-role-change-forbidden`). The `audit:gdpr:erase` command below carries no role check, so it stays a
-  removal path even on a single-administrator installation (a separate fact from the CLI writing `ip` and
-  `user_agent` null on the rows it mints, which it does, running off-request as `system`). The cost is
-  weighed, and carries a revisit trigger, at `AuditErasureEvidence`; what *observes* that trigger is issue
-  #718, not the prose — and it observes only the first of its three conditions.
+  minimisation — **and on an exempt row it still bounds two of the three.** The prune keeps such a row and
+  its `actor_id` for ever, because the attribution is what the evidence is for, and in the same run, under the
+  same advisory lock, sets its `ip` and `user_agent` to `NULL` once it is past the threshold of **its own
+  level** — the `AuditRetentionThreshold` the `DELETE` applies there, never a fixed number of days. `NULL`,
+  never the `[REDACTED]` sentinel, because retention is not an erasure axis; it never rewrites a row an
+  erasure pass already redacted (`actor_erased = FALSE` for the actor pass, `NOT (actor_type = 'anonymous' AND
+  resource_erased)` for the resource pass, the only rows that one writes the sentinel on); and it takes its rows
+  `ORDER BY id … FOR UPDATE` — the order the `DELETE` and the actor pass impose on themselves, and that
+  `DbalAuditSubjectRowLock` imposes on the resource pass on the paths that take it — with no `LIMIT`, since
+  after its level's `DELETE` only exempt rows are past the threshold. The levels run in `AuditLevel::cases()`
+  order, so a level whose statement keeps failing stops the `DELETE` and the clear of every later level
+  until it is fixed. Inside the window the only removal path is the actor-axis erasure below, which matches on
+  `actor_id`: the *identity* route to it is **refused while the subject carries `ADMIN`**, so it needs a
+  demotion by a second active administrator (a self-targeted role change is refused, 409
+  `self-role-change-forbidden`), while the `audit:gdpr:erase` command carries no role check. The CLI paths
+  write `ip` and `user_agent` null on the rows they mint, running off-request as `system`.
   Outright erasure is the second policy — the `audit:gdpr:erase` command's in-place
   anonymising `UPDATE` (`actor_id` → a fresh random UUID per subject; `ip`/`user_agent` → `[REDACTED]`),
   never row deletion. The third is the resource axis, which pseudonymises `resource_id` and — only where

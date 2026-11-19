@@ -26,8 +26,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * It spans three collaborators that are each correct alone. `DbalKeystore::destroy()` tombstones the DEK row
  * and keeps it for ever, on purpose, "so a shredding stays reconcilable". `DbalSubjectErasureReconciler`
  * reports every destroyed key that no `GDPR_SUBJECT_ERASED` entry accounts for, with no date bound. And
- * `DbalAuditLogPruner` deletes `security` rows past their ceiling with no predicate on `action`. Compose the
- * three and the left side of the anti-join is eternal while the right side is not.
+ * `DbalAuditLogPruner` deletes `security` rows past their ceiling. Compose the three without the pruner's
+ * exemption on `action` and the left side of the anti-join is eternal while the right side is not.
  *
  * Its own file rather than a case in the pruner's: it fails for a different reason than every test there —
  * not "the sweep deleted the wrong rows" but "two shipped controls disagree by construction" — and proving

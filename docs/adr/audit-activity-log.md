@@ -292,7 +292,8 @@ disparador propio; cualquier otra escritura es append (cerrado por gate: ver «C
 
 **La poda exime la evidencia del propio borrado, y eso no la convierte en una cuarta política.** Sigue
 siendo un solo `DELETE` con un disparador; lo que cambia es su predicado, que ahora excluye
-`AuditErasureEvidence::ACTIONS`. El principio es **la evidencia no puede caducar antes que aquello que
+`AuditErasureEvidence::ACTIONS`, y una segunda sentencia del mismo disparador, umbral y advisory lock que
+acota lo que esas filas conservan (abajo). El principio es **la evidencia no puede caducar antes que aquello que
 atestigua**: la lápida de `dek_keystore` que responde por un `GDPR_SUBJECT_ERASED` se conserva para siempre
 a propósito y el reconciliador las anti-junta sin cota temporal, así que dejar caducar la evidencia vuelve
 ese par **insatisfacible** — cada sujeto crypto-shredded pasa a reportarse como divergencia, a diario y para
@@ -310,52 +311,59 @@ clasifica cada acción que `src` declara como constante en un colaborador de `Au
 `AuditErasureEvidence::ACTIONS`. Lo que un verde no prueba está en la cabecera del registro —sobre todo que
 nunca juzga la clasificación: un `ordinary` sobre evidencia real pasa.
 
-**Qué se vuelve inmortal, dicho entero porque es la exención lo que lo vuelve inmortal.** Estas filas se
-acuñan por `SealedAuditEntryFactory`, que sella metadata de petición en **toda** entrada; un borrado
-ejecutado por HTTP escribe por tanto el `ip` y el `user_agent` del administrador actuante junto a su
-`actor_id`, y el anonimizador del eje de recurso deja esas dos columnas intactas allí donde el actor fue
-identificado —precisamente porque son suyas y no del sujeto—. La exención retiene **las tres**, que son el
-mismo trío que `docs/rules/database.md` nombra como el PII cuya ventana acotada *es* la minimización. Hay
-vía de eliminación y es **discrecional**: el pase de actor casa por `actor_id`, así que esas columnas se
-limpian sólo si se borra el rastro de ese administrador. Cuál de las dos rutas lo alcanza importa, porque
-sólo una está condicionada. La ruta de *identidad* se **rechaza** mientras el sujeto conserve `ADMIN` (409
-`administrator-erasure-requires-demotion`), de modo que exige degradarlo antes — y el invariante de ≥1 admin
-sólo lo permite mientras **exista** un segundo administrador activo; nunca exige que lo ejecute, porque nada
-guarda la auto-degradación. El comando `audit:gdpr:erase` no lleva esa puerta: anonimiza por `actor_id` para
-cualquier UUID, sin comprobación de rol. Aparte, y sin leerlo como el mismo hecho: los caminos por CLI no
-*escriben* estas columnas en las filas que acuñan — corren fuera de petición como `system`, con ambas nulas.
+**Qué conserva la exención, y qué no.** Estas filas se acuñan por `SealedAuditEntryFactory`, que sella
+metadata de petición en **toda** entrada; un borrado ejecutado por HTTP escribe por tanto el `ip` y el
+`user_agent` del administrador actuante junto a su `actor_id`. La fila y su `actor_id` se conservan para
+siempre: la atribución es para lo que existe la evidencia. `ip` y `user_agent` no. `DbalAuditLogPruner`,
+tras el `DELETE` de cada nivel y bajo el mismo advisory lock, los pone a `NULL` en las filas exentas que ya
+pasaron el umbral **de su propio nivel** —el mismo `AuditRetentionThreshold` que aplica el `DELETE`, hoy
+365 días en `security`—, nunca un literal:
+`UPDATE audit_log SET ip = NULL, user_agent = NULL WHERE id IN (SELECT id … AND action IN (:exempt) AND
+actor_erased = FALSE AND NOT (actor_type = 'anonymous' AND resource_erased) AND (ip IS NOT NULL OR user_agent IS
+NOT NULL) ORDER BY id FOR UPDATE)`.
+- `NULL` y no `[REDACTED]`: el centinela significa «lo anonimizó un eje de borrado», y la retención no lo es.
+- Nunca reescribe una fila que otra política ya resolvió, y dos escriben el centinela: `actor_erased = FALSE`
+  la aparta de las que redactó el pase de actor, y `NOT (actor_type = 'anonymous' AND resource_erased)` de las
+  que redactó el de recurso, las únicas en que ese pase lo escribe. No `resource_erased = FALSE` a secas: un
+  `GDPR_SUBJECT_ERASED` nombra a su sujeto como recurso, así que ese pase le sube la marca dejando intacta la
+  dirección real del administrador, y esta sentencia tiene que alcanzarla.
+- Adquiere en `id` ascendente —el orden que el `DELETE` y el pase de actor se imponen a sí mismos y que
+  `DbalAuditSubjectRowLock` impone al de recurso en los caminos que lo toman— y no escribe `level`,
+  `occurred_on` ni `action`, así que no acorta un lote del `DELETE`. Sin `LIMIT`: tras el `DELETE` de su nivel
+  sólo las filas exentas quedan más allá del umbral. Medido en PostgreSQL 18 sobre población sembrada y
+  `ANALYZE`ada: bitmap scan de `audit_log_level_idx` y sort por `id`, nunca un seq scan; por eso no hay índice
+  parcial atado a `ACTIONS`, que exigiría una migración cada vez que el conjunto cambie.
+- Los niveles corren en el orden de `AuditLevel::cases()`: un nivel cuya sentencia falle una y otra vez detiene
+  el `DELETE` y el vaciado de todos los posteriores hasta que se arregle (la forma ya existía para el `DELETE`).
+Dentro de la ventana la única vía de eliminación sigue siendo el pase de actor, que casa por `actor_id`: la
+ruta de *identidad* se **rechaza** mientras el sujeto conserve `ADMIN` (409
+`administrator-erasure-requires-demotion`), y el comando `audit:gdpr:erase` no lleva esa puerta. Los caminos
+por CLI escriben ambas columnas nulas en las filas que acuñan, porque corren fuera de petición como `system`.
 
-**Sopesado y aceptado, no pasado por alto.** Las dos acciones de evidencia no tienen la misma retención
-correcta, sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita *nunca*, porque
-su falsador es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas `change`, que se
-podan a los cinco años: retenerla para siempre **sobre-retiene al administrador actuante** más allá del punto
-en que algo pueda contrastarlo, que es justo la minimización que la poda ejecuta. Aun así quedan exentas las
-dos, y las dos formas más estrechas se consideraron y se descartaron: un suelo acotado para
-`ACTOR_TRAIL_ERASED` parte una regla en dos por una diferencia que ningún lector inferiría de las filas, y no
-sellar metadata de petición al escribirlas le quitaría atribución a la única clase de fila cuyo propósito
-**es** la atribución — un borrado que nadie puede situar es evidencia más débil de lo que una dirección
-sobre-retenida es un daño. Lo que acota la exposición en la práctica es la **forma del despliegue**, no una
-propiedad del sistema, y no deben leerse como lo mismo: nada limita el conjunto `ADMIN` —existe
-`users.grantAdmin`— y en una instalación con un solo administrador la ruta de identidad queda cerrada hasta
-que otro tenga `ADMIN`. Eso acota una ruta, no la exposición: el comando de operador sigue limpiando esas
-columnas para cualquier id de actor. Lo que el sistema sí garantiza es la mitad estrecha: los caminos por
-CLI escriben ambas columnas nulas en las filas que acuñan.
+Descartado: conservar las tres columnas para siempre, que fue la aceptación anterior (#718) — la exención
+volvía inmortal justo el trío cuya ventana acotada *es* la minimización, y su revisita dependía de un recuento
+en producción que nadie observaba. Descartado: no sellar metadata de petición al escribir estas filas — le
+quitaría atribución a la única clase de fila cuyo propósito **es** la atribución mientras la ventana aún la
+cubre. Descartado: un umbral propio para las exentas — dos reglas donde una basta mientras nadie exija otra.
 
-**Disparador de revisita**, para que la aceptación no se vuelva invisible: lo primero que ocurra entre un
-despliegue en producción que borre a un sujeto real, un administrador que se marche y no sea borrado, o una
-revisión de DPO. En ese momento la opción es el suelo acotado, y este párrafo es el registro de que fue una
-elección. Sólo la primera condición es observable por máquina, y no la observa este párrafo: el issue #718
-lleva el predicado candidato y es el artefacto que tiene bandeja de entrada. Un registro repetido en cuatro
-ficheros es memoria, nunca un despertador — y no se automatiza porque no hay sumidero correcto: a `error`
-alarmaría a diario sobre comportamiento aceptado, y por debajo de `error` producción lo descarta.
+**Sopesado y aceptado: el `actor_id`.** Las dos acciones de evidencia no tienen la misma retención correcta,
+sólo el mismo suelo de «más que el techo de `security`». `SUBJECT_ERASED` necesita *nunca*, porque su falsador
+es eterno. `ACTOR_TRAIL_ERASED` responde por marcas `actor_erased` en filas `change`, que se podan a los cinco
+años: retener su `actor_id` para siempre **sobre-retiene al administrador actuante** más allá del punto en que
+algo pueda contrastarlo. Aun así quedan exentas las dos: un suelo acotado para `ACTOR_TRAIL_ERASED` parte una
+regla en dos por una diferencia que ningún lector inferiría de las filas.
 
-**«Cerrado» significa cerrado por gate.** `SanctionedLogMutationGateTest` declara las tres políticas junto con
-el único `UPDATE` de `event_store` y exige **igualdad** entre ese conjunto y lo que `api/src` emite sobre las dos
+**Lo reabre:** que el asesor exija conservar la IP de estas filas durante el plazo de prescripción — entonces
+un umbral propio para las exentas, no el del nivel.
+
+**«Cerrado» significa cerrado por gate.** `SanctionedLogMutationGateTest` declara las tres políticas —la poda con sus dos
+sentencias— junto con el único `UPDATE` de `event_store` y exige **igualdad** entre ese conjunto y lo que `api/src` emite sobre las dos
 tablas: una cuarta política pone el build en rojo, y también la desaparición de una de las tres. Lo que un verde
 **no** prueba está en la cabecera de ese gate; la decisión, en D12 de
 [`event-store-and-projections.md`](./event-store-and-projections.md).
 
-- **Política de retención (la poda) — la *única* `DELETE`.** Retención **por nivel** (`security` >
+- **Política de retención (la poda) — la *única* `DELETE`**, seguida en cada nivel del `UPDATE` que vacía
+  `ip`/`user_agent` de las filas exentas pasado su umbral (arriba). Retención **por nivel** (`security` >
   `activity`), expresada como dato por una `AuditRetentionPolicy` de dominio (`thresholdsAt(now)` → un
   plan de cutoffs por nivel) y ejecutada por un pruner idempotente que **borra en lotes** (acota duración
   de lock y presión de vacuum; la exposición real es el barrido inicial/backfill, no el ~día de
