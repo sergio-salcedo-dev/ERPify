@@ -337,30 +337,34 @@ you change anything here.
       the prune skips those,
       because the `dek_keystore` tombstone they answer for is kept for ever and the
       reconciler anti-joins the two with no date bound, so an expiring proof makes that
-      pair unsatisfiable. Be exact about the cost when citing it: those rows are minted in
-      the request cycle on the HTTP path, so **the acting administrator's `ip` and
-      `user_agent` are retained indefinitely along with their `actor_id`** — clearable only
-      if that administrator is themself erased, since the actor-axis pass matches by
+      pair unsatisfiable. Be exact about what an exempt row keeps when citing it: those rows
+      are minted in the request cycle on the HTTP path, so they carry **the acting
+      administrator's `actor_id`, `ip` and `user_agent`**. The row and its `actor_id` are kept
+      **for ever**; `ip` and `user_agent` are set to `NULL` by the same prune run once the row
+      is past the threshold of **its own level** — the `AuditRetentionThreshold` the `DELETE`
+      applies there (365 days for `security` today), never a literal — by a second statement
+      in `DbalAuditLogPruner` under the same advisory lock. It writes `NULL`, never the
+      `[REDACTED]` sentinel, and skips `actor_erased` rows, so an actor erasure's evidence on
+      the row survives it. Pinned by `ErasureEvidenceRetentionFunctionalTest` (cleared past the
+      level's threshold, untouched inside it, untouched once actor-erased),
+      `AuditPruneStatementGateTest` (`ORDER BY id FOR UPDATE`, `NULL`, `actor_erased = FALSE`)
+      and `AuditPrunePlanFunctionalTest` (a `LockRows` over an `id` order, no sequential scan).
+      **Inside the window the only removal path is the actor-axis erasure**, which matches by
       `actor_id`. **Say the precondition with it, or the sentence promises a route that is
       refused:** _identity_ erasure is rejected while the subject still carries `ADMIN` (409
       `administrator-erasure-requires-demotion`, `FulfilIdentityErasure`), so on that route
       clearing those columns requires demoting them first — which the ≥1-admin invariant
       permits only while a **second active administrator exists** — and that administrator has
-      to perform it: a self-targeted role change is refused (409 `self-role-change-forbidden`),
-      so no principal drops their own `ADMIN` unilaterally over HTTP. Be
-      equally exact about the other direction: this gates the identity route, **not** the
-      actor-axis anonymiser. The operator CLI `audit:gdpr:erase` reaches those same columns for
-      any UUID with **no role check at all**, so a sole administrator's rows are clearable
-      there. What the CLI paths do not do is _write_ `ip`/`user_agent` on rows they mint — they
-      run off-request as `system`, with both columns NULL. **Weighed and accepted:** stripping
-      request metadata at write time would take attribution off the one class of row whose
-      purpose is attribution, and a bounded floor for `GDPR_ERASURE_EXECUTED` alone splits
-      one rule in two for a difference no reader infers from the rows. Revisit at the first
-      of — a production deployment that erases a real subject, an administrator who leaves
-      without being erased, or a DPO review. Only the first is machine-observable, and **this
-      paragraph does not observe it**: issue #718 holds the candidate predicate (a production
-      count of exempt rows still carrying `ip`/`user_agent` with `actor_erased = FALSE`) and is
-      the artefact with an inbox. Do not read a record in four files as a wake-up.
+      to perform it: a self-targeted role change is refused (409 `self-role-change-forbidden`).
+      The operator CLI `audit:gdpr:erase` reaches those same columns for any UUID with **no
+      role check at all**. The CLI paths write `ip`/`user_agent` `NULL` on the rows they mint.
+      **Residual, accepted:** the `actor_id` of an exempt row outlives anything that could check
+      it for `GDPR_ERASURE_EXECUTED` (its `change` rows go at five years); one exemption for both
+      actions is the recorded choice (`docs/adr/audit-activity-log.md` D4). Reopened if the
+      adviser requires the address kept for the limitation period, which would give exempt rows
+      a threshold of their own. The `action IN` term of the clear is redundant with running it
+      after its level's `DELETE` and no behavioural test can redden it; only the source gate
+      reads it.
       Because the operating role can read the record that audits it, the record's
       attribution is guarded on the write side: **erasure refuses any subject still
       carrying `ADMIN`** (409 `administrator-erasure-requires-demotion`), so an
@@ -2576,7 +2580,6 @@ mitigated state. Accepting one means recording who accepted it and against which
 
   | Issue | Accepted risk | Revisit when | Accepted |
   |---|---|---|---|
-  | [#718](https://github.com/sergio-salcedo-dev/ERPify/issues/718) | Prune-exempt GDPR evidence rows keep the acting administrator's `actor_id`, `ip` and `user_agent` indefinitely | First production erasure of a real subject, an administrator leaving unerased, or a DPO review | the product owner, per the issue — not named, no date (opened 2026-08-14) |
 
 
 - [x] **A production restore could take the scriptable non-production path, closed 2026-10-23.**

@@ -10,12 +10,17 @@ use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditProvenance;
+use Erpify\Shared\Audit\Domain\AuditRedaction;
 use Erpify\Shared\Audit\Domain\AuditRetentionPolicy;
+use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditActorAnonymiser;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogPruner;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalAuditLogWriter;
 use Erpify\Shared\Audit\Infrastructure\Persistence\DbalSubjectErasureReconciler;
 use Erpify\Shared\Persistence\Infrastructure\PostgresAdvisoryLock;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
+use Monolog\LogRecord;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -43,6 +48,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
 {
     private const string ANCHOR = '2026-06-25T00:00:00+00:00';
+
+    private const string IP = '192.0.2.10';
+
+    private const string USER_AGENT = 'seeded-agent/1.0';
 
     /**
      * Asserted behaviourally rather than by row count, because the row surviving is not the point: the point
@@ -180,6 +189,161 @@ final class ErasureEvidenceRetentionFunctionalTest extends KernelTestCase
             );
             $this->assertSame(1, $this->countRowsForId($connection, $evidence), 'and the evidence still survives');
         });
+    }
+
+    /**
+     * What the exemption keeps is the row and its `actor_id`; what it no longer keeps is the acting party's
+     * `ip` and `user_agent` once the row is past the threshold of ITS OWN level — the cut-off the `DELETE` of
+     * that level uses, never a fixed `security` window. Every other row is seeded beside one that is cleared, so
+     * each term of the predicate has a row that goes red without it: the level threshold (an `activity`
+     * evidence row cleared at 200 days next to a `security` one kept), the actor term (a row the actor-axis
+     * erasure already redacted keeps that pass's sentinel), and the `ip`/`user_agent` term (a row with neither
+     * is not counted as cleared). The count is exact because the backlog is cleared first, so every row past a
+     * threshold is one this case seeded.
+     */
+    public function testItClearsTheRequestMetadataOfEvidencePastItsOwnLevelsThresholdAndNothingElse(): void
+    {
+        $this->inRolledBackTransaction(function (Connection $connection): void {
+            $anchor = new DateTimeImmutable(self::ANCHOR);
+            $policy = new AuditRetentionPolicy(90, 365);
+            $connection->executeStatement(
+                'DELETE FROM audit_log WHERE occurred_on < :cutoff',
+                ['cutoff' => $this->leastRestrictiveThreshold($policy, $anchor)],
+            );
+            $rows = $this->seedClearCandidates($connection, $anchor);
+
+            $log = new TestHandler();
+            (new DbalAuditLogPruner($connection, new PostgresAdvisoryLock($connection), new Logger('audit', [$log])))
+                ->prune(...$policy->thresholdsAt($anchor))
+            ;
+
+            foreach (['pastSecurity', 'userAgentOnly', 'pastActivity'] as $cleared) {
+                $this->assertSame(
+                    [null, null],
+                    $this->requestMetadataOf($connection, $rows[$cleared]['id']),
+                    \sprintf('%s: evidence past the threshold of its own level keeps no request metadata', $cleared),
+                );
+            }
+
+            $this->assertSame(
+                $rows['pastSecurity']['actor'],
+                $connection->fetchOne(
+                    'SELECT actor_id FROM audit_log WHERE id = :id',
+                    ['id' => $rows['pastSecurity']['id']],
+                ),
+                'the attribution is what the evidence is for, so the actor id stays',
+            );
+            $this->assertSame(
+                [self::IP, self::USER_AGENT],
+                $this->requestMetadataOf($connection, $rows['withinSecurity']['id']),
+                'a security evidence row is judged by the security threshold, not by the shortest window',
+            );
+            $this->assertSame(
+                [self::IP, self::USER_AGENT],
+                $this->requestMetadataOf($connection, $rows['ordinaryWithin']['id']),
+                'a row inside its window is not touched',
+            );
+            $this->assertSame(
+                [AuditRedaction::SENTINEL, AuditRedaction::SENTINEL],
+                $this->requestMetadataOf($connection, $rows['actorAxisResolved']['id']),
+                "a row the actor-axis erasure resolved keeps that pass's sentinel",
+            );
+            $this->assertSame([null, null], $this->requestMetadataOf($connection, $rows['neverCaptured']['id']));
+            $this->assertTrue(
+                $log->hasInfoThatPasses(
+                    static fn (LogRecord $record): bool => ['removed' => 0, 'cleared' => 3] === $record->context,
+                ),
+                'exactly the three rows holding metadata past their threshold are cleared, and nothing is deleted',
+            );
+        });
+    }
+
+    /**
+     * One row per term of the clear's predicate, each named for what it must show.
+     *
+     * @return array{
+     *     pastSecurity: array{id: string, actor: string},
+     *     userAgentOnly: array{id: string, actor: string},
+     *     pastActivity: array{id: string, actor: string},
+     *     withinSecurity: array{id: string, actor: string},
+     *     ordinaryWithin: array{id: string, actor: string},
+     *     actorAxisResolved: array{id: string, actor: string},
+     *     neverCaptured: array{id: string, actor: null},
+     * }
+     */
+    private function seedClearCandidates(Connection $connection, DateTimeImmutable $anchor): array
+    {
+        $writer = new DbalAuditLogWriter($connection);
+        /** @return array{id: string, actor: string} */
+        $seed = function (
+            string $action,
+            AuditLevel $level,
+            int $age,
+            ?string $ip = self::IP,
+        ) use (
+            $writer,
+            $anchor,
+        ): array {
+            $actor = Uuid::generate();
+
+            return [
+                'id' => $this->seedCaptured($writer, $action, $level, $this->daysBefore($anchor, $age), $actor, $ip),
+                'actor' => $actor,
+            ];
+        };
+
+        $actorAxisResolved = $seed('GDPR_SUBJECT_ERASED', AuditLevel::SECURITY, 400);
+        (new DbalAuditActorAnonymiser($connection))->anonymise($actorAxisResolved['actor']);
+
+        return [
+            'pastSecurity' => $seed('GDPR_SUBJECT_ERASED', AuditLevel::SECURITY, 400),
+            'userAgentOnly' => $seed('GDPR_ERASURE_EXECUTED', AuditLevel::SECURITY, 400, null),
+            'pastActivity' => $seed('GDPR_SUBJECT_ERASED', AuditLevel::ACTIVITY, 200),
+            'withinSecurity' => $seed('GDPR_SUBJECT_ERASED', AuditLevel::SECURITY, 200),
+            'ordinaryWithin' => $seed('BANK_ACCOUNTS_VIEWED', AuditLevel::SECURITY, 200),
+            'actorAxisResolved' => $actorAxisResolved,
+            'neverCaptured' => [
+                'id' => $this->seedSecurityRow($writer, 'GDPR_SUBJECT_ERASED', $this->daysBefore($anchor, 400)),
+                'actor' => null,
+            ],
+        ];
+    }
+
+    private function seedCaptured(
+        DbalAuditLogWriter $writer,
+        string $action,
+        AuditLevel $level,
+        DateTimeImmutable $occurredOn,
+        string $actorId,
+        ?string $ip = self::IP,
+    ): string {
+        $entry = AuditLogEntry::create(
+            $action,
+            $level,
+            new AuditProvenance(
+                ActorContext::forUser($actorId),
+                Uuid::generate(),
+                $occurredOn,
+                $ip,
+                self::USER_AGENT,
+            ),
+        );
+        $writer->write($entry);
+
+        return $entry->id;
+    }
+
+    /**
+     * @return array{mixed, mixed}
+     */
+    private function requestMetadataOf(Connection $connection, string $id): array
+    {
+        $row = $connection->fetchAssociative('SELECT ip, user_agent FROM audit_log WHERE id = :id', ['id' => $id]);
+        $this->assertIsArray($row, 'the row is still there');
+        $this->assertArrayHasKey('ip', $row);
+        $this->assertArrayHasKey('user_agent', $row);
+
+        return [$row['ip'], $row['user_agent']];
     }
 
     private function daysBefore(DateTimeImmutable $anchor, int $days): DateTimeImmutable

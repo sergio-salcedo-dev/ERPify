@@ -16,21 +16,21 @@ use PHPUnit\Framework\TestCase;
  * Both ADRs call these logs append-only "with a closed set of sanctioned mutations" (event-store-and-projections
  * D12, audit-activity-log D4), and for as long as that phrase had no gate behind it, "closed" meant only that a
  * reviewer might notice. The set is declared below, as a constant of this gate rather than a registry at the api
- * root: widening it is a diff to this file, which is exactly the moment a reviewer has to read. Four members
- * across the two tables — the GDPR rewrite of the event log, the two audit erasure axes and the audit retention
- * prune.
+ * root: widening it is a diff to this file, which is exactly the moment a reviewer has to read. Five statements
+ * in four files across the two tables — the GDPR rewrite of the event log, the two audit erasure axes and the
+ * audit retention prune, which deletes past retention and clears the request metadata of the rows it exempts.
  *
  * The comparison is EQUALITY, not "found is a subset of declared". The missing direction is the one that keeps
  * the sweep honest: an extractor broken into seeing nothing would otherwise report the cleanest tree possible.
  * {@see SanctionedLogMutationRulesGateTest} falsifies the extractor against synthetic source, and
  * {@see SanctionedLogMutationBlindSpotGateTest} pins the shapes it does not reconstruct, listed below.
  *
- * {@see AuditPruneStatementGateTest} is not superseded: it pins the clauses of the prune (`ORDER BY id LIMIT
- * :batch FOR UPDATE`), which this gate does not read.
+ * {@see AuditPruneStatementGateTest} is not superseded: it pins the clauses of the prune's two statements
+ * (`ORDER BY id LIMIT :batch FOR UPDATE`, `ORDER BY id FOR UPDATE`), which this gate does not read.
  *
  * **What a green proves:** every `.php` under `api/src` issues, against either log, exactly the mutations
  * declared here — no `UPDATE`, `DELETE`, `TRUNCATE`, `MERGE` or upsert (`INSERT … ON CONFLICT … DO UPDATE`)
- * elsewhere, and none of the four lost — as far as a statement is spelled in string literals, `.`
+ * elsewhere, and none of the five lost — as far as a statement is spelled in string literals, `.`
  * concatenations of them, heredocs, `self::`/`static::` string constants of the same file, or DBAL's
  * `->update('<log>')` / `->delete('<log>')` (positional, or a `table:` named argument in any position).
  *
@@ -72,7 +72,7 @@ final class SanctionedLogMutationGateTest extends TestCase
      */
     private const array SANCTIONED = [
         'Shared/Audit/Infrastructure/Persistence/DbalAuditActorAnonymiser.php' => ['UPDATE audit_log'],
-        'Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php' => ['DELETE audit_log'],
+        'Shared/Audit/Infrastructure/Persistence/DbalAuditLogPruner.php' => ['DELETE audit_log', 'UPDATE audit_log'],
         'Shared/Audit/Infrastructure/Persistence/DbalAuditResourceAnonymiser.php' => ['UPDATE audit_log'],
         'Shared/Event/Infrastructure/Persistence/DbalEventStoreSubjectAnonymiser.php' => ['UPDATE event_store'],
     ];

@@ -28,43 +28,21 @@ namespace Erpify\Shared\Audit\Domain;
  * same argument that earned {@see AuditRedaction} its extraction, and it is why the acceptance test spells
  * these literals out by hand instead of importing them.
  *
- * **What an exempt row keeps for ever, stated in full because the exemption is what makes it immortal.**
- * These rows are minted through {@see \Erpify\Shared\Audit\Infrastructure\SealedAuditEntryFactory}, which
- * seals request metadata onto **every** entry, so an erasure executed over HTTP writes the acting
- * administrator's `ip` and `user_agent` alongside their `actor_id` — and the resource-axis anonymiser
- * deliberately leaves those two alone wherever an actor was identified, because they are that
- * administrator's data and not the subject's. So the exemption retains all three indefinitely, not just the
- * id: exactly the triple `docs/rules/database.md` names as the PII whose bounded window *is* the
- * minimisation. There is a removal path and it is **discretionary**: the actor-axis erasure matches
- * `actor_id`, so these columns clear only if that administrator's trail is erased. Which route reaches it
- * matters, because only one of them is gated. The *identity* route refuses a subject still carrying `ADMIN`,
- * so it needs a demotion first — and the ≥1-admin invariant permits that only while a second active
- * administrator **exists**, who also has to perform it, since a self-targeted role change is refused. The
- * operator CLI `audit:gdpr:erase` carries no such gate: it anonymises by `actor_id` for any UUID, with no
- * role check. Separately, and not to be read as the same fact: the CLI paths do not *write* these columns on
- * the rows they mint — they run off-request as `system`, with both null.
+ * **What the exemption keeps, and what it does not.** These rows are minted through
+ * {@see \Erpify\Shared\Audit\Infrastructure\SealedAuditEntryFactory}, which seals request metadata onto
+ * **every** entry, so an erasure executed over HTTP writes the acting administrator's `ip` and `user_agent`
+ * beside their `actor_id`. The row and its `actor_id` are kept for ever, because the attribution is what the
+ * evidence is for. The other two are not: once the row is past the threshold of its own level — the same
+ * {@see AuditRetentionThreshold} the prune's `DELETE` applies there — the same run sets both to `NULL`, so the
+ * window that minimises every other row's request metadata reaches these too. `NULL` rather than
+ * {@see AuditRedaction::SENTINEL}, because retention is not an erasure axis, and a row the actor-axis erasure
+ * already resolved keeps that pass's sentinel. Inside the window the only removal path is that erasure, which
+ * matches by `actor_id`; the identity route to it refuses a subject still carrying `ADMIN`, while the operator
+ * CLI `audit:gdpr:erase` carries no role check. The CLI paths write both columns `NULL` on the rows they mint,
+ * running off-request as `system`.
  *
- * **Weighed and accepted, not overlooked.** The two actions do not have the same correct retention, only
- * the same floor of "longer than 365 days". `SUBJECT_ERASED` needs never, because its falsifier is eternal.
- * `ACTOR_TRAIL_ERASED` answers for `actor_erased` marks on `change` rows, which are themselves pruned at
- * five years — so retaining it for ever over-retains the acting administrator past the point anything could
- * check it against. Both are exempt anyway. The two narrower shapes were considered and declined: a bounded
- * floor for `ACTOR_TRAIL_ERASED` splits one rule into two for a difference no reader would infer from the
- * rows, and keeping request metadata off these rows at write time would strip attribution from the one class
- * of row whose purpose *is* attribution — an erasure nobody can place is weaker evidence than an
- * over-retained address is a harm. What bounds the exposure in practice is deployment shape, not a system
- * property, and the two must not be read as one: nothing caps the `ADMIN` set — `users.grantAdmin` exists —
- * and on a single-administrator installation the identity route above is closed until someone else holds
- * `ADMIN`. That is a bound on one route, not on the exposure: the operator CLI still clears those columns
- * for any actor id. What the system guarantees is the narrower half — the CLI paths write both columns null
- * on the rows they mint.
- *
- * **Revisit trigger**, so the acceptance does not become invisible: the first of a production deployment
- * that erases a real subject, an administrator who leaves and is not erased, or a DPO review — whichever
- * comes first. At that point the choice is the bounded floor, and this paragraph is the record that it was
- * a choice. Only the first condition is machine-observable, and this paragraph is not what observes it:
- * issue #718 carries the candidate predicate and is the artefact with an inbox. Prose in four files is a
- * record, never a wake-up.
+ * Why the two actions share one exemption although their correct retention differs, and what reopens the
+ * choice of threshold, is `docs/adr/audit-activity-log.md` D4.
  */
 final class AuditErasureEvidence
 {
