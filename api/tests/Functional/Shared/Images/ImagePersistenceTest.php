@@ -18,7 +18,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 /**
  * The aggregate against real Postgres. Two properties live here that nothing else can observe: that a
  * row round-trips without the constructor running again, and that the table holds exactly the seven
- * fields the contract allows.
+ * fields the contract allows plus the origin pair of a dependent image (ADR D8).
  *
  * Each case runs inside a transaction that is always rolled back — the suite has no DAMA auto-rollback
  * and shares the dev database connection.
@@ -85,7 +85,7 @@ final class ImagePersistenceTest extends KernelTestCase
      * "every actual column is expected" loop passes over zero rows — a missing table, a wrong schema
      * filter or an unapplied migration would all read as success.
      */
-    public function testTheTableHoldsExactlyTheSevenFieldsTheContractAllows(): void
+    public function testTheTableHoldsExactlyTheFieldsTheContractAllows(): void
     {
         $this->withEntityManager(function (EntityManagerInterface $entityManager): void {
             $columns = $entityManager->getConnection()->fetchAllAssociative(
@@ -107,8 +107,10 @@ final class ImagePersistenceTest extends KernelTestCase
                 ['column_name' => 'height', 'data_type' => 'integer', 'is_nullable' => 'NO'],
                 ['column_name' => 'id', 'data_type' => 'uuid', 'is_nullable' => 'NO'],
                 ['column_name' => 'media_type', 'data_type' => 'character varying', 'is_nullable' => 'NO'],
+                ['column_name' => 'origin_id', 'data_type' => 'uuid', 'is_nullable' => 'YES'],
+                ['column_name' => 'origin_type', 'data_type' => 'character varying', 'is_nullable' => 'YES'],
                 ['column_name' => 'width', 'data_type' => 'integer', 'is_nullable' => 'NO'],
-            ], $columns, 'exactly seven fields: no updated_at, no owner_id, no filename, no storage_path, no url');
+            ], $columns, 'seven fields and the origin pair: no updated_at, owner_id, filename, storage_path or url');
         });
     }
 
@@ -123,7 +125,7 @@ final class ImagePersistenceTest extends KernelTestCase
      * addition. The primary key is asserted in the same breath: it is what makes a reused identifier fail
      * instead of overwriting.
      */
-    public function testTheOnlyIndexOnTheTableIsItsPrimaryKey(): void
+    public function testTheIndexesAreThePrimaryKeyAndTheNonUniqueOriginLookup(): void
     {
         $this->withEntityManager(function (EntityManagerInterface $entityManager): void {
             $connection = $entityManager->getConnection();
@@ -136,7 +138,16 @@ final class ImagePersistenceTest extends KernelTestCase
             );
 
             $this->assertNotSame([], $indexes, 'the table must exist, or this proves nothing');
-            $this->assertSame(['image_pkey'], \array_keys($indexes), 'no unique digest index, no extra index');
+            $this->assertSame(
+                ['idx_image_origin', 'image_pkey'],
+                \array_keys($indexes),
+                'no unique digest index; the one extra index is the release re-query by origin (ADR D8)',
+            );
+            $origin = $indexes['idx_image_origin'] ?? null;
+            $this->assertIsString($origin);
+            $this->assertStringNotContainsString('UNIQUE', $origin, 'many derivatives share one origin');
+            $this->assertStringContainsString('(origin_type, origin_id)', $origin);
+            $this->assertStringContainsString('WHERE (origin_id IS NOT NULL)', $origin, 'fungible images stay out');
 
             $primaryKey = $indexes['image_pkey'] ?? null;
             $this->assertIsString($primaryKey);
@@ -151,6 +162,15 @@ final class ImagePersistenceTest extends KernelTestCase
             );
 
             $this->assertSame(['PRIMARY KEY'], $constraints, 'no foreign key: this module references nobody');
+
+            $this->assertSame(
+                ['CHECK ((origin_type IS NULL) = (origin_id IS NULL))'],
+                $connection->fetchFirstColumn(
+                    'SELECT pg_get_constraintdef(oid, true) FROM pg_constraint WHERE conname = :name',
+                    ['name' => 'chk_image_origin_paired'],
+                ),
+                'an origin is a pair or nothing',
+            );
         });
     }
 

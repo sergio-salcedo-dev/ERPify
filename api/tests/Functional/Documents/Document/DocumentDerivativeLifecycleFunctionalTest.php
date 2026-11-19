@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\Derivative\MaterialiseDocumentDerivative;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
+use Erpify\Documents\Document\Application\Read\ReadDocument;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesHandler;
 use Erpify\Documents\Document\Infrastructure\Messenger\Maintenance\ReleaseErasedDerivativesMessage;
@@ -69,6 +70,7 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
         FakeMalwareScanner::reset();
         FakeErasureLedger::reset();
         $this->emptyDocumentTables();
+        $this->deleteReadAuditRows();
     }
 
     protected function tearDown(): void
@@ -81,6 +83,7 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
         FakeMalwareScanner::reset();
         FakeErasureLedger::reset();
         $this->emptyDocumentTables();
+        $this->deleteReadAuditRows();
         parent::tearDown();
     }
 
@@ -163,6 +166,17 @@ final class DocumentDerivativeLifecycleFunctionalTest extends WebTestCase
         $this->readDocument($documentId);
         $this->assertStatus(Response::HTTP_GONE, 'the original is gone too');
         $this->derivatives = [];
+    }
+
+    /**
+     * The read route writes its audit rows, and other suites count them: this case leaves none behind.
+     */
+    private function deleteReadAuditRows(): void
+    {
+        $this->connection()->executeStatement(
+            'DELETE FROM audit_log WHERE action IN (:read, :generic)',
+            ['read' => ReadDocument::AUDIT_ACTION, 'generic' => 'ROUTE_DOCUMENTS_READ'],
+        );
     }
 
     private function releaseTick(): void
