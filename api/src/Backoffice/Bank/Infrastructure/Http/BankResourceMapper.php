@@ -32,6 +32,7 @@ final readonly class BankResourceMapper
             $entity->getCreatedAt()->format(DateTimeInterface::ATOM),
             $entity->getUpdatedAt()->format(DateTimeInterface::ATOM),
             $bank->accountCount,
+            $entity->getLogoImageId(),
         );
     }
 
@@ -46,6 +47,7 @@ final readonly class BankResourceMapper
             $entity->getCreatedAt()->format(DateTimeInterface::ATOM),
             $entity->getUpdatedAt()->format(DateTimeInterface::ATOM),
             $bank->accountCount,
+            $entity->getLogoImageId(),
         );
     }
 

@@ -61,6 +61,10 @@ transaction. Whether an event may be routed at all is governed by the persisted-
 | `erpify.backoffice.bank.updated` | 1 | `BankUpdater` | `BankSnapshot` (full) | Mercure · email |
 | `erpify.backoffice.bank.deleted` | 1 | `BankDeleter` | *empty* `{}` (id in envelope) | Mercure · `bank_count` (−1) |
 
+A change of the bank's logo records **no event**: `Bank::changeLogo()` is a decision, `BankSnapshot` carries no logo, and
+the change is traced by the audit diff (`logoImageId` and `updatedAt` in the `BANK_UPDATED` row) and the release of the
+replaced image by `ImageDeletionRequested`. A logo-only change therefore pushes nothing to Mercure.
+
 Source: [`api/src/Backoffice/Bank/Domain/Event/`](../../api/src/Backoffice/Bank/Domain/Event/BankCreatedDomainEvent.php).
 
 ### Iam.Identity (`aggregateType: Iam.Identity`)
@@ -211,7 +215,8 @@ reconcile by `id`, so a re-applied update or delete is a no-op.
 Owned by the reactor
 [`RefreshRealtimeOnBankChanged`](../../api/src/Backoffice/Bank/Infrastructure/Messenger/RefreshRealtimeOnBankChanged.php).
 The wire shape is the snapshot's four fields plus `id`, and adds `accountCount`, resolved at publish
-time via `BankAccountCountEnricher::countFor()`.
+time via `BankAccountCountEnricher::countFor()`, and `logoImageId`, resolved at publish time through the
+`BankLogoReader` port (one scalar read of the column per event, `null` for a bank without a logo or one already gone).
 
 Topics ([`MercureBankTopic`](../../api/src/Backoffice/Bank/Domain/MercureBankTopic.php)):
 
@@ -222,7 +227,7 @@ Topics ([`MercureBankTopic`](../../api/src/Backoffice/Bank/Domain/MercureBankTop
 
 | Triggering event | Topics | Message |
 |------------------|--------|---------|
-| created | `COLLECTION` | `{ "type": "bank.created", "bank": { id, name, shortName, createdAt, updatedAt, accountCount } }` |
+| created | `COLLECTION` | `{ "type": "bank.created", "bank": { id, name, shortName, createdAt, updatedAt, accountCount, logoImageId } }` |
 | updated | `COLLECTION`, `forBank(id)` | `{ "type": "bank.updated", "bank": { …same fields… } }` |
 | deleted | `COLLECTION`, `forBank(id)` | `{ "type": "bank.deleted", "id": "<bankId>" }` |
 

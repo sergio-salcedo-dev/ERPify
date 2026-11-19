@@ -11,13 +11,14 @@ Feature: Search banks
     When I send a "GET" request to "/backoffice/banks?limit=100"
     Then the response status code should be 200
     And the JSON node "data" should have 31 elements
-    And the JSON nodes matching "data[*]" should have 6 children
+    And the JSON nodes matching "data[*]" should have 7 children
     And the JSON nodes matching "data[*].id" should exist
     And the JSON nodes matching "data[*].name" should exist
     And the JSON nodes matching "data[*].shortName" should exist
     And the JSON nodes matching "data[*].createdAt" should exist
     And the JSON nodes matching "data[*].updatedAt" should exist
     And the JSON nodes matching "data[*].accountCount" should exist
+    And the JSON nodes matching "data[*].logoImageId" should exist
     And the JSON node "pagination" should have 4 elements
     And the JSON node "pagination.hasNext" should be false
     And the JSON node "pagination.hasPrev" should be false

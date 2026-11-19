@@ -9,8 +9,8 @@ ERPify/
 │   │   ├── Kernel.php              # Symfony kernel (entry)
 │   │   ├── Backoffice/
 │   │   │   ├── Bank/               # Bank bounded context
-│   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/)
-│   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free)
+│   │   │   │   ├── Application/    # Use cases, DTOs (Application/Http/); the logo: BankLogoHolder (ImageHolder over Shared/Images), BankLogoSetter/Remover
+│   │   │   │   ├── Domain/         # Entity, Event, Exception, Repository (framework-free); BankLogoReader read port
 │   │   │   │   └── Infrastructure/ # Controller, Http, Messenger (event subscribers `<Effect>On<Event>`, see docs/rules/cqrs-naming.md), Persistence, Projection, Security
 │   │   │   ├── BankAccount/        # BankAccount context — references Bank by id only (no object graph crosses the boundary; see docs/adr/bank-bankaccount-modeling.md)
 │   │   │   │   ├── Application/    # Use cases, DTOs
@@ -78,7 +78,7 @@ ERPify/
 │   │   │   ├── _components/        # App-shell components (route-private)
 │   │   │   ├── (auth)/             # Auth route group (login, accept-invitation, forgot/reset-password, recovery)
 │   │   │   ├── (errors)/           # Error/maintenance route group (offline, rate-limited, unauthenticated, …)
-│   │   │   ├── backoffice/         # Backoffice shell + 32 feature route segments (banks, users, invoices, … — many scaffolded shells)
+│   │   │   ├── backoffice/         # Backoffice shell + 32 feature route segments (banks, users, invoices, … — many scaffolded shells); the bank logo control is `banks/_components/BankLogoControl.tsx`
 │   │   │   └── status/             # Public status page (reuses FrontOffice health use case)
 │   │   ├── components/
 │   │   │   ├── ui/                 # Base UI primitives (@base-ui/react) + shared UI

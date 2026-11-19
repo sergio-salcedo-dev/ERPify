@@ -22,3 +22,20 @@ describe("Bank.fromPrimitives — accountCount", () => {
     expect(typeof bank.accountCount).toBe("number");
   });
 });
+
+describe("Bank.fromPrimitives — logoImageId", () => {
+  const LOGO = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
+
+  it("carries the id the API sent", () => {
+    expect(Bank.fromPrimitives({ ...BASE, accountCount: 0, logoImageId: LOGO }).logoImageId).toBe(
+      LOGO,
+    );
+  });
+
+  it("reads an explicit null and an absent key alike as no logo", () => {
+    expect(
+      Bank.fromPrimitives({ ...BASE, accountCount: 0, logoImageId: null }).logoImageId,
+    ).toBeNull();
+    expect(Bank.fromPrimitives({ ...BASE, accountCount: 0 }).logoImageId).toBeNull();
+  });
+});

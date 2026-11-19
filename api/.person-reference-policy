@@ -239,6 +239,8 @@ Erpify\Documents\Document\Domain\Entity\UploadIntent::$documentId => non-person
 Erpify\Documents\Document\Domain\Entity\UploadIntent::$predecessorId => non-person
 
 # References between aggregates that are not people.
+# The id of a bank's logo: an `Image` row, never a person; its release is a queued request, not an erasure.
+Erpify\Backoffice\Bank\Domain\Entity\Bank::$logoImageId => non-person
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$organizationId => non-person

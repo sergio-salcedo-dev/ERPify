@@ -43,6 +43,11 @@ function isNonNegativeInteger(value: unknown): value is number {
  * to 0 rather than dropping the whole event — losing a created/updated delivery
  * over a cosmetic field is the worse failure. The next list/detail fetch
  * reconciles the count (stale-tolerant).
+ *
+ * `logoImageId` follows the same stale-tolerance in the other direction: the API resolves it at publish
+ * time and always sends it (`null` for a bank without a logo), so an absent or non-string key becomes
+ * `null` rather than dropping the event. An open detail page replaces its state with this payload, which
+ * is why the key must survive parsing.
  */
 function toBankPrimitives(value: unknown): BankPrimitives | null {
   if (typeof value !== "object" || value === null) {
@@ -65,6 +70,7 @@ function toBankPrimitives(value: unknown): BankPrimitives | null {
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
     accountCount: isNonNegativeInteger(v.accountCount) ? v.accountCount : 0,
+    logoImageId: typeof v.logoImageId === "string" && v.logoImageId !== "" ? v.logoImageId : null,
   };
 }
 

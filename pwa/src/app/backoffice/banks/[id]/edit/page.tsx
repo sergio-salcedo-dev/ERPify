@@ -18,6 +18,7 @@ import { PersistenceAction, ViewStatus } from "@/context/shared/view-state/domai
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { bankRoutes } from "../../_lib/bankRoutes";
 import { BankForm } from "../../_components/BankForm";
+import { BankLogoControl } from "../../_components/BankLogoControl";
 
 type State = ViewStatus;
 
@@ -41,6 +42,9 @@ export default function EditBankPage() {
   const [state, setState] = useState<State>(ViewStatus.LOADING);
   const [bank, setBank] = useState<Bank | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  // The logo id the screen holds. Seeded from the loaded bank and then set from the write's own
+  // answer, never from a refetch, so a read that lands late cannot restore the id just replaced.
+  const [logoImageId, setLogoImageId] = useState<string | null>(null);
   // Bumped by the form's "Refresh" recovery action (stale 404). Re-runs the
   // load so a bank deleted in parallel lands on the not-found empty state.
   const [reloadToken, setReloadToken] = useState(0);
@@ -50,6 +54,16 @@ export default function EditBankPage() {
   // (mirrors the detail page's pendingRefreshFocusRef pattern).
   const pendingRefreshFocusRef = useRef(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // The bank the screen shows now. An upload started on another bank's screen settles after the
+  // route moved on, and its answer must not land on this one.
+  const currentIdRef = useRef(id);
+  useEffect(() => {
+    currentIdRef.current = id;
+  }, [id]);
+  const reloadStaleBank = () => {
+    pendingRefreshFocusRef.current = true;
+    setReloadToken((token) => token + 1);
+  };
 
   // Reset state when ID changes to avoid synchronous setState in useEffect
   const [prevId, setPrevId] = useState(id);
@@ -57,6 +71,7 @@ export default function EditBankPage() {
     setPrevId(id);
     setState(ViewStatus.LOADING);
     setBank(null);
+    setLogoImageId(null);
     setProblem(null);
   }
 
@@ -69,6 +84,7 @@ export default function EditBankPage() {
         const result = await useCase.run(id);
         if (cancelled) return;
         setBank(result);
+        setLogoImageId(result.logoImageId);
         setState(ViewStatus.READY);
       } catch (err) {
         if (cancelled) return;
@@ -163,14 +179,20 @@ export default function EditBankPage() {
             </p>
           </header>
 
+          <BankLogoControl
+            bankId={bank.id}
+            logoImageId={logoImageId}
+            onLogoChange={(next) => {
+              if (currentIdRef.current === bank.id) setLogoImageId(next);
+            }}
+            onStaleBank={reloadStaleBank}
+          />
+
           <BankForm
             key={bank.id}
             mode={PersistenceAction.UPDATING}
             initial={{ id: bank.id, name: bank.name, shortName: bank.shortName }}
-            onStaleBank={() => {
-              pendingRefreshFocusRef.current = true;
-              setReloadToken((token) => token + 1);
-            }}
+            onStaleBank={reloadStaleBank}
           />
         </>
       ) : null}

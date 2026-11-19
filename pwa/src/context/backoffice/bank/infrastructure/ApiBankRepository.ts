@@ -31,6 +31,12 @@ function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
 
+// An absent `logoImageId` is read as `null` ("no logo"): the field is optional on the wire, and a missing
+// optional field must not fail the whole page. Any other non-string value is a malformed row.
+function isOptionalLogoImageId(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === "string";
+}
+
 function isBankPrimitives(value: unknown): value is BankPrimitives {
   return (
     isObjectRecord(value) &&
@@ -39,7 +45,8 @@ function isBankPrimitives(value: unknown): value is BankPrimitives {
     typeof value.shortName === "string" &&
     typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string" &&
-    isNonNegativeInteger(value.accountCount)
+    isNonNegativeInteger(value.accountCount) &&
+    isOptionalLogoImageId(value.logoImageId)
   );
 }
 
@@ -85,6 +92,9 @@ export function isBankSingleResponse(value: unknown): value is BankSingleRespons
 // DTO on the server, and the create/update ones are deliberately the narrowest bank view —
 // the count belongs to the read views, which compose it from the account projection. So the
 // field is optional here, and a write response that omits it is valid rather than malformed.
+// The same holds for `logoImageId`, which no write view carries: the `Bank` a create/update
+// returns reads 0 accounts and no logo whatever the bank holds, so it is never a read model to
+// replace a screen's state with — reload through `find()` for that.
 function isBankWriteSingleResponse(
   value: unknown,
 ): value is { data: Omit<BankPrimitives, "accountCount"> & { accountCount?: number } } {

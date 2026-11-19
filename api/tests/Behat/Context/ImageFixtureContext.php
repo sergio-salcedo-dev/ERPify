@@ -10,6 +10,7 @@ use Behat\Hook\BeforeScenario;
 use Behat\Step\Given;
 use Behat\Step\When;
 use Behat\Testwork\Environment\Environment;
+use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Shared\Images\Domain\Entity\Image;
 use Erpify\Shared\Images\Domain\ImageId;
 use Erpify\Shared\Images\Domain\Repository\ImageRepository;
@@ -54,6 +55,7 @@ final class ImageFixtureContext extends AbstractContext
         private readonly ImageRepository $images,
         private readonly ImageStorage $storage,
         private readonly TransactionManager $transactionManager,
+        private readonly EntityManagerInterface $entityManager,
     ) {
     }
 
@@ -103,10 +105,63 @@ final class ImageFixtureContext extends AbstractContext
         $this->storage->delete($this->identifier());
     }
 
+    /**
+     * Makes a bank the holder of the image this scenario seeded, so a scenario that replaces, removes or deletes it
+     * can follow THAT identifier afterwards — a response only ever names the new one.
+     */
+    #[Given('the bank :bankId holds that image as its logo')]
+    public function theBankHoldsThatImageAsItsLogo(string $bankId): void
+    {
+        $updated = $this->entityManager->getConnection()->executeStatement(
+            'UPDATE bank SET logo_image_id = :image WHERE id = :bank',
+            ['image' => $this->identifier()->toString(), 'bank' => $bankId],
+        );
+
+        if (1 !== $updated) {
+            throw new RuntimeException(\sprintf('No bank %s was seeded, so it cannot hold that image.', $bankId));
+        }
+    }
+
     #[When('I send a :method request for that image')]
     public function iSendARequestForThatImage(string $method): void
     {
         $this->requestContext()->iSendARequestTo($method, '/images/' . $this->identifier()->toString());
+    }
+
+    /**
+     * The one step that sends a binary body: an image fixture, byte for byte, with the `Content-Length` of those bytes
+     * unless the scenario set another. The media type is the scenario's own `Content-Type` header, which is how a
+     * label that contradicts the bytes is sent.
+     */
+    #[When('I send a :method request to :url with the bytes of the image fixture :name')]
+    public function iSendARequestToWithTheBytesOfTheImageFixture(string $method, string $url, string $name): void
+    {
+        $this->requestContext()->sendRawBytes($method, $url, $this->fixtureBytes($name), true);
+    }
+
+    /**
+     * The same body with NO `Content-Length` of its own: the refusal the edge's mandatory length exists to make, since
+     * a body Caddy cut at its bound reaches the application as a clean, shorter stream.
+     */
+    #[When('I send a :method request to :url with the bytes of the image fixture :name and no Content-Length')]
+    public function iSendARequestToWithTheBytesOfTheImageFixtureAndNoContentLength(
+        string $method,
+        string $url,
+        string $name,
+    ): void {
+        $this->requestContext()->sendRawBytes($method, $url, $this->fixtureBytes($name), false);
+    }
+
+    private function fixtureBytes(string $name): string
+    {
+        $path = \dirname(__DIR__, 2) . '/Fixtures/Images/' . \basename($name);
+        $bytes = \is_file($path) ? \file_get_contents($path) : false;
+
+        if (false === $bytes) {
+            throw new RuntimeException(\sprintf('No image fixture "%s" under tests/Fixtures/Images.', $name));
+        }
+
+        return $bytes;
     }
 
     /**

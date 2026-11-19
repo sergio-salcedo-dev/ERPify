@@ -60,13 +60,15 @@ final class BankDetailResponseGoldenFunctionalTest extends WebTestCase
 
         // Exact ordered key set — a key added/removed/renamed or reordered fails here.
         $this->assertSame(
-            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount'],
+            ['id', 'name', 'shortName', 'createdAt', 'updatedAt', 'accountCount', 'logoImageId'],
             \array_keys($data),
         );
         $this->assertSame($id, $this->node($data, 'id'));
         $this->assertSame('JPMorgan Chase', $this->node($data, 'name'));
         $this->assertSame('JPM', $this->node($data, 'shortName'));
         $this->assertSame(0, $this->node($data, 'accountCount'));
+        // Present and null for a bank without a logo, never absent: the PWA decoder reads the key.
+        $this->assertNull($this->node($data, 'logoImageId'));
         // Format pin: timestamps stay ISO-8601 ATOM, not the serializer default.
         $this->assertMatchesRegularExpression(self::ATOM_PATTERN, $this->stringNode($data, 'createdAt'));
         $this->assertMatchesRegularExpression(self::ATOM_PATTERN, $this->stringNode($data, 'updatedAt'));

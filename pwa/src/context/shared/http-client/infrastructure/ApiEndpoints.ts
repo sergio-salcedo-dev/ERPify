@@ -26,6 +26,10 @@ function bankPath(id: string): string {
   return `${BACKOFFICE_PREFIX}/banks/${encodeURIComponent(id)}`;
 }
 
+function bankLogoPath(id: string): string {
+  return `${bankPath(id)}/logo`;
+}
+
 function bankAccountsPath(bankId: string): string {
   return `${BACKOFFICE_PREFIX}/banks/${encodeURIComponent(bankId)}/accounts`;
 }
@@ -73,6 +77,10 @@ export const API_ENDPOINTS = {
       DETAILS: bankPath,
       UPDATE: bankPath,
       DELETE: bankPath,
+      // The consumer-owned image write routes: one path, two keys, one verb each. Called through
+      // the `ImageUploader` port (`upload` / `remove`), not an `HttpClient` verb.
+      LOGO_SET: bankLogoPath,
+      LOGO_REMOVE: bankLogoPath,
       ACCOUNTS: bankAccountsPath,
       REALTIME_AUTHORIZE: `${BACKOFFICE_PREFIX}/banks/realtime/authorize`,
     },
