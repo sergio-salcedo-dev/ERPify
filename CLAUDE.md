@@ -210,6 +210,7 @@ Both sides follow **DDD + Hexagonal / Clean Architecture**, dependencies pointin
 3. Touch only what you must. Clean up your own mess, and leave the block you edit better than you found it (see *Boy scout rule*).
 4. Define success criteria. Loop until verified.
 5. Learn from your errors; don't repeat them. Follow up with a plan or doc when warranted.
+6. **Never self-block** — a missing contract, paper or data is a mock, not a stop (see [`docs/rules/agent-autonomy.md`](docs/rules/agent-autonomy.md)). Only production writes, real money, irreversible acts, published legal text and owner-only decisions (persistence strategy, aggregate boundaries) wait for a person.
 
 ---
 
