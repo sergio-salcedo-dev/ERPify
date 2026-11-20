@@ -115,7 +115,7 @@ Detailed exhaustive analysis of specific areas:
 - [CLAUDE.md](../CLAUDE.md) — Repo-wide Claude Code guidance
 - [api/CLAUDE.md](../api/CLAUDE.md) · [api/README.md](../api/README.md) · `api/docs/` — API-specific docs
 - [pwa/CLAUDE.md](../pwa/CLAUDE.md) · [pwa/README.md](../pwa/README.md) · `pwa/docs/` — PWA-specific docs
-- `docs/rules/*.md` — Authoritative coding rules (architecture, clean-code, commits, cqrs-naming, database, documentation, frontend, php-standards, read-side-projections, security, testing)
+- `docs/rules/*.md` — Authoritative coding rules (agent-autonomy, architecture, clean-code, commits, cqrs-naming, database, documentation, frontend, php-standards, read-side-projections, security, testing)
 
 ## Getting started
 
