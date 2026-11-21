@@ -7,6 +7,7 @@ namespace Erpify\Tests\Functional\Shared\Monitoring;
 use CurlHandle;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Tools\DsnParser;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use RuntimeException;
@@ -181,8 +182,7 @@ final class DevStackUploadRows
 
         foreach ($documents as $document) {
             $scope = $connection->fetchOne('SELECT scope_id FROM document WHERE id = :id', ['id' => $document]);
-            $connection->executeStatement('DELETE FROM document_custody WHERE document_id = :id', ['id' => $document]);
-            $connection->executeStatement('DELETE FROM document WHERE id = :id', ['id' => $document]);
+            $this->deleteDocument($document);
             // A first version opens the series named by its own id; the row goes with it, and only while no other
             // document holds the series.
             $connection->executeStatement(
@@ -200,6 +200,33 @@ final class DevStackUploadRows
         }
 
         $connection->close();
+    }
+
+    /**
+     * The running stack's scan worker can append a custody row between the two deletes, which the foreign key then
+     * refuses; the document is deleted again together with whatever that row was, a few times before giving up.
+     */
+    private function deleteDocument(string $document): void
+    {
+        $connection = $this->connection();
+
+        for ($attempt = 1;; ++$attempt) {
+            try {
+                $connection->executeStatement(
+                    'DELETE FROM document_custody WHERE document_id = :id',
+                    ['id' => $document],
+                );
+                $connection->executeStatement('DELETE FROM document WHERE id = :id', ['id' => $document]);
+
+                return;
+            } catch (ForeignKeyConstraintViolationException $violation) {
+                if ($attempt >= 5) {
+                    throw $violation;
+                }
+
+                \usleep(200_000);
+            }
+        }
     }
 
     private function removeScope(mixed $scope): void
