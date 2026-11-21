@@ -73,15 +73,16 @@ final readonly class DeclareUpload
 
     /**
      * Declares a new version of `$predecessorId`: the same declare, with the predecessor recorded on the intent and
-     * compared on a replay. A new intent is refused at once when the predecessor is absent or not `Ready`, or when a
-     * live version already holds its slot, so a caller does not stream 100 MiB to be told so at the commit; both are
-     * read without a lock and only advisory, since the commit decides again under the series lock.
+     * compared on a replay. A new intent is refused at once when the predecessor is absent or not `Ready`, when a
+     * series erasure has closed its series, or when a live version already holds its slot, so a caller does not stream
+     * 100 MiB to be told so at the commit; both are read without a lock and only advisory, since the commit decides
+     * again under the series lock.
      *
      * @throws DeclaredSizeOutOfRange  when the size is zero or above the cap
      * @throws IdempotencyKeyConflict  when the key was used with different parameters
      * @throws UploadInProgress        when the key's upload is streaming right now
      * @throws UploadCapacityExhausted when the actor holds too many live declared intents
-     * @throws PredecessorNotReady     when the predecessor is absent or not `Ready`
+     * @throws PredecessorNotReady     when the predecessor is absent or not `Ready`, or its series is closed
      * @throws VersionSlotTaken        when a live version already succeeds the predecessor
      */
     public function declareVersion(
@@ -280,7 +281,11 @@ final readonly class DeclareUpload
     {
         $predecessor = $this->documents->findById($predecessorId);
 
-        if (!$predecessor instanceof Document || DocumentState::Ready !== $predecessor->state()) {
+        if (
+            !$predecessor instanceof Document
+            || DocumentState::Ready !== $predecessor->state()
+            || $this->slots->isClosed($predecessor->seriesId())
+        ) {
             throw PredecessorNotReady::create();
         }
 

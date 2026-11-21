@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
+use Erpify\Documents\Document\Application\Erasure\EraseDocument;
+use Erpify\Documents\Document\Application\Erasure\SeriesErasure;
 use Erpify\Documents\Document\Application\Scanning\RescanDocument;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
 use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
@@ -44,6 +46,7 @@ use Throwable;
 #[CoversClass(RescanDocument::class)]
 #[CoversClass(TakeVersionSlot::class)]
 #[CoversClass(DbalDocumentVersionSlots::class)]
+#[CoversClass(EraseDocument::class)]
 final class VersionSlotPairsFunctionalTest extends KernelTestCase
 {
     use InterleavesWithASecondConnection;
@@ -123,6 +126,24 @@ final class VersionSlotPairsFunctionalTest extends KernelTestCase
         $this->erase($first);
         $this->assertSame('erased', $this->stateOfDocument($first));
         $this->assertSame(1, $this->liveChildrenOf($first), 'the new version stays live under its erased predecessor');
+    }
+
+    #[Test]
+    public function aSeriesErasureWaitsForANewVersionInFlightAndThenErasesItTooSoTheRunTerminates(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+
+        $this->holdTheSlotFor($first);
+        $this->holder()->executeStatement(...$this->successorInsert($first, DocumentState::Received));
+
+        $this->assertTrue($this->waits(fn (): SeriesErasure => $this->eraseSeries($first)), 'the close waits');
+
+        $this->holder()->commit();
+
+        $erasure = $this->eraseSeries($first);
+        $this->assertCount(2, $erasure->erased, 'the version filed before the close is listed and erased');
+        $this->assertSame([], $erasure->remaining);
+        $this->assertSame(0, $this->liveChildrenOf($first));
     }
 
     #[Test]
@@ -260,6 +281,13 @@ final class VersionSlotPairsFunctionalTest extends KernelTestCase
             Uuid::generate(),
             ErasureReason::UploadedInError->value,
         );
+    }
+
+    private function eraseSeries(string $seriesId): SeriesErasure
+    {
+        return $this->service(EraseDocument::class)
+            ->eraseSeries($seriesId, ErasureReason::RetentionExpired, Uuid::generate())
+        ;
     }
 
     private function reopen(string $documentId): void

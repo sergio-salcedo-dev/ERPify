@@ -30,8 +30,10 @@ use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Documents\Document\Domain\Upload\LegalBasis;
 use Erpify\Documents\Document\Domain\Upload\RetentionReason;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
+use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentSeriesRepository;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentVersionSlots;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
@@ -323,6 +325,10 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         ;
         $this->assertSame([], $repeat->erased);
         $this->assertSame([], $repeat->remaining);
+        $this->assertNotFalse($this->connection()->fetchOne(
+            'SELECT closed_at FROM document_series WHERE id = CAST(:id AS UUID) AND closed_at IS NOT NULL',
+            ['id' => $first],
+        ), 'the series erasure closed the series');
 
         $this->assertThrows(
             DocumentNotFound::class,
@@ -332,6 +338,26 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
                 Uuid::generate(),
             ),
         );
+    }
+
+    #[Test]
+    public function aSeriesClosedByAnErasureAdmitsNoVersionAgainWhileItsVersionsAreStillLive(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $failed = $this->plantVersion(DocumentState::ScanFailed, $first);
+        $claimed = $this->streamingVersionOf($first);
+        $actor = Uuid::generate();
+
+        $this->service(TransactionManager::class)->transactional(function () use ($first): void {
+            $this->service(DocumentVersionSlots::class)->close($first);
+        });
+
+        $this->assertThrows(PredecessorNotReady::class, fn (): Document => $this->commitVersion($claimed));
+        $this->assertThrows(PredecessorNotReady::class, fn () => $this->reopen($failed));
+        $this->assertDeclareRefused(PredecessorNotReady::class, $actor, $first);
+        $this->assertSame('ready', $this->stateOfDocument($first), 'closing erases nothing by itself');
+        $this->assertSame('scan_failed', $this->stateOfDocument($failed));
+        $this->assertSame(0, $this->liveChildrenCount($first));
     }
 
     #[Test]
@@ -440,6 +466,15 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         }
 
         return $outcome;
+    }
+
+    private function liveChildrenCount(string $predecessorId): int
+    {
+        return $this->intOf($this->connection()->fetchOne(
+            'SELECT COUNT(*) FROM document WHERE predecessor_id = CAST(:id AS UUID) '
+            . "AND state IN ('received', 'scanning', 'ready')",
+            ['id' => $predecessorId],
+        ));
     }
 
     private function intentState(string $intentId): string

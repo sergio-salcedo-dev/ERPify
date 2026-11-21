@@ -16,7 +16,7 @@ Feature: File a new version of a document and erase a whole series
 
   Scenario: A new version of a ready document is filed in its series and linked to it
     Given a ready document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f01" holding "first"
-    And I am logged in as an editor
+    And I am logged in as an administrator
     And I send a "POST" request to "/documents/0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f01/versions" with body:
     """
     {"size": 6, "retentionReason": "technical-file", "legalBasis": "contract"}
@@ -36,7 +36,7 @@ Feature: File a new version of a document and erase a whole series
 
   Scenario: The second of two uploads for one slot is aborted with a conflict at its commit
     Given a ready document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f02" holding "first"
-    And I am logged in as an editor
+    And I am logged in as an administrator
     And I send a "POST" request to "/documents/0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f02/versions" with body:
     """
     {"size": 6, "sha256": "16367aacb67a4a017c8da8ab95682ccb390863780f7114dda0a0e0c55644c7c4", "idempotencyKey": "acceptance-version-a", "retentionReason": "technical-file", "legalBasis": "contract"}
@@ -76,7 +76,7 @@ Feature: File a new version of a document and erase a whole series
 
   Scenario: A version of a document that is not ready is refused before a byte is sent
     Given a document in state "received" with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f03"
-    And I am logged in as an editor
+    And I am logged in as an administrator
     When I send a "POST" request to "/documents/0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f03/versions" with body:
     """
     {"size": 6, "retentionReason": "technical-file", "legalBasis": "contract"}

@@ -72,6 +72,7 @@ context:
 ## Spec Change Log
 
 - 2026-11-19 (the owner, after the architect consultation): option C replaces the design-B head pointer of the memlog and of `stories.yaml`; recorded in ADR D12 with the discarded alternatives and the reopening condition. Nothing about the head pointer was built.
+- 2026-11-19 (the owner, recorded in the documents handoff; applied 2026-11-21): reduce doc-9's accepted risks to zero. Three changes supersede the frozen bullets they touch. (1) **A series erasure terminates**: it first closes the series (`document_series.closed_at`, under the series row lock, in its own transaction outside every erasure transaction, so `TRANSACTION_LOCKS` stays 3), and both takes refuse a closed series with `document-predecessor-not-ready`, as does the declare; the frozen "guarantees no termination" no longer holds. (2) **`POST …/versions` asks `document.write` AND `document.download`** (the frozen "RBAC `document.write`" is narrowed; still RBAC, still no row-level voter), so in practice ADMIN only. (3) **No §7 acceptance**: the false 409 is recorded as the option-C contract (a retryable conflict) in ADR D12 and the error contract, the series page's uploader ids are stated as mirroring the listing, and the §7 entry is closed rather than accepted. Known-bad state avoided: an erasure that could be outrun by a concurrent filer, and an editor filing a version of a document only an ADMIN may read.
 
 ### To apply locally with memlog.py
 

@@ -16,7 +16,7 @@ final class Version20261119190500 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $this->addSql('CREATE TABLE document_series (id UUID NOT NULL, created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, PRIMARY KEY (id))');
+        $this->addSql('CREATE TABLE document_series (id UUID NOT NULL, created_at TIMESTAMP(6) WITH TIME ZONE NOT NULL, closed_at TIMESTAMP(6) WITH TIME ZONE DEFAULT NULL, PRIMARY KEY (id))');
         // Every document filed before this migration is a first version, so each series is one document; the row is
         // stamped with the earliest creation of its series, which `document.created_at` keeps in UTC.
         $this->addSql("INSERT INTO document_series (id, created_at) SELECT series_id, MIN(created_at) AT TIME ZONE 'UTC' FROM document GROUP BY series_id");

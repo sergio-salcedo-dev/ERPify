@@ -15,7 +15,8 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
 /**
  * The series mutex and the slot read over `document_series` and `document`, in plain DBAL: the series row is a lock and
- * nothing else — no head pointer, no count, no column a transition must remember to move — so it is not an entity.
+ * a one-way `closed_at` stamp — no head pointer, no count, no column a freeing transition must remember to move — so it
+ * is not an entity.
  *
  * The row is inserted with the first version of its series ({@see open()}, from the document repository's insert),
  * and `document.series_id` references it, so every series a take can name has a row to lock.
@@ -33,19 +34,46 @@ final readonly class DbalDocumentVersionSlots implements DocumentVersionSlots
     }
 
     #[Override]
-    public function lockSeries(string $seriesId): void
+    public function lockSeries(string $seriesId): bool
     {
         Uuid::ensure($seriesId);
         RequiresActiveTransaction::ensure($this->connection, 'Locking a document series');
 
-        $locked = $this->connection->fetchOne(
-            'SELECT id FROM document_series WHERE id = CAST(:id AS UUID) FOR UPDATE',
+        $status = $this->connection->fetchOne(
+            "SELECT CASE WHEN closed_at IS NULL THEN 'open' ELSE 'closed' END FROM document_series "
+            . 'WHERE id = CAST(:id AS UUID) FOR UPDATE',
             ['id' => \strtolower($seriesId)],
         );
 
-        if (false === $locked) {
+        if (false === $status) {
             throw new LogicException('A document names a series that has no row to lock.');
         }
+
+        return 'open' === $status;
+    }
+
+    #[Override]
+    public function isClosed(string $seriesId): bool
+    {
+        Uuid::ensure($seriesId);
+
+        return false !== $this->connection->fetchOne(
+            'SELECT 1 FROM document_series WHERE id = CAST(:id AS UUID) AND closed_at IS NOT NULL',
+            ['id' => \strtolower($seriesId)],
+        );
+    }
+
+    #[Override]
+    public function close(string $seriesId): void
+    {
+        if (!$this->lockSeries($seriesId)) {
+            return;
+        }
+
+        $this->connection->executeStatement(
+            'UPDATE document_series SET closed_at = NOW() WHERE id = CAST(:id AS UUID)',
+            ['id' => \strtolower($seriesId)],
+        );
     }
 
     #[Override]

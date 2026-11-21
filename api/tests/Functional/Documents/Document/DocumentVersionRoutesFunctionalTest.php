@@ -9,6 +9,7 @@ use Erpify\Documents\Document\Infrastructure\Controller\DeclareVersionController
 use Erpify\Documents\Document\Infrastructure\Controller\DocumentSeriesController;
 use Erpify\Documents\Document\Infrastructure\Controller\EraseDocumentSeriesController;
 use Erpify\Documents\Document\Infrastructure\Http\DocumentSeriesMapper;
+use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use Erpify\Tests\Support\Dig;
@@ -54,11 +55,16 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
     }
 
     #[Test]
-    public function whoeverMayFileEvidenceMayDeclareAVersionOfAReadyDocument(): void
+    public function aVersionIsDeclaredOnlyByWhoeverMayBothFileEvidenceAndReadTheDocument(): void
     {
-        $this->authenticateClient($this->client);
         $first = $this->plantVersion(DocumentState::Ready);
 
+        $this->authenticateAs($this->client, 'functional-editor@erpify.test', [Role::EDITOR->value]);
+        $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
+        $this->assertStatus(Response::HTTP_FORBIDDEN);
+        $this->assertSame(0, $this->intOf($this->connection()->fetchOne('SELECT COUNT(*) FROM upload_intent')));
+
+        $this->authenticateAdminClient($this->client);
         $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
 
         $this->assertStatus(Response::HTTP_CREATED);
@@ -74,7 +80,7 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
     #[Test]
     public function anAbsentPredecessorAnswersLikeOneThatIsNotReadyAndAHeldSlotIsItsOwnConflict(): void
     {
-        $this->authenticateClient($this->client);
+        $this->authenticateAdminClient($this->client);
         $received = $this->plantVersion(DocumentState::Received);
         $first = $this->plantVersion(DocumentState::Ready);
         $this->plantVersion(DocumentState::Ready, $first);

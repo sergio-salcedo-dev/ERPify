@@ -2848,24 +2848,17 @@ mitigated state. Accepting one means recording who accepted it and against which
       and no route of the owner exists; the first producer story decides who reads a preview and under which audit. The
       `ImageId` of a derivative also stays in `event_store` for ever, as item four of the `Shared/Images` residuals says
       for every image. **Open — owner: the Documents epic (the first derivative producer).**
-- [ ] **Document versioning: what the series erasure and the successor exclusion do not guarantee (doc-9).**
-      **One — a series erasure guarantees no termination.** `POST /api/v1/documents/series/{seriesId}/erase` erases
-      every version that is not `Erased`, newest first, each in its own ledger entry and transaction, and reports what
-      remains; a version filed meanwhile under a predecessor that was still `Ready` is a new live version the run did
-      not see, so the operation is repeatable and is not a legal guarantee that the series is gone — the operator reads
-      `remaining` and runs it again. A failure stops the run where it stands; the versions already erased stay erased.
-      **Two — a conflict can be false.** The successor exclusion reads the slot without a lock under the series lock
-      (ADR `documents-custody-log.md` D12), so an erasure or a quarantine committing concurrently can make a new version
-      or a reopen answer `document-version-slot-taken` for a slot that is free a moment later; the caller declares
-      again, and the loser's sealed bytes and key fall into the aborted-upload class (whose tombstones are never
-      pruned). Never the reverse: no path makes a version live outside that lock. **Three — who may file a version.**
-      The new-version declare is `document.write` (RBAC, no row-level voter), so an editor may file a version of any
-      document, including one only an ADMIN may download; the route answers absent and not-`Ready` alike, so it is no
-      existence oracle, but a refused declare still says that some live version holds the slot. **Four — the series
-      page names uploaders.** `GET /api/v1/documents/series/{seriesId}` (ADMIN, `document.custody`) returns the uploader
-      id of every version that is not `Erased` (an erased version's is withheld by the statement, and an erased person
-      reads as the nil UUID), with only the generic access-log row as its audit record, as for the listing.
-      **Accepted — the owner's design, 2026-11-19 (option C of the architect consultation).**
+- [x] **Document versioning: the series erasure terminates and only a reader of the document files its successor,
+      closed 2026-11-21 (doc-9).** A series erasure (`POST /api/v1/documents/series/{seriesId}/erase`) first closes the
+      series under the row lock every version take holds (`document_series.closed_at`), so a version filed or reopened
+      concurrently is either committed first and erased with the rest, or refused; nothing in the series can become
+      live afterwards and a completed run leaves `remaining` empty (`VersionSlotPairsFunctionalTest`,
+      `DocumentVersioningFunctionalTest`). The new-version declare asks `document.write` and `document.download`, so
+      an editor can no longer file a version of a document only an ADMIN may read. Two properties are the design, not
+      residuals (ADR `documents-custody-log.md` D12): `document-version-slot-taken` can answer for a slot a concurrent
+      erasure or quarantine frees a moment later — a retryable conflict by contract, never a second successor — and
+      the series page returns a live version's uploader id to its ADMIN reader with only the generic access-log row
+      as its record, exactly as the listing does (the doc-6 entry above covers that read class).
 - [ ] **Offsite backups keep the ciphertext of an erased document, and an erasure depends on the offsite channel
       (doc-7).** The sealed objects of an erased document are deleted from the volume, but a backup of the volume (or a
       database dump holding the wrapped key) taken before the erasure still holds the ciphertext; the residual closes

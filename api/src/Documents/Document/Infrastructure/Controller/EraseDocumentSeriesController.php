@@ -34,10 +34,10 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
  * `credential-affecting` in `api/.credential-proof-policy`. The three collaborators are named in this body because
  * `make php.lint.credential-proof` reads the calls as tokens inside the bound action.
  *
- * Answers 200 with the versions this call erased and those still not `Erased` — a repeat erases what a version filed
- * meanwhile left, and a series already erased answers with both lists empty. 404 for a series with no document, 422 for
- * a reason outside the list or a missing password, the wrong-password problem for a wrong one, and the single erasure's
- * 503s, which stop the run where it stands: versions already erased stay erased.
+ * Answers 200 with the versions this call erased and those still not `Erased` — empty once the run completes, since the
+ * use case closes the series before it lists it, and a series already erased answers with both lists empty. 404 for a
+ * series with no document, 422 for a reason outside the list or a missing password, the wrong-password problem for a
+ * wrong one, and the single erasure's 503s, which stop the run where it stands: versions already erased stay erased.
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
