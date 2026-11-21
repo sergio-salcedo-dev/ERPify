@@ -12,11 +12,13 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Documents\Document\Application\AppendCustody;
 use Erpify\Documents\Document\Application\ReceiveDocument;
 use Erpify\Documents\Document\Domain\CustodyEvent;
+use Erpify\Documents\Document\Domain\DocumentIdentifiers;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\Exception\CustodySequenceCollision;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DoctrineDocumentCustodyRepository;
@@ -119,11 +121,8 @@ final class DocumentPersistenceFunctionalTest extends KernelTestCase
     public function aFailureAfterBothInsertsLeavesNeitherRow(): void
     {
         $document = Document::receive(
-            Uuid::generate(),
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            self::DIGEST,
-            10,
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 10),
         );
         $first = DocumentCustody::record(
             Uuid::generate(),

@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Erpify\Documents\Document\Application\Upload;
 
 use Erpify\Documents\Document\Application\ReceiveDocument;
+use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\UploadIntent;
+use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\Exception\UploadAborted;
+use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
@@ -25,6 +29,13 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
  * exactly one of the two decides a given upload. Under both locks it asserts that the intent is still
  * `Streaming` with a live lease and a deadline not passed, and that the scope's key is `Live`: `Absent` is a
  * snapshot that cannot be locked and never passes, and a tombstone means the reaper already decided.
+ *
+ * **A new version also takes its predecessor's slot** ({@see TakeVersionSlot}): the series row after the keystore row,
+ * then the predecessor row — the order of `docs/adr/documents-custody-log.md` D12 — rechecking under them that the
+ * predecessor is `Ready` and that no live version holds its slot. The new scope's keystore row comes before the
+ * series because it is reachable only through the intent this commit already holds. A refusal rolls everything back
+ * and leaves the writer's abort to expire the intent, so the loser's sealed bytes and key fall into the
+ * aborted-upload class like any other refused commit.
  *
  * **Everything the document records about who filed it comes from the locked row** — the actor and the key
  * hash — never from the writer's memory, so a person purge that ran during the stream is honoured.
@@ -45,11 +56,14 @@ final readonly class CommitUpload
         private EnvelopeEncryptor $encryptor,
         private ReceiveDocument $receiveDocument,
         private TransactionManager $transactionManager,
+        private TakeVersionSlot $versionSlot,
     ) {
     }
 
     /**
-     * @throws UploadAborted when the intent is gone, no longer live, or its scope is not live
+     * @throws UploadAborted       when the intent is gone, no longer live, or its scope is not live
+     * @throws PredecessorNotReady when a new version's predecessor is absent or no longer `Ready`
+     * @throws VersionSlotTaken    when a live version already succeeds a new version's predecessor
      */
     public function commit(ClaimedUpload $claimed, string $digest): Document
     {
@@ -94,14 +108,16 @@ final readonly class CommitUpload
             reviewAt: $intent->reviewAt(),
         );
 
+        $predecessorId = $intent->predecessorId();
+
         $document = $this->receiveDocument->receiveWithin(
             $intent->scopeId(),
             $intent->actorId(),
-            $digest,
-            $intent->declaredSize(),
+            new OriginalContent($digest, $intent->declaredSize()),
             $intent->keyHash(),
             $intake,
             $now,
+            null === $predecessorId ? null : $this->versionSlot->forNewVersion($predecessorId),
         );
 
         $intent->commit($document->documentId(), $now);

@@ -10,6 +10,8 @@ use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
 use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
 use Erpify\Documents\Document\Domain\Exception\ErasureOutcomeUnknown;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
+use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Psr\Log\LoggerInterface;
@@ -26,6 +28,11 @@ use Throwable;
  * dump can then replay it. A failure before the entry is durable leaves the document untouched and the request
  * retryable; a timeout is outcome-unknown and says so, since an entry that landed is finished by the completion sweep.
  * Only then does {@see ApplyErasure} run its one transaction.
+ *
+ * **A series is erased version by version** ({@see eraseSeries()}): each one is this same erasure, newest first, so
+ * the ledger entry precedes every key it destroys and no transaction holds more than one document. An erasure never
+ * takes the series lock, because it only ever frees a version slot; the series is closed to new takes once, up front,
+ * and opened again only when its first ledger entry was certainly not durable ({@see eraseSeries()}).
  *
  * This class has no replay mode and takes no parameter that skips the ledger: the restore and the sweep go through
  * {@see ReplayErasure}, which a gate holds to exactly two callers.
@@ -45,6 +52,8 @@ final readonly class EraseDocument
         private ErasureLedger $ledger,
         private ApplyErasure $applyErasure,
         private LoggerInterface $logger,
+        private DocumentSeriesRepository $series,
+        private DocumentVersionSlots $slots,
     ) {
     }
 
@@ -53,8 +62,10 @@ final readonly class EraseDocument
      * @throws ErasureLedgerUnavailable when the ledger entry is certainly not durable; nothing was erased
      * @throws ErasureOutcomeUnknown    when the ledger write timed out, or the transaction failed once it was durable;
      *                                  nothing was erased by this call and the sweep may finish it
+     *
+     * @return bool whether THIS call moved the document to `Erased`; a repeat, or a race another erasure won, is false
      */
-    public function erase(string $documentId, ErasureReason $reason, string $operatorId): void
+    public function erase(string $documentId, ErasureReason $reason, string $operatorId): bool
     {
         Uuid::ensure($documentId);
         Uuid::ensure($operatorId);
@@ -63,7 +74,7 @@ final readonly class EraseDocument
         $document = $this->documents->findById($documentId) ?? throw DocumentNotFound::create();
 
         if (DocumentState::Erased === $document->state()) {
-            return;
+            return false;
         }
 
         try {
@@ -102,6 +113,72 @@ final readonly class EraseDocument
                 'reason' => $reason->value,
             ]);
         }
+
+        return $erased;
+    }
+
+    /**
+     * Erases every version of a series that is not `Erased`, newest first, each through {@see erase()} — its own ledger
+     * entry and its own transaction, so a version erased is never undone by a later failure — and reports what remains.
+     *
+     * The series is closed first (`DocumentVersionSlots::closeSeries()`, outside every erasure transaction), so no
+     * version can be filed or reopened in it from then on and the run terminates. The closing is definitive except in
+     * one case: when this call closed the series and its first ledger entry was certainly not durable
+     * ({@see ErasureLedgerUnavailable}), nothing has been erased or recorded, so the series is opened again before the
+     * exception propagates. It is never opened again after {@see ErasureOutcomeUnknown} (an entry may have landed and
+     * the completion sweep may finish the erasure), after this call erased a version, or when the series was already
+     * closed on entry (an earlier run may have left either behind). The run is repeatable: a failure stops it where it
+     * stands, the versions erased before it stay erased and a repeat continues from there.
+     *
+     * @throws DocumentNotFound         when no document belongs to the series
+     * @throws ErasureLedgerUnavailable when a version's ledger entry is certainly not durable
+     * @throws ErasureOutcomeUnknown    when a version's ledger write timed out, or its transaction failed once durable
+     */
+    public function eraseSeries(string $seriesId, ErasureReason $reason, string $operatorId): SeriesErasure
+    {
+        Uuid::ensure($seriesId);
+        Uuid::ensure($operatorId);
+
+        $seriesId = \strtolower($seriesId);
+
+        if (!$this->series->exists($seriesId)) {
+            throw DocumentNotFound::create();
+        }
+
+        // Closed first and committed on its own, so what is listed next already includes any version a take filed
+        // before it, and a take that starts afterwards is refused: the run ends instead of chasing new versions.
+        $closedByThisCall = $this->slots->closeSeries($seriesId);
+
+        $erased = [];
+
+        try {
+            foreach ($this->series->unerasedNewestFirst($seriesId) as $documentId) {
+                if ($this->erase($documentId, $reason, $operatorId)) {
+                    $erased[] = $documentId;
+                }
+            }
+        } catch (ErasureLedgerUnavailable $erasureLedgerUnavailable) {
+            if ($closedByThisCall && [] === $erased) {
+                $this->slots->reopenSeries($seriesId);
+            }
+
+            throw $erasureLedgerUnavailable;
+        }
+
+        // Idempotent: it stamps nothing when the series is closed, and closes it again when a concurrent run that had
+        // closed it and failed opened it in the meantime.
+        $this->slots->closeSeries($seriesId);
+
+        $remaining = $this->series->unerasedNewestFirst($seriesId);
+
+        $this->logger->info('A document series was erased by an operator.', [
+            'seriesId' => $seriesId,
+            'reason' => $reason->value,
+            'erased' => \count($erased),
+            'remaining' => \count($remaining),
+        ]);
+
+        return new SeriesErasure($seriesId, $erased, $remaining);
     }
 
     /**

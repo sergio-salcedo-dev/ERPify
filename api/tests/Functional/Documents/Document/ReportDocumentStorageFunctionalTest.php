@@ -115,9 +115,14 @@ final class ReportDocumentStorageFunctionalTest extends KernelTestCase
     public function testADocumentRowScanThatReachesItsLimitSaysSo(): void
     {
         $this->connection()->executeStatement(
+            'INSERT INTO document_series (id, created_at) '
+            . 'SELECT gen_random_uuid(), NOW() FROM generate_series(1, 10001)',
+        );
+        $this->connection()->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, created_at, '
-            . 'updated_at) SELECT gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), gen_random_uuid(), '
-            . "'received', repeat('a', 64), 1, NOW(), NOW() FROM generate_series(1, 10001)",
+            . 'updated_at) SELECT s.id, gen_random_uuid(), s.id, gen_random_uuid(), '
+            . "'received', repeat('a', 64), 1, NOW(), NOW() FROM document_series s "
+            . 'WHERE NOT EXISTS (SELECT 1 FROM document d WHERE d.series_id = s.id)',
         );
 
         $this->report([]);

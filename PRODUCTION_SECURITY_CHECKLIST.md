@@ -2857,6 +2857,47 @@ mitigated state. Accepting one means recording who accepted it and against which
       and no route of the owner exists; the first producer story decides who reads a preview and under which audit. The
       `ImageId` of a derivative also stays in `event_store` for ever, as item four of the `Shared/Images` residuals says
       for every image. **Open — owner: the Documents epic (the first derivative producer).**
+- [ ] **Document versioning: what the series erasure, the successor exclusion and the series page do, and two things
+      the closing does not carry (doc-9).** One to four state behaviour a reader of the routes would otherwise have to
+      infer, and none is an accepted risk; five and six are open.
+      **One — a series erasure terminates.** `POST /api/v1/documents/series/{seriesId}/erase` first closes the series
+      (`document_series.closed_at`, one statement in its own transaction, outside every erasure transaction so
+      `ErasureLimits::TRANSACTION_LOCKS` stays 3), and only then lists and erases every version that is not `Erased`,
+      newest first, each in its own ledger entry and transaction. A take that finished before the closing is listed;
+      one that starts after it is refused (409 `document-series-closed`), so no version is filed or reopened in a
+      series whose erasure has begun — a failed first version included, whose reopen takes the series row for that, and the closing is definitive except for one ending: when the call that
+      closed the series fails with its first ledger entry certainly not durable and has erased nothing, it opens the
+      series again before the 503, so an intact series is not left closed for ever by an unreachable ledger. Any other
+      failure stops the run where it stands (the versions already erased stay erased, the series stays closed) and the
+      operator reads `remaining` and repeats.
+      **Two — a slot conflict is retryable.** The successor exclusion reads the slot without a lock under the series
+      lock (ADR `documents-custody-log.md` D12), so an erasure or a quarantine committing concurrently can make a new
+      version or a reopen answer `document-version-slot-taken` for a slot that is free a moment later: a conflict the
+      caller retries by declaring again, never a double successor, since no path makes a version live outside that
+      lock. The refused commit's sealed bytes and key fall into the aborted-upload class (D6), whose tombstones are
+      never pruned. **Three — who may file a version.** The new-version declare asks `document.write` AND
+      `document.download` (RBAC, no row-level voter), so a tier that may file evidence but not download it cannot file
+      a version of a document it could not read; the route answers an absent predecessor like a non-`Ready` one, so it
+      is no existence oracle, and a refused declare still says that some live version holds the slot, to a caller who
+      may read the document. **Four — the series page names uploaders.** `GET /api/v1/documents/series/{seriesId}`
+      (ADMIN, `document.custody`) returns the uploader id of every version that is not `Erased`, as the listing does
+      (an erased version's is withheld by the statement, and an erased person reads as the nil UUID), with the generic
+      access-log row as its audit record. **Five — the closing is a database fact only.** `document_series.closed_at`
+      is written by the series erasure and by nothing else, and neither `ReplayErasure` (the restore step and the
+      completion sweep) nor a restore to a dump older than the closing, nor a down and up of the migration, brings it
+      back: versions that survived a partial series erasure can then accept successors again until the erasure is
+      run again. The ledger keeps the scope id of each version erased, never the closing. **Six — a series erasure
+      is one synchronous request over N versions.** Each version is durable and the run is repeatable, but a request
+      cut off between versions surfaces as an unmapped exception and not as `ErasureOutcomeUnknown`, and the new-version
+      declare and its commit do not consult `ErasureLedgerOverride`, as the first-version declare does not.
+      **Seven — two concurrent runs over one series.** Run A closes the series and fails with its first ledger entry
+      certainly not durable; run B, started after A's closing, saw it closed and so never reopens it, and B's own
+      ledger write succeeds. A opens the series again under B, and a version filed before B's closing statement at the
+      end of its run is live and was not in B's list. B closes the series again before it reads `remaining`, so the
+      series ends closed and the version shows in `remaining`, which the operator repeats on. No lock orders two runs
+      (`ErasureLimits::TRANSACTION_LOCKS` stays 3), and the window needs the ledger to fail for one run and answer for
+      the next within the length of one run.
+      **Open — owner: the Documents epic.**
 - [ ] **Offsite backups keep the ciphertext of an erased document, and an erasure depends on the offsite channel
       (doc-7).** The sealed objects of an erased document are deleted from the volume, but a backup of the volume (or a
       database dump holding the wrapped key) taken before the erasure still holds the ciphertext; the residual closes

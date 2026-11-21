@@ -248,6 +248,7 @@ scripts/        Utility scripts
 | Symfony kernel                                                               | `api/src/Kernel.php`                                                     |
 | Bounded contexts (DDD)                                                       | `api/src/{Backoffice,Frontoffice,Iam,Organization,Shared}/<Module>/`     |
 | Documents listing and custody trail (`Application/Listing`, `Application/Query`, `Domain/Projection`) | `api/src/Documents/Document/`   |
+| Documents version series (`Domain/Versioning`, `Application/Versioning`, `Application/Listing/ReadDocumentSeries`, ADR D12) | `api/src/Documents/Document/`   |
 | Domain layer (entities, VOs, ports)                                          | `<Module>/Domain/`                                                       |
 | Application layer (use cases, DTOs)                                          | `<Module>/Application/`                                                  |
 | Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |

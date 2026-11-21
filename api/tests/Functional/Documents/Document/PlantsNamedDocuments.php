@@ -46,6 +46,7 @@ trait PlantsNamedDocuments
             CommitUpload::filenameAssociatedData($scope),
         );
 
+        $this->plantSeries($id);
         $this->connection()->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, predecessor_id, uploader_id, state, digest, size_bytes, '
             . 'filename_ciphertext, retention_reason, legal_basis, next_scan_at, created_at, updated_at) '

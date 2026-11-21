@@ -35,7 +35,7 @@ trait PlantsDocumentRows
 
     private function emptyDocumentTables(): void
     {
-        $this->connection()->executeStatement('TRUNCATE document_custody, document');
+        $this->connection()->executeStatement('TRUNCATE document_custody, document, document_series');
     }
 
     private function plantDocument(
@@ -45,6 +45,7 @@ trait PlantsDocumentRows
     ): string {
         $id = Uuid::generate();
 
+        $this->plantSeries($id);
         $this->connection()->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, predecessor_id, uploader_id, state, digest, size_bytes, '
             . 'idempotency_key_hash, next_scan_at, created_at, updated_at) '
@@ -60,6 +61,18 @@ trait PlantsDocumentRows
         );
 
         return $id;
+    }
+
+    /**
+     * The series row a planted first version references: `document.series_id` has a foreign key to it, and the
+     * repository inserts it with every first version it files.
+     */
+    private function plantSeries(string $seriesId): void
+    {
+        $this->connection()->executeStatement(
+            'INSERT INTO document_series (id, created_at) VALUES (:id, NOW()) ON CONFLICT DO NOTHING',
+            ['id' => $seriesId],
+        );
     }
 
     private function plantCustody(string $documentId, int $seq, string $actorId): string
