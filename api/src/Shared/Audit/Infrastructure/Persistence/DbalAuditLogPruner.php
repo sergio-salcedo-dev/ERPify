@@ -8,6 +8,9 @@ use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Types\Types;
 use Erpify\Shared\Audit\Application\AuditLogPruner;
+use Erpify\Shared\Audit\Domain\ActorType;
+use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
+use Erpify\Shared\Audit\Domain\AuditRedaction;
 use Erpify\Shared\Audit\Domain\AuditRetentionThreshold;
 use Erpify\Shared\Persistence\Infrastructure\PostgresAdvisoryLock;
 use InvalidArgumentException;
@@ -18,7 +21,27 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * {@link AuditLogPruner} backed by the `audit_log` table — the sole `DELETE` against the otherwise
- * append-only log (see {@see DbalAuditLogWriter}, which deliberately carries no delete path).
+ * append-only log (see {@see DbalAuditLogWriter}, which deliberately carries no delete path), and the
+ * `UPDATE` that bounds what the rows exempt from it keep.
+ *
+ * **Two statements per level, in this order: the `DELETE`, then the metadata clear.** The rows of
+ * {@see AuditErasureEvidence::ACTIONS} are never deleted, so the window that minimises every other row would
+ * otherwise never reach the acting administrator's `ip` and `user_agent` sealed on them. Once such a row is
+ * past the same threshold the `DELETE` applies at its level, both columns are set to `NULL`; the row and its
+ * `actor_id` stay, because the attribution is what the evidence is for. `NULL`, never
+ * {@see AuditRedaction::SENTINEL}: the sentinel means "an erasure axis anonymised this", and retention is not
+ * one. It never rewrites a row another policy already resolved, and two policies write the sentinel:
+ * `actor_erased = FALSE` keeps it off a row the actor pass redacted, and `NOT (actor_type = 'anonymous' AND
+ * resource_erased)` off one the resource pass redacted — the only rows that pass writes the sentinel on. Not
+ * `resource_erased = FALSE` alone: a `GDPR_SUBJECT_ERASED` row names its subject as its resource, so that pass
+ * raises the flag on it while leaving the administrator's real address in place, and this statement has to
+ * reach it. An empty-string `user_agent` counts as present and is nulled too; it holds nothing personal.
+ * It writes neither `level`, `occurred_on` nor `action`, so it cannot shorten a batch of the `DELETE`, and it
+ * takes its rows ascending by `id`, the order `DbalAuditActorAnonymiser` imposes on itself and
+ * `DbalAuditSubjectRowLock` imposes on the resource pass on the paths that take it. It carries no `LIMIT`:
+ * after the `DELETE` of its level the only rows past the threshold are exempt ones, so it writes the evidence
+ * rows that crossed the threshold since the last run and reads every evidence row of that level past it —
+ * through `audit_log_level_idx`, as `AuditPrunePlanFunctionalTest` measures.
  *
  * Two production-shaping concerns, both for a write-heavy table rather than a measured hotspot (the app is
  * pre-production):
@@ -42,9 +65,9 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *   accidentally-scaled scheduler) is skipped rather than racing — defence in depth, not a correctness
  *   need (the delete is idempotent and prod runs a single-replica scheduler).
  *
- * Owns no transaction and does not swallow database failures. Each run logs its outcome — rows pruned, or
- * skipped because another worker already holds the lock — so a perpetually-held lock is visible rather than
- * silently stopping retention.
+ * Owns no transaction and does not swallow database failures. Each run logs its outcome — rows pruned and
+ * exempt rows cleared, or skipped because another worker already holds the lock — so a perpetually-held lock
+ * is visible rather than silently stopping retention.
  */
 #[AsAlias(AuditLogPruner::class)]
 final readonly class DbalAuditLogPruner implements AuditLogPruner
@@ -71,12 +94,17 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
     public function prune(AuditRetentionThreshold ...$plan): int
     {
         $removed = 0;
+        $cleared = 0;
 
-        $ran = $this->advisoryLock->withTryLock(self::LOCK_NAME, function () use ($plan, &$removed): void {
-            foreach ($plan as $threshold) {
-                $removed += $this->drainLevel($threshold);
-            }
-        });
+        $ran = $this->advisoryLock->withTryLock(
+            self::LOCK_NAME,
+            function () use ($plan, &$removed, &$cleared): void {
+                foreach ($plan as $threshold) {
+                    $removed += $this->drainLevel($threshold);
+                    $cleared += $this->clearExemptRequestMetadata($threshold);
+                }
+            },
+        );
 
         if (!$ran) {
             $this->logger->info('Audit retention prune skipped: another worker holds the lock.');
@@ -84,7 +112,11 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
             return $removed;
         }
 
-        $this->logger->info('Pruned {removed} audit_log row(s) past retention.', ['removed' => $removed]);
+        $this->logger->info(
+            'Pruned {removed} audit_log row(s) past retention; cleared the request metadata of {cleared} '
+            . 'exempt row(s).',
+            ['removed' => $removed, 'cleared' => $cleared],
+        );
 
         return $removed;
     }
@@ -153,5 +185,36 @@ final readonly class DbalAuditLogPruner implements AuditLogPruner
         } while ($deleted === $this->batchSize);
 
         return $removed;
+    }
+
+    /**
+     * Runs after {@see drainLevel()} for the same threshold, so every row it can still match is one the
+     * `DELETE` exempted. The `action` term is therefore redundant with the order of the two calls while both
+     * run to completion, and is kept so the statement says what it clears rather than relying on that.
+     *
+     * The `ip`/`user_agent` term keeps an already-cleared row out of the lock set and out of the write, so a
+     * daily run does not rewrite every evidence row it ever cleared.
+     */
+    private function clearExemptRequestMetadata(AuditRetentionThreshold $threshold): int
+    {
+        return (int) $this->connection->executeStatement(
+            'UPDATE audit_log SET ip = NULL, user_agent = NULL WHERE id IN ('
+            . 'SELECT id FROM audit_log WHERE level = :level AND occurred_on < :threshold '
+            . 'AND action IN (:exemptActions) AND actor_erased = FALSE '
+            . 'AND NOT (actor_type = :anonymous AND resource_erased) '
+            . 'AND (ip IS NOT NULL OR user_agent IS NOT NULL) '
+            . 'ORDER BY id FOR UPDATE'
+            . ')',
+            [
+                'level' => $threshold->level->value,
+                'threshold' => $threshold->deleteBefore,
+                'exemptActions' => $threshold->exemptActions,
+                'anonymous' => ActorType::ANONYMOUS->value,
+            ],
+            [
+                'threshold' => Types::DATETIMETZ_IMMUTABLE,
+                'exemptActions' => ArrayParameterType::STRING,
+            ],
+        );
     }
 }
