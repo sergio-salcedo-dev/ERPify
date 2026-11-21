@@ -110,6 +110,12 @@ adversarial pass this story owes. None has run. Findings and their routes are re
 
 ## Verification
 
+Rerun 2026-11-21 on the rebased branch (origin/main `9ef45a23`, no Documents change on main since the baseline), in the
+per-worktree dev stack (`make app.dev`), after the changes of the 2026-11-21 Spec Change Log entry: `make php.stan` exit
+0; `make php.prepush` (php.quality, php.quality.dry-run, full `php.unit`) exit 0 with 6038 tests, 10 skipped, the
+live-stack gates running in the stack; `make php.behat c='features/documents'` 71 scenarios and 848 steps passed;
+`doctrine:schema:validate` in sync after the migration was re-applied down and up. The earlier record follows.
+
 Fresh runs in a PHP 8.5.12 toolbox container over a throwaway PostgreSQL 18 (`make app.dev` could not build the per-worktree images: the image build cannot reach `getcomposer.org` or PECL from this session's network), each `make` target with `IN_CONTAINER=false`:
 
 - `make php.stan` on the 54 changed PHP files: exit 0. The full tree through PHPStan (`vendor/bin/phpstan analyse` from `/app/api`, as the dev container runs it): exit 0.
