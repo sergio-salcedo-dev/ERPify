@@ -33,19 +33,32 @@ final readonly class DbalDocumentVersionSlots implements DocumentVersionSlots
     }
 
     #[Override]
-    public function lockSeries(string $seriesId): void
+    public function lockSeries(string $seriesId): bool
     {
         Uuid::ensure($seriesId);
         RequiresActiveTransaction::ensure($this->connection, 'Locking a document series');
 
-        $locked = $this->connection->fetchOne(
-            'SELECT id FROM document_series WHERE id = CAST(:id AS UUID) FOR UPDATE',
+        $row = $this->connection->fetchAssociative(
+            'SELECT closed_at IS NULL AS open FROM document_series WHERE id = CAST(:id AS UUID) FOR UPDATE',
             ['id' => \strtolower($seriesId)],
         );
 
-        if (false === $locked) {
+        if (false === $row) {
             throw new LogicException('A document names a series that has no row to lock.');
         }
+
+        return (bool) ($row['open'] ?? false);
+    }
+
+    #[Override]
+    public function closeSeries(string $seriesId): void
+    {
+        Uuid::ensure($seriesId);
+
+        $this->connection->executeStatement(
+            'UPDATE document_series SET closed_at = COALESCE(closed_at, NOW()) WHERE id = CAST(:id AS UUID)',
+            ['id' => \strtolower($seriesId)],
+        );
     }
 
     #[Override]

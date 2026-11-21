@@ -22,8 +22,18 @@ interface DocumentVersionSlots
     /**
      * Takes the series row under `SELECT … FOR UPDATE` until the transaction ends: the mutex of every slot of the
      * series. Taken after the intent and the new scope's keystore row and before any document row.
+     *
+     * @return bool whether the series still admits a take; `false` once a series erasure has closed it
      */
-    public function lockSeries(string $seriesId): void;
+    public function lockSeries(string $seriesId): bool;
+
+    /**
+     * Closes the series to every later take, for ever: one statement in its own transaction, which waits for a take
+     * holding the series row and commits before returning. The series erasure calls it before it lists what remains,
+     * so a version filed by a take that finished first is listed, and one that starts afterwards is refused. Repeating
+     * it changes nothing. Never called from inside an erasure's own transaction, so an erasure still locks no series.
+     */
+    public function closeSeries(string $seriesId): void;
 
     /**
      * Whether a live version exists anywhere below the document, read without a lock by one recursive query. Under the

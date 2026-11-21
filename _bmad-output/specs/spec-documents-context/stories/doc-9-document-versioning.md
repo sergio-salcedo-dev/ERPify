@@ -73,6 +73,17 @@ context:
 
 - 2026-11-19 (the owner, after the architect consultation): option C replaces the design-B head pointer of the memlog and of `stories.yaml`; recorded in ADR D12 with the discarded alternatives and the reopening condition. Nothing about the head pointer was built.
 
+- 2026-11-21 (the owner's direction of 2026-11-19, applied on the branch before its first review; it amends the
+  "decided here" lines above, which stay as they were frozen): (1) the series erasure closes the series first
+  (`document_series.closed_at`, one statement in its own transaction, outside every erasure transaction, so
+  `TRANSACTION_LOCKS` stays 3) and `TakeVersionSlot` refuses every new version and reopen of a closed series with
+  `document-predecessor-not-ready`, so the erasure terminates; (2) a slot conflict that a concurrent free makes false is
+  the option-C contract, a retryable conflict, not a risk; (3) the new-version declare asks `document.write` AND
+  `document.download` (RBAC, no row-level voter), which no tier but ADMIN carries, so only an administrator files a
+  version; (4) the series page names uploaders to ADMIN as the listing does, stated and not accepted. The `Accepted`
+  line of the `PRODUCTION_SECURITY_CHECKLIST.md` §7 entry is gone and the entry is closed. The closed series is not
+  refused at the declare (only at the commit): a caller streaming into a closing series is told at the PUT.
+
 ### To apply locally with memlog.py
 
 `_bmad/scripts/memlog.py` is not installed in the cloud session that implemented this story, and the memlog is written only through it, so neither `.memlog.md` nor `stories.yaml` was edited here. To apply locally:
@@ -93,7 +104,9 @@ and append to its "Tests:" sentence: "and the pairs new version against new vers
 
 ## Review Triage Log
 
-Pending: the three review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) are run by the orchestrating session over this branch, independently of the implementation; the Blind Hunter layer is the adversarial pass this story owes. Findings and their routes are recorded here when they return.
+Pending: the three review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) are owed and are run by the
+coordinating session over the opened pull request, independently of the implementation; the Blind Hunter layer is the
+adversarial pass this story owes. None has run. Findings and their routes are recorded here when they return.
 
 ## Verification
 

@@ -19,7 +19,8 @@ use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
  * then asks the lock-free recursive read whether a live version already holds the slot.
  *
  * An absent predecessor answers like one that cannot be succeeded, so neither caller can be used to learn whether an
- * id exists. Every method assumes the caller owns the transaction.
+ * id exists; a series closed by its erasure answers the same, since nothing in it can be succeeded or reopened.
+ * Every method assumes the caller owns the transaction.
  */
 final readonly class TakeVersionSlot
 {
@@ -68,11 +69,13 @@ final readonly class TakeVersionSlot
     }
 
     /**
-     * @throws PredecessorNotReady when the predecessor row is absent
+     * @throws PredecessorNotReady when the series is closed by an erasure, or the predecessor row is absent
      */
     private function lockUnderSeries(string $seriesId, string $predecessorId): Document
     {
-        $this->slots->lockSeries($seriesId);
+        if (!$this->slots->lockSeries($seriesId)) {
+            throw PredecessorNotReady::create();
+        }
 
         try {
             return $this->documents->lockForUpdate($predecessorId);

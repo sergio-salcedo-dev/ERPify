@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
+use Erpify\Documents\Document\Application\Erasure\EraseDocument;
+use Erpify\Documents\Document\Application\Erasure\SeriesErasure;
 use Erpify\Documents\Document\Application\Scanning\RescanDocument;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
 use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
@@ -32,8 +34,9 @@ use Throwable;
  *
  * What is shown, pair by pair: two new versions of one predecessor serialise on the series row and one wins; a new
  * version and the predecessor's erasure meet on the predecessor row only; a new version and a reopen, and two
- * reopens, serialise on the series row and one wins; and the freeing transitions — the erasure and the scan's
- * compare-and-set — never wait on the series row, which is why they need no change.
+ * reopens, serialise on the series row and one wins; the series erasure's closing waits for a take in flight and then
+ * lists what it filed; and the freeing transitions — the erasure and the scan's compare-and-set — never wait on the
+ * series row, which is why they need no change.
  *
  * @internal
  *
@@ -41,6 +44,7 @@ use Throwable;
  * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per pair and direction
  */
 #[CoversClass(CommitUpload::class)]
+#[CoversClass(EraseDocument::class)]
 #[CoversClass(RescanDocument::class)]
 #[CoversClass(TakeVersionSlot::class)]
 #[CoversClass(DbalDocumentVersionSlots::class)]
@@ -207,6 +211,29 @@ final class VersionSlotPairsFunctionalTest extends KernelTestCase
         $this->assertSame(1, $this->liveChildrenOf($first));
     }
 
+    #[Test]
+    public function aSeriesErasureMeetingATakeInFlightWaitsAndThenListsTheVersionTheTakeFiled(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+
+        $this->holdTheSlotFor($first);
+        [$insert, $parameters] = $this->successorInsert($first, DocumentState::Received);
+        $filed = $parameters['id'] ?? $this->fail('The successor insert names its id.');
+        $this->holder()->executeStatement($insert, $parameters);
+
+        $this->assertTrue(
+            $this->waits(fn (): SeriesErasure => $this->eraseSeries($first)),
+            'closing the series waits for the take that holds it',
+        );
+
+        $this->holder()->commit();
+
+        $erasure = $this->eraseSeries($first);
+
+        $this->assertSame([$filed, $first], $erasure->erased, 'the filed version is erased with the rest');
+        $this->assertSame([], $erasure->remaining);
+    }
+
     /**
      * What a take holds once it has decided: the series row, then the predecessor row, in that order.
      */
@@ -260,6 +287,13 @@ final class VersionSlotPairsFunctionalTest extends KernelTestCase
             Uuid::generate(),
             ErasureReason::UploadedInError->value,
         );
+    }
+
+    private function eraseSeries(string $seriesId): SeriesErasure
+    {
+        return $this->service(EraseDocument::class)
+            ->eraseSeries($seriesId, ErasureReason::UploadedInError, Uuid::generate())
+        ;
     }
 
     private function reopen(string $documentId): void

@@ -11,6 +11,7 @@ use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
 use Erpify\Documents\Document\Domain\Exception\ErasureOutcomeUnknown;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
+use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Shared\Persistence\Domain\Exception\TransientTransactionFailure;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Psr\Log\LoggerInterface;
@@ -29,8 +30,8 @@ use Throwable;
  * Only then does {@see ApplyErasure} run its one transaction.
  *
  * **A series is erased version by version** ({@see eraseSeries()}): each one is this same erasure, newest first, so
- * the ledger entry precedes every key it destroys and no transaction holds more than one document. The series lock is
- * never taken: an erasure only ever frees a version slot.
+ * the ledger entry precedes every key it destroys and no transaction holds more than one document. An erasure never
+ * takes the series lock, because it only ever frees a version slot; the series is closed to new takes once, up front.
  *
  * This class has no replay mode and takes no parameter that skips the ledger: the restore and the sweep go through
  * {@see ReplayErasure}, which a gate holds to exactly two callers.
@@ -51,6 +52,7 @@ final readonly class EraseDocument
         private ApplyErasure $applyErasure,
         private LoggerInterface $logger,
         private DocumentSeriesRepository $series,
+        private DocumentVersionSlots $slots,
     ) {
     }
 
@@ -117,9 +119,10 @@ final readonly class EraseDocument
     /**
      * Erases every version of a series that is not `Erased`, newest first, each through {@see erase()} — its own ledger
      * entry and its own transaction, so a version erased is never undone by a later failure — and reports what remains.
-     * It is repeatable and guarantees no termination: a version filed meanwhile under a predecessor that was still
-     * `Ready` is a new live version this run did not see. A failure stops the run where it stands and propagates; the
-     * versions erased before it stay erased and a repeat continues from there.
+     * It closes the series first (`DocumentVersionSlots::closeSeries()`, outside every erasure transaction), so no
+     * version can be filed or reopened in it from then on and the run terminates. It is repeatable: a failure stops
+     * the run where it stands and propagates; the versions erased before it stay erased and a repeat continues from
+     * there.
      *
      * @throws DocumentNotFound         when no document belongs to the series
      * @throws ErasureLedgerUnavailable when a version's ledger entry is certainly not durable
@@ -135,6 +138,10 @@ final readonly class EraseDocument
         if (!$this->series->exists($seriesId)) {
             throw DocumentNotFound::create();
         }
+
+        // Closed first and committed on its own, so what is listed next already includes any version a take filed
+        // before it, and a take that starts afterwards is refused: the run ends instead of chasing new versions.
+        $this->slots->closeSeries($seriesId);
 
         $erased = [];
 

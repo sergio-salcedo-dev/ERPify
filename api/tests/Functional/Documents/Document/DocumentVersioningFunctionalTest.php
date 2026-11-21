@@ -30,6 +30,7 @@ use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Documents\Document\Domain\Upload\LegalBasis;
 use Erpify\Documents\Document\Domain\Upload\RetentionReason;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
+use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentSeriesRepository;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentVersionSlots;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -335,6 +336,46 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function aSeriesErasureClosesTheSeriesOnceAndLeavesOthersOpen(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $other = $this->plantVersion(DocumentState::Ready);
+
+        $this->assertNull($this->closedAtOf($first));
+
+        $this->service(EraseDocument::class)->eraseSeries($first, ErasureReason::RetentionExpired, Uuid::generate());
+        $closedAt = $this->closedAtOf($first);
+
+        $this->assertNotNull($closedAt);
+        $this->assertNull($this->closedAtOf($other), 'another series is not closed');
+
+        $this->service(EraseDocument::class)->eraseSeries($first, ErasureReason::RetentionExpired, Uuid::generate());
+
+        $this->assertSame($closedAt, $this->closedAtOf($first), 'closing is stamped once and a repeat keeps it');
+    }
+
+    #[Test]
+    public function noVersionIsFiledOrReopenedInASeriesOnceItIsClosed(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $failed = $this->plantVersion(DocumentState::ScanFailed, $first);
+        $other = $this->plantVersion(DocumentState::Ready);
+
+        $this->service(DocumentVersionSlots::class)->closeSeries($first);
+
+        $this->assertThrows(
+            PredecessorNotReady::class,
+            fn (): Document => $this->commitVersion($this->streamingVersionOf($first)),
+        );
+        $this->assertThrows(PredecessorNotReady::class, fn () => $this->reopen($failed));
+        $this->assertSame('scan_failed', $this->stateOfDocument($failed));
+        $this->assertSame('ready', $this->stateOfDocument($first), 'closing erases nothing');
+
+        $filed = $this->commitVersion($this->streamingVersionOf($other));
+        $this->assertSame($other, $filed->predecessorId(), 'a series that is not closed still takes versions');
+    }
+
+    #[Test]
     public function aFirstVersionFiledThroughTheRepositoryOpensItsSeriesRow(): void
     {
         $first = $this->commitFirstVersion();
@@ -410,6 +451,16 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
                 ErasureReason::UploadedInError->value,
             ),
         );
+    }
+
+    private function closedAtOf(string $seriesId): ?string
+    {
+        $closedAt = $this->connection()->fetchOne(
+            'SELECT closed_at FROM document_series WHERE id = CAST(:id AS UUID)',
+            ['id' => $seriesId],
+        );
+
+        return false === $closedAt || null === $closedAt ? null : $this->stringOf($closedAt);
     }
 
     private function reopen(string $documentId): void

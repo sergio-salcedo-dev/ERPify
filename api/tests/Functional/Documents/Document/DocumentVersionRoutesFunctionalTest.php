@@ -54,9 +54,9 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
     }
 
     #[Test]
-    public function whoeverMayFileEvidenceMayDeclareAVersionOfAReadyDocument(): void
+    public function aVersionOfAReadyDocumentIsDeclaredByWhoeverMayWriteAndDownload(): void
     {
-        $this->authenticateClient($this->client);
+        $this->authenticateAdminClient($this->client);
         $first = $this->plantVersion(DocumentState::Ready);
 
         $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
@@ -72,9 +72,21 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
     }
 
     #[Test]
-    public function anAbsentPredecessorAnswersLikeOneThatIsNotReadyAndAHeldSlotIsItsOwnConflict(): void
+    public function aCallerThatMayWriteButNotDownloadMayNotDeclareAVersion(): void
     {
         $this->authenticateClient($this->client);
+        $first = $this->plantVersion(DocumentState::Ready);
+
+        $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
+
+        $this->assertStatus(Response::HTTP_FORBIDDEN);
+        $this->assertSame(0, $this->intOf($this->connection()->fetchOne('SELECT COUNT(*) FROM upload_intent')));
+    }
+
+    #[Test]
+    public function anAbsentPredecessorAnswersLikeOneThatIsNotReadyAndAHeldSlotIsItsOwnConflict(): void
+    {
+        $this->authenticateAdminClient($this->client);
         $received = $this->plantVersion(DocumentState::Received);
         $first = $this->plantVersion(DocumentState::Ready);
         $this->plantVersion(DocumentState::Ready, $first);
