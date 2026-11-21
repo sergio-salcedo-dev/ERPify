@@ -6,10 +6,12 @@ namespace Erpify\Documents\Document\Application;
 
 use DateTimeImmutable;
 use Erpify\Documents\Document\Domain\CustodyEvent;
+use Erpify\Documents\Document\Domain\DocumentIdentifiers;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Entity\DocumentCustody;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Persistence\Application\TransactionManager;
@@ -29,6 +31,9 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * conflict that is never retried. A violation of `uniq_document_scope_id` is not mapped: the scope id is minted
  * random by the flow that seals the bytes, so a collision is a defect of that flow and surfaces as the raw
  * violation.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the one place that turns a filing into an aggregate and its first
+ * custody row, so it names the value objects of both
  */
 final readonly class ReceiveDocument
 {
@@ -57,8 +62,7 @@ final readonly class ReceiveDocument
             fn (): Document => $this->receiveWithin(
                 $scopeId,
                 $uploaderId,
-                $digest,
-                $sizeBytes,
+                new OriginalContent($digest, $sizeBytes),
                 $idempotencyKeyHash,
                 $intake,
             ),
@@ -77,37 +81,25 @@ final readonly class ReceiveDocument
     public function receiveWithin(
         string $scopeId,
         string $uploaderId,
-        string $digest,
-        int $sizeBytes,
+        OriginalContent $content,
         ?string $idempotencyKeyHash = null,
         ?IntakeMetadata $intake = null,
         ?DateTimeImmutable $receivedAt = null,
         ?Document $predecessor = null,
     ): Document {
         $documentId = Uuid::generate();
+        $identifiers = new DocumentIdentifiers($documentId, $scopeId, $uploaderId);
 
         $document = $predecessor instanceof Document
             ? Document::succeed(
                 $predecessor,
-                $documentId,
-                $scopeId,
-                $uploaderId,
-                $digest,
-                $sizeBytes,
+                $identifiers,
+                $content,
                 $idempotencyKeyHash,
                 $intake ?? new IntakeMetadata(),
                 $receivedAt ?? SystemClock::now(),
             )
-            : Document::receive(
-                $documentId,
-                $scopeId,
-                $uploaderId,
-                $digest,
-                $sizeBytes,
-                $idempotencyKeyHash,
-                $intake,
-                $receivedAt,
-            );
+            : Document::receive($identifiers, $content, $idempotencyKeyHash, $intake, $receivedAt);
         $received = DocumentCustody::record(
             Uuid::generate(),
             $documentId,

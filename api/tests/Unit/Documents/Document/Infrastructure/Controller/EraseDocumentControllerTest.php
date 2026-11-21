@@ -7,11 +7,13 @@ namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Controller;
 use Erpify\Documents\Document\Application\AppendCustody;
 use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
+use Erpify\Documents\Document\Domain\DocumentIdentifiers;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Erasure\DocumentErasures;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
 use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Documents\Document\Infrastructure\Controller\EraseDocumentController;
@@ -170,7 +172,10 @@ final class EraseDocumentControllerTest extends TestCase
 
     private function plant(DocumentState $state): Document
     {
-        $document = Document::receive(Uuid::generate(), Uuid::generate(), Uuid::generate(), \str_repeat('a', 64), 10);
+        $document = Document::receive(
+            new DocumentIdentifiers(Uuid::generate(), Uuid::generate(), Uuid::generate()),
+            new OriginalContent(\str_repeat('a', 64), 10),
+        );
         (new ReflectionProperty(Document::class, 'state'))->setValue($document, $state);
         $this->documents->documents[$document->documentId()] = $document;
 

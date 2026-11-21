@@ -12,6 +12,7 @@ use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\Exception\UploadAborted;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Documents\Document\Domain\Repository\UploadIntentRepository;
 use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
@@ -112,8 +113,7 @@ final readonly class CommitUpload
         $document = $this->receiveDocument->receiveWithin(
             $intent->scopeId(),
             $intent->actorId(),
-            $digest,
-            $intent->declaredSize(),
+            new OriginalContent($digest, $intent->declaredSize()),
             $intent->keyHash(),
             $intake,
             $now,

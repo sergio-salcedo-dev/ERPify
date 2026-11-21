@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Documents\Document\Domain\Entity;
 
 use DateTimeImmutable;
+use Erpify\Documents\Document\Domain\DocumentIdentifiers;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
@@ -33,7 +35,10 @@ final class DocumentTest extends TestCase
         $scope = RandomUuid::v4()->toRfc4122();
         $uploader = Uuid::generate();
 
-        $document = Document::receive($id, $scope, $uploader, self::DIGEST, 4096);
+        $document = Document::receive(
+            new DocumentIdentifiers($id, $scope, $uploader),
+            new OriginalContent(self::DIGEST, 4096),
+        );
 
         $this->assertSame($id, $document->getId());
         $this->assertSame($id, $document->seriesId());
@@ -54,7 +59,10 @@ final class DocumentTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        Document::receive($id, $id, Uuid::generate(), self::DIGEST, 1);
+        Document::receive(
+            new DocumentIdentifiers($id, $id, Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
+        );
     }
 
     #[Test]
@@ -62,7 +70,10 @@ final class DocumentTest extends TestCase
     {
         $this->expectException(InvalidUuidException::class);
 
-        Document::receive(Uuid::generate(), 'not-a-uuid', Uuid::generate(), self::DIGEST, 1);
+        Document::receive(
+            new DocumentIdentifiers(Uuid::generate(), 'not-a-uuid', Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
+        );
     }
 
     #[Test]
@@ -71,11 +82,8 @@ final class DocumentTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         Document::receive(
-            Uuid::generate(),
-            \strtoupper(RandomUuid::v4()->toRfc4122()),
-            Uuid::generate(),
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers(Uuid::generate(), \strtoupper(RandomUuid::v4()->toRfc4122()), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
         );
     }
 
@@ -85,7 +93,11 @@ final class DocumentTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        Document::receive(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate(), $digest, $size, $hash);
+        Document::receive(
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent($digest, $size),
+            $hash,
+        );
     }
 
     /**
@@ -107,11 +119,8 @@ final class DocumentTest extends TestCase
         $hash = \hash('sha256', 'key');
 
         $document = Document::receive(
-            Uuid::generate(),
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
             $hash,
         );
 
@@ -124,18 +133,18 @@ final class DocumentTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         Document::receive(
-            Uuid::generate(),
-            RandomUuid::v4()->toRfc4122(),
-            ErasedPersonMarker::UUID,
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), ErasedPersonMarker::UUID),
+            new OriginalContent(self::DIGEST, 1),
         );
     }
 
     #[Test]
     public function theOptionalSealedFilenameAndRetentionFieldsAreKeptWhenSuppliedAndNullOtherwise(): void
     {
-        $plain = Document::receive(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate(), self::DIGEST, 1);
+        $plain = Document::receive(
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
+        );
 
         $this->assertNull($plain->filenameCiphertext());
         $this->assertNull($plain->retentionReason());
@@ -144,11 +153,8 @@ final class DocumentTest extends TestCase
 
         $review = new DateTimeImmutable('2031-01-01T00:00:00+00:00');
         $full = Document::receive(
-            Uuid::generate(),
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
             intake: new IntakeMetadata(
                 filenameCiphertext: 'sealed',
                 retentionReason: 'contract',

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Documents\Document\Domain\Entity;
 
+use Erpify\Documents\Document\Domain\DocumentIdentifiers;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
@@ -78,11 +80,8 @@ final class DocumentSuccessionTest extends TestCase
 
         Document::succeed(
             $document,
-            $document->documentId(),
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers($document->documentId(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
             null,
             new IntakeMetadata(),
             SystemClock::now(),
@@ -101,11 +100,8 @@ final class DocumentSuccessionTest extends TestCase
     private function documentIn(DocumentState $state): Document
     {
         $document = Document::receive(
-            Uuid::generate(),
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
         );
         $this->setState($document, $state);
 
@@ -116,11 +112,8 @@ final class DocumentSuccessionTest extends TestCase
     {
         return Document::succeed(
             $predecessor,
-            Uuid::generate(),
-            RandomUuid::v4()->toRfc4122(),
-            Uuid::generate(),
-            self::DIGEST,
-            1,
+            new DocumentIdentifiers(Uuid::generate(), RandomUuid::v4()->toRfc4122(), Uuid::generate()),
+            new OriginalContent(self::DIGEST, 1),
             null,
             new IntakeMetadata(),
             SystemClock::now(),
