@@ -6,6 +6,7 @@ namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
+use Erpify\Documents\Document\Application\Erasure\SeriesErasure;
 use Erpify\Documents\Document\Application\Listing\DocumentSeriesPage;
 use Erpify\Documents\Document\Application\Listing\ReadDocumentSeries;
 use Erpify\Documents\Document\Application\Scanning\RescanDocument;
@@ -21,6 +22,8 @@ use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
+use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
+use Erpify\Documents\Document\Domain\Exception\ErasureOutcomeUnknown;
 use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
@@ -36,6 +39,7 @@ use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentSe
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentVersionSlots;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Erasure\FakeErasureLedger;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use LogicException;
 use Override;
@@ -78,11 +82,13 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
     protected function setUp(): void
     {
         self::bootKernel();
+        FakeErasureLedger::reset();
         $this->emptyDocumentTables();
     }
 
     protected function tearDown(): void
     {
+        FakeErasureLedger::reset();
         $this->emptyDocumentTables();
 
         parent::tearDown();
@@ -282,22 +288,97 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
     }
 
     #[Test]
-    public function closingASeriesInsideATransactionIsRefused(): void
+    public function closingAndReopeningASeriesInsideATransactionIsRefused(): void
     {
         $first = $this->plantVersion(DocumentState::Ready);
+        $slots = $this->service(DocumentVersionSlots::class);
 
         $this->connection()->beginTransaction();
 
         try {
-            $this->assertThrows(
-                LogicException::class,
-                fn () => $this->service(DocumentVersionSlots::class)->closeSeries($first),
-            );
+            $this->assertThrows(LogicException::class, static fn () => $slots->closeSeries($first));
+            $this->assertThrows(LogicException::class, static fn () => $slots->reopenSeries($first));
         } finally {
             $this->connection()->rollBack();
         }
 
         $this->assertNull($this->closedAtOf($first));
+    }
+
+    #[Test]
+    public function onlyTheCallThatClosedASeriesIsToldSoAndAReopenOpensItAgain(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $slots = $this->service(DocumentVersionSlots::class);
+
+        $this->assertTrue($slots->closeSeries($first));
+        $closedAt = $this->closedAtOf($first);
+        $this->assertNotNull($closedAt);
+        $this->assertFalse($slots->closeSeries($first), 'a second close finds it closed');
+        $this->assertSame($closedAt, $this->closedAtOf($first), 'and keeps the first stamp');
+
+        $slots->reopenSeries($first);
+        $this->assertNull($this->closedAtOf($first));
+        $slots->reopenSeries($first);
+        $this->assertNull($this->closedAtOf($first), 'reopening an open series changes nothing');
+        $this->assertTrue($slots->closeSeries($first), 'it can be closed again');
+    }
+
+    #[Test]
+    public function aSeriesErasureWhoseFirstLedgerEntryIsCertainlyNotDurableReopensTheSeries(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $second = $this->plantVersion(DocumentState::Ready, $first);
+        FakeErasureLedger::failWrites();
+
+        $this->assertThrows(ErasureLedgerUnavailable::class, fn (): SeriesErasure => $this->eraseSeries($first));
+
+        $this->assertNull($this->closedAtOf($first), 'nothing was erased, so the series is open again');
+        $this->assertSame('ready', $this->stateOfDocument($second));
+        FakeErasureLedger::reset();
+        $this->assertTrue($this->declareVersion(Uuid::generate(), $second)->created, 'a version can be declared again');
+    }
+
+    #[Test]
+    public function aSeriesErasureThatFailsAfterErasingAVersionStaysClosed(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $second = $this->plantVersion(DocumentState::Ready, $first);
+        FakeErasureLedger::failWritesAfter(1);
+
+        $this->assertThrows(ErasureLedgerUnavailable::class, fn (): SeriesErasure => $this->eraseSeries($first));
+
+        $this->assertSame('erased', $this->stateOfDocument($second));
+        $this->assertSame('ready', $this->stateOfDocument($first));
+        $this->assertNotNull($this->closedAtOf($first), 'a version of this call is erased, so the closing stands');
+    }
+
+    #[Test]
+    public function aSeriesErasureWhoseOutcomeIsUnknownStaysClosedWhetherOrNotTheEntryLanded(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+
+        FakeErasureLedger::timeOutAfterLanding();
+        $this->assertThrows(ErasureOutcomeUnknown::class, fn (): SeriesErasure => $this->eraseSeries($first));
+        $this->assertNotNull($this->closedAtOf($first), 'an entry landed and the sweep may finish it');
+
+        FakeErasureLedger::reset();
+        $this->service(DocumentVersionSlots::class)->reopenSeries($first);
+        FakeErasureLedger::timeOutWithoutLanding();
+        $this->assertThrows(ErasureOutcomeUnknown::class, fn (): SeriesErasure => $this->eraseSeries($first));
+        $this->assertNotNull($this->closedAtOf($first), 'an entry may have landed and the caller cannot tell');
+    }
+
+    #[Test]
+    public function aSeriesAlreadyClosedOnEntryStaysClosedWhenTheLedgerIsUnavailable(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $this->service(DocumentVersionSlots::class)->closeSeries($first);
+        FakeErasureLedger::failWrites();
+
+        $this->assertThrows(ErasureLedgerUnavailable::class, fn (): SeriesErasure => $this->eraseSeries($first));
+
+        $this->assertNotNull($this->closedAtOf($first), 'an earlier run may have left the closing for a reason');
     }
 
     #[Test]
@@ -577,6 +658,13 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         );
     }
 
+    private function eraseSeries(string $seriesId): SeriesErasure
+    {
+        return $this->service(EraseDocument::class)
+            ->eraseSeries($seriesId, ErasureReason::RetentionExpired, Uuid::generate())
+        ;
+    }
+
     private function closedAtOf(string $seriesId): ?string
     {
         $closedAt = $this->connection()->fetchOne(
@@ -584,7 +672,7 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
             ['id' => $seriesId],
         );
 
-        return false === $closedAt || null === $closedAt ? null : $this->stringOf($closedAt);
+        return \is_string($closedAt) ? $closedAt : null;
     }
 
     private function reopen(string $documentId): void

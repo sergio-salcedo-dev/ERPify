@@ -51,16 +51,38 @@ final readonly class DbalDocumentVersionSlots implements DocumentVersionSlots
     }
 
     #[Override]
-    public function closeSeries(string $seriesId): void
+    public function closeSeries(string $seriesId): bool
+    {
+        return 0 < $this->stampSeries($seriesId, 'NOW()', 'closed_at IS NULL');
+    }
+
+    #[Override]
+    public function reopenSeries(string $seriesId): void
+    {
+        $this->stampSeries($seriesId, 'NULL', 'closed_at IS NOT NULL');
+    }
+
+    /**
+     * One statement, no series lock beyond the row lock the `UPDATE` itself takes, and refused inside a transaction
+     * for that reason. The predicate makes a repeat change nothing and tells the caller whether it was the one that
+     * did.
+     *
+     * @param 'NOW()'|'NULL' $closedAt
+     */
+    private function stampSeries(string $seriesId, string $closedAt, string $unless): int
     {
         Uuid::ensure($seriesId);
 
         if ($this->connection->isTransactionActive()) {
-            throw new LogicException('Closing a document series must not run inside a transaction.');
+            throw new LogicException('Closing or reopening a document series must not run inside a transaction.');
         }
 
-        $this->connection->executeStatement(
-            'UPDATE document_series SET closed_at = COALESCE(closed_at, NOW()) WHERE id = CAST(:id AS UUID)',
+        return (int) $this->connection->executeStatement(
+            \sprintf(
+                'UPDATE document_series SET closed_at = %s WHERE id = CAST(:id AS UUID) AND %s',
+                $closedAt,
+                $unless,
+            ),
             ['id' => \strtolower($seriesId)],
         );
     }

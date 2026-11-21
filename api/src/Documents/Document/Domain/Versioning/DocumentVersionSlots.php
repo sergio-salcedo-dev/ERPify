@@ -28,12 +28,22 @@ interface DocumentVersionSlots
     public function lockSeries(string $seriesId): bool;
 
     /**
-     * Closes the series to every later take, for ever: one statement in its own transaction, which waits for a take
-     * holding the series row and commits before returning. The series erasure calls it before it lists what remains,
-     * so a version filed by a take that finished first is listed, and one that starts afterwards is refused. Repeating
-     * it changes nothing. Refused inside a transaction, which would keep the series row locked until it ended.
+     * Closes the series to every later take: one statement in its own transaction, which waits for a take holding the
+     * series row and commits before returning. The series erasure calls it before it lists what remains, so a version
+     * filed by a take that finished first is listed, and one that starts afterwards is refused. Refused inside a
+     * transaction, which would keep the series row locked until it ended.
+     *
+     * @return bool whether THIS call closed it; `false` when it was already closed, which the statement itself decides
+     *              so that two callers can never both believe they closed it
      */
-    public function closeSeries(string $seriesId): void;
+    public function closeSeries(string $seriesId): bool;
+
+    /**
+     * Opens a closed series again, under the same contract as {@see closeSeries()}. Only the series erasure calls it,
+     * and only for the run that closed the series and then failed with its ledger entry certainly not durable, before
+     * erasing anything: no other ending leaves a series reopened.
+     */
+    public function reopenSeries(string $seriesId): void;
 
     /**
      * Whether a live version exists anywhere below the document, read without a lock by one recursive query. Under the

@@ -419,7 +419,7 @@ A new version is the declare and PUT above with a predecessor named in the path;
 | Series page with `afterId` empty or not a UUID, or `limit` below 1 or above 100 | **422 `validation-failed`** | `DocumentSeriesQuery` |
 | Series page while the erasure ledger's override is set | **410 `gone`**, for any well-formed id and before any lookup, as the listing | `ErasureLedgerOverride`, `DocumentGone` |
 | Series erasure: every refusal of the single erasure (wrong or missing password, reason outside the list, no `document.erase`) | as the erasure table above, before any ledger write | `EraseDocumentSeriesController` |
-| Series erasure: a version's ledger write or transaction fails | **503 `erasure-ledger-unavailable`** / **503 `erasure-outcome-unknown`**, as the erasure table; the run stops there and the versions already erased stay erased | `EraseDocument::eraseSeries()` |
+| Series erasure: a version's ledger write or transaction fails | **503 `erasure-ledger-unavailable`** / **503 `erasure-outcome-unknown`**, as the erasure table; the run stops there and the versions already erased stay erased; a series this call closed is opened again only for the 503 `erasure-ledger-unavailable` of the first version, with nothing erased | `EraseDocument::eraseSeries()` |
 
 A series page carries no name and opens no key; its `uploaderId` is `null` for an `Erased` version and the nil UUID for an uploader since erased. Every response carries `Cache-Control: no-store`. A series erasure answers **200** with `erased` (this call, newest first) and `remaining` (still not `Erased` when it finished); a repeat over an erased series answers both empty.
 

@@ -31,7 +31,8 @@ use Throwable;
  *
  * **A series is erased version by version** ({@see eraseSeries()}): each one is this same erasure, newest first, so
  * the ledger entry precedes every key it destroys and no transaction holds more than one document. An erasure never
- * takes the series lock, because it only ever frees a version slot; the series is closed to new takes once, up front.
+ * takes the series lock, because it only ever frees a version slot; the series is closed to new takes once, up front,
+ * and opened again only when its first ledger entry was certainly not durable ({@see eraseSeries()}).
  *
  * This class has no replay mode and takes no parameter that skips the ledger: the restore and the sweep go through
  * {@see ReplayErasure}, which a gate holds to exactly two callers.
@@ -119,10 +120,15 @@ final readonly class EraseDocument
     /**
      * Erases every version of a series that is not `Erased`, newest first, each through {@see erase()} — its own ledger
      * entry and its own transaction, so a version erased is never undone by a later failure — and reports what remains.
-     * It closes the series first (`DocumentVersionSlots::closeSeries()`, outside every erasure transaction), so no
-     * version can be filed or reopened in it from then on and the run terminates. It is repeatable: a failure stops
-     * the run where it stands and propagates; the versions erased before it stay erased and a repeat continues from
-     * there.
+     *
+     * The series is closed first (`DocumentVersionSlots::closeSeries()`, outside every erasure transaction), so no
+     * version can be filed or reopened in it from then on and the run terminates. The closing is definitive except in
+     * one case: when this call closed the series and its first ledger entry was certainly not durable
+     * ({@see ErasureLedgerUnavailable}), nothing has been erased or recorded, so the series is opened again before the
+     * exception propagates. It is never opened again after {@see ErasureOutcomeUnknown} (an entry may have landed and
+     * the completion sweep may finish the erasure), after this call erased a version, or when the series was already
+     * closed on entry (an earlier run may have left either behind). The run is repeatable: a failure stops it where it
+     * stands, the versions erased before it stay erased and a repeat continues from there.
      *
      * @throws DocumentNotFound         when no document belongs to the series
      * @throws ErasureLedgerUnavailable when a version's ledger entry is certainly not durable
@@ -141,15 +147,27 @@ final readonly class EraseDocument
 
         // Closed first and committed on its own, so what is listed next already includes any version a take filed
         // before it, and a take that starts afterwards is refused: the run ends instead of chasing new versions.
-        $this->slots->closeSeries($seriesId);
+        $closedByThisCall = $this->slots->closeSeries($seriesId);
 
         $erased = [];
 
-        foreach ($this->series->unerasedNewestFirst($seriesId) as $documentId) {
-            if ($this->erase($documentId, $reason, $operatorId)) {
-                $erased[] = $documentId;
+        try {
+            foreach ($this->series->unerasedNewestFirst($seriesId) as $documentId) {
+                if ($this->erase($documentId, $reason, $operatorId)) {
+                    $erased[] = $documentId;
+                }
             }
+        } catch (ErasureLedgerUnavailable $erasureLedgerUnavailable) {
+            if ($closedByThisCall && [] === $erased) {
+                $this->slots->reopenSeries($seriesId);
+            }
+
+            throw $erasureLedgerUnavailable;
         }
+
+        // Idempotent: it stamps nothing when the series is closed, and closes it again when a concurrent run that had
+        // closed it and failed opened it in the meantime.
+        $this->slots->closeSeries($seriesId);
 
         $remaining = $this->series->unerasedNewestFirst($seriesId);
 

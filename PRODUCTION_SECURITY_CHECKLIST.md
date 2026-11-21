@@ -2865,8 +2865,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       `ErasureLimits::TRANSACTION_LOCKS` stays 3), and only then lists and erases every version that is not `Erased`,
       newest first, each in its own ledger entry and transaction. A take that finished before the closing is listed;
       one that starts after it is refused (409 `document-predecessor-not-ready`), so no version is filed or reopened
-      in a series whose erasure has begun, and the closing is for ever. A failure stops the run where it stands (the
-      versions already erased stay erased, the series stays closed) and the operator reads `remaining` and repeats.
+      in a series whose erasure has begun, and the closing is definitive except for one ending: when the call that
+      closed the series fails with its first ledger entry certainly not durable and has erased nothing, it opens the
+      series again before the 503, so an intact series is not left closed for ever by an unreachable ledger. Any other
+      failure stops the run where it stands (the versions already erased stay erased, the series stays closed) and the
+      operator reads `remaining` and repeats.
       **Two — a slot conflict is retryable.** The successor exclusion reads the slot without a lock under the series
       lock (ADR `documents-custody-log.md` D12), so an erasure or a quarantine committing concurrently can make a new
       version or a reopen answer `document-version-slot-taken` for a slot that is free a moment later: a conflict the
@@ -2887,6 +2890,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       is one synchronous request over N versions.** Each version is durable and the run is repeatable, but a request
       cut off between versions surfaces as an unmapped exception and not as `ErasureOutcomeUnknown`, and the new-version
       declare and its commit do not consult `ErasureLedgerOverride`, as the first-version declare does not.
+      **Seven — two concurrent runs over one series.** Run A closes the series and fails with its first ledger entry
+      certainly not durable; run B, started after A's closing, saw it closed and so never reopens it, and B's own
+      ledger write succeeds. A opens the series again under B, and a version filed before B's closing statement at the
+      end of its run is live and was not in B's list. B closes the series again before it reads `remaining`, so the
+      series ends closed and the version shows in `remaining`, which the operator repeats on. No lock orders two runs
+      (`ErasureLimits::TRANSACTION_LOCKS` stays 3), and the window needs the ledger to fail for one run and answer for
+      the next within the length of one run.
       **Open — owner: the Documents epic.**
 - [ ] **Offsite backups keep the ciphertext of an erased document, and an erasure depends on the offsite channel
       (doc-7).** The sealed objects of an erased document are deleted from the volume, but a backup of the volume (or a
