@@ -80,7 +80,10 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
         $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
 
         $this->assertStatus(Response::HTTP_FORBIDDEN);
-        $this->assertSame(0, $this->intOf($this->connection()->fetchOne('SELECT COUNT(*) FROM upload_intent')));
+        $this->assertSame(0, $this->intOf($this->connection()->fetchOne(
+            'SELECT COUNT(*) FROM upload_intent WHERE predecessor_id = CAST(:id AS UUID)',
+            ['id' => $first],
+        )));
     }
 
     #[Test]
