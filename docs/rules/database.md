@@ -252,7 +252,7 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
   **`User` is NOT one of them in this codebase**: it is the aggregate of the
   `Iam/Identity` bounded context, so a reference to it crosses a context and
   follows Level 2 — a bare UUID column, no `FOREIGN KEY`. Measured: the schema
-  holds exactly three foreign keys and none points at `identity_user`.
+  holds exactly five foreign keys and none points at `identity_user`.
 - **ID-only references** across contexts (`project.leadId`) — no JOIN, no entity
   association, no foreign repository.
 - **Integration via events** — `ProjectCreated → CRM updates its projection`.

@@ -16,6 +16,15 @@ use Erpify\Documents\Document\Application\Upload\DeclareUpload;
 use Erpify\Documents\Document\Application\Upload\DeclareUploadOutcome;
 use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
 use Erpify\Documents\Document\Domain\DocumentState;
+use Psr\Log\NullLogger;
+use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
+use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
+use Erpify\Documents\Document\Application\Erasure\SeriesErasure;
+use Erpify\Documents\Document\Application\Erasure\LedgerWriteFailed;
+use Erpify\Documents\Document\Application\Erasure\ErasureLedger;
+use Erpify\Documents\Document\Application\Upload\IdempotencyKeyHasher;
+use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
@@ -270,6 +279,11 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $first = $this->plantVersion(DocumentState::Ready, uploaderId: $uploader);
         $second = $this->plantVersion(DocumentState::Ready, $first, $uploader);
         $third = $this->plantVersion(DocumentState::Received, $second, ErasedPersonMarker::UUID);
+        $this->connection()->executeStatement(
+            "UPDATE document SET retention_reason = 'technical-file', legal_basis = 'contract', "
+            . "review_at = '2031-03-04 05:06:07+00' WHERE id = CAST(:id AS UUID)",
+            ['id' => $second],
+        );
         $this->erase($second);
         $this->plantVersion(DocumentState::Ready);
 
@@ -283,6 +297,9 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $this->assertSame(DocumentState::Erased, $tombstone->state);
         $this->assertSame(\hash('sha256', $second), $tombstone->digest, 'the tombstone keeps its digest');
         $this->assertSame($first, $tombstone->predecessorId);
+        $this->assertSame('technical-file', $tombstone->retentionReason, 'the tombstone keeps its retention terms');
+        $this->assertSame('contract', $tombstone->legalBasis);
+        $this->assertSame('2031-03-04T05:06:07+00:00', $tombstone->reviewAt?->format(\DATE_ATOM));
         $this->assertSame($second, $page->nextAfterId);
 
         $next = $reader->read($first, $page->nextAfterId, 2);
@@ -291,6 +308,28 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $this->assertNull($next->nextAfterId);
 
         $this->assertThrows(DocumentNotFound::class, static fn () => $reader->read($second, null, 10));
+    }
+
+    #[Test]
+    public function theSeriesIsOrderedByCreationThenByIdNeverByIdAlone(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $later = $this->plantVersion(DocumentState::Erased, $first);
+        $tieLow = $this->plantVersion(DocumentState::Erased, $first);
+        $tieHigh = $this->plantVersion(DocumentState::Ready, $first);
+        $this->connection()->executeStatement(
+            "UPDATE document SET created_at = created_at + INTERVAL '1 hour' WHERE id = CAST(:id AS UUID)",
+            ['id' => $later],
+        );
+        $this->connection()->executeStatement(
+            'UPDATE document SET created_at = (SELECT created_at FROM document WHERE id = CAST(:low AS UUID)) '
+            . 'WHERE id = CAST(:high AS UUID)',
+            ['low' => $tieLow, 'high' => $tieHigh],
+        );
+
+        $page = $this->service(ReadDocumentSeries::class)->read($first, null, 10);
+
+        $this->assertSame([$first, $tieLow, $tieHigh, $later], $this->idsOf($page));
     }
 
     #[Test]
@@ -348,16 +387,85 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $claimed = $this->streamingVersionOf($first);
         $actor = Uuid::generate();
 
-        $this->service(TransactionManager::class)->transactional(function () use ($first): void {
-            $this->service(DocumentVersionSlots::class)->close($first);
-        });
+        $this->closeSeries($first);
 
-        $this->assertThrows(PredecessorNotReady::class, fn (): Document => $this->commitVersion($claimed));
-        $this->assertThrows(PredecessorNotReady::class, fn () => $this->reopen($failed));
-        $this->assertDeclareRefused(PredecessorNotReady::class, $actor, $first);
+        $this->assertThrows(SeriesClosed::class, fn (): Document => $this->commitVersion($claimed));
+        $this->assertThrows(SeriesClosed::class, fn () => $this->reopen($failed));
+        $this->assertDeclareRefused(SeriesClosed::class, $actor, $first);
         $this->assertSame('ready', $this->stateOfDocument($first), 'closing erases nothing by itself');
         $this->assertSame('scan_failed', $this->stateOfDocument($failed));
         $this->assertSame(0, $this->liveChildrenCount($first));
+    }
+
+    #[Test]
+    public function aFailedFirstVersionOfAClosedSeriesIsNotReopened(): void
+    {
+        $first = $this->plantVersion(DocumentState::ScanFailed);
+
+        $this->closeSeries($first);
+
+        $this->assertThrows(SeriesClosed::class, fn () => $this->reopen($first));
+        $this->assertSame('scan_failed', $this->stateOfDocument($first));
+    }
+
+    #[Test]
+    public function aKeyAFiledVersionHoldsIsReplayedAsThatVersionAndConflictsWithAnyOtherPredecessor(): void
+    {
+        $actor = Uuid::generate();
+        $first = $this->plantVersion(DocumentState::Ready);
+        $other = $this->plantVersion(DocumentState::Ready);
+        $version = $this->plantVersion(DocumentState::Ready, $first);
+        $this->connection()->executeStatement(
+            'UPDATE document SET idempotency_key_hash = :key, digest = :digest, retention_reason = :reason, '
+            . 'legal_basis = :basis WHERE id = CAST(:id AS UUID)',
+            [
+                'key' => $this->service(IdempotencyKeyHasher::class)->hash($actor, 'filed-key'),
+                'digest' => \hash('sha256', 'v'),
+                'reason' => RetentionReason::TechnicalFile->value,
+                'basis' => LegalBasis::Contract->value,
+                'id' => $version,
+            ],
+        );
+
+        $replay = $this->declareVersion($actor, $first, 'filed-key');
+        $this->assertFalse($replay->created, 'the filed version answers its own replay, not the slot it holds');
+
+        $this->assertDeclareRefused(IdempotencyKeyConflict::class, $actor, $other, 'filed-key');
+        $this->assertThrows(
+            IdempotencyKeyConflict::class,
+            fn (): DeclareUploadOutcome => $this->service(DeclareUpload::class)->declare(
+                $this->versionCommand('filed-key'),
+                $actor,
+            ),
+        );
+    }
+
+    #[Test]
+    public function aSeriesErasureStopsAtTheFirstLedgerFailureKeepsWhatItErasedAndARepeatFinishesIt(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $second = $this->plantVersion(DocumentState::Ready, $first);
+        $third = $this->plantVersion(DocumentState::Received, $second);
+        $ledger = $this->ledgerFailingFrom(2);
+
+        $this->assertThrows(
+            ErasureLedgerUnavailable::class,
+            fn (): SeriesErasure => $this->eraseSeriesWith($ledger, $first),
+        );
+
+        $this->assertSame('erased', $this->stateOfDocument($third), 'the newest version stays erased');
+        $this->assertSame('ready', $this->stateOfDocument($second), 'the failed version is untouched');
+        $this->assertSame('ready', $this->stateOfDocument($first));
+        $this->assertSame([$this->scopeOf($third), $this->scopeOf($second)], $ledger->attempts);
+        $this->assertNotFalse($this->connection()->fetchOne(
+            'SELECT 1 FROM document_series WHERE id = CAST(:id AS UUID) AND closed_at IS NOT NULL',
+            ['id' => $first],
+        ), 'the series stays closed');
+
+        $repeat = $this->eraseSeriesWith($this->ledgerFailingFrom(\PHP_INT_MAX), $first);
+
+        $this->assertSame([$second, $first], $repeat->erased);
+        $this->assertSame([], $repeat->remaining);
     }
 
     #[Test]
@@ -449,13 +557,7 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         ?string $key = null,
     ): DeclareUploadOutcome {
         $outcome = $this->service(DeclareUpload::class)->declareVersion(
-            new DeclareUploadCommand(
-                size: 10,
-                sha256: \hash('sha256', 'v'),
-                idempotencyKey: $key,
-                retentionReason: RetentionReason::TechnicalFile,
-                legalBasis: LegalBasis::Contract,
-            ),
+            $this->versionCommand($key),
             $actor,
             $predecessorId,
         );
@@ -474,6 +576,78 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
             'SELECT COUNT(*) FROM document WHERE predecessor_id = CAST(:id AS UUID) '
             . "AND state IN ('received', 'scanning', 'ready')",
             ['id' => $predecessorId],
+        ));
+    }
+
+    private function versionCommand(?string $key): DeclareUploadCommand
+    {
+        return new DeclareUploadCommand(
+            size: 10,
+            sha256: \hash('sha256', 'v'),
+            idempotencyKey: $key,
+            retentionReason: RetentionReason::TechnicalFile,
+            legalBasis: LegalBasis::Contract,
+        );
+    }
+
+    private function closeSeries(string $seriesId): void
+    {
+        $this->service(TransactionManager::class)->transactional(function () use ($seriesId): void {
+            $this->service(DocumentVersionSlots::class)->close($seriesId);
+        });
+    }
+
+    private function eraseSeriesWith(ErasureLedger $ledger, string $seriesId): SeriesErasure
+    {
+        return new EraseDocument(
+            $this->service(DocumentRepository::class),
+            $ledger,
+            $this->service(ApplyErasure::class),
+            new NullLogger(),
+            $this->service(DocumentSeriesRepository::class),
+            $this->service(DocumentVersionSlots::class),
+            $this->service(TransactionManager::class),
+        )->eraseSeries($seriesId, ErasureReason::RetentionExpired, Uuid::generate());
+    }
+
+    /**
+     * A ledger that records every write it is asked for and refuses, as certainly not durable, from the `$failing`-th.
+     */
+    private function ledgerFailingFrom(int $failing): ErasureLedger
+    {
+        return new class($failing) implements ErasureLedger {
+            /** @var list<string> */
+            public array $attempts = [];
+
+            public function __construct(private readonly int $failing)
+            {
+            }
+
+            public function record(string $scopeId): void
+            {
+                $this->attempts[] = $scopeId;
+
+                if (\count($this->attempts) >= $this->failing) {
+                    throw LedgerWriteFailed::create();
+                }
+            }
+
+            public function entries(): array
+            {
+                return [];
+            }
+
+            public function verifyReadableInFull(): void
+            {
+            }
+        };
+    }
+
+    private function scopeOf(string $documentId): string
+    {
+        return $this->stringOf($this->connection()->fetchOne(
+            'SELECT scope_id FROM document WHERE id = CAST(:id AS UUID)',
+            ['id' => $documentId],
         ));
     }
 

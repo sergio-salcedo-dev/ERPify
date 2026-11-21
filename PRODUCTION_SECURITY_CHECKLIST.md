@@ -2818,7 +2818,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       current password before any ledger write (`documents_erase :: credential-affecting`), because a stolen session could
       otherwise erase documents for good and evicting it undoes nothing. `backoffice_user_erase`, which erases an identity,
       is the same gap and is classified `ordinary` with no proof; it was not fixed here. **Open — owner: the identity
-      erasure route's next change; the credential-proof gate pins the Documents route and cannot see this one.**
+      erasure route's next change; the credential-proof gate pins the two Documents erasure routes (one document, one
+      series) and cannot see this one.**
 - [ ] **The digest, size and timestamps of an erased document survive its erasure (doc-7).** Erasure destroys the key,
       nulls the sealed filename and deletes the sealed object, but the row keeps its sha256 digest, byte size, retention
       fields and timestamps, and its custody trail stays. Anyone who holds a known file can confirm it is the one

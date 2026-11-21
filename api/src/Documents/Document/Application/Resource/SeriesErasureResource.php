@@ -6,7 +6,8 @@ namespace Erpify\Documents\Document\Application\Resource;
 
 /**
  * Wire contract of a series erasure: the versions this call erased, newest first, and the versions still not `Erased`
- * when it finished. A non-empty `remaining` means a version was filed meanwhile; the operator runs it again.
+ * when it finished, read back after the run. It is empty whenever the run completes, since the series is closed before
+ * it is listed; a failed run answers its 503 instead, and repeating it continues where it stopped.
  */
 final readonly class SeriesErasureResource
 {

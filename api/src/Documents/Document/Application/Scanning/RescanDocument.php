@@ -12,6 +12,7 @@ use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotRescannable;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
+use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Scanning\DocumentScanLeases;
@@ -60,6 +61,7 @@ final readonly class RescanDocument
      * @throws DocumentNotRescannable when the document is not in `ScanFailed`
      * @throws PredecessorNotReady    when the document is a successor whose predecessor is `Erased`
      * @throws VersionSlotTaken       when the document is a successor whose slot another live version holds
+     * @throws SeriesClosed           when a series erasure has closed the document's series
      */
     public function rescan(string $documentId, RescanReason $reason, string $operatorId): void
     {
@@ -81,7 +83,9 @@ final readonly class RescanDocument
             $documentId = $document->documentId();
             $predecessorId = $document->predecessorId();
 
-            if (null !== $predecessorId) {
+            if (null === $predecessorId) {
+                $this->versionSlot->forFirstVersionReopen($document->seriesId());
+            } else {
                 $this->versionSlot->forReopen($document->seriesId(), $predecessorId);
             }
 

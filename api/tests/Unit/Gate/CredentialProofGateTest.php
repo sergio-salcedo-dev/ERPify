@@ -80,7 +80,7 @@ final class CredentialProofGateTest extends TestCase
      * is pinned. `backoffice_user_erase` is the same gap, named and left `ordinary` on purpose
      * (`PRODUCTION_SECURITY_CHECKLIST.md` §7).
      */
-    public function testTheDocumentsErasureStaysClassifiedAsCredentialAffecting(): void
+    public function testTheDocumentsErasuresStayClassifiedAsCredentialAffecting(): void
     {
         $registry = $this->policy()->registry();
 

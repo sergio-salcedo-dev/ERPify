@@ -8,6 +8,7 @@ use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
+use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
 use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
@@ -18,8 +19,9 @@ use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
  * transaction it takes the series row, then the predecessor row under `FOR UPDATE`, rechecks the predecessor, and only
  * then asks the lock-free recursive read whether a live version already holds the slot.
  *
- * An absent predecessor, and one in a series a series erasure has closed, answers like one that cannot be succeeded,
- * so neither caller can be used to learn whether an id exists. Every method assumes the caller owns the transaction.
+ * An absent predecessor answers like one that cannot be succeeded, so neither caller can be used to learn whether an
+ * id exists. A series a series erasure has closed refuses every take, and the reopen of a failed first version too,
+ * so nothing in it becomes live again. Every method assumes the caller owns the transaction.
  */
 final readonly class TakeVersionSlot
 {
@@ -34,7 +36,8 @@ final readonly class TakeVersionSlot
      * series from the database. The series id is read first without a lock — it never changes — to know which row to
      * lock.
      *
-     * @throws PredecessorNotReady when the predecessor is absent or not `Ready`, or its series is closed
+     * @throws PredecessorNotReady when the predecessor is absent or not `Ready`
+     * @throws SeriesClosed        when a series erasure has closed the series
      * @throws VersionSlotTaken    when a live version already succeeds it
      */
     public function forNewVersion(string $predecessorId): Document
@@ -55,7 +58,8 @@ final readonly class TakeVersionSlot
      * For a reopen of a failed version: the predecessor must not be `Erased` — while the failed version exists its
      * predecessor was `Ready` once, and `Erased` is the only state it can have left for.
      *
-     * @throws PredecessorNotReady when the predecessor is `Erased` (or absent), or the series is closed
+     * @throws PredecessorNotReady when the predecessor is `Erased` (or absent)
+     * @throws SeriesClosed        when a series erasure has closed the series
      * @throws VersionSlotTaken    when a live version already holds the slot
      */
     public function forReopen(string $seriesId, string $predecessorId): void
@@ -68,13 +72,33 @@ final readonly class TakeVersionSlot
     }
 
     /**
-     * @throws PredecessorNotReady when the series is closed by a series erasure, or the predecessor row is absent
+     * For a reopen of a failed FIRST version, which has no predecessor and so no slot: it still may not become live in
+     * a series a series erasure has closed. Takes the series row, which the caller holds until its transaction ends.
+     *
+     * @throws SeriesClosed when a series erasure has closed the series
+     */
+    public function forFirstVersionReopen(string $seriesId): void
+    {
+        $this->lockOpenSeries($seriesId);
+    }
+
+    /**
+     * @throws SeriesClosed when a series erasure has closed the series
+     */
+    private function lockOpenSeries(string $seriesId): void
+    {
+        if (!$this->slots->lockSeries($seriesId)) {
+            throw SeriesClosed::create();
+        }
+    }
+
+    /**
+     * @throws SeriesClosed        when a series erasure has closed the series
+     * @throws PredecessorNotReady when the predecessor row is absent
      */
     private function lockUnderSeries(string $seriesId, string $predecessorId): Document
     {
-        if (!$this->slots->lockSeries($seriesId)) {
-            throw PredecessorNotReady::create();
-        }
+        $this->lockOpenSeries($seriesId);
 
         try {
             return $this->documents->lockForUpdate($predecessorId);

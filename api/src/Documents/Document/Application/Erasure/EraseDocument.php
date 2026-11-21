@@ -156,6 +156,10 @@ final readonly class EraseDocument
 
         $remaining = $this->series->unerasedNewestFirst($seriesId);
 
+        if ([] === $erased) {
+            return new SeriesErasure($seriesId, $erased, $remaining);
+        }
+
         $this->logger->info('A document series was erased by an operator.', [
             'seriesId' => $seriesId,
             'reason' => $reason->value,

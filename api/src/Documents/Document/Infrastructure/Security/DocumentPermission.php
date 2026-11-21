@@ -29,7 +29,8 @@ final class DocumentPermission
     /**
      * Reads the original of a `Ready` document. Not a tier verb, so no tier carries it and only the ADMIN wildcard
      * reaches it; `StaticAuthorizationPolicy` declares the row. A non-ADMIN reader, or a rule that an uploader may
-     * download what they filed, is a decision to take there, not a tier to widen.
+     * download what they filed, is a decision to take there, not a tier to widen. Filing a new version also asks it,
+     * beside `document.write`, so granting it to a role also lets that role's writers replace documents.
      */
     public const string DOWNLOAD = 'document.download';
 

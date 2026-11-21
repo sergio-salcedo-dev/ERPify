@@ -142,7 +142,7 @@ final class UploadIntent
         self::ensureDigests($declaredSha256, $keyHash);
 
         if (null !== $predecessorId) {
-            self::ensureIdentifiers($predecessorId, $actorId, $scopeId);
+            self::ensureLowerCaseUuid($predecessorId);
         }
 
         $intent = new self(
@@ -391,15 +391,20 @@ final class UploadIntent
     private static function ensureIdentifiers(string $id, string $actorId, string $scopeId): void
     {
         foreach ([$id, $actorId, $scopeId] as $identifier) {
-            Uuid::ensure($identifier);
-
-            if (\strtolower($identifier) !== $identifier) {
-                throw new InvalidArgumentException('Identifiers must be lower-case UUIDs.');
-            }
+            self::ensureLowerCaseUuid($identifier);
         }
 
         if (ErasedPersonMarker::UUID === $actorId) {
             throw new InvalidArgumentException('The erased-person marker is written by the erasure, never declared.');
+        }
+    }
+
+    private static function ensureLowerCaseUuid(string $identifier): void
+    {
+        Uuid::ensure($identifier);
+
+        if (\strtolower($identifier) !== $identifier) {
+            throw new InvalidArgumentException('Identifiers must be lower-case UUIDs.');
         }
     }
 
