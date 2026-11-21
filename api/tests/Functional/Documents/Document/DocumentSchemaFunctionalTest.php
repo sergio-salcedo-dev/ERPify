@@ -72,6 +72,56 @@ final class DocumentSchemaFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function theSeriesAndPredecessorForeignKeysExistAndHaveNeitherAnUpdateNorADeleteCascade(): void
+    {
+        $keys = ['fk_document_series' => 'document_series', 'fk_document_predecessor' => 'document'];
+
+        foreach ($keys as $name => $table) {
+            $constraint = $this->connection()->fetchAssociative(
+                'SELECT confdeltype, confupdtype, confrelid::regclass::text AS referenced FROM pg_constraint '
+                . 'WHERE conname = :name',
+                ['name' => $name],
+            );
+
+            $this->assertIsArray($constraint, $name . ' is physically present');
+            $this->assertSame($table, $constraint['referenced'] ?? null);
+            $this->assertSame('a', $constraint['confdeltype'] ?? null, $name . ': ON DELETE NO ACTION');
+            $this->assertSame('a', $constraint['confupdtype'] ?? null, $name . ': ON UPDATE NO ACTION');
+        }
+
+        $this->assertSame('YES', $this->connection()->fetchOne(
+            "SELECT is_nullable FROM information_schema.columns WHERE table_name = 'document_series' "
+            . "AND column_name = 'closed_at'",
+        ), 'a series is open until its erasure closes it');
+    }
+
+    #[Test]
+    public function aDocumentCannotNameASeriesOrAPredecessorThatDoesNotExist(): void
+    {
+        foreach (['series_id', 'predecessor_id'] as $column) {
+            try {
+                $id = Uuid::generate();
+                $this->connection()->executeStatement(
+                    'INSERT INTO document (id, scope_id, series_id, predecessor_id, uploader_id, state, digest, '
+                    . 'size_bytes, next_scan_at, created_at, updated_at) VALUES (:id, :scope, :series, '
+                    . "CAST(:predecessor AS UUID), :uploader, 'received', :digest, 10, NOW(), NOW(), NOW())",
+                    [
+                        'id' => $id,
+                        'scope' => Uuid::generate(),
+                        'series' => 'series_id' === $column ? Uuid::generate() : $this->plantedSeries(),
+                        'predecessor' => 'predecessor_id' === $column ? Uuid::generate() : null,
+                        'uploader' => Uuid::generate(),
+                        'digest' => \hash('sha256', $id),
+                    ],
+                );
+                $this->fail('An orphan ' . $column . ' is refused.');
+            } catch (ForeignKeyConstraintViolationException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    #[Test]
     public function aDocumentThatHasCustodyCannotBeDeleted(): void
     {
         $documentId = $this->plantDocument(Uuid::generate());
@@ -232,5 +282,13 @@ final class DocumentSchemaFunctionalTest extends KernelTestCase
         }
 
         $this->fail($message);
+    }
+
+    private function plantedSeries(): string
+    {
+        $seriesId = Uuid::generate();
+        $this->plantSeries($seriesId);
+
+        return $seriesId;
     }
 }

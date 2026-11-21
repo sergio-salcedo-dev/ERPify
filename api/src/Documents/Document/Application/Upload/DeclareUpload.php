@@ -12,6 +12,7 @@ use Erpify\Documents\Document\Domain\Entity\UploadIntent;
 use Erpify\Documents\Document\Domain\Exception\DeclaredSizeOutOfRange;
 use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
+use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Exception\UploadCapacityExhausted;
 use Erpify\Documents\Document\Domain\Exception\UploadInProgress;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
@@ -73,15 +74,17 @@ final readonly class DeclareUpload
 
     /**
      * Declares a new version of `$predecessorId`: the same declare, with the predecessor recorded on the intent and
-     * compared on a replay. A new intent is refused at once when the predecessor is absent or not `Ready`, or when a
-     * live version already holds its slot, so a caller does not stream 100 MiB to be told so at the commit; both are
-     * read without a lock and only advisory, since the commit decides again under the series lock.
+     * compared on a replay. A key a filed version already holds answers that version first. Otherwise a new intent is
+     * refused at once when the predecessor is absent or not `Ready`, when its series erasure has closed the series, or
+     * when a live version already holds its slot, so a caller does not stream 100 MiB to be told so at the commit; all
+     * three are read without a lock and only advisory, since the commit decides again under the series lock.
      *
      * @throws DeclaredSizeOutOfRange  when the size is zero or above the cap
      * @throws IdempotencyKeyConflict  when the key was used with different parameters
      * @throws UploadInProgress        when the key's upload is streaming right now
      * @throws UploadCapacityExhausted when the actor holds too many live declared intents
      * @throws PredecessorNotReady     when the predecessor is absent or not `Ready`
+     * @throws SeriesClosed            when the series erasure has closed the predecessor's series
      * @throws VersionSlotTaken        when a live version already succeeds the predecessor
      */
     public function declareVersion(
@@ -163,6 +166,9 @@ final readonly class DeclareUpload
         }
 
         if (null !== $declaration->predecessorId) {
+            // A key a filed version already holds answers that version, even once its intent is pruned: the version
+            // itself now holds the slot, so the early refusal below would otherwise answer its own replay.
+            $this->answerAKeyADocumentHolds($declaration);
             $this->ensureSlotLooksFree($declaration->predecessorId);
         }
 
@@ -260,6 +266,22 @@ final readonly class DeclareUpload
         return DeclareUploadOutcome::replayedDocument($document, $intent);
     }
 
+    /**
+     * @throws DocumentHoldsKey when a filed document already holds the declaration's key
+     */
+    private function answerAKeyADocumentHolds(Declaration $declaration): void
+    {
+        if (null === $declaration->keyHash) {
+            return;
+        }
+
+        $document = $this->documents->findByIdempotencyKeyHash($declaration->keyHash);
+
+        if ($document instanceof Document) {
+            throw new DocumentHoldsKey($document);
+        }
+    }
+
     private function matches(UploadIntent $intent, Declaration $declaration): bool
     {
         return $intent->matchesDeclaration(
@@ -286,7 +308,7 @@ final readonly class DeclareUpload
         }
 
         if ($this->slots->isSeriesClosed($predecessor->seriesId())) {
-            throw PredecessorNotReady::create();
+            throw SeriesClosed::create();
         }
 
         if ($this->slots->isSlotHeld($predecessorId)) {

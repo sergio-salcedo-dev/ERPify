@@ -9,6 +9,9 @@ use Erpify\Documents\Document\Infrastructure\Controller\DeclareVersionController
 use Erpify\Documents\Document\Infrastructure\Controller\DocumentSeriesController;
 use Erpify\Documents\Document\Infrastructure\Controller\EraseDocumentSeriesController;
 use Erpify\Documents\Document\Infrastructure\Http\DocumentSeriesMapper;
+use Erpify\Documents\Document\Infrastructure\Security\DeclareUploadThrottle;
+use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\ErrorContract\Domain\Exception\RateLimitExceeded;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\AuthenticatesFunctionalRequests;
 use Erpify\Tests\Support\Dig;
@@ -116,6 +119,11 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
     {
         $first = $this->plantVersion(DocumentState::Ready);
         $erased = $this->plantVersion(DocumentState::Erased, $first);
+        $this->connection()->executeStatement(
+            "UPDATE document SET retention_reason = 'technical-file', legal_basis = 'contract', "
+            . "review_at = '2031-03-04 05:06:07' WHERE id = CAST(:id AS UUID)",
+            ['id' => $erased],
+        );
 
         $this->authenticateClient($this->client);
         $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $first);
@@ -131,16 +139,56 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
         $this->assertSame($erased, Dig::value($this->data(), 'versions', 1, 'id'));
         $this->assertSame('erased', Dig::value($this->data(), 'versions', 1, 'state'));
         $this->assertNull(Dig::value($this->data(), 'versions', 1, 'uploaderId'));
+        $this->assertSame('technical-file', Dig::value($this->data(), 'versions', 1, 'retentionReason'));
+        $this->assertSame('contract', Dig::value($this->data(), 'versions', 1, 'legalBasis'));
+        $this->assertSame('2031-03-04T05:06:07+00:00', Dig::value($this->data(), 'versions', 1, 'reviewAt'));
         $this->assertIsString(Dig::value($this->data(), 'versions', 0, 'uploaderId'));
         $this->assertNull(Dig::value($this->data(), 'nextAfterId'));
 
         $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $erased);
         $this->assertStatus(Response::HTTP_NOT_FOUND);
 
-        foreach (['nope', ''] as $afterId) {
-            $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $first . '?afterId=' . $afterId);
+        foreach (['afterId=nope', 'afterId=', 'limit=0', 'limit=101'] as $query) {
+            $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $first . '?' . $query);
             $this->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
         }
+    }
+
+    #[Test]
+    public function aSpentDeclareBudgetRateLimitsAVersionDeclareAndCreatesNothing(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        // An administrator of its own, so the spent budget cannot reach any other test's caller.
+        $email = 'functional-version-throttle@erpify.test';
+        $this->authenticateAs($this->client, $email, [Role::ADMIN->value]);
+        $this->spendTheDeclareBudgetOf($this->stringOf($this->connection()->fetchOne(
+            'SELECT id FROM identity_user WHERE email = :email',
+            ['email' => $email],
+        )));
+
+        $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
+
+        $this->assertStatus(Response::HTTP_TOO_MANY_REQUESTS);
+        $this->assertSame('rate-limited', Dig::value($this->decoded(), 'type'));
+        $this->assertGreaterThan(0, (int) $this->client->getResponse()->headers->get('Retry-After'));
+        $this->assertSame(0, $this->intentsNaming($first));
+    }
+
+    #[Test]
+    public function aVersionOfASeriesItsErasureClosedIsRefusedWithItsOwnType(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $this->connection()->executeStatement(
+            'UPDATE document_series SET closed_at = NOW() WHERE id = CAST(:id AS UUID)',
+            ['id' => $first],
+        );
+        $this->authenticateAdminClient($this->client);
+
+        $this->send(Request::METHOD_POST, '/api/v1/documents/' . $first . '/versions', $this->declaration());
+
+        $this->assertStatus(Response::HTTP_CONFLICT);
+        $this->assertSame('document-series-closed', Dig::value($this->decoded(), 'type'));
+        $this->assertSame(0, $this->intentsNaming($first));
     }
 
     #[Test]
@@ -187,6 +235,30 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
 
         $this->send(Request::METHOD_POST, $this->seriesErase(Uuid::generate()), $this->erasure('functional-password'));
         $this->assertStatus(Response::HTTP_NOT_FOUND);
+    }
+
+    private function intentsNaming(string $predecessorId): int
+    {
+        return $this->intOf($this->connection()->fetchOne(
+            'SELECT COUNT(*) FROM upload_intent WHERE predecessor_id = CAST(:id AS UUID)',
+            ['id' => $predecessorId],
+        ));
+    }
+
+    private function spendTheDeclareBudgetOf(string $actor): void
+    {
+        $throttle = self::getContainer()->get(DeclareUploadThrottle::class);
+        $this->assertInstanceOf(DeclareUploadThrottle::class, $throttle);
+
+        for ($spent = 0; $spent < 10_000; ++$spent) {
+            try {
+                $throttle->ensureWithinBudget($actor);
+            } catch (RateLimitExceeded) {
+                return;
+            }
+        }
+
+        $this->fail('The declare budget never ran out.');
     }
 
     /**

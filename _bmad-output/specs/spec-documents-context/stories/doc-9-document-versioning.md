@@ -84,6 +84,7 @@ context:
   line of the `PRODUCTION_SECURITY_CHECKLIST.md` §7 entry is gone and the entry is closed. The new-version declare also refuses a closed
   series early, without a lock (`DocumentVersionSlots::isSeriesClosed()`), with the same 409 as the commit.
 
+- 2026-11-21 (a second review, ported from a parallel session's branch at the owner's direction): a closed series answers its own type, `document-series-closed` (`SeriesClosed`, `Conflict`), final where `document-predecessor-not-ready` is not and true for a `Ready` predecessor; the reopen of a failed FIRST version now takes the series row too (`TakeVersionSlot::forFirstVersionReopen()`), so a closed series refuses it — before this, a first version reopened inside a series being erased became readable again; and the declare answers a key a filed version already holds before its early slot refusal, since that version holds the slot and the replay otherwise answered `document-version-slot-taken` once its intent was pruned (the existing replay test used a `Quarantined` version, which holds no slot). KEEP: the reversible closing (`closeSeries()`/`reopenSeries()`), option C, `TRANSACTION_LOCKS` 3.
 ### To apply locally with memlog.py
 
 `_bmad/scripts/memlog.py` is not installed in the cloud session that implemented this story, and the memlog is written only through it, so neither `.memlog.md` nor `stories.yaml` was edited here. To apply locally:

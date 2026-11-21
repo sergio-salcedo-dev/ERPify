@@ -130,6 +130,38 @@ final class VersionSlotPairsFunctionalTest extends KernelTestCase
     }
 
     #[Test]
+    public function everyTakeWaitsOnTheSeriesRowAloneSoASeriesCloseCannotBeOutrun(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $failed = $this->plantVersion(DocumentState::ScanFailed, $first);
+        $claimed = $this->streamingVersionOf($first);
+        $failedFirst = $this->plantVersion(DocumentState::ScanFailed);
+
+        $takesBySeries = [
+            $first => [
+                fn (): Document => $this->commitVersion($claimed),
+                fn () => $this->reopen($failed),
+            ],
+            $failedFirst => [fn () => $this->reopen($failedFirst)],
+        ];
+
+        foreach ($takesBySeries as $series => $takes) {
+            $holder = $this->holder();
+            $holder->beginTransaction();
+            $holder->fetchOne(
+                'SELECT id FROM document_series WHERE id = CAST(:id AS UUID) FOR UPDATE',
+                ['id' => $series],
+            );
+
+            foreach ($takes as $take) {
+                $this->assertTrue($this->waits($take), 'a take waits on the series row, not only on a document row');
+            }
+
+            $holder->rollBack();
+        }
+    }
+
+    #[Test]
     public function theFreeingTransitionsNeverWaitOnTheSeriesRow(): void
     {
         $first = $this->plantVersion(DocumentState::Ready);

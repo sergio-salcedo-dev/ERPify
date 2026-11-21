@@ -26,6 +26,7 @@ use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
 use Erpify\Documents\Document\Domain\Exception\ErasureOutcomeUnknown;
 use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
+use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\OriginalFilename;
 use Erpify\Documents\Document\Domain\Projection\DocumentVersionRow;
@@ -279,7 +280,7 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
 
         $this->service(DocumentVersionSlots::class)->closeSeries($first);
 
-        $this->assertDeclareRefused(PredecessorNotReady::class, Uuid::generate(), $first);
+        $this->assertDeclareRefused(SeriesClosed::class, Uuid::generate(), $first);
         $this->assertTrue($this->declareVersion(Uuid::generate(), $other)->created, 'another series is not closed');
         $this->assertSame(0, $this->intOf($this->connection()->fetchOne(
             'SELECT COUNT(*) FROM upload_intent WHERE predecessor_id = CAST(:id AS UUID)',
@@ -429,6 +430,14 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $replay = $this->declareVersion($actor, $first, 'key-replay');
 
         $this->assertFalse($replay->created, 'the committed version answers its own declaration');
+
+        // A live version holds the slot itself, so its replay must be answered before the early slot refusal.
+        $this->connection()->executeStatement(
+            "UPDATE document SET state = 'ready' WHERE id = CAST(:id AS UUID)",
+            ['id' => $held],
+        );
+        $this->assertFalse($this->declareVersion($actor, $first, 'key-replay')->created, 'answered, not slot-taken');
+        $this->assertDeclareRefused(VersionSlotTaken::class, $actor, $first, 'another-key');
         $this->assertDeclareRefused(IdempotencyKeyConflict::class, $actor, $other, 'key-replay');
         $this->assertThrows(
             IdempotencyKeyConflict::class,
@@ -566,14 +575,19 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $failed = $this->plantVersion(DocumentState::ScanFailed, $first);
         $other = $this->plantVersion(DocumentState::Ready);
 
+        $failedFirst = $this->plantVersion(DocumentState::ScanFailed);
+
         $this->service(DocumentVersionSlots::class)->closeSeries($first);
+        $this->service(DocumentVersionSlots::class)->closeSeries($failedFirst);
 
         $this->assertThrows(
-            PredecessorNotReady::class,
+            SeriesClosed::class,
             fn (): Document => $this->commitVersion($this->streamingVersionOf($first)),
         );
-        $this->assertThrows(PredecessorNotReady::class, fn () => $this->reopen($failed));
+        $this->assertThrows(SeriesClosed::class, fn () => $this->reopen($failed));
+        $this->assertThrows(SeriesClosed::class, fn () => $this->reopen($failedFirst));
         $this->assertSame('scan_failed', $this->stateOfDocument($failed));
+        $this->assertSame('scan_failed', $this->stateOfDocument($failedFirst));
         $this->assertSame('ready', $this->stateOfDocument($first), 'closing erases nothing');
 
         $filed = $this->commitVersion($this->streamingVersionOf($other));

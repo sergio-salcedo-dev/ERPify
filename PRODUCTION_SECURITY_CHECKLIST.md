@@ -2864,8 +2864,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       (`document_series.closed_at`, one statement in its own transaction, outside every erasure transaction so
       `ErasureLimits::TRANSACTION_LOCKS` stays 3), and only then lists and erases every version that is not `Erased`,
       newest first, each in its own ledger entry and transaction. A take that finished before the closing is listed;
-      one that starts after it is refused (409 `document-predecessor-not-ready`), so no version is filed or reopened
-      in a series whose erasure has begun, and the closing is definitive except for one ending: when the call that
+      one that starts after it is refused (409 `document-series-closed`), so no version is filed or reopened in a
+      series whose erasure has begun — a failed first version included, whose reopen takes the series row for that, and the closing is definitive except for one ending: when the call that
       closed the series fails with its first ledger entry certainly not durable and has erased nothing, it opens the
       series again before the 503, so an intact series is not left closed for ever by an unreachable ledger. Any other
       failure stops the run where it stands (the versions already erased stay erased, the series stays closed) and the
