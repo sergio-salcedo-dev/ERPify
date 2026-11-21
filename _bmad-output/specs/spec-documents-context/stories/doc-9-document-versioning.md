@@ -2,7 +2,7 @@
 title: 'doc-9: Document versioning'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-review'
+status: 'done'
 baseline_commit: '98d6d449989b97fbeb625dd8f40cc89374fe8e93'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -73,6 +73,7 @@ context:
 
 - 2026-11-19 (the owner, after the architect consultation): option C replaces the design-B head pointer of the memlog and of `stories.yaml`; recorded in ADR D12 with the discarded alternatives and the reopening condition. Nothing about the head pointer was built.
 - 2026-11-19 (the owner, recorded in the documents handoff; applied 2026-11-21): reduce doc-9's accepted risks to zero. Three changes supersede the frozen bullets they touch. (1) **A series erasure terminates**: it first closes the series (`document_series.closed_at`, under the series row lock, in its own transaction outside every erasure transaction, so `TRANSACTION_LOCKS` stays 3), and both takes refuse a closed series with `document-predecessor-not-ready`, as does the declare; the frozen "guarantees no termination" no longer holds. (2) **`POST …/versions` asks `document.write` AND `document.download`** (the frozen "RBAC `document.write`" is narrowed; still RBAC, still no row-level voter), so in practice ADMIN only. (3) **No §7 acceptance**: the false 409 is recorded as the option-C contract (a retryable conflict) in ADR D12 and the error contract, the series page's uploader ids are stated as mirroring the listing, and the §7 entry is closed rather than accepted. Known-bad state avoided: an erasure that could be outrun by a concurrent filer, and an editor filing a version of a document only an ADMIN may read.
+- 2026-11-21 (review, `bmad-build` step 4): a closed series answers its own problem type, `document-series-closed` (`SeriesClosed`, `Conflict`), rather than `document-predecessor-not-ready`, whose title was false for a `Ready` predecessor and whose remedy differs (a closed series never opens again); and the reopen of a failed FIRST version takes the series row too, so nothing in a closed series becomes live (the frozen "a first version has no slot and takes no series lock" still holds for the slot; only the closed check was added). Known-bad state avoided: a first version reopened and readable inside a series being erased. KEEP: option C untouched, `TRANSACTION_LOCKS` 3, freeing transitions off the series lock.
 
 ### To apply locally with memlog.py
 
@@ -94,15 +95,43 @@ and append to its "Tests:" sentence: "and the pairs new version against new vers
 
 ## Review Triage Log
 
-Pending: the three review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) are run by the orchestrating session over this branch, independently of the implementation; the Blind Hunter layer is the adversarial pass this story owes. Findings and their routes are recorded here when they return.
+Four layers ran on 2026-11-21, in parallel and read-only, over `98d6d449..02af5ad` (the implementation plus the owner's three directions), in the cloud session that closed the story: Blind Hunter (context-free, the adversarial pass this story owes), Edge Case Hunter and Verification Gap (`bmad-build` step 4), and Acceptance Auditor (root `CLAUDE.md`). BH = Blind Hunter, EC = Edge Case Hunter, VG = Verification Gap, AA = Acceptance Auditor.
+
+| # | Finding (layers) | Verdict | Route and evidence |
+|---|---|---|---|
+| 1 | `features/backoffice/users/erase.feature` seeds a `document` with no `document_series` row (EC, VG, AA) | high | patch — `fk_document_series` rejects the seed, the "a person's erasure touches no document" acceptance went red; the series row is seeded first |
+| 2 | A failed FIRST version reopens inside a closed series (BH, EC, AA) | medium | patch — `RescanDocument` skipped the take for a first version; `TakeVersionSlot::forFirstVersionReopen()` now takes the series row and refuses a closed one |
+| 3 | `document-predecessor-not-ready` answers a closed series whose predecessor IS `Ready` (BH) | medium | patch — distinct `document-series-closed`; recorded in the error contract and ADR D12 |
+| 4 | The take's series-row `FOR UPDATE` is never tested apart from the predecessor lock (VG) | medium | patch — `everyTakeWaitsOnTheSeriesRowAloneSoASeriesCloseCannotBeOutrun` holds only the series row |
+| 5 | The series erasure's stop-at-first-failure path and its one ledger entry per version are untested (VG, BH, AA) | medium | patch — `aSeriesErasureStopsAtTheFirstLedgerFailureKeepsWhatItErasedAndARepeatFinishesIt` (`LedgerFailingFromTheNthWrite`) |
+| 6 | The series page's 410 under the ledger override and its HEAD refusal are untested (VG, BH, AA) | medium | patch — two cases in `DocumentListingControllersTest` with the repository asserted never read |
+| 7 | `answerDocument()`'s predecessor comparison is untested (VG) | medium | patch — the test written for it exposed a defect: a replay of a filed version's key, once its intent is pruned, answered `document-version-slot-taken` (the version holds its own slot); the declare now answers a key a document holds before the early slot refusal |
+| 8 | Stale `SeriesErasure` / `SeriesErasureResource` docblocks ("a version filed meanwhile") (BH, EC, VG, AA) | low | patch |
+| 9 | `.credential-proof-policy` header, the §7 doc-7 line and a gate-test name still say seven / one Documents route (BH, AA) | low | patch |
+| 10 | Documents feature Backgrounds do not reset `document_series`, so a closed stamp survives (BH, EC, AA) | low | patch — all six Backgrounds truncate it |
+| 11 | "Exactly three foreign keys" is false now that the schema holds five (AA) | low | patch in `api/.person-reference-policy` and `docs/rules/database.md`; root `CLAUDE.md` is an agent-context file and is left to the owner (deferred, named in the PR) |
+| 12 | The version declare's per-actor budget spend is untested (VG) | low | patch — `aSpentDeclareBudgetRateLimitsAVersionDeclareAndCreatesNothing` on an administrator of its own |
+| 13 | The two new foreign keys and `closed_at` are not proven in the schema test (AA) | low | patch — presence, `NO ACTION` both ways, orphan refusals, nullable `closed_at` |
+| 14 | Tombstone retention fields asserted only as NULL; ordering does not separate `(created_at, id)` from either alone (AA) | low | patch — real retention values on page and wire; a later-stamped version and a same-second tie |
+| 15 | Out-of-range `limit` untested (AA) | low | patch — `limit=0` and `limit=101` answer 422 |
+| 16 | `UploadIntent` validates the predecessor through the three-id helper (BH) | low | patch — `ensureLowerCaseUuid()` |
+| 17 | `VersionSlotTaken`, `DeclareUpload` and `DocumentPermission::DOWNLOAD` docblocks out of date (BH, AA) | low | patch |
+| 18 | A repeat over an erased series logs "a series was erased" (BH) | low | patch — no line when nothing was erased |
+| 19 | `evidence-lifecycle.md` still says "once doc-9 ships" (AA) | low | patch |
+| 20 | Page size clamped at the edge, the use case and the repository (BH) | false | the use-case clamp is the module's pattern (`ReadCustodyTrail`) for non-HTTP callers; no wrong outcome |
+| 21 | `versions.feature` has no series-page or closed-series scenario (BH) | false | both are pinned over HTTP by `DocumentVersionRoutesFunctionalTest`; no behaviour is unpinned |
+| 22 | Size bounds on the version path untested (AA) | low, rejected | the bounds are `declareFor()`'s, shared with the first-version declare and tested there |
+| 23 | One request erases a whole series with no cap (BH) | maybe-false | decision for the owner (a per-call cap would change the frozen "every non-`Erased` version"); asked in the PR, not changed |
+| 24 | `stories.yaml` / `SPEC.md` still carry the head pointer (BH) | known | the memlog step below; `memlog.py` is now installed, applying it is the owner's call |
+| 25 | This section and Verification predate the second commit (BH) | low | patch — rewritten below |
 
 ## Verification
 
-Fresh runs in a PHP 8.5.12 toolbox container over a throwaway PostgreSQL 18 (`make app.dev` could not build the per-worktree images: the image build cannot reach `getcomposer.org` or PECL from this session's network), each `make` target with `IN_CONTAINER=false`:
+Fresh runs on 2026-11-21 over the final tree (the review patches plus `origin/main` merged in), in this cloud session's per-worktree stack. The `php` image was built from a copy of `api/Dockerfile` without `apcu`, `xdebug` or the `getcomposer.org` download, which this session's network refuses; `vendor/` was installed with `--prefer-source` and then through `make composer` in the container, so the Composer plugins and scripts ran.
 
-- `make php.stan` on the 54 changed PHP files: exit 0. The full tree through PHPStan (`vendor/bin/phpstan analyse` from `/app/api`, as the dev container runs it): exit 0.
-- `make php.quality` and `make php.quality.dry-run` (`-k`): every member green except `php.stan`, which fails only in this toolbox on its result-cache path (`../../var/cache` resolved from the checkout, `/var/cache` in the dev container) — the same analysis run from `/app/api` is green. `php.lint.route-manifest`, `php.lint.config-reference`, `php.lint.credential-proof`, `php.lint.bounded-context`, `php.deptrac`, `php.lint.documents-ingest`, `php.lint.document-custody`, `php.lint.person-reference`, `php.lint.step-vocabulary`, `php.lint.doctrine` and `composer.check.missing-deps` all ran and passed.
-- The migration up, down and up on the dev database, the backfill checked over a planted pre-existing document, and `doctrine:schema:validate` in sync.
-- `make php.unit c='--filter "Documents|Document|CredentialProof|IntNarrowingConfinementGateTest|BoundedContext"'`: 874 tests, green (7 skipped as on `main`).
-- Full `make php.unit`: 6031 tests; the only errors are the 21 live-stack gates that need the Caddy edge (`AccessLogQueryContainmentGateTest`, `RequestBodyBoundGateTest`, `UploadPathAnonymousBoundGateTest`, `UploadFilenameAccessLogContainmentGateTest`, `UploadSpoolConcurrencyGateTest`, `BankLogoThroughCaddyTest`), left to CI; the one failure it found (`IntNarrowingConfinementGateTest` on the series repository) was fixed and the gate rerun green.
-- `make php.behat c='features/documents'`: 70 scenarios, 837 steps, green, `versions.feature` included.
+- `make php.stan` (full tree): exit 0.
+- `make php.quality` (apply) then `make -k php.quality.dry-run`: every member green except `composer.check.missing-deps`, which stops on `Extension "apcu" does not exist` — the image here lacks it, CI's does not.
+- `make php.deptrac`: 0 violations, 0 uncovered.
+- The migration down and up on the dev database, then `doctrine:schema:validate`: mapping correct, schema in sync, `closed_at` included.
+- `make php.unit`: 6047 tests, 53914 assertions, green (10 skipped).
+- `make php.behat`: 619 scenarios, 6118 steps, green — `features/backoffice/users/erase.feature` included, which the first round never ran.

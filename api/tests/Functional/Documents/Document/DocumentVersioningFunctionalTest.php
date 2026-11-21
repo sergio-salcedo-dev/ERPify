@@ -6,6 +6,8 @@ namespace Erpify\Tests\Functional\Documents\Document;
 
 use Erpify\Documents\Document\Application\Erasure\ApplyErasure;
 use Erpify\Documents\Document\Application\Erasure\EraseDocument;
+use Erpify\Documents\Document\Application\Erasure\ErasureLedger;
+use Erpify\Documents\Document\Application\Erasure\SeriesErasure;
 use Erpify\Documents\Document\Application\Listing\DocumentSeriesPage;
 use Erpify\Documents\Document\Application\Listing\ReadDocumentSeries;
 use Erpify\Documents\Document\Application\Scanning\RescanDocument;
@@ -14,26 +16,22 @@ use Erpify\Documents\Document\Application\Upload\Command\DeclareUploadCommand;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
 use Erpify\Documents\Document\Application\Upload\DeclareUpload;
 use Erpify\Documents\Document\Application\Upload\DeclareUploadOutcome;
+use Erpify\Documents\Document\Application\Upload\IdempotencyKeyHasher;
 use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
 use Erpify\Documents\Document\Domain\DocumentState;
-use Psr\Log\NullLogger;
-use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
-use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
-use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
-use Erpify\Documents\Document\Application\Erasure\SeriesErasure;
-use Erpify\Documents\Document\Application\Erasure\LedgerWriteFailed;
-use Erpify\Documents\Document\Application\Erasure\ErasureLedger;
-use Erpify\Documents\Document\Application\Upload\IdempotencyKeyHasher;
-use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\Erasure\ErasureReason;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
+use Erpify\Documents\Document\Domain\Exception\ErasureLedgerUnavailable;
 use Erpify\Documents\Document\Domain\Exception\IdempotencyKeyConflict;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
+use Erpify\Documents\Document\Domain\Exception\SeriesClosed;
 use Erpify\Documents\Document\Domain\Exception\VersionSlotTaken;
 use Erpify\Documents\Document\Domain\OriginalFilename;
 use Erpify\Documents\Document\Domain\Projection\DocumentVersionRow;
+use Erpify\Documents\Document\Domain\Repository\DocumentRepository;
+use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
 use Erpify\Documents\Document\Domain\Scanning\DocumentScanLeases;
 use Erpify\Documents\Document\Domain\Scanning\RescanReason;
 use Erpify\Documents\Document\Domain\Upload\LegalBasis;
@@ -44,11 +42,13 @@ use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentSe
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentVersionSlots;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
+use Erpify\Tests\Double\Erasure\LedgerFailingFromTheNthWrite;
 use Erpify\Tests\Functional\ResolvesContainerServices;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Throwable;
 
@@ -299,7 +299,7 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $this->assertSame($first, $tombstone->predecessorId);
         $this->assertSame('technical-file', $tombstone->retentionReason, 'the tombstone keeps its retention terms');
         $this->assertSame('contract', $tombstone->legalBasis);
-        $this->assertSame('2031-03-04T05:06:07+00:00', $tombstone->reviewAt?->format(\DATE_ATOM));
+        $this->assertSame('2031-03-04T05:06:07+00:00', $tombstone->reviewAt?->format(DATE_ATOM));
         $this->assertSame($second, $page->nextAfterId);
 
         $next = $reader->read($first, $page->nextAfterId, 2);
@@ -456,13 +456,13 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
         $this->assertSame('erased', $this->stateOfDocument($third), 'the newest version stays erased');
         $this->assertSame('ready', $this->stateOfDocument($second), 'the failed version is untouched');
         $this->assertSame('ready', $this->stateOfDocument($first));
-        $this->assertSame([$this->scopeOf($third), $this->scopeOf($second)], $ledger->attempts);
+        $this->assertSame([$this->scopeOf($third), $this->scopeOf($second)], $ledger->attempts());
         $this->assertNotFalse($this->connection()->fetchOne(
             'SELECT 1 FROM document_series WHERE id = CAST(:id AS UUID) AND closed_at IS NOT NULL',
             ['id' => $first],
         ), 'the series stays closed');
 
-        $repeat = $this->eraseSeriesWith($this->ledgerFailingFrom(\PHP_INT_MAX), $first);
+        $repeat = $this->eraseSeriesWith($this->ledgerFailingFrom(PHP_INT_MAX), $first);
 
         $this->assertSame([$second, $first], $repeat->erased);
         $this->assertSame([], $repeat->remaining);
@@ -599,7 +599,7 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
 
     private function eraseSeriesWith(ErasureLedger $ledger, string $seriesId): SeriesErasure
     {
-        return new EraseDocument(
+        $erase = new EraseDocument(
             $this->service(DocumentRepository::class),
             $ledger,
             $this->service(ApplyErasure::class),
@@ -607,40 +607,14 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
             $this->service(DocumentSeriesRepository::class),
             $this->service(DocumentVersionSlots::class),
             $this->service(TransactionManager::class),
-        )->eraseSeries($seriesId, ErasureReason::RetentionExpired, Uuid::generate());
+        );
+
+        return $erase->eraseSeries($seriesId, ErasureReason::RetentionExpired, Uuid::generate());
     }
 
-    /**
-     * A ledger that records every write it is asked for and refuses, as certainly not durable, from the `$failing`-th.
-     */
-    private function ledgerFailingFrom(int $failing): ErasureLedger
+    private function ledgerFailingFrom(int $failing): LedgerFailingFromTheNthWrite
     {
-        return new class($failing) implements ErasureLedger {
-            /** @var list<string> */
-            public array $attempts = [];
-
-            public function __construct(private readonly int $failing)
-            {
-            }
-
-            public function record(string $scopeId): void
-            {
-                $this->attempts[] = $scopeId;
-
-                if (\count($this->attempts) >= $this->failing) {
-                    throw LedgerWriteFailed::create();
-                }
-            }
-
-            public function entries(): array
-            {
-                return [];
-            }
-
-            public function verifyReadableInFull(): void
-            {
-            }
-        };
+        return new LedgerFailingFromTheNthWrite($failing);
     }
 
     private function scopeOf(string $documentId): string

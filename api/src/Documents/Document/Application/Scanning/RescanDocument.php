@@ -9,6 +9,7 @@ use Erpify\Documents\Document\Application\Upload\DocumentScanWakeUp;
 use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
 use Erpify\Documents\Document\Domain\CustodyEvent;
 use Erpify\Documents\Document\Domain\DocumentState;
+use Erpify\Documents\Document\Domain\Entity\Document;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotFound;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotRescannable;
 use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
@@ -81,13 +82,7 @@ final readonly class RescanDocument
             $reason,
         ): bool {
             $documentId = $document->documentId();
-            $predecessorId = $document->predecessorId();
-
-            if (null === $predecessorId) {
-                $this->versionSlot->forFirstVersionReopen($document->seriesId());
-            } else {
-                $this->versionSlot->forReopen($document->seriesId(), $predecessorId);
-            }
+            $this->takeBackItsPlace($document);
 
             if (!$this->leases->reopen($documentId)) {
                 return false;
@@ -107,5 +102,26 @@ final readonly class RescanDocument
             'documentId' => $documentId,
             'reason' => $reason->value,
         ]);
+    }
+
+    /**
+     * A successor takes its predecessor's slot back; a first version has no slot, but takes the series row all the
+     * same, so that a series its erasure closed refuses it.
+     *
+     * @throws PredecessorNotReady when the document is a successor whose predecessor is `Erased`
+     * @throws VersionSlotTaken    when the document is a successor whose slot another live version holds
+     * @throws SeriesClosed        when a series erasure has closed the document's series
+     */
+    private function takeBackItsPlace(Document $document): void
+    {
+        $predecessorId = $document->predecessorId();
+
+        if (null === $predecessorId) {
+            $this->versionSlot->forFirstVersionReopen($document->seriesId());
+
+            return;
+        }
+
+        $this->versionSlot->forReopen($document->seriesId(), $predecessorId);
     }
 }

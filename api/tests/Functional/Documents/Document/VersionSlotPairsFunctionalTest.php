@@ -154,10 +154,15 @@ final class VersionSlotPairsFunctionalTest extends KernelTestCase
         $claimed = $this->streamingVersionOf($first);
         $failedFirst = $this->plantVersion(DocumentState::ScanFailed);
 
-        foreach ([$first => [
-            fn (): Document => $this->commitVersion($claimed),
-            fn () => $this->reopen($failed),
-        ], $failedFirst => [fn () => $this->reopen($failedFirst)]] as $series => $takes) {
+        $takesBySeries = [
+            $first => [
+                fn (): Document => $this->commitVersion($claimed),
+                fn () => $this->reopen($failed),
+            ],
+            $failedFirst => [fn () => $this->reopen($failedFirst)],
+        ];
+
+        foreach ($takesBySeries as $series => $takes) {
             $holder = $this->holder();
             $holder->beginTransaction();
             $holder->fetchOne(
