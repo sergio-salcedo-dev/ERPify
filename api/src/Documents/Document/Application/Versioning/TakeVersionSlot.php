@@ -18,8 +18,11 @@ use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
  * transaction it takes the series row, then the predecessor row under `FOR UPDATE`, rechecks the predecessor, and only
  * then asks the lock-free recursive read whether a live version already holds the slot.
  *
- * An absent predecessor answers like one that cannot be succeeded, so neither caller can be used to learn whether an
- * id exists; a series closed by its erasure answers the same, since nothing in it can be succeeded or reopened.
+ * An absent predecessor answers like one that is not `Ready`, so neither caller can learn from the refusal whether an
+ * id exists. A caller who may reach these routes (ADMIN) can still tell a `Ready` predecessor with a live successor
+ * (`VersionSlotTaken`) from every other refusal (`PredecessorNotReady`). A series closed by its erasure refuses a new
+ * version and the reopen of a successor with `PredecessorNotReady`; the reopen of a FIRST version never comes here, as
+ * it has no slot to take, so the closing does not gate it.
  * Every method assumes the caller owns the transaction.
  */
 final readonly class TakeVersionSlot
@@ -54,18 +57,20 @@ final readonly class TakeVersionSlot
 
     /**
      * For a reopen of a failed version: the predecessor must not be `Erased` — while the failed version exists its
-     * predecessor was `Ready` once, and `Erased` is the only state it can have left for.
+     * predecessor was `Ready` once, and `Erased` is the only state it can have left for. The version being reopened
+     * is left out of the slot read, so two reopens of the same version leave the loser to the compare-and-set that
+     * refuses it as not reopenable, and a sibling holding the slot is still the conflict.
      *
-     * @throws PredecessorNotReady when the predecessor is `Erased` (or absent)
-     * @throws VersionSlotTaken    when a live version already holds the slot
+     * @throws PredecessorNotReady when the predecessor is `Erased` or absent, or the series is closed
+     * @throws VersionSlotTaken    when another live version already holds the slot
      */
-    public function forReopen(string $seriesId, string $predecessorId): void
+    public function forReopen(string $seriesId, string $predecessorId, string $reopeningId): void
     {
         if (DocumentState::Erased === $this->lockUnderSeries($seriesId, $predecessorId)->state()) {
             throw PredecessorNotReady::create();
         }
 
-        $this->ensureFree($predecessorId);
+        $this->ensureFree($predecessorId, $reopeningId);
     }
 
     /**
@@ -87,9 +92,9 @@ final readonly class TakeVersionSlot
     /**
      * @throws VersionSlotTaken when a live version is anywhere below the predecessor
      */
-    private function ensureFree(string $predecessorId): void
+    private function ensureFree(string $predecessorId, ?string $exceptId = null): void
     {
-        if ($this->slots->isSlotHeld($predecessorId)) {
+        if ($this->slots->isSlotHeld($predecessorId, $exceptId)) {
             throw VersionSlotTaken::create();
         }
     }

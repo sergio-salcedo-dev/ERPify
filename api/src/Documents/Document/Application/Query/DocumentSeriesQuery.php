@@ -15,6 +15,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 final readonly class DocumentSeriesQuery
 {
     public function __construct(
+        #[Assert\NotBlank(message: 'The afterId must not be empty.', allowNull: true)]
         #[Assert\Uuid(message: 'The afterId must be a UUID.')]
         public ?string $afterId = null,
         #[Assert\Positive]

@@ -137,8 +137,10 @@ final class DocumentVersionRoutesFunctionalTest extends WebTestCase
         $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $erased);
         $this->assertStatus(Response::HTTP_NOT_FOUND);
 
-        $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $first . '?afterId=nope');
-        $this->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
+        foreach (['nope', ''] as $afterId) {
+            $this->send(Request::METHOD_GET, '/api/v1/documents/series/' . $first . '?afterId=' . $afterId);
+            $this->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
     }
 
     #[Test]

@@ -81,32 +81,58 @@ context:
   the option-C contract, a retryable conflict, not a risk; (3) the new-version declare asks `document.write` AND
   `document.download` (RBAC, no row-level voter), which no tier but ADMIN carries, so only an administrator files a
   version; (4) the series page names uploaders to ADMIN as the listing does, stated and not accepted. The `Accepted`
-  line of the `PRODUCTION_SECURITY_CHECKLIST.md` §7 entry is gone and the entry is closed. The closed series is not
-  refused at the declare (only at the commit): a caller streaming into a closing series is told at the PUT.
+  line of the `PRODUCTION_SECURITY_CHECKLIST.md` §7 entry is gone and the entry is closed. The new-version declare also refuses a closed
+  series early, without a lock (`DocumentVersionSlots::isSeriesClosed()`), with the same 409 as the commit.
 
 ### To apply locally with memlog.py
 
 `_bmad/scripts/memlog.py` is not installed in the cloud session that implemented this story, and the memlog is written only through it, so neither `.memlog.md` nor `stories.yaml` was edited here. To apply locally:
 
-**Memlog entry** (append, then re-derive `stories.yaml`):
+**Memlog entries** (append both, in this order, then re-derive `stories.yaml`). The first is the option-C line; the second records the owner's direction of 2026-11-19 as applied on 2026-11-21:
 
 ```
 - (decision by user) doc-9 successor exclusion refined (Sergio, 2026-11-19, after the architect consultation): option C, the architect's refinement of design B, supersedes the design-B head pointer recorded above. A document_series row exists per series (inserted with the first version, backfilled by the doc-9 migration, referenced by document.series_id) and is used ONLY as a mutex (SELECT … FOR UPDATE) by the two transitions that take a version slot: filing a new version and reopening a ScanFailed successor; no head pointer is stored. Under that lock the take rechecks the predecessor under its own FOR UPDATE (Ready for a new version, not Erased for a reopen) and asks a lock-free recursive read whether the predecessor has a live strict descendant (live = Received, Scanning, Ready; Quarantined, ScanFailed and Erased hold no slot). A version becomes live only under the series lock and outside it versions only stop being live, so a concurrent free costs at most a retryable false 409, never a double successor. Erasure, the scan compare-and-sets (settle, returnToReceived, failCapped), the cap sweep and ReplayErasure take no series lock; ErasureLimits::TRANSACTION_LOCKS stays 3; the cascade freeing a contiguous run of Erased nodes is derived by the read, never written. Lock order: new version = upload intent, new scope keystore row, series, predecessor (safe because the new scope is reachable only through its intent); reopen = series, predecessor, self. The series projection orders by (created_at, id). Discarded: the stored head pointer (the series lock in every freeing transition, TRANSACTION_LOCKS 3 to 4, a forgotten head move blocks a series for ever), UNIQUE (series_id, version_no) alone, an advisory transaction lock, event sourcing. Reopened by a consumer that needs time travel or derived state over versions (approval workflows). Recorded in docs/adr/documents-custody-log.md D12.
+```
+
+```
+- (decision by user) doc-9 option C amended (Sergio, direction of 2026-11-19, applied 2026-11-21): (1) document_series gains closed_at; a series erasure closes the series first, in one statement of its own outside every erasure transaction (ErasureLimits::TRANSACTION_LOCKS stays 3), and TakeVersionSlot refuses every new version and every reopen of a successor in a closed series with document-predecessor-not-ready, the declare refusing it early without a lock; the closing is for ever and is not carried by ReplayErasure. (2) POST /api/v1/documents/{id}/versions requires document.write AND document.download (RBAC, no row-level voter), so only an administrator files a version. (3) A slot conflict a concurrent free makes false is the option-C contract, a retryable conflict, not a risk; the series page naming uploaders to ADMIN mirrors the listing. Recorded in docs/adr/documents-custody-log.md D12 and PRODUCTION_SECURITY_CHECKLIST.md section 7.
 ```
 
 **`stories.yaml` doc-9 `invoke_dev_with`, intended wording** — replace the sentence beginning "The successor-exclusion mechanism is decided: a series row whose head pointer moves …" through "… not the walk." with:
 
 > The successor-exclusion mechanism is decided (option C, memlog): a document_series row per series used only as the mutex of the two transitions that take a slot (new version: intent, new scope keystore, series, predecessor; reopen: series, predecessor, self), no stored head pointer, and under that lock a lock-free recursive read of whether the predecessor has a live descendant; record it in the Documents ADR with its safety argument and the discarded alternatives. Erasure, the scan compare-and-sets, the cap sweep and ReplayErasure take no series lock, and ErasureLimits::TRANSACTION_LOCKS stays 3.
 
-and append to its "Tests:" sentence: "and the pairs new version against new version (one winner), new version against erasure, new version against reopen and reopen against reopen."
+and add to the same entry: "A series erasure closes the series first (closed_at) so no version is filed or reopened in it afterwards, and the new-version declare asks document.write and document.download." Then append to its "Tests:" sentence: "and the pairs new version against new version (one winner), new version against erasure, new version against reopen and reopen against reopen."
 
 **`SPEC.md`, intended amendment (re-derived the same way):** in the "a version is its own `Document` aggregate" bullet, the paragraph that compares the two designs ends with "doc-9 chose a third: a series row used only as the mutex of the slot takes, with the slot derived by a lock-free read (ADR D12)"; the Open question "Version-slot mechanism" becomes "Decided by doc-9: ADR `documents-custody-log.md` D12".
 
 ## Review Triage Log
 
-Pending: the three review layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) are owed and are run by the
-coordinating session over the opened pull request, independently of the implementation; the Blind Hunter layer is the
-adversarial pass this story owes. None has run. Findings and their routes are recorded here when they return.
+The three layers (Blind Hunter, Edge Case Hunter, Acceptance Auditor) ran over PR #1276 at `a3d3afcf`, in the coordinating
+session. The hand-off of their findings did not say which layer raised each one, so a layer is named only where it was
+stated (marked); every other row is "the three-layer review". Patches landed as the commit that follows this log.
+
+| Finding | Layer | Route |
+|---|---|---|
+| `API Behat` red: `features/backoffice/users/erase.feature` inserted a `document` row with no `document_series` row, so `fk_document_series` refused it | three-layer review (CI) | Applied: the scenario inserts the series row first; the full Behat lane and every raw `INSERT INTO document` in the tree were checked |
+| `DevStackUploadRows::remove()` left the `document_series` row a first version now inserts | three-layer review | Applied: deletes the series row it owns after the document, only while no other document holds the series |
+| The new-version declare did not look at a closed series, so the controller docblock overclaimed and a body could be streamed to a refusal | three-layer review | Applied: `DeclareUpload::ensureSlotLooksFree` refuses early through `DocumentVersionSlots::isSeriesClosed()` with `document-predecessor-not-ready`; test added; Spec Change Log line updated |
+| `SeriesErasure`, `SeriesErasureResource` and the controller said `remaining` can be non-empty because a version was filed during the run | three-layer review | Applied: the series closes first, so `remaining` is empty on a normal return; prose says so |
+| `api/.credential-proof-policy` still said seven pinned routes | three-layer review | Applied: eight |
+| `TakeVersionSlot` docblock said a closed series gates every reopen, while `RescanDocument` skips the take for a first version | three-layer review | Applied: the docblock states that a first version has no slot, so the closing does not gate its reopen (code kept) |
+| "No existence oracle" comments overclaimed: `PredecessorNotReady` against `VersionSlotTaken` tells a caller that a predecessor is `Ready` with a live successor | Blind Hunter | Applied: the controller and `TakeVersionSlot` docblocks say exactly that, to an ADMIN only |
+| `?afterId=` empty passed `Assert\Uuid` and then `Uuid::ensure('')` answered 400 instead of the documented 422 | three-layer review | Applied: `NotBlank(allowNull: true)` on `afterId`; route test added |
+| No test for two versions sharing a `created_at` (id tiebreak, cursor across the tie) | three-layer review | Applied: `aKeysetPageCrossesTwoVersionsFiledInTheSameSecond` |
+| No test for the replay branch that compares against an already-committed `Document` | three-layer review | Applied: `aReplayAgainstTheCommittedVersionIsAnsweredOnlyForTheSamePredecessor` |
+| `closeSeries` inside an open transaction would keep the series row locked until it ended | three-layer review | Applied: refused with a `LogicException`; test added |
+| `closed_at` is not carried by `ReplayErasure`, nor by a restore to an older dump or a down/up of the migration | three-layer review | Recorded once in section 7 (not a code comment) |
+| `eraseSeries` is synchronous over N versions in one request, a cut-off surfaces as an unmapped exception, and declare and commit do not consult `ErasureLedgerOverride` | three-layer review | Recorded once in section 7 |
+| Two concurrent rescans of one `ScanFailed` successor: the loser got `VersionSlotTaken` instead of `DocumentNotRescannable`, because the slot read counted the version being reopened | Edge Case Hunter (#5) | Applied: the reopen's slot read leaves its own version out (`isSlotHeld($predecessorId, $exceptId)`), the lock order series, predecessor, own row unchanged; test added |
+
+### Open decisions (the owner's, not applied here)
+
+- **A. Closing before the first ledger write.** `eraseSeries` closes the series before any ledger write, so a 503 `ErasureLedgerUnavailable` on the first version leaves an intact series closed for ever; whether the closing should wait for the first durable ledger entry, or be undoable, is the owner's call (`EraseDocument::eraseSeries()`).
+- **B. A failed successor whose predecessor was erased singly.** A `ScanFailed` successor whose predecessor is erased by a plain single-document erase can neither be reopened nor succeeded (`TakeVersionSlot::forReopen()`); whether such a version should be reopenable, erased with it, or left as a tombstone is the owner's call.
 
 ## Verification
 

@@ -183,6 +183,13 @@ final class DevStackUploadRows
             $scope = $connection->fetchOne('SELECT scope_id FROM document WHERE id = :id', ['id' => $document]);
             $connection->executeStatement('DELETE FROM document_custody WHERE document_id = :id', ['id' => $document]);
             $connection->executeStatement('DELETE FROM document WHERE id = :id', ['id' => $document]);
+            // A first version opens the series named by its own id; the row goes with it, and only while no other
+            // document holds the series.
+            $connection->executeStatement(
+                'DELETE FROM document_series WHERE id = :id AND NOT EXISTS ('
+                . 'SELECT 1 FROM document WHERE series_id = :id)',
+                ['id' => $document],
+            );
             $this->removeScope($scope);
         }
 

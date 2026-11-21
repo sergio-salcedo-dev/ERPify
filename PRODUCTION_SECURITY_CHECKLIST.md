@@ -2857,8 +2857,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       and no route of the owner exists; the first producer story decides who reads a preview and under which audit. The
       `ImageId` of a derivative also stays in `event_store` for ever, as item four of the `Shared/Images` residuals says
       for every image. **Open — owner: the Documents epic (the first derivative producer).**
-- [x] **Document versioning: what the series erasure, the successor exclusion and the series page do (doc-9).** Nothing
-      here is an accepted risk; the entry states behaviour a reader of the routes would otherwise have to infer.
+- [ ] **Document versioning: what the series erasure, the successor exclusion and the series page do, and two things
+      the closing does not carry (doc-9).** One to four state behaviour a reader of the routes would otherwise have to
+      infer, and none is an accepted risk; five and six are open.
       **One — a series erasure terminates.** `POST /api/v1/documents/series/{seriesId}/erase` first closes the series
       (`document_series.closed_at`, one statement in its own transaction, outside every erasure transaction so
       `ErasureLimits::TRANSACTION_LOCKS` stays 3), and only then lists and erases every version that is not `Erased`,
@@ -2878,7 +2879,15 @@ mitigated state. Accepting one means recording who accepted it and against which
       may read the document. **Four — the series page names uploaders.** `GET /api/v1/documents/series/{seriesId}`
       (ADMIN, `document.custody`) returns the uploader id of every version that is not `Erased`, as the listing does
       (an erased version's is withheld by the statement, and an erased person reads as the nil UUID), with the generic
-      access-log row as its audit record.
+      access-log row as its audit record. **Five — the closing is a database fact only.** `document_series.closed_at`
+      is written by the series erasure and by nothing else, and neither `ReplayErasure` (the restore step and the
+      completion sweep) nor a restore to a dump older than the closing, nor a down and up of the migration, brings it
+      back: versions that survived a partial series erasure can then accept successors again until the erasure is
+      run again. The ledger keeps the scope id of each version erased, never the closing. **Six — a series erasure
+      is one synchronous request over N versions.** Each version is durable and the run is repeatable, but a request
+      cut off between versions surfaces as an unmapped exception and not as `ErasureOutcomeUnknown`, and the new-version
+      declare and its commit do not consult `ErasureLedgerOverride`, as the first-version declare does not.
+      **Open — owner: the Documents epic.**
 - [ ] **Offsite backups keep the ciphertext of an erased document, and an erasure depends on the offsite channel
       (doc-7).** The sealed objects of an erased document are deleted from the volume, but a backup of the volume (or a
       database dump holding the wrapped key) taken before the erasure still holds the ciphertext; the residual closes

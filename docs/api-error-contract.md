@@ -408,7 +408,7 @@ A new version is the declare and PUT above with a predecessor named in the path;
 
 | Situation | Answer | Source |
 |---|---|---|
-| New version of a predecessor that does not exist, is not `Ready`, or sits in a series whose erasure has begun (at the declare, or found so under the lock at the commit; the closed series is found only at the commit) | **409 `document-predecessor-not-ready`** (`Conflict`); at the commit the upload is aborted like any refused commit (staged object deleted, intent expired, scope tombstoned by the reaper) | `PredecessorNotReady`, from `DeclareUpload::declareVersion()`, `CommitUpload` or `Document::succeed()` |
+| New version of a predecessor that does not exist, is not `Ready`, or sits in a series whose erasure has begun (at the declare, or found so under the lock at the commit) | **409 `document-predecessor-not-ready`** (`Conflict`); at the commit the upload is aborted like any refused commit (staged object deleted, intent expired, scope tombstoned by the reaper) | `PredecessorNotReady`, from `DeclareUpload::declareVersion()`, `CommitUpload` or `Document::succeed()` |
 | New version of a predecessor that a live version (`Received`, `Scanning`, `Ready`) already succeeds, anywhere below it | **409 `document-version-slot-taken`** (`Conflict`); at the commit, the same abort | `VersionSlotTaken` |
 | New version by a caller holding `document.write` but not `document.download` | **403 `forbidden`** (`AccessDenied`), before any lookup and before the declare budget | `#[IsGranted]` ×2 on `DeclareVersionController` |
 | New version with `{id}` not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in `DeclareVersionController` |
@@ -416,7 +416,7 @@ A new version is the declare and PUT above with a predecessor named in the path;
 | Re-scan of a failed version whose predecessor is `Erased`, or whose series erasure has begun | **409 `document-predecessor-not-ready`** (`Conflict`); nothing changes | `PredecessorNotReady`, from `RescanDocument` |
 | Re-scan of a failed version whose slot another live version holds | **409 `document-version-slot-taken`** (`Conflict`); nothing changes | `VersionSlotTaken`, from `RescanDocument` |
 | Series page or series erasure of a series no document belongs to (the series id is its first version's id) | **404 `document-not-found`** (`NotFound`), before any ledger write | `DocumentNotFound` |
-| Series page with `afterId` not a UUID, or `limit` below 1 or above 100 | **422 `validation-failed`** | `DocumentSeriesQuery` |
+| Series page with `afterId` empty or not a UUID, or `limit` below 1 or above 100 | **422 `validation-failed`** | `DocumentSeriesQuery` |
 | Series page while the erasure ledger's override is set | **410 `gone`**, for any well-formed id and before any lookup, as the listing | `ErasureLedgerOverride`, `DocumentGone` |
 | Series erasure: every refusal of the single erasure (wrong or missing password, reason outside the list, no `document.erase`) | as the erasure table above, before any ledger write | `EraseDocumentSeriesController` |
 | Series erasure: a version's ledger write or transaction fails | **503 `erasure-ledger-unavailable`** / **503 `erasure-outcome-unknown`**, as the erasure table; the run stops there and the versions already erased stay erased | `EraseDocument::eraseSeries()` |

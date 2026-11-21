@@ -82,7 +82,7 @@ final readonly class RescanDocument
             $predecessorId = $document->predecessorId();
 
             if (null !== $predecessorId) {
-                $this->versionSlot->forReopen($document->seriesId(), $predecessorId);
+                $this->versionSlot->forReopen($document->seriesId(), $predecessorId, $documentId);
             }
 
             if (!$this->leases->reopen($documentId)) {

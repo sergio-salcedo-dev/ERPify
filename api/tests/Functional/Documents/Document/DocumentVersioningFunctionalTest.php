@@ -14,6 +14,7 @@ use Erpify\Documents\Document\Application\Upload\Command\DeclareUploadCommand;
 use Erpify\Documents\Document\Application\Upload\CommitUpload;
 use Erpify\Documents\Document\Application\Upload\DeclareUpload;
 use Erpify\Documents\Document\Application\Upload\DeclareUploadOutcome;
+use Erpify\Documents\Document\Application\Upload\IdempotencyKeyHasher;
 use Erpify\Documents\Document\Application\Versioning\TakeVersionSlot;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Entity\Document;
@@ -33,8 +34,10 @@ use Erpify\Documents\Document\Domain\Upload\UploadIntentState;
 use Erpify\Documents\Document\Domain\Versioning\DocumentVersionSlots;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentSeriesRepository;
 use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalDocumentVersionSlots;
+use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Functional\ResolvesContainerServices;
+use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -260,6 +263,127 @@ final class DocumentVersioningFunctionalTest extends KernelTestCase
 
         $this->plantVersion(DocumentState::Scanning, $first);
         $this->assertDeclareRefused(VersionSlotTaken::class, $actor, $first);
+    }
+
+    #[Test]
+    public function theDeclareRefusesAVersionOfASeriesWhoseErasureHasBegun(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $other = $this->plantVersion(DocumentState::Ready);
+
+        $this->service(DocumentVersionSlots::class)->closeSeries($first);
+
+        $this->assertDeclareRefused(PredecessorNotReady::class, Uuid::generate(), $first);
+        $this->assertTrue($this->declareVersion(Uuid::generate(), $other)->created, 'another series is not closed');
+        $this->assertSame(0, $this->intOf($this->connection()->fetchOne(
+            'SELECT COUNT(*) FROM upload_intent WHERE predecessor_id = CAST(:id AS UUID)',
+            ['id' => $first],
+        )), 'nothing was recorded for the refused declare');
+    }
+
+    #[Test]
+    public function closingASeriesInsideATransactionIsRefused(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+
+        $this->connection()->beginTransaction();
+
+        try {
+            $this->assertThrows(
+                LogicException::class,
+                fn () => $this->service(DocumentVersionSlots::class)->closeSeries($first),
+            );
+        } finally {
+            $this->connection()->rollBack();
+        }
+
+        $this->assertNull($this->closedAtOf($first));
+    }
+
+    #[Test]
+    public function theReopenOfAVersionLeavesItselfOutOfTheSlotRead(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $failed = $this->plantVersion(DocumentState::ScanFailed, $first);
+        $this->reopen($failed);
+        $slot = $this->service(TakeVersionSlot::class);
+        $transactions = $this->service(TransactionManager::class);
+        $series = $this->seriesOf($first);
+
+        $transactions->transactional(static function () use ($slot, $series, $first, $failed): void {
+            $slot->forReopen($series, $first, $failed);
+        });
+        $this->addToAssertionCount(1);
+
+        $this->plantVersion(DocumentState::Ready, $first);
+        $this->assertThrows(
+            VersionSlotTaken::class,
+            static fn () => $transactions->transactional(
+                static function () use ($slot, $series, $first, $failed): void {
+                    $slot->forReopen($series, $first, $failed);
+                },
+            ),
+        );
+    }
+
+    #[Test]
+    public function aReplayAgainstTheCommittedVersionIsAnsweredOnlyForTheSamePredecessor(): void
+    {
+        $actor = Uuid::generate();
+        $first = $this->plantVersion(DocumentState::Ready);
+        $other = $this->plantVersion(DocumentState::Ready);
+        $held = $this->plantVersion(DocumentState::Quarantined, $first);
+        $this->connection()->executeStatement(
+            'UPDATE document SET idempotency_key_hash = :hash, retention_reason = :reason, legal_basis = :basis, '
+            . 'digest = :digest WHERE id = CAST(:id AS UUID)',
+            [
+                'hash' => $this->service(IdempotencyKeyHasher::class)->hash($actor, 'key-replay'),
+                'reason' => RetentionReason::TechnicalFile->value,
+                'basis' => LegalBasis::Contract->value,
+                'digest' => \hash('sha256', 'v'),
+                'id' => $held,
+            ],
+        );
+
+        $replay = $this->declareVersion($actor, $first, 'key-replay');
+
+        $this->assertFalse($replay->created, 'the committed version answers its own declaration');
+        $this->assertDeclareRefused(IdempotencyKeyConflict::class, $actor, $other, 'key-replay');
+        $this->assertThrows(
+            IdempotencyKeyConflict::class,
+            fn (): DeclareUploadOutcome => $this->service(DeclareUpload::class)->declare(
+                new DeclareUploadCommand(
+                    size: 10,
+                    sha256: \hash('sha256', 'v'),
+                    idempotencyKey: 'key-replay',
+                    retentionReason: RetentionReason::TechnicalFile,
+                    legalBasis: LegalBasis::Contract,
+                ),
+                $actor,
+            ),
+        );
+    }
+
+    #[Test]
+    public function aKeysetPageCrossesTwoVersionsFiledInTheSameSecond(): void
+    {
+        $first = $this->plantVersion(DocumentState::Ready);
+        $second = $this->plantVersion(DocumentState::Ready, $first);
+        $third = $this->plantVersion(DocumentState::Quarantined, $second);
+        $this->connection()->executeStatement(
+            'UPDATE document SET created_at = (SELECT created_at FROM document WHERE id = CAST(:second AS UUID)) '
+            . 'WHERE id = CAST(:third AS UUID)',
+            ['second' => $second, 'third' => $third],
+        );
+
+        $reader = $this->service(ReadDocumentSeries::class);
+        $page = $reader->read($first, null, 2);
+
+        $this->assertSame([$first, $second], $this->idsOf($page));
+        $this->assertSame($second, $page->nextAfterId);
+        $next = $reader->read($first, $page->nextAfterId, 2);
+        $this->assertSame([$third], $this->idsOf($next), 'the id breaks the tie and the cursor crosses it');
+        $this->assertNull($next->nextAfterId);
     }
 
     #[Test]

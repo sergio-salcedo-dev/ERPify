@@ -6,8 +6,9 @@ namespace Erpify\Documents\Document\Application\Erasure;
 
 /**
  * What one run of a series erasure did and what it left: the versions this call erased, newest first, and the
- * versions of the series still not `Erased` when it finished. `remaining` is not empty when a version was filed while
- * the run worked, under a predecessor that was still `Ready`; the operator runs it again.
+ * versions of the series still not `Erased` when it finished. The series is closed before the run lists anything, so
+ * nothing is filed meanwhile and `remaining` is empty on a normal return; it is reported so the caller can check, and a
+ * failure never returns a partial result — it propagates, and a repeat continues.
  */
 final readonly class SeriesErasure
 {

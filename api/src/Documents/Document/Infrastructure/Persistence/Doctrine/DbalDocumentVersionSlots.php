@@ -55,6 +55,10 @@ final readonly class DbalDocumentVersionSlots implements DocumentVersionSlots
     {
         Uuid::ensure($seriesId);
 
+        if ($this->connection->isTransactionActive()) {
+            throw new LogicException('Closing a document series must not run inside a transaction.');
+        }
+
         $this->connection->executeStatement(
             'UPDATE document_series SET closed_at = COALESCE(closed_at, NOW()) WHERE id = CAST(:id AS UUID)',
             ['id' => \strtolower($seriesId)],
@@ -62,24 +66,42 @@ final readonly class DbalDocumentVersionSlots implements DocumentVersionSlots
     }
 
     #[Override]
-    public function isSlotHeld(string $predecessorId): bool
+    public function isSlotHeld(string $predecessorId, ?string $exceptId = null): bool
     {
         Uuid::ensure($predecessorId);
+
+        if (null !== $exceptId) {
+            Uuid::ensure($exceptId);
+        }
 
         return false !== $this->connection->fetchOne(
             'WITH RECURSIVE below (id, state) AS ('
             . 'SELECT d.id, d.state FROM document d WHERE d.predecessor_id = CAST(:id AS UUID) '
             . 'UNION '
             . 'SELECT d.id, d.state FROM document d JOIN below b ON d.predecessor_id = b.id'
-            . ') SELECT 1 FROM below WHERE state IN (:live) LIMIT 1',
+            . ') SELECT 1 FROM below WHERE state IN (:live) '
+            . 'AND (CAST(:except AS UUID) IS NULL OR id <> CAST(:except AS UUID)) '
+            . 'LIMIT 1',
             [
                 'id' => \strtolower($predecessorId),
+                'except' => null === $exceptId ? null : \strtolower($exceptId),
                 'live' => \array_map(
                     static fn (DocumentState $state): string => $state->value,
                     DocumentState::slotHolders(),
                 ),
             ],
             ['live' => ArrayParameterType::STRING],
+        );
+    }
+
+    #[Override]
+    public function isSeriesClosed(string $seriesId): bool
+    {
+        Uuid::ensure($seriesId);
+
+        return false !== $this->connection->fetchOne(
+            'SELECT 1 FROM document_series WHERE id = CAST(:id AS UUID) AND closed_at IS NOT NULL',
+            ['id' => \strtolower($seriesId)],
         );
     }
 

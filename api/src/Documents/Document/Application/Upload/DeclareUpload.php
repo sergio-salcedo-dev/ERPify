@@ -273,14 +273,19 @@ final readonly class DeclareUpload
     }
 
     /**
-     * The new-version declare's early refusal, read without a lock: an absent predecessor answers like a non-`Ready`
-     * one, and a live successor already below it answers the slot conflict.
+     * The new-version declare's early refusal, read without a lock: an absent predecessor, one that is not `Ready` and
+     * one in a series whose erasure has begun answer alike, and a live successor already below it answers the slot
+     * conflict. The commit decides all of it again under the series lock.
      */
     private function ensureSlotLooksFree(string $predecessorId): void
     {
         $predecessor = $this->documents->findById($predecessorId);
 
         if (!$predecessor instanceof Document || DocumentState::Ready !== $predecessor->state()) {
+            throw PredecessorNotReady::create();
+        }
+
+        if ($this->slots->isSeriesClosed($predecessor->seriesId())) {
             throw PredecessorNotReady::create();
         }
 

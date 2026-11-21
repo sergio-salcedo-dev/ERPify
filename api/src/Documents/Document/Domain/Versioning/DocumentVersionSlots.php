@@ -31,13 +31,22 @@ interface DocumentVersionSlots
      * Closes the series to every later take, for ever: one statement in its own transaction, which waits for a take
      * holding the series row and commits before returning. The series erasure calls it before it lists what remains,
      * so a version filed by a take that finished first is listed, and one that starts afterwards is refused. Repeating
-     * it changes nothing. Never called from inside an erasure's own transaction, so an erasure still locks no series.
+     * it changes nothing. Refused inside a transaction, which would keep the series row locked until it ended.
      */
     public function closeSeries(string $seriesId): void;
 
     /**
      * Whether a live version exists anywhere below the document, read without a lock by one recursive query. Under the
      * series lock it is authoritative for "may a new live child appear here": nothing else can make a version live.
+     * `$exceptId` leaves one version out of the answer: the reopen of a failed version asks whether any OTHER version
+     * holds the slot, so a reopen that lost the race to a concurrent reopen of the same version reaches its
+     * compare-and-set and is refused there as not reopenable, not as a slot conflict.
      */
-    public function isSlotHeld(string $predecessorId): bool;
+    public function isSlotHeld(string $predecessorId, ?string $exceptId = null): bool;
+
+    /**
+     * Whether a series erasure has closed the series, read without a lock: the early refusal of a new-version declare.
+     * The commit decides again under the series lock ({@see lockSeries()}).
+     */
+    public function isSeriesClosed(string $seriesId): bool;
 }

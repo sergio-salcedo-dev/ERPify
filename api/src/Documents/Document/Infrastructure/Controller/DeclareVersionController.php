@@ -33,10 +33,12 @@ use Symfony\Component\Serializer\Exception\ExceptionInterface;
  * `docs/adr/authorization-model-boundaries.md`). Filing a version of a document is acting on evidence the caller could
  * not otherwise read, so the read permission is part of the gate and a tier that may file evidence but not download it
  * cannot file a version of anything; the PUT that follows is authorised as the intent's own actor. The per-actor
- * declare budget is spent before the use case runs. Answers 409 `document-predecessor-not-ready` for a predecessor that
- * is absent, not `Ready` or in a series whose erasure has begun (one answer for all three, so the route is no
- * existence oracle) and 409 `document-version-slot-taken` when a live version already succeeds it; the commit at the
- * end of the PUT decides both again under the series lock. It re-proves no credential (`api/.credential-proof-policy`).
+ * declare budget is spent before the use case runs. The declare refuses early, without a lock, with 409
+ * `document-predecessor-not-ready` for a predecessor that is absent, not `Ready` or in a series whose erasure has
+ * begun, and with 409 `document-version-slot-taken` when a live version already succeeds it, so no body is streamed
+ * to be refused at the commit, which decides both again under the series lock. Absent and not-`Ready` answer alike, so
+ * the refusal does not tell whether an id exists; `slot-taken` does tell a caller (ADMIN, by the gate above) that the
+ * predecessor is `Ready` and has a live successor. It re-proves no credential (`api/.credential-proof-policy`).
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the HTTP edge translating one request into one command
  */
