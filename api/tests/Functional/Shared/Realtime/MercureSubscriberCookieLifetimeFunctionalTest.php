@@ -59,9 +59,11 @@ final class MercureSubscriberCookieLifetimeFunctionalTest extends KernelTestCase
         $claims = $this->payload((string) $this->mintCookie()->getValue());
 
         $this->assertArrayHasKey('exp', $claims, 'a token without `exp` never expires at the hub');
-        $this->assertIsInt($claims['exp']);
-        $this->assertGreaterThan($before, $claims['exp']);
-        $this->assertLessThanOrEqual(\time() + self::CONFIGURED_LIFETIME_SECONDS, $claims['exp']);
+        // The library stamps `exp` as a float with microseconds, so it is compared as a number, not an int.
+        $this->assertIsNumeric($claims['exp']);
+        $expiresAt = (float) $claims['exp'];
+        $this->assertGreaterThan($before, $expiresAt);
+        $this->assertLessThanOrEqual(\time() + self::CONFIGURED_LIFETIME_SECONDS + 1, $expiresAt);
     }
 
     private function mintCookie(): Cookie
