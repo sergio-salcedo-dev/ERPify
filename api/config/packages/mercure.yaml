@@ -1,4 +1,10 @@
 mercure:
+    # Lifetime of the subscriber cookie AND of the `exp` claim of its JWT (symfony/mercure 0.9 derives both
+    # from this value). Unset it falls back to `session.cookie_lifetime`, which is 0 here, and the library
+    # then issues a session cookie whose JWT lives one hour. The hub checks no revocation, so this is the
+    # ceiling on how long a revoked or suspended holder keeps receiving updates; the PWA re-authorises on
+    # every stream error (`useMercureRealtime`), so a short value costs one extra request per window.
+    default_cookie_lifetime: 900
     hubs:
         default:
             url: '%env(default::MERCURE_URL)%'

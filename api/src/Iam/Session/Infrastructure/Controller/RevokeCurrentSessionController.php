@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mercure\Authorization;
 use Symfony\Component\Routing\Attribute\Route;
 use Throwable;
 
@@ -25,6 +26,10 @@ use Throwable;
  * leave the ex-user's cookie live and the registry row ACTIVE (resumable once the store recovers). The failed
  * revoke is logged; the left-behind ACTIVE row is correlation-orphaned and self-cleans via the TTL / retention
  * job. Always 204 — a logout must not fail.
+ *
+ * The response also expires the Mercure subscriber cookie the realtime authorize endpoints set: it is a JWT the hub
+ * accepts without consulting the session, so it would otherwise keep delivering private updates on this browser
+ * until it expires. Clearing is best-effort too — a hub whose public host cannot be resolved must not fail a logout.
  */
 #[Route('/sessions/revoke-current', name: 'iam_revoke_current_session', methods: ['POST'])]
 final readonly class RevokeCurrentSessionController
@@ -32,6 +37,7 @@ final readonly class RevokeCurrentSessionController
     public function __construct(
         private CurrentSessionReference $currentSession,
         private RevokeSession $revokeSession,
+        private Authorization $mercureAuthorization,
         #[Autowire(service: 'monolog.logger.observability')]
         private LoggerInterface $logger,
     ) {
@@ -47,7 +53,21 @@ final readonly class RevokeCurrentSessionController
 
         $request->getSession()->invalidate();
 
-        return new Response(status: Response::HTTP_NO_CONTENT);
+        $response = new Response(status: Response::HTTP_NO_CONTENT);
+        $this->clearMercureCookie($request, $response);
+
+        return $response;
+    }
+
+    private function clearMercureCookie(Request $request, Response $response): void
+    {
+        try {
+            $response->headers->setCookie($this->mercureAuthorization->createClearCookie($request));
+        } catch (Throwable $throwable) {
+            $this->logger->warning('Sign-out could not clear the Mercure subscriber cookie; it expires on its own.', [
+                'exception' => $throwable,
+            ]);
+        }
     }
 
     private function revokeCurrentSession(SessionId $currentSessionId): void

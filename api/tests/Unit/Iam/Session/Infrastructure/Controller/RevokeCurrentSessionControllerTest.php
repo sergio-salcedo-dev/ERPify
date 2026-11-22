@@ -17,6 +17,12 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Component\Mercure\Authorization;
+use Symfony\Component\Mercure\Hub;
+use Symfony\Component\Mercure\HubRegistry;
+use Symfony\Component\Mercure\Jwt\LcobucciFactory;
+use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
+use Symfony\Component\Mercure\ProtocolVersion;
 
 /**
  * "Sign out this device" must be durable: a store outage on the revoke must not leave the cookie live and the
@@ -50,6 +56,26 @@ final class RevokeCurrentSessionControllerTest extends TestCase
         $this->assertSame(self::HTTP_NO_CONTENT, $response->getStatusCode(), (string) $response->getContent());
     }
 
+    public function testItExpiresTheMercureSubscriberCookie(): void
+    {
+        $store = $this->createStub(SessionRepository::class);
+        $store->method('findActiveById')->willThrowException(SessionStoreUnavailable::storeUnreachable());
+
+        $request = Request::create('/api/v1/sessions/revoke-current', Request::METHOD_POST);
+        $request->setSession($this->createStub(SessionInterface::class));
+
+        $response = ($this->controller($store))($request);
+
+        $cookies = \array_values(\array_filter(
+            $response->headers->getCookies(),
+            static fn ($cookie): bool => 'mercureAuthorization' === $cookie->getName(),
+        ));
+        $this->assertCount(1, $cookies);
+        $this->assertNull($cookies[0]->getValue());
+        $this->assertTrue($cookies[0]->isCleared(), 'the cookie must be expired so the browser drops it');
+        $this->assertSame('/.well-known/mercure', $cookies[0]->getPath());
+    }
+
     private function controller(SessionRepository $store): RevokeCurrentSessionController
     {
         $currentSession = $this->createStub(CurrentSessionReference::class);
@@ -62,6 +88,16 @@ final class RevokeCurrentSessionControllerTest extends TestCase
             $this->createStub(TransactionManager::class),
         );
 
-        return new RevokeCurrentSessionController($currentSession, $revokeSession, new NullLogger());
+        return new RevokeCurrentSessionController(
+            $currentSession,
+            $revokeSession,
+            new Authorization(new HubRegistry(new Hub(
+                'https://localhost/.well-known/mercure',
+                new StaticTokenProvider('unused'),
+                new LcobucciFactory('test-secret-not-a-real-credential-0123456789abcdef', protocolVersion: ProtocolVersion::Legacy),
+                protocolVersion: ProtocolVersion::Legacy,
+            ))),
+            new NullLogger(),
+        );
     }
 }
