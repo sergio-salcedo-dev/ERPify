@@ -694,7 +694,8 @@ severity: medium
 origin: auditoría de seguridad de #1091, 2026-10-23
 location: pwa/next.config.ts (headers), pwa/src/proxy.ts, pwa/CLAUDE.md
 reason: `script-src 'self' 'unsafe-inline'` sin nonce y `img-src https:`. Hoy no hay ningún sumidero de XSS en `pwa/src`, pero la CSP no aporta nada como segunda línea y deja `img-src` como canal de exfiltración.
-status: open
+status: done 2026-11-22
+resolution: per-request nonce CSP in src/proxy.ts (script-src 'self' 'nonce-…' 'strict-dynamic'), img-src narrowed, next.config no longer emits a CSP. Verified in Chromium against next build + next start (no violations, hydration and theme toggle work). Cost: all 74 routes now render per request (was 67 static of 75). Not verified: Docker/Caddy path, dev HMR, a real Sentry event, real API. style-src keeps 'unsafe-inline'.
 severity: medium
 
 **Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*Production CSP admits inline script*).
