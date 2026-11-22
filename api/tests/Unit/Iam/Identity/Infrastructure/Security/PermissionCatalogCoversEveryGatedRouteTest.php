@@ -206,7 +206,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
 
         $this->assertIsArray($rules, 'security.yaml no longer declares access_control: update this sweep.');
         $this->assertNotEmpty($rules);
-        $rules = \array_values(\array_filter($rules, 'is_array'));
+        $rules = \array_values(\array_filter($rules, is_array(...)));
         $this->assertSame([], $this->accessControlProblems($rules, new PermissionCatalog()));
     }
 
@@ -266,30 +266,37 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
             }
 
             foreach ((array) ($rule['roles'] ?? []) as $role) {
-                if (!\is_string($role)) {
-                    $problems[] = \sprintf('access_control "%s" declares a non-string role.', $path);
+                $problem = $this->roleProblem($path, $role, $catalog);
 
-                    continue;
+                if (null !== $problem) {
+                    $problems[] = $problem;
                 }
-
-                if ('PUBLIC_ACCESS' === $role || \str_starts_with($role, 'IS_AUTHENTICATED_')) {
-                    continue;
-                }
-
-                if (Permission::isWellFormed($role) && $catalog->contains($role)) {
-                    continue;
-                }
-
-                $problems[] = \sprintf(
-                    'access_control "%s" gates on "%s", which is neither a public/authenticated token nor a catalog '
-                    . 'permission: add it to PermissionCatalog or classify it here.',
-                    $path,
-                    $role,
-                );
             }
         }
 
         return $problems;
+    }
+
+    private function roleProblem(string $path, mixed $role, PermissionCatalog $catalog): ?string
+    {
+        if (!\is_string($role)) {
+            return \sprintf('access_control "%s" declares a non-string role.', $path);
+        }
+
+        if ('PUBLIC_ACCESS' === $role || \str_starts_with($role, 'IS_AUTHENTICATED_')) {
+            return null;
+        }
+
+        if (Permission::isWellFormed($role) && $catalog->contains($role)) {
+            return null;
+        }
+
+        return \sprintf(
+            'access_control "%s" gates on "%s", which is neither a public/authenticated token nor a catalog '
+            . 'permission: add it to PermissionCatalog or classify it here.',
+            $path,
+            $role,
+        );
     }
 
     /**
