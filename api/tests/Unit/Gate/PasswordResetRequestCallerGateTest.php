@@ -96,11 +96,15 @@ final class PasswordResetRequestCallerGateTest extends TestCase
     {
         $holders = $this->holders([
             self::DEFINING_FILE => '<?php final class RequestPasswordReset {}',
-            'Planted/ImportingController.php' => "<?php\nuse Erpify\\Iam\\Identity\\Application\\RequestPasswordReset;\n"
-                . "final class X { public function __construct(private RequestPasswordReset \$reset) {} }",
-            'Planted/QualifiedCommand.php' => '<?php $r = new \\Erpify\\Iam\\Identity\\Application\\RequestPasswordReset();',
-            'Planted/DocblockOnly.php' => "<?php\n/** @see RequestPasswordReset */\n// RequestPasswordReset\nfinal class Y {}",
-            'Planted/Lookalike.php' => '<?php use Erpify\\Iam\\Identity\\Infrastructure\\Http\\RequestPasswordResetController;',
+            'Planted/ImportingController.php' => "<?php\n"
+                . 'use Erpify\Iam\Identity\Application\RequestPasswordReset;' . "\n"
+                . 'final class X { public function __construct(private RequestPasswordReset $reset) {} }',
+            'Planted/QualifiedCommand.php' => '<?php $r = new '
+                . '\Erpify\Iam\Identity\Application\RequestPasswordReset();',
+            'Planted/DocblockOnly.php' => "<?php\n/** @see RequestPasswordReset */\n"
+                . "// RequestPasswordReset\nfinal class Y {}",
+            'Planted/Lookalike.php' => '<?php use '
+                . 'Erpify\Iam\Identity\Infrastructure\Http\RequestPasswordResetController;',
         ]);
 
         $this->assertSame(['Planted/ImportingController.php', 'Planted/QualifiedCommand.php'], $holders);
