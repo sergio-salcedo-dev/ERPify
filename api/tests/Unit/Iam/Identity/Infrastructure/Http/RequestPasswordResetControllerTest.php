@@ -26,8 +26,8 @@ use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
@@ -59,7 +59,12 @@ final class RequestPasswordResetControllerTest extends TestCase
     {
         $tokens = new InMemoryPasswordResetTokenRepository();
         $auditLogger = new RecordingAuditLogger();
-        [$controller, $listener, $resetListener] = $this->endpoint($tokens, 5, new CountingPreIdentityTimingFloor(), $auditLogger);
+        [$controller, $listener, $resetListener] = $this->endpoint(
+            $tokens,
+            5,
+            new CountingPreIdentityTimingFloor(),
+            $auditLogger,
+        );
 
         $response = $this->drive($controller, $listener, $resetListener, UserMother::DEFAULT_EMAIL);
 
@@ -161,7 +166,7 @@ final class RequestPasswordResetControllerTest extends TestCase
                 new ForgotPasswordRequest($email),
             );
 
-            $this->assertSame(Response::HTTP_ACCEPTED, $response->getStatusCode());
+            $this->assertSame(Response::HTTP_ACCEPTED, $response->getStatusCode(), (string) $response->getContent());
         }
 
         $this->assertSame([], $tokens->saved);
@@ -194,7 +199,7 @@ final class RequestPasswordResetControllerTest extends TestCase
         $users = new InMemoryUserRepository(UserMother::create());
         $stack = new RequestStack();
         $tokens = new InMemoryPasswordResetTokenRepository();
-        $tokens->onSave = static function (): void {
+        $tokens->onSave = static function (): never {
             throw new RuntimeException('store down');
         };
         $listener = new PasswordResetRequestListener(
@@ -225,7 +230,12 @@ final class RequestPasswordResetControllerTest extends TestCase
     public function testAnUnmarkedRequestIsNotProcessed(): void
     {
         $tokens = new InMemoryPasswordResetTokenRepository();
-        [, , $resetListener] = $this->endpoint($tokens, 5, new CountingPreIdentityTimingFloor(), new RecordingAuditLogger());
+        [, , $resetListener] = $this->endpoint(
+            $tokens,
+            5,
+            new CountingPreIdentityTimingFloor(),
+            new RecordingAuditLogger(),
+        );
 
         $resetListener->onTerminate(new TerminateEvent(
             $this->createStub(HttpKernelInterface::class),
