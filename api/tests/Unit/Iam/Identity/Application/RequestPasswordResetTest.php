@@ -186,40 +186,6 @@ final class RequestPasswordResetTest extends TestCase
         $this->assertNoWork($tokens, $eventBus, $emails);
     }
 
-    #[DataProvider('provideEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistenceCases')]
-    public function testEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistence(
-        ?User $user,
-        string $requestedEmail,
-    ): void {
-        $floor = new CountingPreIdentityTimingFloor();
-        $users = $user instanceof User ? new InMemoryUserRepository($user) : new InMemoryUserRepository();
-
-        $this->useCase(
-            $users,
-            new InMemoryPasswordResetTokenRepository(),
-            new RecordingEventBus(),
-            new RecordingPasswordResetEmailSender(),
-            $floor,
-        )->request($requestedEmail);
-
-        $this->assertSame(1, $floor->invocations);
-    }
-
-    /**
-     * @return iterable<string, array{?User, string}>
-     */
-    public static function provideEveryOutcomePaysTheSameTimingFloorSoLatencyDoesNotLeakExistenceCases(): iterable
-    {
-        $suspended = UserMother::create();
-        $suspended->suspend();
-
-        yield 'active (the write path)' => [UserMother::create(), UserMother::DEFAULT_EMAIL];
-        yield 'unknown email' => [null, 'nobody@erpify.test'];
-        yield 'malformed email' => [null, '   '];
-        yield 'invited' => [UserMother::invited(), UserMother::DEFAULT_EMAIL];
-        yield 'suspended' => [$suspended, UserMother::DEFAULT_EMAIL];
-    }
-
     /**
      * A reset link already outstanding for the identity, so the supersede has something real to drop rather
      * than an empty store in which every ordering looks alike.
@@ -238,7 +204,6 @@ final class RequestPasswordResetTest extends TestCase
         InMemoryPasswordResetTokenRepository $tokens,
         RecordingEventBus $eventBus,
         RecordingPasswordResetEmailSender $emails,
-        ?CountingPreIdentityTimingFloor $floor = null,
     ): RequestPasswordReset {
         return new RequestPasswordReset(
             $users,
@@ -247,7 +212,6 @@ final class RequestPasswordResetTest extends TestCase
             new InlineTransactionManager(),
             FixedClock::at(self::NOW),
             new SendPasswordResetEmailBestEffort($emails, new NullLogger()),
-            $floor ?? new CountingPreIdentityTimingFloor(),
         );
     }
 

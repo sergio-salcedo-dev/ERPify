@@ -658,9 +658,10 @@ you change anything here.
       every pre-identity rejection pays the same **constant-time floor** (`PreIdentityTimingFloor`, one password
       verification of the firewall's own hasher) — malformed/unknown login identifiers, the `INVITED` pre-auth
       rejection and **every** forgot outcome (`identity-invitation-lifecycle.md` D10). The floor is ADDED to each branch,
-      not a deadline each is padded to, so it hides only differentials smaller than its own variance: the forgot
-      route's ACTIVE branch still pays a locked transaction and a synchronous SMTP send on top of it — open in §7,
-      *`/forgot-password` latency separates an active account from every other address*. A dead reset/accept
+      not a deadline each is padded to, so it hides only differentials smaller than its own variance — which is
+      why the forgot route's heavier ACTIVE work (supersede transaction, mail send) no longer precedes its answer:
+      every address does the same in-band work (budget claim, floor, one request attribute) and that work runs
+      on `kernel.terminate` — see §7, *`/forgot-password` latency* (closed). A dead reset/accept
       link never runs the KDF (hashing is deferred until the token proves live). Token hygiene (same ADR, D11):
       `Referrer-Policy: no-referrer` on `/accept-invitation` + `/reset-password` + `/backoffice/audit` and its
       subtree (the audit URL names the people under investigation, so it leaves the tab no more readily than a
@@ -2519,16 +2520,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       is the throttle's only bound on one identity from one source — the persisted lockout, keyed on the resolved
       row, still stops the guessing at ten.
 
-- [ ] **`/forgot-password` latency separates an active account from every other address.**
-      `RequestPasswordReset::request()` pays the `PreIdentityTimingFloor` first on every branch, then returns for
-      a malformed, unknown or non-`ACTIVE` address while an `ACTIVE` one goes on to a `FOR UPDATE` transaction
-      (supersede, insert, event publish) and a **synchronous** mail send before the 202 — synchronous by
-      decision, because Symfony's `SendEmailMessage` is left unrouted so the plaintext token never reaches a
-      persisted transport. A floor added to both sides does not hide a difference between them, and an SMTP
-      round-trip is not sub-millisecond. Unmeasured against a real relay; the per-email recovery budget bounds
-      the samples per window, not their resolution. **The fix** is the one `kernel.terminate` already applies to
-      the recovery-throttle audit projection: answer first, issue and send after the response is on the wire —
-      or pad every branch to one deadline.
+- [x] **`/forgot-password` latency separated an active account from every other address — closed.**
+      `RequestPasswordReset::request()` ran a `FOR UPDATE` transaction (supersede, insert, event publish) and a
+      synchronous mail send before the 202 for an `ACTIVE` address only; the floor was added to every branch
+      rather than padded to, so it hid nothing. Now `RequestPasswordResetController` does the same in-band work
+      for every address (budget claim, `PreIdentityTimingFloor`, one request attribute) and
+      `PasswordResetRequestListener` runs the whole use case on `kernel.terminate`, after the response — the
+      route the recovery-throttle audit projection already took. The plaintext token is still minted and mailed
+      in one process and never dispatched: `SendEmailMessage` stays unrouted. **Residuals:** (a) a request
+      that dies before its terminate phase loses the reset, indistinguishable from a refused mail — the
+      requester re-asks; (b) the work still occupies the worker after the response, so a requester who can
+      saturate workers could infer load, not account state; (c) a failure after the response is reported on the
+      `observability` channel and never reaches the requester; (d) **unmeasured against a real relay** — the
+      closure is by construction (no differing work before the response), not by a paired timing run; (e) the
+      guarantee rests on the SAPI flushing the response before terminate listeners run.
 
 - [x] **Production CSP admitted inline script — closed.** `script-src` was `'self' 'unsafe-inline'`, so the
       policy added nothing against an injected script. `pwa/src/proxy.ts` now mints a nonce per request and
