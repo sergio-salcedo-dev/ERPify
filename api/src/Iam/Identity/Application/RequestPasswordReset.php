@@ -23,9 +23,14 @@ use SensitiveParameter;
  * status, shape and timing are uniform (`docs/adr/identity-invitation-lifecycle.md` D10).
  *
  * Only an `ACTIVE` identity mints a {@see SingleUseToken}, supersedes any pending token, persists the digest
- * and records {@see PasswordResetRequested}; every other case returns silently having touched nothing. Every
- * outcome pays the shared {@see PreIdentityTimingFloor} up front, so the silent read path cannot be told apart
- * from the write path by latency either — status, shape and timing all answer uniformly.
+ * and records {@see PasswordResetRequested}; every other case returns silently having touched nothing.
+ *
+ * THE CALLER MUST NOT RUN THIS BEFORE THE RESPONSE. The branches differ in cost — an indexed read for the silent
+ * ones, a `FOR UPDATE` transaction plus a synchronous SMTP send for an `ACTIVE` identity — so any caller that
+ * waits for it hands the requester a timing oracle on account existence. The one HTTP caller
+ * ({@see \Erpify\Iam\Identity\Infrastructure\Http\PasswordResetRequestListener}) runs it on `kernel.terminate`,
+ * after the uniform 202 is on the wire, and pays the {@see PreIdentityTimingFloor} in-band on every branch
+ * itself: this class neither needs nor pays it.
  */
 final readonly class RequestPasswordReset
 {
@@ -42,17 +47,11 @@ final readonly class RequestPasswordReset
         private TransactionManager $transactionManager,
         private Clock $clock,
         private SendPasswordResetEmailBestEffort $emailSender,
-        private PreIdentityTimingFloor $timingFloor,
     ) {
     }
 
     public function request(#[SensitiveParameter] string $email): void
     {
-        // why: without a floor the silent branches (malformed, unknown, non-ACTIVE) answer in the time of one
-        // indexed read. The floor is paid by every branch, so none of them answers faster than a KDF
-        // verification; it is added to the ACTIVE branch's work rather than padding it.
-        $this->timingFloor->equalise();
-
         $canonicalEmail = Email::tryFrom($email);
 
         if (!$canonicalEmail instanceof Email) {

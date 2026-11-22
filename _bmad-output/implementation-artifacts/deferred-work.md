@@ -676,10 +676,13 @@ resolution: opción B, extendida a `SUSPENDED` y `DEACTIVATED` (decisión del pr
 origin: auditoría de seguridad de #1091, 2026-10-23
 location: api/src/Iam/Identity/Application/RequestPasswordReset.php
 reason: el suelo de tiempo se suma a todas las ramas en vez de rellenarlas hasta un plazo fijo. La rama `ACTIVE` paga además una transacción con `FOR UPDATE` y un envío SMTP síncrono antes del 202. Contradice D10 ("identical observable work").
-status: open
+status: done 2026-11-22
+resolution: password-reset request work (FOR UPDATE supersede, token insert, event publish, SMTP send) moved to kernel.terminate (PasswordResetRequestListener); every branch pays the same work before the 202. Closure holds by construction; NO paired timing run against a real relay was done. Plaintext token never touches Messenger. Residual: a request killed before terminate loses the reset.
 severity: medium
 
-**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*`/forgot-password` latency separates an active account from every other address*).
+**Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*`/forgot-password` latency … — closed*).
+
+**Verification still owed (review 2026-11-22):** a paired timing run against a real relay and a check that the response is flushed before `kernel.terminate` under FrankenPHP. Neither exists; the closure is by construction. Deferred from the review: a gate restricting callers of `RequestPasswordReset::request` to the listener, explicit priorities between the two terminate listeners (a failed reset transaction could leave the EntityManager closed for the throttle audit), and a recording-logger test of the failure report.
 
 **Para cerrarla:**
 - **Medir primero:** la diferencia contra un relay SMTP real, con muestras pareadas de una dirección activa y otra desconocida, como la medición que llevó la proyección del throttle a `kernel.terminate`.
