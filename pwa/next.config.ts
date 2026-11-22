@@ -34,6 +34,10 @@ const nextConfig: NextConfig = {
     //   inline `<style>` tags for critical CSS, so `script-src` / `style-src`
     //   keep `'unsafe-inline'`. A nonce-based CSP via `middleware.ts` is the
     //   future-state and removes both.
+    // - `img-src` lists only the origins the app renders images from: itself
+    //   and the API origin (every `<img>` goes through `imageReadUrl`, i.e. the
+    //   shared image read route). A blanket `https:` would be an exfiltration
+    //   channel for an injected script (`new Image().src = …`).
     // - `'unsafe-eval'` is required by Next/Turbopack in development for HMR
     //   only; it is dropped in production builds.
     // - `connect-src` allows the Symfony API origin via
@@ -55,7 +59,7 @@ const nextConfig: NextConfig = {
       "default-src 'self'",
       `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
+      `img-src 'self' data: blob: ${apiOrigin}`.trim(),
       "font-src 'self' data:",
       `connect-src 'self' ${apiOrigin}`.trim(),
       "media-src 'self' data: blob:",

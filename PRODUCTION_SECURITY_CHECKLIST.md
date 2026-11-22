@@ -2531,12 +2531,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       or pad every branch to one deadline.
 
 - [ ] **Production CSP admits inline script.** `pwa/next.config.ts` emits `script-src 'self' 'unsafe-inline'`
-      with no nonce, and `img-src` admits any `https:` origin, so the policy adds nothing against an injected
-      script and leaves it an exfiltration channel. No injection sink exists in `pwa/src` today
+      with no nonce, so the policy adds nothing against an injected script. (`img-src` was narrowed to
+      `'self'` plus the API origin, so it is no longer an exfiltration channel; pinned in
+      `pwa/tests/next-config-headers.test.ts`.) No injection sink exists in `pwa/src` today
       (`dangerouslySetInnerHTML`, `innerHTML`, `eval` and every dynamic `href` are refused or routed through
       `safeHref`); this is the second line being inert, not the first being breached. Accepted "for now" in
       `pwa/CLAUDE.md` and recorded nowhere a decider reads until this entry. **The fix** is a per-request nonce
-      minted in `pwa/src/proxy.ts`, which needs its matcher widened and the pages rendered dynamically.
+      minted in `pwa/src/proxy.ts`, which needs its matcher widened, the root layout rendered dynamically (`await connection()`), the CSP moved out of `next.config.ts` (two CSP headers intersect) and the nonce handed to next-themes' inline script; unverified without a running app, and the pinned `it.fails` in the headers test flips to a plain `it` when it lands.
 
 - [x] **The Mercure subscriber cookie outlives the session that obtained it — closed.** The two realtime
       authorize controllers set `mercureAuthorization`, a JWT the hub accepts without checking revocation.

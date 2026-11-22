@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import nextConfig from "../next.config";
 
 /**
@@ -60,4 +60,51 @@ describe("next.config headers — Referrer-Policy", () => {
       expect(entryIndex).toBeGreaterThan(globalIndex);
     },
   );
+});
+
+function directive(csp: string, name: string): string | undefined {
+  return csp
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part === name || part.startsWith(`${name} `));
+}
+
+async function cspFor(env: { nodeEnv: string; apiBase?: string }): Promise<string> {
+  vi.stubEnv("NODE_ENV", env.nodeEnv);
+  vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", env.apiBase ?? "");
+  const entries = await headerEntries();
+  const global = entries.find((entry) => entry.source === GLOBAL_SOURCE);
+  const value = global?.headers.find((header) => header.key === "Content-Security-Policy")?.value;
+  if (value === undefined) throw new Error("catch-all entry must carry a CSP");
+  return value;
+}
+
+describe("next.config headers — Content-Security-Policy", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("never admits a blanket https: origin in img-src", async () => {
+    for (const nodeEnv of ["production", "development"]) {
+      const img = directive(await cspFor({ nodeEnv }), "img-src");
+      expect(img).toBe("img-src 'self' data: blob:");
+    }
+  });
+
+  it("limits img-src to self plus the API origin when one is configured", async () => {
+    const csp = await cspFor({ nodeEnv: "production", apiBase: "https://api.example.test/v1" });
+    expect(directive(csp, "img-src")).toBe("img-src 'self' data: blob: https://api.example.test");
+  });
+
+  it("keeps 'unsafe-eval' out of production script-src", async () => {
+    expect(directive(await cspFor({ nodeEnv: "production" }), "script-src")).not.toContain(
+      "'unsafe-eval'",
+    );
+  });
+
+  // DW-75 open item: production script-src still carries 'unsafe-inline' until the per-request
+  // nonce lands in src/proxy.ts. Flip this to a plain `it` (and delete the pin below) then.
+  it.fails("production script-src has no 'unsafe-inline'", async () => {
+    expect(directive(await cspFor({ nodeEnv: "production" }), "script-src")).not.toContain(
+      "'unsafe-inline'",
+    );
+  });
 });
