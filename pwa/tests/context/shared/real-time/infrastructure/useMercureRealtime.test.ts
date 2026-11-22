@@ -1,6 +1,18 @@
 import { renderHook, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useMercureRealtime } from "@/context/shared/real-time/infrastructure/useMercureRealtime";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+  type MockInstance,
+} from "vitest";
+import {
+  REARM_DELAY_MS,
+  useMercureRealtime,
+} from "@/context/shared/real-time/infrastructure/useMercureRealtime";
 import { container } from "@/context/shared/dependency-injection/infrastructure/Container";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
@@ -312,5 +324,139 @@ describe("useMercureRealtime", () => {
     onReconnect?.();
 
     expect(reconnect).toHaveBeenCalledTimes(1);
+  });
+
+  describe("re-arm after a terminal denial", () => {
+    function setVisibility(state: "visible" | "hidden"): void {
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: state });
+    }
+
+    async function denyOnce(): Promise<{
+      subscribe: MockInstance<typeof mercureSubscriber.subscribe>;
+      close: Mock<() => void>;
+      onError: () => void;
+      unmount: () => void;
+    }> {
+      vi.spyOn(telemetry, "warn").mockImplementation(() => {});
+      const close = vi.fn();
+      let onError: (() => void) | undefined;
+      const subscribe = vi
+        .spyOn(mercureSubscriber, "subscribe")
+        .mockImplementation((_topics, _onMessage, opts) => {
+          onError = opts?.onError;
+          return { close };
+        });
+      const { unmount } = renderHook(() =>
+        useMercureRealtime<unknown>({
+          topics: ["urn:test:topic"],
+          authorizePath: "/api/v1/test/realtime/authorize",
+          parse: () => null,
+          onEvent: () => {},
+          scope: "realtime:test",
+        }),
+      );
+      await vi.waitFor(() => expect(onError).toBeDefined());
+      authorizeCall.mockRejectedValueOnce(refusal(HttpStatus.FORBIDDEN));
+      (onError as () => void)();
+      await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(1));
+      // Fake timers are installed by the caller before this point.
+      authorizeCall.mockResolvedValue(undefined);
+
+      return { subscribe, close, onError: onError as () => void, unmount };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+      setVisibility("visible");
+    });
+
+    it("re-opens the stream once, after the long interval, when authorize succeeds again", async () => {
+      const { subscribe } = await denyOnce();
+      expect(subscribe).toHaveBeenCalledTimes(1);
+
+      // `vi.waitFor` ticks the fake clock while polling, so assert on halves, not on the edge.
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS / 2);
+      expect(subscribe).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS / 2);
+      await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2));
+    });
+
+    it("never loops: a second denial after the re-arm is final", async () => {
+      const { subscribe, close } = await denyOnce();
+      let secondOnError: (() => void) | undefined;
+      subscribe.mockImplementation((_t, _m, opts) => {
+        secondOnError = opts?.onError;
+        return { close };
+      });
+
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS);
+      await vi.waitFor(() => expect(secondOnError).toBeDefined());
+
+      authorizeCall.mockRejectedValue(refusal(HttpStatus.FORBIDDEN));
+      secondOnError?.();
+      await vi.waitFor(() => expect(close).toHaveBeenCalledTimes(2));
+
+      const calls = authorizeCall.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS * 10);
+      expect(authorizeCall).toHaveBeenCalledTimes(calls);
+      expect(subscribe).toHaveBeenCalledTimes(2);
+    });
+
+    it("gives up when the re-arm authorize is refused (no second attempt)", async () => {
+      const { subscribe } = await denyOnce();
+      authorizeCall.mockRejectedValue(refusal(HttpStatus.FORBIDDEN));
+
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS);
+      await vi.waitFor(() => expect(authorizeCall).toHaveBeenCalledTimes(3));
+      const calls = authorizeCall.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS * 10);
+      expect(authorizeCall).toHaveBeenCalledTimes(calls);
+      expect(subscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it("cancels the pending re-arm on unmount", async () => {
+      const { subscribe, unmount } = await denyOnce();
+      const calls = authorizeCall.mock.calls.length;
+
+      unmount();
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS * 2);
+
+      expect(authorizeCall).toHaveBeenCalledTimes(calls);
+      expect(subscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it("waits for the tab to become visible before re-arming", async () => {
+      const { subscribe } = await denyOnce();
+      setVisibility("hidden");
+      const calls = authorizeCall.mock.calls.length;
+
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS);
+      expect(authorizeCall).toHaveBeenCalledTimes(calls);
+
+      setVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.waitFor(() => expect(subscribe).toHaveBeenCalledTimes(2));
+    });
+
+    it("drops the visibility wait on unmount", async () => {
+      const { subscribe, unmount } = await denyOnce();
+      setVisibility("hidden");
+      await vi.advanceTimersByTimeAsync(REARM_DELAY_MS);
+      const calls = authorizeCall.mock.calls.length;
+
+      unmount();
+      setVisibility("visible");
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(authorizeCall).toHaveBeenCalledTimes(calls);
+      expect(subscribe).toHaveBeenCalledTimes(1);
+    });
   });
 });
