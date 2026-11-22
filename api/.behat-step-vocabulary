@@ -118,6 +118,7 @@ the erasure ledger write times out after the entry landed => used
 :count request(s) got executed across all doctrine connections => used
 :count request(s) got executed for doctrine connection :connectionName => used
 :count request(s) got executed only for doctrine connection :connectionName => used
+at most :count request(s) got executed only for doctrine connection :connectionName => used
 :number Mercure update was published => used
 :number Mercure updates were published => used
 :number notification email was sent => used

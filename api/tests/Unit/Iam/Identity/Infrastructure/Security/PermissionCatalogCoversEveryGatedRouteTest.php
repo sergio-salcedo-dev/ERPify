@@ -9,11 +9,13 @@ use Erpify\Iam\Identity\Infrastructure\Security\Permission;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionCatalog;
 use Erpify\Tests\Support\ApiSourceFiles;
 use Erpify\Tests\Support\ImperativePermissionChecks;
+use Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\Fixtures\SubclassGatedFixture;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionAttribute;
 use ReflectionClass;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * The gate that makes a central catalog safe to have. Enumerating permissions costs the design its best
@@ -114,38 +116,56 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
         $gated = [];
 
         foreach ($this->classesUnderApiSrc() as $reflectionClass) {
-            foreach ($this->isGrantedAttributesOf($reflectionClass) as $attribute) {
-                $permission = $this->permissionOf($attribute);
+            $unclassifiable = [];
 
-                if (null === $permission) {
-                    continue;
-                }
-
+            foreach ($this->permissionsDeclaredOn($reflectionClass, $unclassifiable) as $permission) {
                 $gated[$permission] = $reflectionClass->getShortName();
             }
+
+            $this->assertSame([], $unclassifiable, \sprintf(
+                '%s gates a route with an #[IsGranted] whose argument is not a plain string (an Expression or a '
+                . 'Closure). The catalog sweep cannot tell which permission it governs, so `/me` could omit it '
+                . 'without anything failing: gate on a "resource.action" string, or teach this sweep to classify it.',
+                $reflectionClass->getName(),
+            ));
         }
 
         return $gated;
     }
 
     /**
-     * `IsGranted::$attribute` is `string|Expression|Closure`, and the argument may be passed positionally or
-     * by name — so the attribute is instantiated and its property read, rather than picking `getArguments()[0]`
-     * (absent under a named argument, an object under an Expression). Non-string attributes are not
-     * permissions this catalog governs; `Permission::isWellFormed()` then drops the role and authenticated
-     * tokens (`ROLE_*`, `IS_AUTHENTICATED_*`, `PUBLIC_ACCESS`), which carry no `resource.action` separator.
+     * Permission strings gated on a class and its methods, `IsGranted` subclasses included. The attribute
+     * lookup is by instance-of, not by exact name: `IsGranted` is not final, so a project-local subclass
+     * would otherwise gate a route while the sweep saw nothing.
      *
-     * @param ReflectionAttribute<IsGranted> $attribute
+     * @template T of object
+     *
+     * @param ReflectionClass<T> $reflectionClass
+     * @param list<string>       $unclassifiable  receives a description of each non-string attribute argument
+     *
+     * @return list<string>
      */
-    private function permissionOf(ReflectionAttribute $attribute): ?string
+    private function permissionsDeclaredOn(ReflectionClass $reflectionClass, array &$unclassifiable): array
     {
-        $declared = $attribute->newInstance()->attribute;
+        $permissions = [];
 
-        if (!\is_string($declared)) {
-            return null;
+        foreach ($this->isGrantedAttributesOf($reflectionClass) as $attribute) {
+            $declared = $attribute->newInstance()->attribute;
+
+            if (!\is_string($declared)) {
+                $unclassifiable[] = \get_debug_type($declared);
+
+                continue;
+            }
+
+            // Role and authenticated tokens (`ROLE_*`, `IS_AUTHENTICATED_*`, `PUBLIC_ACCESS`) carry no
+            // `resource.action` separator and are not permissions this catalog governs.
+            if (Permission::isWellFormed($declared)) {
+                $permissions[] = $declared;
+            }
         }
 
-        return Permission::isWellFormed($declared) ? $declared : null;
+        return $permissions;
     }
 
     /**
@@ -159,13 +179,124 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
      */
     private function isGrantedAttributesOf(ReflectionClass $reflectionClass): array
     {
-        $attributes = $reflectionClass->getAttributes(IsGranted::class);
+        $attributes = $reflectionClass->getAttributes(IsGranted::class, ReflectionAttribute::IS_INSTANCEOF);
 
         foreach ($reflectionClass->getMethods() as $reflectionMethod) {
-            $attributes = [...$attributes, ...$reflectionMethod->getAttributes(IsGranted::class)];
+            $attributes = [
+                ...$attributes,
+                ...$reflectionMethod->getAttributes(IsGranted::class, ReflectionAttribute::IS_INSTANCEOF),
+            ];
         }
 
         return $attributes;
+    }
+
+    /**
+     * `security.yaml` `access_control` is a second gating surface over `/api`. Today every rule there is
+     * `PUBLIC_ACCESS` or the `IS_AUTHENTICATED_FULLY` catch-all; a rule that gated a path on a permission
+     * (or on an `allow_if` expression) would bypass the attribute sweep entirely.
+     */
+    public function testAccessControlRulesDoNotGateApiPathsOutsideTheCatalog(): void
+    {
+        $config = Yaml::parseFile(\dirname(__DIR__, 6) . '/config/packages/security.yaml', Yaml::PARSE_CONSTANT);
+        $this->assertIsArray($config);
+        $security = $config['security'] ?? null;
+        $this->assertIsArray($security);
+        $rules = $security['access_control'] ?? null;
+
+        $this->assertIsArray($rules, 'security.yaml no longer declares access_control: update this sweep.');
+        $this->assertNotEmpty($rules);
+        $rules = \array_values(\array_filter($rules, is_array(...)));
+        $this->assertSame([], $this->accessControlProblems($rules, new PermissionCatalog()));
+    }
+
+    public function testTheSweepSeesIsGrantedSubclasses(): void
+    {
+        $unclassifiable = [];
+
+        $this->assertSame(
+            ['widgets.read'],
+            $this->permissionsDeclaredOn(new ReflectionClass(SubclassGatedFixture::class), $unclassifiable),
+            'An IsGranted subclass must be swept: an exact-name lookup would report nothing here.',
+        );
+        $this->assertSame([], $unclassifiable);
+    }
+
+    public function testTheAccessControlEngineRejectsUnclassifiedRules(): void
+    {
+        $catalog = new PermissionCatalog();
+
+        $this->assertSame([], $this->accessControlProblems([
+            ['path' => '^/api/v1/health$', 'roles' => 'PUBLIC_ACCESS'],
+            ['path' => '^/api', 'roles' => 'IS_AUTHENTICATED_FULLY'],
+        ], $catalog));
+        $this->assertCount(1, $this->accessControlProblems([
+            ['path' => '^/api/v1/x$', 'roles' => 'widgets.read'],
+        ], $catalog), 'A permission absent from the catalog must be reported.');
+        $this->assertCount(1, $this->accessControlProblems([
+            ['path' => '^/api/v1/x$', 'roles' => 'IS_AUTHENTICATED_FULLY', 'allow_if' => 'true'],
+        ], $catalog), 'An allow_if expression must fail closed.');
+        $this->assertCount(1, $this->accessControlProblems([
+            ['path' => '^/api/v1/x$', 'roles' => ['ROLE_ADMIN']],
+        ], $catalog), 'A role gate on an API path is not a catalog permission and must be classified.');
+        $this->assertSame([], $this->accessControlProblems([
+            ['path' => '^/admin', 'roles' => 'ROLE_ADMIN'],
+        ], $catalog), 'Rules outside /api are out of scope.');
+    }
+
+    /**
+     * @param list<array<mixed>> $rules
+     *
+     * @return list<string>
+     */
+    private function accessControlProblems(array $rules, PermissionCatalog $catalog): array
+    {
+        $problems = [];
+
+        foreach ($rules as $rule) {
+            $rawPath = $rule['path'] ?? '';
+            $path = \is_string($rawPath) ? $rawPath : '';
+
+            if (!\str_contains($path, '/api')) {
+                continue;
+            }
+
+            if (isset($rule['allow_if'])) {
+                $problems[] = \sprintf('access_control "%s" uses allow_if, which this sweep cannot classify.', $path);
+            }
+
+            foreach ((array) ($rule['roles'] ?? []) as $role) {
+                $problem = $this->roleProblem($path, $role, $catalog);
+
+                if (null !== $problem) {
+                    $problems[] = $problem;
+                }
+            }
+        }
+
+        return $problems;
+    }
+
+    private function roleProblem(string $path, mixed $role, PermissionCatalog $catalog): ?string
+    {
+        if (!\is_string($role)) {
+            return \sprintf('access_control "%s" declares a non-string role.', $path);
+        }
+
+        if ('PUBLIC_ACCESS' === $role || \str_starts_with($role, 'IS_AUTHENTICATED_')) {
+            return null;
+        }
+
+        if (Permission::isWellFormed($role) && $catalog->contains($role)) {
+            return null;
+        }
+
+        return \sprintf(
+            'access_control "%s" gates on "%s", which is neither a public/authenticated token nor a catalog '
+            . 'permission: add it to PermissionCatalog or classify it here.',
+            $path,
+            $role,
+        );
     }
 
     /**

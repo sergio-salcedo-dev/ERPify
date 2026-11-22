@@ -67,7 +67,7 @@ export function BankAccountsActiveFilters({
               else removeRefs.current.delete(chip.key);
             }}
             onClick={() => handleRemove(index, chip.key)}
-            className="bank-accounts-filters__chip-remove text-muted-foreground hover:text-foreground focus-visible:ring-ring -mr-0.5 inline-flex size-4 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
+            className="bank-accounts-filters__chip-remove text-muted-foreground hover:text-foreground focus-visible:ring-ring -my-1 -mr-1 inline-flex size-6 items-center any-pointer-coarse:my-0 any-pointer-coarse:-mr-0.5 any-pointer-coarse:size-11 justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none"
             aria-label={`Remove filter ${chip.label}`}
             title={`Remove filter ${chip.label}`}
             data-testid={`bank-accounts-filters__chip-${chip.key}`}

@@ -59,7 +59,23 @@ class DoctrineContext extends AbstractContext
     public function queriesWereExecutedOnConnectionAndNoOther(int $count, string $connectionName): void
     {
         self::assertEquals($count, $this->getQueriesCountForConnectionName($connectionName));
+        $this->assertNoOtherConnectionWasUsed($connectionName);
+    }
 
+    /**
+     * A ceiling rather than an equality, for a scenario whose subject is a behaviour and not the exact work the
+     * transaction folds in (event store, outbox, audit, BEGIN/COMMIT): an unrelated cross-cutting change then
+     * moves the count without failing it, while an N+1 still does.
+     */
+    #[Then('at most :count request(s) got executed only for doctrine connection :connectionName')]
+    public function atMostQueriesWereExecutedOnConnectionAndNoOther(int $count, string $connectionName): void
+    {
+        self::assertLessThanOrEqual($count, $this->getQueriesCountForConnectionName($connectionName));
+        $this->assertNoOtherConnectionWasUsed($connectionName);
+    }
+
+    private function assertNoOtherConnectionWasUsed(string $connectionName): void
+    {
         $errorMessages = [];
 
         foreach ($this->getUsedConnectionNames() as $name) {

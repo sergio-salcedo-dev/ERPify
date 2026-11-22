@@ -12,6 +12,7 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Controller\RevokeCurrentSessionController;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Mercure\LegacyProtocolAuthorization;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -50,6 +51,30 @@ final class RevokeCurrentSessionControllerTest extends TestCase
         $this->assertSame(self::HTTP_NO_CONTENT, $response->getStatusCode(), (string) $response->getContent());
     }
 
+    public function testItExpiresTheMercureSubscriberCookie(): void
+    {
+        $store = $this->createStub(SessionRepository::class);
+        $store->method('findActiveById')->willThrowException(SessionStoreUnavailable::storeUnreachable());
+
+        $request = Request::create('/api/v1/sessions/revoke-current', Request::METHOD_POST);
+        $request->setSession($this->createStub(SessionInterface::class));
+
+        $response = ($this->controller($store))($request);
+
+        $cookies = [];
+
+        foreach ($response->headers->getCookies() as $cookie) {
+            if ('mercureAuthorization' === $cookie->getName()) {
+                $cookies[] = $cookie;
+            }
+        }
+
+        $this->assertCount(1, $cookies);
+        $this->assertNull($cookies[0]->getValue());
+        $this->assertTrue($cookies[0]->isCleared(), 'the cookie must be expired so the browser drops it');
+        $this->assertSame('/.well-known/mercure', $cookies[0]->getPath());
+    }
+
     private function controller(SessionRepository $store): RevokeCurrentSessionController
     {
         $currentSession = $this->createStub(CurrentSessionReference::class);
@@ -62,6 +87,11 @@ final class RevokeCurrentSessionControllerTest extends TestCase
             $this->createStub(TransactionManager::class),
         );
 
-        return new RevokeCurrentSessionController($currentSession, $revokeSession, new NullLogger());
+        return new RevokeCurrentSessionController(
+            $currentSession,
+            $revokeSession,
+            LegacyProtocolAuthorization::create(),
+            new NullLogger(),
+        );
     }
 }

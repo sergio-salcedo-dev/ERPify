@@ -2531,20 +2531,26 @@ mitigated state. Accepting one means recording who accepted it and against which
       or pad every branch to one deadline.
 
 - [ ] **Production CSP admits inline script.** `pwa/next.config.ts` emits `script-src 'self' 'unsafe-inline'`
-      with no nonce, and `img-src` admits any `https:` origin, so the policy adds nothing against an injected
-      script and leaves it an exfiltration channel. No injection sink exists in `pwa/src` today
+      with no nonce, so the policy adds nothing against an injected script. (`img-src` was narrowed to
+      `'self'` plus the API origin, so it is no longer an exfiltration channel; pinned in
+      `pwa/tests/next-config-headers.test.ts`.) No injection sink exists in `pwa/src` today
       (`dangerouslySetInnerHTML`, `innerHTML`, `eval` and every dynamic `href` are refused or routed through
       `safeHref`); this is the second line being inert, not the first being breached. Accepted "for now" in
       `pwa/CLAUDE.md` and recorded nowhere a decider reads until this entry. **The fix** is a per-request nonce
-      minted in `pwa/src/proxy.ts`, which needs its matcher widened and the pages rendered dynamically.
+      minted in `pwa/src/proxy.ts`, which needs its matcher widened, the root layout rendered dynamically (`await connection()`), the CSP moved out of `next.config.ts` (two CSP headers intersect) and the nonce handed to next-themes' inline script; unverified without a running app, and the pinned `it.fails` in the headers test flips to a plain `it` when it lands.
 
-- [ ] **The Mercure subscriber cookie outlives the session that obtained it.** The two realtime authorize
-      controllers set `mercureAuthorization` (a JWT, one hour by default) and nothing in `api/src` ever clears
-      it: signing out, revoking every other session, a suspension and a deactivation all leave it valid, and
-      the hub checks no revocation. A revoked or suspended holder keeps receiving the private bank and
-      bank-account updates — ids only, no IBAN or holder name — until it expires. **The fix** is
-      `Authorization::createClearCookie()` on the sign-out paths and a lifetime of minutes rather than an hour,
-      re-authorised on reconnect.
+- [x] **The Mercure subscriber cookie outlives the session that obtained it — closed.** The two realtime
+      authorize controllers set `mercureAuthorization`, a JWT the hub accepts without checking revocation.
+      `POST /sessions/revoke-current` now expires it (`Authorization::createClearCookie()`, best-effort so a
+      logout never fails), and `mercure.default_cookie_lifetime` is pinned to 900 s (it was unset: with
+      `session.cookie_lifetime` at 0 symfony/mercure 0.9 issued a session cookie whose JWT `exp` was +1 hour).
+      **Residual:** revoking *other* sessions, a suspension or a deactivation cannot reach another browser's
+      cookie, so that holder can open new private bank and bank-account streams (ids only, no IBAN or holder
+      name) for up to 15 minutes, and a stream already open keeps delivering until it closes (the hub checks
+      the JWT only at connect time); the PWA's re-authorise is refused once the session is gone. The
+      15-minute value is set in `mercure.yaml` and no test pins it. Both authorize
+      endpoints write the same cookie name and path and `createCookie()` does not merge, so authorising one
+      channel replaces the other's topics — harmless while only one stream is open per page.
 
 - [ ] **A minted session can still end unreachable, in two narrow ways, and the mint's admission rule lives
       twice.** `StartSession` retires the session the device's cookie carried in the same transaction that

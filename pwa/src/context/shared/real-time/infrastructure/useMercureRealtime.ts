@@ -65,6 +65,12 @@ function isTerminalDenial(error: unknown): boolean {
 }
 
 /**
+ * Delay before the one re-arm attempt after a terminal denial. Long on purpose: the denial is a
+ * stable decision, so the retry only exists to pick up a permission that came back, not to poll.
+ */
+export const REARM_DELAY_MS = 5 * 60 * 1000;
+
+/**
  * Subscribes to Mercure topics, authorizes (mints the subscriber cookie) before
  * opening the stream, and dispatches typed events to `onEvent`. Re-mints the
  * cookie on stream error so the EventSource's automatic reconnect stays
@@ -147,6 +153,56 @@ export function useMercureRealtime<E>({
     let subscription: { close(): void } | undefined;
     let cancelled = false;
     let refreshing = false;
+    let reArmed = false;
+    let reArmTimer: ReturnType<typeof setTimeout> | undefined;
+    let removeVisibilityWait: (() => void) | undefined;
+
+    // One bounded attempt, never a loop: a feed abandoned after a terminal denial is re-armed at
+    // most once per effect lifetime (the earlier re-authorise loop was cut deliberately). A second
+    // refusal, or a failure of this attempt, leaves the feed abandoned until a remount or a
+    // `topicsKey`/`authorizePath` change. A hidden tab waits for visibility instead of spending a
+    // request nobody can see, and cleanup cancels the timer and the visibility wait.
+    const attemptReArm = async (): Promise<void> => {
+      try {
+        await authorize(authorizePath);
+        if (!cancelled && subscription === undefined) {
+          openStream();
+        }
+      } catch (error) {
+        telemetry.warn("realtime re-arm failed", { scope, cause: error });
+      }
+    };
+
+    const scheduleReArm = (): void => {
+      if (reArmed) {
+        return;
+      }
+      reArmed = true;
+      reArmTimer = setTimeout(() => {
+        reArmTimer = undefined;
+        if (cancelled) {
+          return;
+        }
+        if (document.visibilityState === "hidden") {
+          const onVisible = (): void => {
+            if (document.visibilityState === "hidden") {
+              return;
+            }
+            removeVisibilityWait?.();
+            if (!cancelled) {
+              void attemptReArm();
+            }
+          };
+          document.addEventListener("visibilitychange", onVisible);
+          removeVisibilityWait = (): void => {
+            document.removeEventListener("visibilitychange", onVisible);
+            removeVisibilityWait = undefined;
+          };
+          return;
+        }
+        void attemptReArm();
+      }, REARM_DELAY_MS);
+    };
 
     // The transport reconnects on its own, so a refusal that stands would be re-authorized on
     // every retry, forever — a silent request loop against an endpoint that will keep saying no,
@@ -171,6 +227,7 @@ export function useMercureRealtime<E>({
           if ((await refreshAuthorization()) && !cancelled) {
             subscription?.close();
             subscription = undefined;
+            scheduleReArm();
           }
         } catch {
           // Reporting the refusal is itself fallible (the telemetry singleton fans out to real
@@ -182,14 +239,18 @@ export function useMercureRealtime<E>({
       })();
     };
 
+    function openStream(): void {
+      subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
+        onError: handleStreamError,
+        onReconnect: () => handleReconnect(),
+      });
+    }
+
     void (async (): Promise<void> => {
       try {
         await authorize(authorizePath);
         if (!cancelled) {
-          subscription = mercureSubscriber.subscribe(topicList, (data) => dispatch(data), {
-            onError: handleStreamError,
-            onReconnect: () => handleReconnect(),
-          });
+          openStream();
         }
       } catch (error) {
         // Best-effort: a missing cookie, an absent EventSource (SSR/test), or a
@@ -200,6 +261,8 @@ export function useMercureRealtime<E>({
 
     return (): void => {
       cancelled = true;
+      clearTimeout(reArmTimer);
+      removeVisibilityWait?.();
       subscription?.close();
     };
     // `authorizePath` / `scope` are stable per call site, so this preserves the
