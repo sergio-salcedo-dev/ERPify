@@ -1,0 +1,54 @@
+- id: "mfa-1"
+  title: Second-factor port, sealed aggregate and enrolment
+  description: >-
+    CAP-1 and the persistence half of CAP-6 and CAP-9: the TOTP port and RFC 6238 adapter, the state-oriented
+    aggregate with the sealed secret, enrol and confirm routes, erasure and person-reference registration.
+  invoke_dev_with: >-
+    Seal under EncryptionScopeId::of('User', id) with an identity-bound AAD; join EraseIdentitySubject,
+    .person-reference-policy, a PersonReferenceSource, .audit-evidence-actions and .route-manifest.json; classify
+    the enrol route in .credential-proof-policy; test the adapter with the RFC 6238 vectors.
+- id: "mfa-2"
+  title: Second step on every session-minting path
+  description: >-
+    CAP-2: pending-login state, the code step, and the gate over login, reset-password, invitation accept,
+    change-password and recovery redeem, with uniform failures and structural indistinguishability tests.
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Read integration-points.md first. The gate sits above priority -64 on LoginSuccessEvent and in
+    ReauthenticateDevice; clear the firewall token when withholding the mint; code attempts use their own limiter
+    and never the email-keyed lockout.
+- id: "mfa-3"
+  title: Recovery codes and disabling the factor
+  description: >-
+    CAP-3 and CAP-4: ten single-use recovery codes at activation, accepted at the second step, and the disable
+    route that requires a valid app or recovery code.
+  invoke_dev_with: >-
+    Settle the open question on how the code-authenticated disable route is classified in the credential-proof
+    gate before writing the route; store digests only and consume atomically.
+- id: "mfa-4"
+  title: Administrator reset and operator console command
+  description: >-
+    CAP-5: the admin reset route with caller password re-proof and self-reset refusal, audited, plus the console
+    command for the last-administrator case.
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    Follow UnlockUserAccount for the self-target refusal and ProveActorPassword for the caller proof; model the
+    command on organization:administrator:create and add its parameters to .person-address-parameter-policy.
+- id: "mfa-5"
+  title: Privileged-lockout alert to administrators
+  description: >-
+    CAP-7: a maintenance-tick notice to the other active administrators when an ADMIN identity is locked, once per
+    identity per day, with nothing exercisable in the mail.
+  invoke_dev_with: >-
+    Extend the NotifyLockedIdentities pattern on the identity_maintenance schedule; never filter locked_until in
+    DoctrineActiveAdministratorDirectory; no mail work in the failing login request.
+- id: "mfa-6"
+  title: PWA second step and profile panel
+  description: >-
+    CAP-8: the login second-step state, and the profile panel to enrol, show recovery codes once and disable,
+    following the existing form and error-surface patterns.
+  invoke_dev_with: >-
+    Add a second-step outcome to LoginOutcomeKind routed by problem.type; model the panel on ChangePasswordForm
+    and the recovery-secret panel; register endpoints in API_ENDPOINTS; secret displays follow the PasswordInput
+    and CopyButton rules.
