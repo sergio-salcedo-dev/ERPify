@@ -21,7 +21,7 @@ const STATUS_LABEL: Record<BankAccountStatus, string> = {
 };
 
 const SELECT_CLASS =
-  "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56";
+  "border-border bg-background text-foreground focus-visible:ring-ring h-9 any-pointer-coarse:h-11 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56";
 
 interface BankAccountStatusControlProps {
   account: BankAccount;
@@ -110,7 +110,7 @@ export function BankAccountStatusControl({
         </select>
         <button
           type="button"
-          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 any-pointer-coarse:h-11 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
           disabled={!isDirty || saving}
           onClick={() => void onSubmit()}
           title={`Change ${account.holderName} status`}

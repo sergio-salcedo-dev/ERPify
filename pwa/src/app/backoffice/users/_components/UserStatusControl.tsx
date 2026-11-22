@@ -27,7 +27,7 @@ const TRANSITION_LABEL: Record<TransitionTarget, string> = {
 const TRANSITIONS: readonly TransitionTarget[] = [UserStatus.SUSPENDED, UserStatus.DEACTIVATED];
 
 const SELECT_CLASS =
-  "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56";
+  "border-border bg-background text-foreground focus-visible:ring-ring h-9 any-pointer-coarse:h-11 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none sm:w-56";
 
 interface UserStatusControlProps {
   user: User;
@@ -131,7 +131,7 @@ export function UserStatusControl({ user, onChanged }: Readonly<UserStatusContro
           </select>
           <button
             type="button"
-            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 any-pointer-coarse:h-11 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
             onClick={() => setConfirming(true)}
             title={`Change ${user.email} status`}
             aria-label="Change status"

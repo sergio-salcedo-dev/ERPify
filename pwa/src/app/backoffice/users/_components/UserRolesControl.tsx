@@ -195,7 +195,7 @@ export function UserRolesControl({ user, onChanged }: Readonly<UserRolesControlP
 
         <button
           type="submit"
-          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex h-9 any-pointer-coarse:h-11 items-center justify-center rounded-md px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50"
           disabled={isSubmitting}
           title={`Change ${user.email} roles`}
           aria-label="Change roles"

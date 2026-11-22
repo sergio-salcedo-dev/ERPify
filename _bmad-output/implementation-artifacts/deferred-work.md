@@ -281,7 +281,8 @@ archived: 2026-10-21
 origin: migrated from legacy ledger ("Deferred from: code review of spec-pwa-components-boundary-remediation (2026-06-21)"), 2026-09-24
 location: pwa/eslint.config.mjs
 reason: Hardening only: a future ui primitive needing a @/context/shared type would be blocked; hypothetical with today's cn/ui/erpify-only layer. The other half (cn.ts uncovered) is closed via dependency-cruiser components-root-is-foundational and ui-is-foundational (measured 2026-09-03).
-status: open
+status: done 2026-11-22
+resolution: rejected — allowTypeImports in ESLint would only move the failure to the dependency-cruiser gate (tsPreCompilationDeps counts type imports; ui-is-foundational has no exemption). A ui primitive needing a type takes it from @/components.
 
 PWA component-layer gate — latent coverage gap, hardening only (no current break): the `ui → @/context` ban in `pwa/eslint.config.mjs` has no `allowTypeImports` carve-out, so a future `ui` primitive needing a `@/context/shared/**` *type* would be blocked. Still hypothetical with today's `cn`/`ui`/`erpify`-only `@/components` layer. **La otra mitad de esta bala está cerrada (medido 2026-09-03):** decía que `cn.ts` no lo cubría ninguna regla, y hoy sí — `pwa/.dependency-cruiser.cjs` declara `components-root-is-foundational` sobre `^src/components/` (hoy `cn.ts`, que ningún glob `files` de ESLint alcanza) y `ui-is-foundational` prohíbe que `ui/` llegue a `^src/context/`, `^src/app/` o `^src/components/erpify/` **por cualquier número de saltos**, así que el escape `ui → hermano → context` ya no resuelve.
 
@@ -327,7 +328,8 @@ archived: 2026-10-21
 origin: migrated from legacy ledger ("Deferred from: code review of u-1-me-deriva-permisos-gateo-can (2026-07-17)"), 2026-09-24
 location: api/tests (PermissionCatalogCoversEveryGatedRouteTest)
 reason: The sweep only reflects string-literal/constant #[IsGranted]; it cannot see #[IsGranted(new Expression(...))], security.yaml access_control rules, or IsGranted subclasses. All latent (0 in the tree). Harden when the first Expression or access_control gate lands.
-status: open
+status: done 2026-11-22
+resolution: sweep now covers IsGranted subclasses, non-literal (Expression) arguments and security.yaml access_control rules on /api, with engine self-tests. Written without running PHPUnit/PHPStan (no vendor in the session container).
 
 **AC5: el barrido de completitud de permisos tiene puntos ciegos latentes.** `PermissionCatalogCoversEveryGatedRouteTest` solo refleja atributos `#[IsGranted]` string-literal/constante. No ve: `#[IsGranted(new Expression(...))]` (Symfony expression-language está instalado), reglas `access_control` de `security.yaml`, ni subclases de `IsGranted` (usa match exacto, e `IsGranted` no es `final`). Todos latentes hoy (0 en el árbol). Reforzar el barrido cuando aterrice el primer gate por Expression o por `access_control`.
 
@@ -336,7 +338,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of u-2-invitar-alta-invitacion (2026-07-18)"), 2026-09-24
 location: api/features/backoffice/identity/invitation_create.feature:47
 reason: The exact count folds identity, membership, invitation, event_store, outbox, CDC audit row and BEGIN/COMMIT, so unrelated changes fail an invitation scenario. Accepted house pattern; a repo-wide '<= N' or table-scoped budget would be less false-positive.
-status: open
+status: done 2026-11-22
+resolution: invitation_create.feature uses the new ceiling step 'at most 30 requests…' (27 measured). Behat and make php.lint.step-vocabulary not run in the session container.
 
 **(behat · brittleness · low) El presupuesto de query exacto `27` acopla la feature de invitación a internals transversales.** `And 27 requests got executed only for doctrine connection "default"` pliega identity+membership+invitation+event_store+outbox+fila CDC de auditoría+BEGIN/COMMIT; cualquier cambio ajeno al listener de auditoría/outbox/event-store desplaza el número y hace fallar un escenario de *invitación* por una razón no-conductual. Patrón aceptado de la casa (`behat-query-budget-transaction-overhead`); si se quiere endurecer, un `<= N` (o acotado a las tablas de la invitación) repo-wide sería menos falso-positivo. Ref: `api/features/backoffice/identity/invitation_create.feature:47`.
 
@@ -354,7 +357,8 @@ status: open
 origin: migrated from legacy ledger ("Deferred from: code review of spec-realtime-authorize-terminal-denial (2026-07-22)"), 2026-09-24
 location: pwa/src/context/shared/real-time/infrastructure/useMercureRealtime.ts (handleStreamError)
 reason: Deliberate price of cutting the re-authorise loop; the 'realtime unavailable' UI surface was out of scope. Evaluate with that decision: a single long-interval re-arm retry, or an onRealtimeUnavailable seam consumed by the surface.
-status: open
+status: done 2026-11-22
+resolution: one bounded re-arm 5 min after a terminal denial (REARM_DELAY_MS), cancelled on unmount/topic change, deferred while the tab is hidden; no loop.
 decision: 2026-09-28 Keep open
 
 **(pwa/real-time · recuperación · low) Un feed abandonado por denegación terminal no se re-arma nunca, ni cuando el permiso vuelve.** Tras un 401/403 la suscripción se cierra y solo un remontaje (o un cambio de `topicsKey`/`authorizePath`) reintenta: si un ADMIN devuelve el rol un segundo después, la pestaña sigue con datos estáticos hasta una recarga completa, sin señal para el usuario. Es el precio deliberado de cortar el bucle de reautorización; la superficie UI del estado «realtime no disponible» quedó explícitamente fuera de alcance (sería un patrón nuevo — hoy `<Can>` gatea JSX renderizado, no capabilities de fondo). A evaluar junto con esa decisión: un único reintento de re-arme a intervalo largo, o un seam `onRealtimeUnavailable` que la superficie consuma. Ref: `pwa/src/context/shared/real-time/infrastructure/useMercureRealtime.ts` (`handleStreamError`).
@@ -627,7 +631,8 @@ severity: medium
 origin: revisión de tres capas de #1141, 2026-10-27
 location: pwa/src/components/ui, pwa/src/components/erpify, pwa/src/app/backoffice, pwa/src/context/backoffice/audit
 reason: #1141 lleva a 44 px (`any-pointer-coarse:`) la paginación keyset y los controles principales de las barras de filtros. El resto no se toca, porque arreglarlo en las variantes de `Button` o de `Input` afecta a todos los formularios y pide decisión de diseño.
-status: open
+status: done 2026-11-22
+resolution: any-pointer-coarse 44px in button-variants/input and the h-9 selects; chip-remove buttons 24px (44px on coarse). Class-string tests only: the Playwright touch-profile measurement was NOT done.
 severity: medium
 
 **Inventario medido el 2026-10-27 (alto en táctil, sin cambios respecto a escritorio):**
@@ -682,6 +687,8 @@ severity: medium
 - **Alternativa:** rellenar todas las ramas hasta un plazo fijo. Es más simple, pero el plazo tiene que cubrir el peor caso del SMTP (`MAILER_SMTP_TIMEOUT` por cada ida y vuelta).
 - **Al cerrar:** corregir D10 y el texto de §6 que remite a esta entrada.
 
+**2026-11-22:** not attempted: needs paired SMTP timing data and rework of synchronous tests that cannot run without vendor/docker.
+
 ### DW-75: La CSP de producción admite scripts inline
 
 origin: auditoría de seguridad de #1091, 2026-10-23
@@ -698,12 +705,15 @@ severity: medium
 - Ampliar `pwa/tests/next-config-headers.test.ts` para que falle si vuelve `'unsafe-inline'` en `script-src` de producción.
 - Medir el impacto en rendimiento antes de mergear, porque perder el render estático tiene coste.
 
+**2026-11-22:** img-src narrowed (no https:) and pinned by tests; script-src nonce NOT implemented — needs a running build to verify (steps in PRODUCTION_SECURITY_CHECKLIST §7). An `it.fails` test pins 'unsafe-inline'; flip it when the nonce lands.
+
 ### DW-76: La cookie de suscripción de Mercure sobrevive al cierre de sesión y a la suspensión
 
 origin: auditoría de seguridad de #1091, 2026-10-23
 location: api/src/Backoffice/Bank/Infrastructure/Controller/BankRealtimeAuthorizeController.php, api/src/Backoffice/BankAccount/Infrastructure/Controller/BankAccountRealtimeAuthorizeController.php, api/src/Iam/Session (revocación)
 reason: los dos controladores fijan `mercureAuthorization`, un JWT cuya vida no está fijada en la configuración, y nada en `api/src` la borra. Cerrar sesión, revocar sesiones, suspender o desactivar la dejan válida, y el hub no comprueba revocaciones. Solo expone ids de bancos y cuentas, sin IBAN ni titular.
-status: open
+status: done 2026-11-22
+resolution: sign-out clears mercureAuthorization; mercure default_cookie_lifetime 900. Residual: cookies in other browsers survive revocation/suspension up to 15 min; the two authorize endpoints overwrite each other's cookie. PHPUnit/PHPStan not run.
 severity: low
 
 **Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*The Mercure subscriber cookie outlives the session that obtained it*).

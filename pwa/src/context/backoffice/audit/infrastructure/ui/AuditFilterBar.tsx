@@ -47,7 +47,7 @@ const ACTOR_TYPE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 ];
 
 const SELECT_CLASS =
-  "border-border bg-background text-foreground focus-visible:ring-ring h-9 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none";
+  "border-border bg-background text-foreground focus-visible:ring-ring h-9 any-pointer-coarse:h-11 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none";
 
 interface AuditFilterBarProps {
   filter: AuditFilter;
