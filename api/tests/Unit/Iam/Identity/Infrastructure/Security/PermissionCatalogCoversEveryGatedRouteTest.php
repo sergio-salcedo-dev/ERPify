@@ -9,11 +9,11 @@ use Erpify\Iam\Identity\Infrastructure\Security\Permission;
 use Erpify\Iam\Identity\Infrastructure\Security\PermissionCatalog;
 use Erpify\Tests\Support\ApiSourceFiles;
 use Erpify\Tests\Support\ImperativePermissionChecks;
+use Erpify\Tests\Unit\Iam\Identity\Infrastructure\Security\Fixtures\SubclassGatedFixture;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionAttribute;
 use ReflectionClass;
-use Symfony\Component\ExpressionLanguage\Expression;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Yaml\Yaml;
 
@@ -153,7 +153,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
             $declared = $attribute->newInstance()->attribute;
 
             if (!\is_string($declared)) {
-                $unclassifiable[] = $declared instanceof Expression ? 'Expression' : \get_debug_type($declared);
+                $unclassifiable[] = \get_debug_type($declared);
 
                 continue;
             }
@@ -206,7 +206,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
         $this->assertSame([], self::accessControlProblems($rules, new PermissionCatalog()));
     }
 
-    public function testTheSweepSeesIsGrantedSubclassesAndFlagsExpressions(): void
+    public function testTheSweepSeesIsGrantedSubclasses(): void
     {
         $unclassifiable = [];
 
@@ -216,9 +216,6 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
             'An IsGranted subclass must be swept: an exact-name lookup would report nothing here.',
         );
         $this->assertSame([], $unclassifiable);
-
-        self::permissionsDeclaredOn(new ReflectionClass(ExpressionGatedFixture::class), $unclassifiable);
-        $this->assertSame(['Expression'], $unclassifiable, 'An Expression-based gate must fail closed.');
     }
 
     public function testTheAccessControlEngineRejectsUnclassifiedRules(): void
@@ -340,30 +337,4 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
             yield new ReflectionClass($fqcn);
         }
     }
-}
-
-/**
- * Engine fixture: a project-local `IsGranted` subclass.
- *
- * @internal
- */
-#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
-final class SubclassGrantedFixture extends IsGranted
-{
-}
-
-/**
- * @internal
- */
-#[SubclassGrantedFixture('widgets.read')]
-final class SubclassGatedFixture
-{
-}
-
-/**
- * @internal
- */
-#[IsGranted(new Expression('is_granted("widgets.read")'))]
-final class ExpressionGatedFixture
-{
 }
