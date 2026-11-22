@@ -682,7 +682,7 @@ severity: medium
 
 **Registrado en `PRODUCTION_SECURITY_CHECKLIST.md` §7** (*`/forgot-password` latency … — closed*).
 
-**Verification still owed (review 2026-11-22):** a paired timing run against a real relay and a check that the response is flushed before `kernel.terminate` under FrankenPHP. Neither exists; the closure is by construction. Deferred from the review: a gate restricting callers of `RequestPasswordReset::request` to the listener, explicit priorities between the two terminate listeners (a failed reset transaction could leave the EntityManager closed for the throttle audit), and a recording-logger test of the failure report.
+**Verification still owed (review 2026-11-22):** a paired timing run against a real relay and a check that the response is flushed before `kernel.terminate` under FrankenPHP. Neither exists; the closure is by construction. Review follow-ups: the caller gate now exists (`PasswordResetRequestCallerGateTest`); explicit priorities between the two terminate listeners are NOT needed (a request sets exactly one of the two attributes, so both never run for one request, and `RequestTransactionBoundaryListener` rolls back leaked transactions at -2048). Still owed: a recording-logger test of the failure report.
 
 **Para cerrarla:**
 - **Medir primero:** la diferencia contra un relay SMTP real, con muestras pareadas de una dirección activa y otra desconocida, como la medición que llevó la proyección del throttle a `kernel.terminate`.

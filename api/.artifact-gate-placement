@@ -189,6 +189,7 @@ tests/Unit/Gate/ObservabilityChannelGateTest.php :: home
 tests/Unit/Gate/OrmSortDirectionGateTest.php :: home
 tests/Unit/Gate/PersistentTransportPolicyGateTest.php :: home
 tests/Unit/Gate/PersistentTransportRoutingShapeGateTest.php :: home
+tests/Unit/Gate/PasswordResetRequestCallerGateTest.php :: home
 tests/Unit/Gate/PersonAddressParameterGateTest.php :: home
 tests/Unit/Gate/PersonContainmentRuleGateTest.php :: home
 tests/Unit/Gate/PersonDataCarrierEmitterGateTest.php :: home
