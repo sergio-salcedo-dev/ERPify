@@ -97,6 +97,10 @@ final class DocumentsReadContext extends AbstractContext implements Context
         $this->sealed[$id] = $scope;
 
         $this->entityManager->getConnection()->executeStatement(
+            'INSERT INTO document_series (id, created_at) VALUES (:id, NOW()) ON CONFLICT DO NOTHING',
+            ['id' => $id],
+        );
+        $this->entityManager->getConnection()->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, promoted_at, '
             . 'next_scan_at, created_at, updated_at) '
             . "VALUES (:id, :scope, :id, :uploader, 'ready', :digest, :size, NOW(), NOW(), NOW(), NOW())",

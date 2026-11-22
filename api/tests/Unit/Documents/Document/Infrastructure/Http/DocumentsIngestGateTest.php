@@ -21,7 +21,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 final class DocumentsIngestGateTest extends TestCase
 {
     #[DataProvider('provideIngestRoutes')]
-    public function testBothRoutesAnswer404WhileIngestIsDisabled(string $route): void
+    public function testEveryIngestRouteAnswers404WhileIngestIsDisabled(string $route): void
     {
         $this->expectException(NotFoundHttpException::class);
 
@@ -30,7 +30,7 @@ final class DocumentsIngestGateTest extends TestCase
 
     #[DataProvider('provideIngestRoutes')]
     #[\PHPUnit\Framework\Attributes\DoesNotPerformAssertions]
-    public function testBothRoutesPassWhileIngestIsEnabled(string $route): void
+    public function testEveryIngestRoutePassesWhileIngestIsEnabled(string $route): void
     {
         (new DocumentsIngestGate(true))->onRequest($this->eventFor($route));
     }
@@ -41,6 +41,7 @@ final class DocumentsIngestGateTest extends TestCase
     public static function provideIngestRoutes(): iterable
     {
         yield 'declare' => [UploadRoutes::DECLARE];
+        yield 'version declare' => [UploadRoutes::VERSION_DECLARE];
         yield 'content' => [UploadRoutes::CONTENT];
     }
 

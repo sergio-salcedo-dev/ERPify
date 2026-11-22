@@ -45,12 +45,17 @@ final readonly class DoctrineDocumentRepository implements DocumentRepository
         private EntityManagerInterface $entityManager,
         private Connection $connection,
         private DbalDocumentPromotions $promotions,
+        private DbalDocumentVersionSlots $series,
     ) {
     }
 
     #[Override]
     public function add(Document $document, DocumentCustody $firstCustody): void
     {
+        if (null === $document->predecessorId()) {
+            $this->series->open($document->seriesId());
+        }
+
         try {
             $this->entityManager->persist($document);
             $this->entityManager->persist($firstCustody);

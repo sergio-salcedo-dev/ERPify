@@ -10,7 +10,7 @@ Feature: Read the original of a document through an audited route
 
   # The Documents tables are not part of the per-feature fixture backup, so each scenario starts them empty.
   Background:
-    Given I execute the SQL query "TRUNCATE upload_intent, document_custody, document"
+    Given I execute the SQL query "TRUNCATE upload_intent, document_custody, document, document_series"
     And I add "Accept" header equal to "application/json"
 
   Scenario: An administrator reads the original and the read is audited once

@@ -73,13 +73,14 @@ final readonly class DoctrineUploadIntentRepository implements UploadIntentRepos
             . 'id, actor_id, scope_id, document_id, predecessor_id, state, declared_size, declared_sha256, key_hash, '
             . 'retention_reason, legal_basis, review_at, created_at, ttl_expires_at'
             . ') VALUES ('
-            . ':id, :actor_id, :scope_id, NULL, NULL, :state, :declared_size, :declared_sha256, :key_hash, '
+            . ':id, :actor_id, :scope_id, NULL, :predecessor_id, :state, :declared_size, :declared_sha256, :key_hash, '
             . ':retention_reason, :legal_basis, :review_at, :created_at, :ttl_expires_at'
             . ') ON CONFLICT (key_hash) DO NOTHING',
             [
                 'id' => $intent->id(),
                 'actor_id' => $intent->actorId(),
                 'scope_id' => $intent->scopeId(),
+                'predecessor_id' => $intent->predecessorId(),
                 'state' => $intent->state()->value,
                 'declared_size' => $intent->declaredSize(),
                 'declared_sha256' => $intent->declaredSha256(),

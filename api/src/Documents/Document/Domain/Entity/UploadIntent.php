@@ -60,9 +60,12 @@ final class UploadIntent
     #[ORM\Column(name: 'document_id', type: Types::GUID, nullable: true)]
     private ?string $documentId = null;
 
-    // Written NULL until versioning ships: the declare step has no predecessor field, so no successor is filed.
+    /**
+     * The version this upload is to succeed, named by the new-version declare and NULL for a first version. Only a
+     * request: the commit locks the predecessor and decides under the series lock, and the document copies its series
+     * from that locked row, never from here.
+     */
     #[ORM\Column(name: 'predecessor_id', type: Types::GUID, nullable: true, updatable: false)]
-    // @phpstan-ignore property.unusedType (Doctrine hydrates a successor's id once versioning exists)
     private ?string $predecessorId = null;
 
     #[ORM\Column(length: 16, enumType: UploadIntentState::class)]
@@ -129,6 +132,7 @@ final class UploadIntent
         LegalBasis $legalBasis,
         ?DateTimeImmutable $reviewAt,
         DateTimeImmutable $now,
+        ?string $predecessorId = null,
     ): self {
         if ($declaredSize < 1 || $declaredSize > UploadLimits::MAX_ORIGINAL_BYTES) {
             throw DeclaredSizeOutOfRange::create();
@@ -137,7 +141,11 @@ final class UploadIntent
         self::ensureIdentifiers($id, $actorId, $scopeId);
         self::ensureDigests($declaredSha256, $keyHash);
 
-        return new self(
+        if (null !== $predecessorId) {
+            self::ensureIdentifiers($predecessorId, $actorId, $scopeId);
+        }
+
+        $intent = new self(
             $id,
             $actorId,
             $scopeId,
@@ -149,6 +157,9 @@ final class UploadIntent
             $reviewAt,
             $now,
         );
+        $intent->predecessorId = $predecessorId;
+
+        return $intent;
     }
 
     /**
@@ -248,8 +259,10 @@ final class UploadIntent
         RetentionReason $retentionReason,
         LegalBasis $legalBasis,
         ?DateTimeImmutable $reviewAt,
+        ?string $predecessorId = null,
     ): bool {
-        return $this->declaredSize === $declaredSize
+        return $this->predecessorId === $predecessorId
+            && $this->declaredSize === $declaredSize
             && $this->declaredSha256 === $declaredSha256
             && $this->retentionReason === $retentionReason
             && $this->legalBasis === $legalBasis

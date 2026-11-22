@@ -7,14 +7,19 @@ namespace Erpify\Tests\Unit\Documents\Document\Infrastructure\Controller;
 use Erpify\Documents\Document\Application\Listing\DocumentNameOpener;
 use Erpify\Documents\Document\Application\Listing\ListDocuments;
 use Erpify\Documents\Document\Application\Listing\ReadCustodyTrail;
+use Erpify\Documents\Document\Application\Listing\ReadDocumentSeries;
 use Erpify\Documents\Document\Application\Query\CustodyTrailQuery;
+use Erpify\Documents\Document\Application\Query\DocumentSeriesQuery;
 use Erpify\Documents\Document\Application\Read\ErasureLedgerOverride;
 use Erpify\Documents\Document\Domain\Exception\DocumentGone;
 use Erpify\Documents\Document\Domain\Repository\DocumentCustodyRepository;
 use Erpify\Documents\Document\Domain\Repository\DocumentListingRepository;
+use Erpify\Documents\Document\Domain\Repository\DocumentSeriesRepository;
 use Erpify\Documents\Document\Infrastructure\Controller\DocumentCustodyController;
+use Erpify\Documents\Document\Infrastructure\Controller\DocumentSeriesController;
 use Erpify\Documents\Document\Infrastructure\Controller\ListDocumentsController;
 use Erpify\Documents\Document\Infrastructure\Http\DocumentListingMapper;
+use Erpify\Documents\Document\Infrastructure\Http\DocumentSeriesMapper;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
 use Erpify\Shared\Search\Application\Http\SearchQuery;
@@ -31,16 +36,17 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 /**
- * What both listing routes decide before they look anything up: HEAD is refused, a malformed id is a request-target
- * error, and an active erasure-ledger override answers `gone` whatever the id — with the repositories asserted never
- * to be reached, so "before any lookup" is the test's claim and not a reading of the code.
+ * What the three listing routes decide before they look anything up: HEAD is refused, a malformed id is a
+ * request-target error, and an active erasure-ledger override answers `gone` whatever the id — with the repositories
+ * asserted never to be reached, so "before any lookup" is the test's claim and not a reading of the code.
  *
  * @internal
  *
- * @SuppressWarnings("PHPMD.CouplingBetweenObjects") two controllers and every collaborator each is built from
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") three controllers and what each is built from
  */
 #[CoversClass(ListDocumentsController::class)]
 #[CoversClass(DocumentCustodyController::class)]
+#[CoversClass(DocumentSeriesController::class)]
 final class DocumentListingControllersTest extends TestCase
 {
     #[Test]
@@ -92,6 +98,26 @@ final class DocumentListingControllersTest extends TestCase
         $controller(new Request(), Uuid::generate(), new CustodyTrailQuery());
     }
 
+    #[Test]
+    public function theSeriesPageRefusesHeadBeforeAnyLookup(): void
+    {
+        $this->expectException(MethodNotAllowedHttpException::class);
+
+        $this->seriesPage(new InactiveErasureLedgerOverride())(
+            Request::create('/documents/series/x', Request::METHOD_HEAD),
+            Uuid::generate(),
+            new DocumentSeriesQuery(),
+        );
+    }
+
+    #[Test]
+    public function theSeriesPageAnswersGoneWhileTheOverrideIsActiveWhateverTheIdAndBeforeAnyLookup(): void
+    {
+        $this->expectException(DocumentGone::class);
+
+        $this->seriesPage($this->overridden())(new Request(), Uuid::generate(), new DocumentSeriesQuery());
+    }
+
     /**
      * A listing repository that fails the test the moment it is read.
      *
@@ -129,6 +155,20 @@ final class DocumentListingControllersTest extends TestCase
                 new DocumentNameOpener($this->createStub(EnvelopeEncryptor::class)),
             ),
             new DocumentListingMapper(),
+            (new ReflectionClass(ResourceResponder::class))->newInstanceWithoutConstructor(),
+            $override,
+        );
+    }
+
+    private function seriesPage(ErasureLedgerOverride $override): DocumentSeriesController
+    {
+        $series = $this->createMock(DocumentSeriesRepository::class);
+        $series->expects($this->never())->method('exists');
+        $series->expects($this->never())->method('versionsOf');
+
+        return new DocumentSeriesController(
+            new ReadDocumentSeries($series),
+            new DocumentSeriesMapper(),
             (new ReflectionClass(ResourceResponder::class))->newInstanceWithoutConstructor(),
             $override,
         );

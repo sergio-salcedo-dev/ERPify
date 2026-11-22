@@ -7,14 +7,16 @@ namespace Erpify\Documents\Document\Domain\Entity;
 use DateTimeImmutable;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Erpify\Documents\Document\Domain\DocumentIdentifiers;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\ErasedPersonMarker;
 use Erpify\Documents\Document\Domain\Exception\DocumentNotReadable;
+use Erpify\Documents\Document\Domain\Exception\PredecessorNotReady;
 use Erpify\Documents\Document\Domain\IntakeMetadata;
+use Erpify\Documents\Document\Domain\OriginalContent;
 use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Kernel\Domain\Aggregate\AggregateRoot;
 use Erpify\Shared\Privacy\Domain\PersonSubjectReference;
-use Erpify\Shared\Uuid\Domain\Uuid;
 use InvalidArgumentException;
 
 /**
@@ -23,9 +25,12 @@ use InvalidArgumentException;
  * same transaction as the snapshot change (`docs/adr/documents-custody-log.md`).
  *
  * **Each version is its own aggregate.** `seriesId` links it to its series by a scalar and `predecessorId` to
- * the version it replaces; nothing else about versioning exists. Both are written once and have no setter and
- * no UPDATE path (`updatable: false`): this story only files first versions, so `seriesId` is the row's own
- * id and `predecessorId` is `NULL`, and no series aggregate, cycle check or walk-up exists to maintain them.
+ * the version it replaces. Both are written once and have no setter and no UPDATE path (`updatable: false`): a
+ * first version is its own series with no predecessor ({@see receive()}), and a successor copies the series of the
+ * predecessor it is handed, which the caller has locked and which must be `Ready` ({@see succeed()}). Whether the
+ * predecessor's slot is free is not this aggregate's to know — it spans other versions — and is decided under the
+ * series lock (`DocumentVersionSlots`). Ids are minted, never reused, and a predecessor exists before its successor,
+ * so the links cannot close a cycle.
  *
  * **`scopeId` is random and never derived from the document id.** It names the encryption scope that seals
  * the bytes (`EncryptionScopeId::forDocument()`); a scope derived from the document id would let anyone who
@@ -81,8 +86,6 @@ final class Document extends AggregateRoot
 
     public const string IDEMPOTENCY_KEY_CONSTRAINT = 'uniq_document_idempotency_key_hash';
 
-    private const int DIGEST_HEX_LENGTH = 64;
-
     private const string NEXT_SCAN_AT_FALLBACK = '1970-01-01 00:00:00+00';
 
     #[ORM\Column(name: 'scope_id', type: Types::GUID, updatable: false)]
@@ -91,10 +94,8 @@ final class Document extends AggregateRoot
     #[ORM\Column(name: 'series_id', type: Types::GUID, updatable: false)]
     private string $seriesId;
 
-    // Only first versions are filed here; a successor is a different way in, and it brings its own argument.
     #[ORM\Column(name: 'predecessor_id', type: Types::GUID, nullable: true, updatable: false)]
-    // @phpstan-ignore property.unusedType (Doctrine hydrates a successor's id; only first versions are filed here)
-    private ?string $predecessorId = null;
+    private ?string $predecessorId;
 
     #[ORM\Column(name: 'uploader_id', type: Types::GUID)]
     #[PersonSubjectReference(erasedBy: 'src/Documents/Document/Application/PurgeUserDocumentReferences.php')]
@@ -103,13 +104,13 @@ final class Document extends AggregateRoot
     #[ORM\Column(length: 16, enumType: DocumentState::class)]
     private DocumentState $state = DocumentState::Received;
 
-    #[ORM\Column(length: self::DIGEST_HEX_LENGTH, updatable: false)]
+    #[ORM\Column(length: OriginalContent::DIGEST_HEX_LENGTH, updatable: false)]
     private string $digest;
 
     #[ORM\Column(name: 'size_bytes', type: Types::INTEGER, updatable: false)]
     private int $sizeBytes;
 
-    #[ORM\Column(name: 'idempotency_key_hash', length: self::DIGEST_HEX_LENGTH, nullable: true)]
+    #[ORM\Column(name: 'idempotency_key_hash', length: OriginalContent::DIGEST_HEX_LENGTH, nullable: true)]
     private ?string $idempotencyKeyHash;
 
     /**
@@ -280,13 +281,11 @@ final class Document extends AggregateRoot
     private ?DateTimeImmutable $leaseExpiresAt = null;
 
     private function __construct(
-        string $id,
-        string $scopeId,
-        string $uploaderId,
-        string $digest,
-        int $sizeBytes,
+        DocumentIdentifiers $identifiers,
+        OriginalContent $content,
         ?string $idempotencyKeyHash,
         IntakeMetadata $intake,
+        ?self $predecessor,
         /**
          * When the scan sweep may next claim the document. Filed as the instant the document was received — the
          * upload commit passes its transaction's database time — so one sweep also re-drives a lost first message.
@@ -302,15 +301,15 @@ final class Document extends AggregateRoot
     ) {
         parent::__construct();
 
-        $this->ensureIdentifiers($id, $scopeId, $uploaderId);
-        $this->ensureContent($digest, $sizeBytes, $idempotencyKeyHash);
+        $this->ensureIdempotencyKeyHash($idempotencyKeyHash);
 
-        $this->id = $id;
-        $this->scopeId = $scopeId;
-        $this->seriesId = $id;
-        $this->uploaderId = $uploaderId;
-        $this->digest = $digest;
-        $this->sizeBytes = $sizeBytes;
+        $this->id = $identifiers->id;
+        $this->scopeId = $identifiers->scopeId;
+        $this->seriesId = $predecessor instanceof self ? $predecessor->seriesId : $identifiers->id;
+        $this->predecessorId = $predecessor?->documentId();
+        $this->uploaderId = $identifiers->uploaderId;
+        $this->digest = $content->digest;
+        $this->sizeBytes = $content->sizeBytes;
         $this->idempotencyKeyHash = $idempotencyKeyHash;
         $this->filenameCiphertext = $intake->filenameCiphertext;
         $this->retentionReason = $intake->retentionReason;
@@ -323,24 +322,52 @@ final class Document extends AggregateRoot
      * and supplies the random scope id; nothing here reads a byte.
      */
     public static function receive(
-        string $id,
-        string $scopeId,
-        string $uploaderId,
-        string $digest,
-        int $sizeBytes,
+        DocumentIdentifiers $identifiers,
+        OriginalContent $content,
         ?string $idempotencyKeyHash = null,
         ?IntakeMetadata $intake = null,
         ?DateTimeImmutable $receivedAt = null,
     ): self {
         return new self(
-            $id,
-            $scopeId,
-            $uploaderId,
-            $digest,
-            $sizeBytes,
+            $identifiers,
+            $content,
             $idempotencyKeyHash,
             $intake ?? new IntakeMetadata(),
+            null,
             $receivedAt ?? SystemClock::now(),
+        );
+    }
+
+    /**
+     * Files a new version of the predecessor's series in `Received`, linked to it. The predecessor is the row the
+     * caller loaded under its lock, so the series is copied from the database, never from a caller; it must be
+     * `Ready`, because a version that is not yet readable, or no longer is, has nothing a successor could replace.
+     *
+     * @throws PredecessorNotReady when the predecessor is in any state but `Ready`
+     */
+    public static function succeed(
+        self $predecessor,
+        DocumentIdentifiers $identifiers,
+        OriginalContent $content,
+        ?string $idempotencyKeyHash,
+        IntakeMetadata $intake,
+        DateTimeImmutable $receivedAt,
+    ): self {
+        if (DocumentState::Ready !== $predecessor->state) {
+            throw PredecessorNotReady::create();
+        }
+
+        if ($predecessor->documentId() === $identifiers->id) {
+            throw new InvalidArgumentException('A version cannot succeed itself.');
+        }
+
+        return new self(
+            $identifiers,
+            $content,
+            $idempotencyKeyHash,
+            $intake,
+            $predecessor,
+            $receivedAt,
         );
     }
 
@@ -488,52 +515,12 @@ final class Document extends AggregateRoot
         }
     }
 
-    /**
-     * Every identifier is a lower-case UUID, so one row has one spelling, and the scope is never the document.
-     */
-    private function ensureIdentifiers(string $id, string $scopeId, string $uploaderId): void
+    private function ensureIdempotencyKeyHash(?string $idempotencyKeyHash): void
     {
-        foreach ([$id, $scopeId, $uploaderId] as $identifier) {
-            Uuid::ensure($identifier);
-
-            if (\strtolower($identifier) !== $identifier) {
-                throw new InvalidArgumentException('Identifiers must be lower-case UUIDs.');
-            }
-        }
-
-        if (ErasedPersonMarker::UUID === $uploaderId) {
-            throw new InvalidArgumentException('The erased-person marker is written by the erasure, never filed.');
-        }
-
-        if ($scopeId === $id) {
-            throw new InvalidArgumentException('The encryption scope id must not be the document id.');
-        }
-    }
-
-    private function ensureContent(string $digest, int $sizeBytes, ?string $idempotencyKeyHash): void
-    {
-        if ($this->isNotHexDigest($digest)) {
-            throw new InvalidArgumentException(
-                'The digest must be a 64-character lower-case hexadecimal SHA-256 string.',
-            );
-        }
-
-        if (null !== $idempotencyKeyHash && $this->isNotHexDigest($idempotencyKeyHash)) {
+        if (null !== $idempotencyKeyHash && !OriginalContent::isSha256Hex($idempotencyKeyHash)) {
             throw new InvalidArgumentException(
                 'The idempotency key hash must be a 64-character lower-case hexadecimal string.',
             );
         }
-
-        if ($sizeBytes <= 0) {
-            throw new InvalidArgumentException('The size must be a positive number of bytes.');
-        }
-    }
-
-    /**
-     * `D` is load-bearing: without it `$` also matches before a trailing newline.
-     */
-    private function isNotHexDigest(string $value): bool
-    {
-        return 1 !== \preg_match('/^[0-9a-f]{64}$/D', $value);
     }
 }

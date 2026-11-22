@@ -11,8 +11,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
- * Answers 404 on both ingest routes while `documents.ingest_enabled` is false — before authentication runs, so
- * a disabled ingest looks the same to everyone. The flag is independent of `documents.read_enabled`, defaults
+ * Answers 404 on the ingest routes — the declare, the new-version declare and the PUT — while
+ * `documents.ingest_enabled` is false, before authentication runs, so a disabled ingest looks the same to everyone. The
+ * flag is independent of `documents.read_enabled`, defaults
  * to false outside dev and test, and may only be set true in tracked production configuration together with a
  * valid restore proof for the declared backup mechanism (`DocumentsIngestProofGateTest`).
  *
@@ -37,7 +38,7 @@ final readonly class DocumentsIngestGate
 
         $route = $event->getRequest()->attributes->get('_route');
 
-        if (UploadRoutes::DECLARE === $route || UploadRoutes::CONTENT === $route) {
+        if (\in_array($route, [UploadRoutes::DECLARE, UploadRoutes::VERSION_DECLARE, UploadRoutes::CONTENT], true)) {
             throw new NotFoundHttpException();
         }
     }
