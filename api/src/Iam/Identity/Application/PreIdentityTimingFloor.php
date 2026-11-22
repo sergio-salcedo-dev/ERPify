@@ -13,8 +13,9 @@ namespace Erpify\Iam\Identity\Application;
  * The floor equalises the DOMINANT term of the timing oracle — the credential KDF (tens of milliseconds) —
  * not every micro-difference: the residual read-vs-write differential of the silent paths is sub-millisecond
  * and drowns in the KDF's own variance. Should that residue ever become measurable, the mitigation is to
- * equalise the store work inside this same envelope, never to defer the write (async would break
- * read-your-writes for the legitimate requester).
+ * equalise the store work inside this same envelope. Forgot-password has since taken the other route: its
+ * controller pays this floor once and the reset work itself runs on `kernel.terminate`, so no branch's store
+ * work shows in the response.
  */
 interface PreIdentityTimingFloor
 {

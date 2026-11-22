@@ -32,11 +32,13 @@ use Throwable;
  * as typed, which the request itself already held.
  *
  * NOTHING HERE ESCAPES. The response is already sent, so an exception would answer nobody and could only take
- * a worker down; it is reported on the always-on `observability` channel instead, with no address and no token
- * in the line. A request that dies before the terminate phase (a worker kill, a platform timeout) loses the
+ * a worker down; it is reported on the always-on `observability` channel instead, with the exception CLASS
+ * only: a Doctrine, DBAL or mailer message can embed the address or a bound parameter, and that channel has no
+ * erasure path. A request that dies before the terminate phase (a worker kill, a platform timeout) loses the
  * reset: the requester sees a 202 and no mail, and asks again — the same outcome as a mail the relay refused.
  * The ASSUMPTION is a SAPI that flushes the response before running terminate listeners (FrankenPHP and
- * PHP-FPM do, through `Symfony\Component\Runtime`); on one that does not, the work is merely in-band again.
+ * PHP-FPM are expected to, through `Symfony\Component\Runtime`; no test proves it); on one that does not, the
+ * work is merely in-band again and the oracle returns.
  *
  * `kernel.terminate` runs after `finishRequest()` has popped the request, so it is pushed back for the
  * duration: the events the use case publishes are stamped from the current request, and without it they would
@@ -71,6 +73,8 @@ final readonly class PasswordResetRequestListener
             return;
         }
 
+        // Consumed before running: a second terminate dispatch for the same request must not mint a second token.
+        $request->attributes->remove(self::TARGET_ATTRIBUTE);
         $this->requestStack->push($request);
 
         try {
@@ -90,7 +94,7 @@ final readonly class PasswordResetRequestListener
         try {
             $this->logger->error(
                 'Password reset requested; the deferred issue-and-send failed.',
-                ['exception' => $failure],
+                ['exception_class' => $failure::class],
             );
         } catch (Throwable) {
             // Nothing left to report to.
