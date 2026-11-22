@@ -30,15 +30,18 @@ vi.mock("next/server", () => {
       this.status = init?.status ?? 200;
       this.headers = new Headers(init?.headers);
     }
-    static next(): FakeNextResponse {
+    forwardedHeaders?: Headers;
+    static next(init?: { request?: { headers?: Headers } }): FakeNextResponse {
       const response = new FakeNextResponse();
       response.kind = "next";
+      response.forwardedHeaders = init?.request?.headers;
       return response;
     }
-    static rewrite(destination: URL): FakeNextResponse {
+    static rewrite(destination: URL, init?: { request?: { headers?: Headers } }): FakeNextResponse {
       const response = new FakeNextResponse();
       response.kind = "rewrite";
       response.destination = destination;
+      response.forwardedHeaders = init?.request?.headers;
       return response;
     }
   }
@@ -72,6 +75,7 @@ type ProxyDecision = {
   destination?: URL;
   status?: number;
   headers?: Headers;
+  forwardedHeaders?: Headers;
 };
 function runProxy(pathname: string, init?: RequestInit): ProxyDecision {
   const result: unknown = proxy(fakeRequest(pathname, init));
@@ -105,17 +109,81 @@ describe("isDevToolRoute", () => {
   });
 });
 
-describe("proxy.config.matcher — domain ↔ static-literal parity", () => {
-  // Turbopack requires `config.matcher` to be a static literal, so we
-  // can't derive it from `DEV_TOOL_ROUTE_PREFIXES` at runtime. The two
-  // are duplicated by necessity — this test fails the build the moment
-  // they drift.
-  it("contains the dev-tool prefixes plus the monitoring tunnel entries", () => {
-    const devToolEntries = DEV_TOOL_ROUTE_PREFIXES.flatMap((prefix) => [
-      prefix,
-      `${prefix}/:path*`,
-    ]);
-    expect(config.matcher).toEqual([...devToolEntries, "/monitoring", "/monitoring/:path*"]);
+describe("proxy.config.matcher", () => {
+  // Turbopack requires `config.matcher` to be a static literal. It must cover pages
+  // (the nonce) and the dev-tool prefixes (production 404) and `/monitoring` (rate
+  // limit), and must skip Next's static assets, the image optimiser and the favicon.
+  it("is a single catch-all that excludes only static assets", () => {
+    expect(config.matcher).toEqual(["/((?!api|_next/static|_next/image|favicon.ico).*)"]);
+    const pattern = new RegExp(`^${config.matcher[0]}$`);
+    for (const path of [
+      "/",
+      "/login",
+      "/backoffice/banks/abc",
+      "/monitoring",
+      ...DEV_TOOL_ROUTE_PREFIXES,
+    ]) {
+      expect(pattern.test(path), path).toBe(true);
+    }
+    for (const path of ["/_next/static/chunks/a.js", "/_next/image", "/favicon.ico", "/api/v1/x"]) {
+      expect(pattern.test(path), path).toBe(false);
+    }
+  });
+});
+
+describe("proxy — per-request CSP nonce", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  function nonceOf(policy: string | null | undefined): string {
+    const match = /'nonce-([^']+)'/.exec(policy ?? "");
+    if (!match?.[1]) throw new Error(`no nonce in: ${policy}`);
+    return match[1];
+  }
+
+  it("sets one policy with the same nonce on the forwarded request, x-nonce and the response", () => {
+    vi.stubEnv("NODE_ENV", NodeEnv.PRODUCTION);
+    const result = runProxy("/login");
+    const responsePolicy = result.headers?.get("Content-Security-Policy");
+    const requestPolicy = result.forwardedHeaders?.get("Content-Security-Policy");
+
+    expect(requestPolicy).toBe(responsePolicy);
+    expect(result.forwardedHeaders?.get("x-nonce")).toBe(nonceOf(responsePolicy));
+    expect(responsePolicy).toContain("'strict-dynamic'");
+    const scriptSrc = responsePolicy?.split("; ").find((part) => part.startsWith("script-src"));
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+  });
+
+  it("mints a different nonce for every request", () => {
+    const first = nonceOf(runProxy("/").headers?.get("Content-Security-Policy"));
+    const second = nonceOf(runProxy("/").headers?.get("Content-Security-Policy"));
+    expect(second).not.toBe(first);
+  });
+
+  it("overwrites a client-supplied x-nonce and Content-Security-Policy", () => {
+    const request = fakeRequest("/login");
+    request.headers.set("x-nonce", "attacker");
+    request.headers.set("Content-Security-Policy", "script-src 'unsafe-inline'");
+    const result = proxy(request) as unknown as ProxyDecision;
+    expect(result.forwardedHeaders?.get("x-nonce")).not.toBe("attacker");
+    expect(result.forwardedHeaders?.get("Content-Security-Policy")).toContain("'nonce-");
+    expect(result.headers?.get("Content-Security-Policy")).not.toContain(
+      "script-src 'unsafe-inline'",
+    );
+  });
+
+  it("carries the nonce on the dev-tools production rewrite too", () => {
+    vi.stubEnv("NODE_ENV", NodeEnv.PRODUCTION);
+    const result = runProxy("/backoffice/dev-tools");
+    expect(result.kind).toBe("rewrite");
+    expect(result.headers?.get("Content-Security-Policy")).toContain("'nonce-");
+    expect(result.forwardedHeaders?.get("x-nonce")).toBeTruthy();
+  });
+
+  it("admits 'unsafe-eval' only outside production", () => {
+    vi.stubEnv("NODE_ENV", NodeEnv.DEVELOPMENT);
+    expect(runProxy("/").headers?.get("Content-Security-Policy")).toContain("'unsafe-eval'");
+    vi.stubEnv("NODE_ENV", NodeEnv.PRODUCTION);
+    expect(runProxy("/").headers?.get("Content-Security-Policy")).not.toContain("'unsafe-eval'");
   });
 });
 

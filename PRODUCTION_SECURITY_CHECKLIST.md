@@ -2530,14 +2530,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       the recovery-throttle audit projection: answer first, issue and send after the response is on the wire —
       or pad every branch to one deadline.
 
-- [ ] **Production CSP admits inline script.** `pwa/next.config.ts` emits `script-src 'self' 'unsafe-inline'`
-      with no nonce, so the policy adds nothing against an injected script. (`img-src` was narrowed to
-      `'self'` plus the API origin, so it is no longer an exfiltration channel; pinned in
-      `pwa/tests/next-config-headers.test.ts`.) No injection sink exists in `pwa/src` today
-      (`dangerouslySetInnerHTML`, `innerHTML`, `eval` and every dynamic `href` are refused or routed through
-      `safeHref`); this is the second line being inert, not the first being breached. Accepted "for now" in
-      `pwa/CLAUDE.md` and recorded nowhere a decider reads until this entry. **The fix** is a per-request nonce
-      minted in `pwa/src/proxy.ts`, which needs its matcher widened, the root layout rendered dynamically (`await connection()`), the CSP moved out of `next.config.ts` (two CSP headers intersect) and the nonce handed to next-themes' inline script; unverified without a running app, and the pinned `it.fails` in the headers test flips to a plain `it` when it lands.
+- [x] **Production CSP admitted inline script — closed.** `script-src` was `'self' 'unsafe-inline'`, so the
+      policy added nothing against an injected script. `pwa/src/proxy.ts` now mints a nonce per request and
+      sets `script-src 'self' 'nonce-…' 'strict-dynamic'` (no `'unsafe-inline'`; `'unsafe-eval'` only in
+      development) on the forwarded request, the response and `x-nonce`; `next.config.ts` no longer emits a CSP
+      (two headers intersect), the root layout reads `headers()` and hands the nonce to next-themes. `img-src`
+      is `'self'` plus the API origin. Pinned by `pwa/tests/proxy.test.ts`,
+      `pwa/tests/context/shared/content-security-policy/` and `pwa/tests/next-config-headers.test.ts`.
+      **Verified** against `next build` + `next start` in Chromium: `/`, `/login`, `/status` and a 404 send a
+      fresh nonce, every `<script>` carries it, no CSP violation, hydration and the theme toggle work, and a
+      parser-inserted un-nonced inline script is blocked. **Residuals:** `style-src` still has `'unsafe-inline'`
+      (React `style` attributes cannot take a nonce); every route is now rendered per request (the 67 static
+      routes became dynamic — a cost accepted for the control); `'strict-dynamic'` makes any nonced or
+      script-created script trusted, so an injection that reaches a trusted script's DOM sink still runs;
+      browsers without `'strict-dynamic'` fall back to `'self'`. Not verified: the Docker/Caddy path, the dev
+      server (HMR with `'unsafe-eval'`), or `/monitoring` delivering a real event to Sentry.
 
 - [x] **The Mercure subscriber cookie outlives the session that obtained it — closed.** The two realtime
       authorize controllers set `mercureAuthorization`, a JWT the hub accepts without checking revocation.

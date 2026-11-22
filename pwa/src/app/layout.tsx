@@ -11,6 +11,7 @@ import { AuthProvider } from "@/context/shared/access/infrastructure/ui";
 import { isDevToolsAvailable } from "@/context/shared/dev-tools/domain/isDevToolsAvailable";
 import { isAutomatedTestRequest } from "@/context/shared/dev-tools/infrastructure/isAutomatedTestRequest";
 import { SymfonyDebugToolbar } from "@/context/shared/dev-tools/infrastructure/ui/SymfonyDebugToolbar";
+import { headers } from "next/headers";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -34,6 +35,10 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Reading the request headers opts every page into per-request rendering, which the
+  // CSP nonce requires: `proxy.ts` mints it per request and Next stamps it onto its own
+  // scripts only while rendering one. Static prerendering has no request to read it from.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   const frankenHotReloadUrl = await fetchFrankenPhpHotReloadSubscribeUrl();
   // Skip the dev toolbar under Playwright: its injected profiler DOM (the AJAX
   // panel grows a row per /api call) otherwise pollutes document-wide e2e
@@ -64,6 +69,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           attribute="class"
           defaultTheme={Theme.SYSTEM}
           enableSystem
+          nonce={nonce}
           storageKey={THEME_STORAGE_KEY}
           disableTransitionOnChange
         >

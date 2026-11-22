@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import nextConfig from "../next.config";
 
 /**
@@ -62,56 +62,13 @@ describe("next.config headers — Referrer-Policy", () => {
   );
 });
 
-function directive(csp: string, name: string): string | undefined {
-  return csp
-    .split(";")
-    .map((part) => part.trim())
-    .find((part) => part === name || part.startsWith(`${name} `));
-}
-
-async function cspFor(env: { nodeEnv: string; apiBase?: string }): Promise<string> {
-  vi.stubEnv("NODE_ENV", env.nodeEnv);
-  vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", env.apiBase ?? "");
-  const entries = await headerEntries();
-  const global = entries.find((entry) => entry.source === GLOBAL_SOURCE);
-  const value = global?.headers.find((header) => header.key === "Content-Security-Policy")?.value;
-  if (value === undefined) throw new Error("catch-all entry must carry a CSP");
-  return value;
-}
-
 describe("next.config headers — Content-Security-Policy", () => {
-  afterEach(() => vi.unstubAllEnvs());
-
-  it("never admits a blanket https: origin in img-src", async () => {
-    for (const nodeEnv of ["production", "development"]) {
-      const img = directive(await cspFor({ nodeEnv }), "img-src");
-      expect(img).toBe("img-src 'self' data: blob:");
+  it("sets no CSP of its own: the nonce policy lives in src/proxy.ts and a second header would intersect with it", async () => {
+    const entries = await headerEntries();
+    for (const entry of entries) {
+      expect(entry.headers.map((header) => header.key.toLowerCase())).not.toContain(
+        "content-security-policy",
+      );
     }
-  });
-
-  it("limits img-src to self plus the API origin when one is configured", async () => {
-    const csp = await cspFor({ nodeEnv: "production", apiBase: "https://api.example.test/v1" });
-    expect(directive(csp, "img-src")).toBe("img-src 'self' data: blob: https://api.example.test");
-  });
-
-  it("keeps 'unsafe-eval' out of production script-src", async () => {
-    expect(directive(await cspFor({ nodeEnv: "production" }), "script-src")).not.toContain(
-      "'unsafe-eval'",
-    );
-  });
-
-  it("pins the current DW-75 gap: production script-src still declares 'unsafe-inline'", async () => {
-    const scriptSrc = directive(await cspFor({ nodeEnv: "production" }), "script-src");
-
-    expect(scriptSrc).toBeDefined();
-    expect(scriptSrc).toContain("'unsafe-inline'");
-  });
-
-  // DW-75 open item: production script-src still carries 'unsafe-inline' until the per-request
-  // nonce lands in src/proxy.ts. Flip this to a plain `it` (and delete the pin below) then.
-  it.fails("production script-src has no 'unsafe-inline'", async () => {
-    expect(directive(await cspFor({ nodeEnv: "production" }), "script-src")).not.toContain(
-      "'unsafe-inline'",
-    );
   });
 });
