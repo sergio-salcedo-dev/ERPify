@@ -12,17 +12,12 @@ use Erpify\Iam\Session\Domain\SessionId;
 use Erpify\Iam\Session\Infrastructure\Controller\RevokeCurrentSessionController;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
+use Erpify\Tests\Double\Mercure\LegacyProtocolAuthorization;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
-use Symfony\Component\Mercure\Authorization;
-use Symfony\Component\Mercure\Hub;
-use Symfony\Component\Mercure\HubRegistry;
-use Symfony\Component\Mercure\Jwt\LcobucciFactory;
-use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
-use Symfony\Component\Mercure\ProtocolVersion;
 
 /**
  * "Sign out this device" must be durable: a store outage on the revoke must not leave the cookie live and the
@@ -66,10 +61,14 @@ final class RevokeCurrentSessionControllerTest extends TestCase
 
         $response = ($this->controller($store))($request);
 
-        $cookies = \array_values(\array_filter(
-            $response->headers->getCookies(),
-            static fn ($cookie): bool => 'mercureAuthorization' === $cookie->getName(),
-        ));
+        $cookies = [];
+
+        foreach ($response->headers->getCookies() as $cookie) {
+            if ('mercureAuthorization' === $cookie->getName()) {
+                $cookies[] = $cookie;
+            }
+        }
+
         $this->assertCount(1, $cookies);
         $this->assertNull($cookies[0]->getValue());
         $this->assertTrue($cookies[0]->isCleared(), 'the cookie must be expired so the browser drops it');
@@ -91,12 +90,7 @@ final class RevokeCurrentSessionControllerTest extends TestCase
         return new RevokeCurrentSessionController(
             $currentSession,
             $revokeSession,
-            new Authorization(new HubRegistry(new Hub(
-                'https://localhost/.well-known/mercure',
-                new StaticTokenProvider('unused'),
-                new LcobucciFactory('test-secret-not-a-real-credential-0123456789abcdef', protocolVersion: ProtocolVersion::Legacy),
-                protocolVersion: ProtocolVersion::Legacy,
-            ))),
+            LegacyProtocolAuthorization::create(),
             new NullLogger(),
         );
     }

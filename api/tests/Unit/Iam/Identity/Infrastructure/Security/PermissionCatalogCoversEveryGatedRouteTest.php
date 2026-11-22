@@ -99,7 +99,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
             . 'so it no longer exercises the method path.',
         );
         $this->assertNotEmpty(
-            self::isGrantedAttributesOf($methodGated),
+            $this->isGrantedAttributesOf($methodGated),
             'The sweep must read #[IsGranted] declared on methods, not just on classes.',
         );
     }
@@ -118,7 +118,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
         foreach ($this->classesUnderApiSrc() as $reflectionClass) {
             $unclassifiable = [];
 
-            foreach (self::permissionsDeclaredOn($reflectionClass, $unclassifiable) as $permission) {
+            foreach ($this->permissionsDeclaredOn($reflectionClass, $unclassifiable) as $permission) {
                 $gated[$permission] = $reflectionClass->getShortName();
             }
 
@@ -141,15 +141,15 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
      * @template T of object
      *
      * @param ReflectionClass<T> $reflectionClass
-     * @param list<string>       $unclassifiable receives a description of each non-string attribute argument
+     * @param list<string>       $unclassifiable  receives a description of each non-string attribute argument
      *
      * @return list<string>
      */
-    private static function permissionsDeclaredOn(ReflectionClass $reflectionClass, array &$unclassifiable): array
+    private function permissionsDeclaredOn(ReflectionClass $reflectionClass, array &$unclassifiable): array
     {
         $permissions = [];
 
-        foreach (self::isGrantedAttributesOf($reflectionClass) as $attribute) {
+        foreach ($this->isGrantedAttributesOf($reflectionClass) as $attribute) {
             $declared = $attribute->newInstance()->attribute;
 
             if (!\is_string($declared)) {
@@ -177,7 +177,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
      *
      * @return list<ReflectionAttribute<IsGranted>>
      */
-    private static function isGrantedAttributesOf(ReflectionClass $reflectionClass): array
+    private function isGrantedAttributesOf(ReflectionClass $reflectionClass): array
     {
         $attributes = $reflectionClass->getAttributes(IsGranted::class, ReflectionAttribute::IS_INSTANCEOF);
 
@@ -199,11 +199,15 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
     public function testAccessControlRulesDoNotGateApiPathsOutsideTheCatalog(): void
     {
         $config = Yaml::parseFile(\dirname(__DIR__, 6) . '/config/packages/security.yaml', Yaml::PARSE_CONSTANT);
-        $rules = $config['security']['access_control'] ?? null;
+        $this->assertIsArray($config);
+        $security = $config['security'] ?? null;
+        $this->assertIsArray($security);
+        $rules = $security['access_control'] ?? null;
 
         $this->assertIsArray($rules, 'security.yaml no longer declares access_control: update this sweep.');
         $this->assertNotEmpty($rules);
-        $this->assertSame([], self::accessControlProblems($rules, new PermissionCatalog()));
+        $rules = \array_values(\array_filter($rules, 'is_array'));
+        $this->assertSame([], $this->accessControlProblems($rules, new PermissionCatalog()));
     }
 
     public function testTheSweepSeesIsGrantedSubclasses(): void
@@ -212,7 +216,7 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
 
         $this->assertSame(
             ['widgets.read'],
-            self::permissionsDeclaredOn(new ReflectionClass(SubclassGatedFixture::class), $unclassifiable),
+            $this->permissionsDeclaredOn(new ReflectionClass(SubclassGatedFixture::class), $unclassifiable),
             'An IsGranted subclass must be swept: an exact-name lookup would report nothing here.',
         );
         $this->assertSame([], $unclassifiable);
@@ -222,35 +226,36 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
     {
         $catalog = new PermissionCatalog();
 
-        $this->assertSame([], self::accessControlProblems([
+        $this->assertSame([], $this->accessControlProblems([
             ['path' => '^/api/v1/health$', 'roles' => 'PUBLIC_ACCESS'],
             ['path' => '^/api', 'roles' => 'IS_AUTHENTICATED_FULLY'],
         ], $catalog));
-        $this->assertCount(1, self::accessControlProblems([
+        $this->assertCount(1, $this->accessControlProblems([
             ['path' => '^/api/v1/x$', 'roles' => 'widgets.read'],
         ], $catalog), 'A permission absent from the catalog must be reported.');
-        $this->assertCount(1, self::accessControlProblems([
+        $this->assertCount(1, $this->accessControlProblems([
             ['path' => '^/api/v1/x$', 'roles' => 'IS_AUTHENTICATED_FULLY', 'allow_if' => 'true'],
         ], $catalog), 'An allow_if expression must fail closed.');
-        $this->assertCount(1, self::accessControlProblems([
+        $this->assertCount(1, $this->accessControlProblems([
             ['path' => '^/api/v1/x$', 'roles' => ['ROLE_ADMIN']],
         ], $catalog), 'A role gate on an API path is not a catalog permission and must be classified.');
-        $this->assertSame([], self::accessControlProblems([
+        $this->assertSame([], $this->accessControlProblems([
             ['path' => '^/admin', 'roles' => 'ROLE_ADMIN'],
         ], $catalog), 'Rules outside /api are out of scope.');
     }
 
     /**
-     * @param list<array<string, mixed>> $rules
+     * @param list<array<mixed>> $rules
      *
      * @return list<string>
      */
-    private static function accessControlProblems(array $rules, PermissionCatalog $catalog): array
+    private function accessControlProblems(array $rules, PermissionCatalog $catalog): array
     {
         $problems = [];
 
         foreach ($rules as $rule) {
-            $path = (string) ($rule['path'] ?? '');
+            $rawPath = $rule['path'] ?? '';
+            $path = \is_string($rawPath) ? $rawPath : '';
 
             if (!\str_contains($path, '/api')) {
                 continue;
@@ -261,7 +266,11 @@ final class PermissionCatalogCoversEveryGatedRouteTest extends TestCase
             }
 
             foreach ((array) ($rule['roles'] ?? []) as $role) {
-                $role = (string) $role;
+                if (!\is_string($role)) {
+                    $problems[] = \sprintf('access_control "%s" declares a non-string role.', $path);
+
+                    continue;
+                }
 
                 if ('PUBLIC_ACCESS' === $role || \str_starts_with($role, 'IS_AUTHENTICATED_')) {
                     continue;
