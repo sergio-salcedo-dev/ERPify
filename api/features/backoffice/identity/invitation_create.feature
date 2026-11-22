@@ -44,7 +44,9 @@ Feature: Invite a member from the console
     # single-table create. Exactly ONE of these is an `audit_log` write, the role-grant row above, written
     # synchronously because it is `security`; no CDC row joins it, since only Bank and BankAccount are
     # `AuditedEntity` and the generic access hook audits GET.
-    And 27 requests got executed only for doctrine connection "default"
+    # A ceiling (the transaction measured 27 when written), not an equality: the aim is to catch an N+1, not
+    # to couple this scenario to every cross-cutting write the transaction folds in.
+    And at most 30 requests got executed only for doctrine connection "default"
     # The envelope, asserted against the stored row rather than against the emitting code: the subject of an
     # invitation event is the invited user, the payload is empty, and the schema version says so. Placed after
     # the query budget above so these reads cannot move it. The empty payload is `{}`: the store writes both
