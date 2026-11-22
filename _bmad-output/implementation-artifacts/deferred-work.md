@@ -359,7 +359,7 @@ location: pwa/src/context/shared/real-time/infrastructure/useMercureRealtime.ts 
 reason: Deliberate price of cutting the re-authorise loop; the 'realtime unavailable' UI surface was out of scope. Evaluate with that decision: a single long-interval re-arm retry, or an onRealtimeUnavailable seam consumed by the surface.
 status: done 2026-11-22
 resolution: one bounded re-arm 5 min after a terminal denial (REARM_DELAY_MS), cancelled on unmount/topic change, deferred while the tab is hidden; no loop.
-decision: 2026-09-28 Keep open
+decision: 2026-09-28 Keep open (superseded 2026-11-22: the single bounded re-arm below was built, as the entry itself proposed)
 
 **(pwa/real-time · recuperación · low) Un feed abandonado por denegación terminal no se re-arma nunca, ni cuando el permiso vuelve.** Tras un 401/403 la suscripción se cierra y solo un remontaje (o un cambio de `topicsKey`/`authorizePath`) reintenta: si un ADMIN devuelve el rol un segundo después, la pestaña sigue con datos estáticos hasta una recarga completa, sin señal para el usuario. Es el precio deliberado de cortar el bucle de reautorización; la superficie UI del estado «realtime no disponible» quedó explícitamente fuera de alcance (sería un patrón nuevo — hoy `<Can>` gatea JSX renderizado, no capabilities de fondo). A evaluar junto con esa decisión: un único reintento de re-arme a intervalo largo, o un seam `onRealtimeUnavailable` que la superficie consuma. Ref: `pwa/src/context/shared/real-time/infrastructure/useMercureRealtime.ts` (`handleStreamError`).
 
@@ -723,6 +723,8 @@ severity: low
 - **Medir primero:** el `exp` del JWT que emite `createCookie`. `mercure.default_cookie_lifetime` no está fijado y por defecto toma `framework.session.cookie_lifetime`; §7 dice "una hora", y eso no está verificado.
 - Fijar `default_cookie_lifetime` en minutos y que el PWA vuelva a autorizar al reconectar.
 - **Aparte, funcional:** las dos rutas escriben la misma cookie, así que autorizar un canal sobrescribe los permisos del otro. Comprobarlo al tocarlas.
+
+**Review 2026-11-22 (bmad-code-review, 4 layers):** the 900 s value bounds NEW connections only (an open stream keeps delivering until it closes), is pinned by no test, and the `catch (Throwable)` branch of the sign-out clear has no test. Deferred, not patched: a functional test over the container-built `Authorization` needs a running stack (not available in the session). Revoke-others, suspension and deactivation still do not clear anything.
 
 ### DW-77: Comprobar si el túnel de Sentry reenvía a proyectos de terceros
 

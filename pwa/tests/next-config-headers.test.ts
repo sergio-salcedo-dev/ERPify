@@ -100,6 +100,13 @@ describe("next.config headers — Content-Security-Policy", () => {
     );
   });
 
+  it("pins the current DW-75 gap: production script-src still declares 'unsafe-inline'", async () => {
+    const scriptSrc = directive(await cspFor({ nodeEnv: "production" }), "script-src");
+
+    expect(scriptSrc).toBeDefined();
+    expect(scriptSrc).toContain("'unsafe-inline'");
+  });
+
   // DW-75 open item: production script-src still carries 'unsafe-inline' until the per-request
   // nonce lands in src/proxy.ts. Flip this to a plain `it` (and delete the pin below) then.
   it.fails("production script-src has no 'unsafe-inline'", async () => {

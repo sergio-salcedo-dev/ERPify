@@ -2545,8 +2545,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       logout never fails), and `mercure.default_cookie_lifetime` is pinned to 900 s (it was unset: with
       `session.cookie_lifetime` at 0 symfony/mercure 0.9 issued a session cookie whose JWT `exp` was +1 hour).
       **Residual:** revoking *other* sessions, a suspension or a deactivation cannot reach another browser's
-      cookie, so the holder keeps receiving private bank and bank-account updates (ids only, no IBAN or holder
-      name) for up to 15 minutes; the PWA's re-authorise is refused once the session is gone. Both authorize
+      cookie, so that holder can open new private bank and bank-account streams (ids only, no IBAN or holder
+      name) for up to 15 minutes, and a stream already open keeps delivering until it closes (the hub checks
+      the JWT only at connect time); the PWA's re-authorise is refused once the session is gone. The
+      15-minute value is set in `mercure.yaml` and no test pins it. Both authorize
       endpoints write the same cookie name and path and `createCookie()` does not merge, so authorising one
       channel replaces the other's topics — harmless while only one stream is open per page.
 
