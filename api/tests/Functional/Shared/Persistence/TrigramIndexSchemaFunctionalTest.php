@@ -76,12 +76,10 @@ final class TrigramIndexSchemaFunctionalTest extends KernelTestCase
                     continue;
                 }
 
-                $this->assertIsArray($index);
                 $columns = $index['columns'] ?? null;
                 $this->assertIsArray($columns);
                 $this->assertCount(1, $columns, \sprintf('Trigram index "%s" must cover exactly one column.', $name));
-                $column = $columns[0] ?? null;
-                $this->assertIsString($column);
+                $column = $columns[0];
 
                 $declared[$name] = \sprintf('%s gin %s gin_trgm_ops', $classMetadata->getTableName(), $column);
             }

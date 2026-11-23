@@ -122,9 +122,7 @@ final class ReadDocumentRouteFunctionalTest extends WebTestCase
         );
 
         $response = $controller(new Request(), $id);
-        // Asserted through a copy: narrowing the property itself would outlive sendContent(), which fills it.
-        $armedBeforeTheBody = $budget->armed;
-        $this->assertSame([], $armedBeforeTheBody, 'nothing is armed until the body is sent');
+        $this->assertSame([], $budget->armed(), 'nothing is armed until the body is sent');
 
         \ob_start();
         $response->sendContent();
@@ -132,8 +130,8 @@ final class ReadDocumentRouteFunctionalTest extends WebTestCase
 
         $this->assertSame($plaintext, $sent);
         // Once before the stream, then once per chunk: 300,000 bytes arrive in more than one chunk.
-        $this->assertGreaterThan(2, \count($budget->armed));
-        $this->assertSame([60], \array_values(\array_unique($budget->armed)));
+        $this->assertGreaterThan(2, \count($budget->armed()));
+        $this->assertSame([60], \array_values(\array_unique($budget->armed())));
     }
 
     #[Test]

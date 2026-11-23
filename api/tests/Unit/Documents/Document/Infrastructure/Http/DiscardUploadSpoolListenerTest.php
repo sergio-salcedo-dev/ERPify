@@ -51,7 +51,7 @@ final class DiscardUploadSpoolListenerTest extends TestCase
         );
 
         $this->assertFileExists($spool);
-        $this->assertSame([], $budget->armed, 'a route that is not the upload never re-arms the time limit');
+        $this->assertSame([], $budget->armed(), 'a route that is not the upload never re-arms the time limit');
     }
 
     public function testItLeavesASubRequestAlone(): void
@@ -60,7 +60,7 @@ final class DiscardUploadSpoolListenerTest extends TestCase
             $this->eventFor(UploadRoutes::CONTENT, HttpKernelInterface::SUB_REQUEST),
         );
 
-        $this->assertSame([], $budget->armed);
+        $this->assertSame([], $budget->armed());
     }
 
     public function testItRunsLastOfTheResponseListeners(): void
