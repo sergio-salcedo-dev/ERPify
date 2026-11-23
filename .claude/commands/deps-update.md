@@ -177,6 +177,29 @@ curl -s "https://raw.githubusercontent.com/rectorphp/rector/$rc/vendor/composer/
 print([p['version'] for p in d if p['name']=='phpstan/phpdoc-parser'])"
 ```
 
+**A third shape: a deprecation one package fires and another package calls (#1295).** Nobody
+reaches into anybody's internals here. `doctrine/dbal` 4.6.0 deprecated the public
+`Type::getType()`, and `doctrine/orm` 3.7.x still calls it from `BasicEntityPersister`.
+ORM 3.7 asks for `doctrine/dbal: ^4`, so Composer admits the pair, the code runs, and the only
+red is PHPUnit's `failOnDeprecation`:
+
+```
+Doctrine\DBAL\Types\Type::getType is deprecated. … (Type.php:96 called by
+BasicEntityPersister.php:1653, https://github.com/doctrine/dbal/pull/7342, package doctrine/dbal)
+```
+
+The `called by` frame names the consumer, and that consumer is the package to co-move. Read
+its source at the candidate tag rather than its changelog: `BasicEntityPersister.php` at
+3.7.7 still calls `Type::getType`, at 3.8.0 it goes through `$this->getType()`. Then check
+that the co-moved release is past the cooldown. It arrived through dbal, which the
+doctrine-bundle PR pulled in transitively. **Dependabot never opens a PR for the consumer**,
+so nothing in step 1's inventory points at it.
+
+The co-move brings its own deprecations, so read the next red before declaring the coupling
+closed. ORM 3.8 deprecated `SchemaTool`'s mutation path (`setUseSchemaEditorApi`), and that
+needed `doctrine.orm.use_schema_editor_api: true`. Each one cost a full CI round, because
+the PHP suite only runs there when the container cannot.
+
 ### 3C — Not a split: a fixer bump that ships new rules
 
 The rest of #739's red is neither the coupling nor a regression: `php.rector.dry-run` exits
@@ -211,13 +234,32 @@ awk '/files with changes/{f=1} /files would have been changed/{f=0} f' <log> \
 Whether to take those rewrites wholesale, take them selectively (a skip list in
 `api/tools/rector/rector.php`), or split them off is the **user's** call, not yours.
 
+**A patch release of the analyser behaves the same way.** In #1295, `phpstan/phpstan`
+2.3.5 → 2.3.7 started resolving class constants inside PHPUnit assertions, and `php.stan`
+went red on 16 test lines with `src` untouched. Most were `method.alreadyNarrowedType` over
+an assertion that pins the ordering of two constants: there, the assertion is the test.
+They take the repo's existing `// @phpstan-ignore method.alreadyNarrowedType (the assertion
+IS the test — …)` convention; find it with `grep -rn "phpstan-ignore method.alreadyNarrowed"
+api/tests`. Two shapes are not that and must be fixed in code:
+
+- **A narrowing that outlives a mutation.** A property of a freshly built test double is typed
+  by its default (`[]`), and that type survived a call that filled it. Route the read through
+  a method.
+- **An assertion another bump made redundant.** ORM 3.8 types `ClassMetadata::$table`, so an
+  `assertIsArray` on an index entry is now always true. Delete it; never silence it.
+
+`make -j4 php.quality.dry-run` stops scheduling new targets at the first failure, so a red
+`php.stan` hides every gate queued after it (deptrac, the `php.lint.*` set, config-reference).
+Fix it before reading anything else as green.
+
 ## 4. Report
 
 Print a table: PR / ecosystem / files / **batch-blocking?** (yes when 3A or 3B applies).
 There is no per-PR CI column: a dependabot PR runs only the static job, so its
 `CI Status` is red for every one of them and says nothing about the bump — the
 batch PR's run, and the local checks in step 7, are where a bump is judged. Name every red and which class it is — the multi-pin split (3A), the
-private-API coupling (3B), or real work the bump demands (3C) — and say how you told them
+coupling (3B: a private-API reach or a deprecation one package fires and another calls), or real
+work the bump demands (3C) — and say how you told them
 apart. For a suspected 3B, the A/B is the answer, not the error text.
 
 `--dry-run` STOPS here.
@@ -271,6 +313,22 @@ npm update <pkg> …   # respects the range, takes the newest version it allows
 **Composer.** Edit the constraints in `api/composer.json`, then
 `make composer c='update <pkg> … --with-dependencies'`. Follow with
 `make composer.check.all` (platform-reqs, missing deps, unused).
+
+Three things a dependabot composer PR gets wrong, each measured in #1295:
+
+- **The Composer version writes the lock's format.** Dependabot ran 2.9 and rewrote the
+  `plugin-api-version` header from `2.11.0` to `2.9.0`, and dropped every `published-time` field
+  `main`'s 2.11 had written. Taking its lock means churn that the next 2.11 run reverts. Resolve
+  with the version that wrote `main` (`git show origin/main:api/composer.lock | grep
+  plugin-api-version`), and pin each target with `update <pkg>:<version>` so the cooldown
+  holds.
+- **`--with-dependencies` does not move a root requirement.** `doctrine/dbal`, `sentry/sentry`
+  and `guzzlehttp/psr7` arrived inside other PRs' locks but are root requirements, so the
+  update printed `is also a root requirement … keeping locked at old version` and left them
+  behind. Move them explicitly. Compare the union of what the PRs' locks moved with what yours
+  moved (`git show <pr-branch>:api/composer.lock`), never the PR titles.
+- **`bump-after-update: true` raises the floors in `composer.json` by itself.** Expect that
+  diff and do not hand-edit it.
 
 **Docker.** Base images are pinned by digest, not tag — `FROM <image>@sha256:<digest>`
 in `api/Dockerfile` (`dunglas/frankenphp`, `debian`) and `pwa/Dockerfile` (`node`).
@@ -391,6 +449,8 @@ make <target> > tmp/gate.log 2>&1; echo "<target> EXIT=$?"
 | npm | `make pwa.quality`, `make pwa.quality.dry-run` (what CI runs — check-only; the plain target *fixes* and can mask), `make pwa.test.unit` |
 | npm, when `@playwright/test` moved | `cd pwa && ./node_modules/.bin/playwright test --list` — proves the new version parses `playwright.config.ts` and discovers every spec without needing browsers. Use the local binary: `npx playwright` may fetch a standalone package instead. |
 | composer | `make php.quality`, `make ci.api` |
+| composer, when any `*-bundle` moved | `make sf.config.reference` **before** the gates, then commit `api/config/reference.php`. A bundle's config tree is in that file, so a new option, a deprecation note or a reworded `info()` reds `php.lint.config-reference`. In #1295 that was doctrine-bundle 3.4 and sentry-symfony 5.16, both found only by CI. Never hand-edit the file; when no PHP 8.5 runtime is available, the gate's own diff on CI is the generator output to copy |
+| composer, when a version named in `docs/project-context.md` moved | update the page **and** `api/.project-context-versions` together (`ProjectContextVersionGateTest`); grep the old token across `docs/` for prose copies (`docs/index.md` carried one) |
 | docker | build the stage that carries the pin (below), or lean on the `API Build (Docker)` CI job |
 | docker_compose | `make docker.up.wait`, then read the running version back (below); for a `postgres` bump also `make db.test.prepare` and `make php.unit c='--filter PlanFunctionalTest'`, or lean on CI's API jobs, which run on this same pin |
 | github_actions only | nothing local — CI is the gate |
