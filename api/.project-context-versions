@@ -67,8 +67,8 @@
 
 api/composer.json :: require.php => PHP 8.5
 api/composer.json :: extra.symfony.require => Symfony 8.1
-api/composer.json :: require.doctrine/orm => Doctrine ORM 3.7
-api/composer.json :: require.doctrine/dbal => DBAL 4.5
+api/composer.json :: require.doctrine/orm => Doctrine ORM 3.8
+api/composer.json :: require.doctrine/dbal => DBAL 4.6
 api/composer.json :: require.doctrine/doctrine-migrations-bundle => migrations-bundle 4.0
 api/composer.json :: require.doctrine/persistence => Persistence 4.2
 api/composer.json :: require.symfony/messenger => Messenger 8
@@ -92,7 +92,7 @@ pwa/package.json :: devDependencies.vitest => Vitest 5
 pwa/package.json :: devDependencies.@playwright/test => Playwright 1.65
 pwa/package.json :: devDependencies.@testing-library/react => @testing-library/react 16
 pwa/package.json :: devDependencies.@testing-library/jest-dom => jest-dom 7
-pwa/package.json :: devDependencies.jsdom => jsdom 30
+pwa/package.json :: devDependencies.jsdom => jsdom 31
 pwa/package.json :: devDependencies.eslint => ESLint 10.15
 pwa/package.json :: devDependencies.@next/eslint-plugin-next => @next/eslint-plugin-next 16.4
 pwa/package.json :: devDependencies.eslint-plugin-jsx-a11y => eslint-plugin-jsx-a11y 6.10

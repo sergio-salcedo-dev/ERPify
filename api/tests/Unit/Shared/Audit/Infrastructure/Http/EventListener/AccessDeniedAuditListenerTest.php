@@ -127,6 +127,7 @@ final class AccessDeniedAuditListenerTest extends TestCase
         // The denial must be recorded before the Problem Details responder sets the 403 and stops
         // propagation (RequestEvent::setResponse halts later listeners), so this listener's priority sits
         // above the responder's. The end-to-end wiring is exercised by the symfony_bridges Behat feature.
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertGreaterThan(ExceptionResponder::PRIORITY, AccessDeniedAuditListener::PRIORITY);
     }
 

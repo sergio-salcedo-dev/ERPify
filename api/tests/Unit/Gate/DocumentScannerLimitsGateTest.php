@@ -71,8 +71,11 @@ final class DocumentScannerLimitsGateTest extends TestCase
         $milliseconds = (int) ($this->config()['MaxScanTime'] ?? 0);
 
         $this->assertSame(ScanPolicy::CLAMD_MAX_SCAN_TIME_MILLISECONDS, $milliseconds);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertGreaterThan(0, $milliseconds, 'MaxScanTime 0 disables the limit');
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertLessThan(ScanPolicy::LEASE_SECONDS * 1000, $milliseconds);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertLessThan(ScanPolicy::DEADLINE_SECONDS * 1000, $milliseconds);
     }
 

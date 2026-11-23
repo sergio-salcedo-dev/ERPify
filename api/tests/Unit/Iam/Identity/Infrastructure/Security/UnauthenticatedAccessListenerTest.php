@@ -83,6 +83,7 @@ final class UnauthenticatedAccessListenerTest extends TestCase
         // The rewrite must happen before AccessDeniedAuditListener (priority 32) reads the chain, so an
         // unauthenticated probe becomes an AuthenticationException it no longer records. Higher priority = 401
         // over a spuriously-audited 403.
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertGreaterThan(
             AccessDeniedAuditListener::PRIORITY,
             UnauthenticatedAccessListener::PRIORITY,
