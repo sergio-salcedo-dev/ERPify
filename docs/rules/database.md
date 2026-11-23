@@ -189,7 +189,8 @@ table owns a `*SchemaListener` (`EventStoreSchemaListener`, `ProjectionCheckpoin
 subclass describes the table on a `Table::editor()`, and the base hands back a new schema through
 `GenerateSchemaEventArgs::setSchema($schema->edit()->addTable(…)->create())` — the
 DBAL 4.5 mutation API (`createTable`, `addColumn`, `addIndex`) is deprecated, and the suite fails on
-deprecations — so `make db.diff` generates and keeps its migration. These tables are deliberately
+deprecations — so `make db.diff` generates and keeps its migration. The ORM's own `SchemaTool` takes the same path
+(`doctrine.orm.use_schema_editor_api: true`; ORM 3.8 deprecates the mutation one and ORM 4 removes it). These tables are deliberately
 **absent** from the `config/packages/doctrine.yaml` ORM mappings — the schema tool sees them, the ORM
 does not.
 
