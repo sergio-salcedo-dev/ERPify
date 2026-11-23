@@ -34,6 +34,7 @@ final class UnknownPayloadMemberListenerTest extends TestCase
     public function itRunsBeforeTheListenerThatBuildsTheProblemDetailsEnvelope(): void
     {
         // A lower priority would let the envelope be built from the unclassified serializer exception.
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertGreaterThan(ExceptionResponder::PRIORITY, UnknownPayloadMemberListener::PRIORITY);
     }
 

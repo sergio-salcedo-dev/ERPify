@@ -124,6 +124,7 @@ final class InvalidCurrentPasswordAuditListenerTest extends TestCase
     {
         // ExceptionEvent extends RequestEvent, whose setResponse() stops propagation, so a listener ordered
         // after the responder would never see the throwable at all.
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertGreaterThan(ExceptionResponder::PRIORITY, InvalidCurrentPasswordAuditListener::PRIORITY);
     }
 

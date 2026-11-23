@@ -122,7 +122,9 @@ final class ReadDocumentRouteFunctionalTest extends WebTestCase
         );
 
         $response = $controller(new Request(), $id);
-        $this->assertSame([], $budget->armed, 'nothing is armed until the body is sent');
+        // Asserted through a copy: narrowing the property itself would outlive sendContent(), which fills it.
+        $armedBeforeTheBody = $budget->armed;
+        $this->assertSame([], $armedBeforeTheBody, 'nothing is armed until the body is sent');
 
         \ob_start();
         $response->sendContent();

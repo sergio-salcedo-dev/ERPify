@@ -40,18 +40,23 @@ final class ScanPolicyTest extends TestCase
         $this->assertSame(60 + 300 + 900 + 6 * 3600, $horizon, 'returns 1-9 (22,860 s): three entries, then 6 hours');
 
         $jitteredMaximum = $horizon * (1 + ScanPolicy::JITTER);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertGreaterThan($jitteredMaximum, ScanPolicy::STUCK_BOUND_SECONDS);
     }
 
     #[Test]
     public function theTimingConstantsKeepTheirOrder(): void
     {
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertLessThan(ScanPolicy::LEASE_SECONDS, ScanPolicy::CLAMD_MAX_SCAN_TIME_MILLISECONDS / 1000);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertLessThan(ScanPolicy::DEADLINE_SECONDS, ScanPolicy::CLAMD_MAX_SCAN_TIME_MILLISECONDS / 1000);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertLessThan(ScanPolicy::HEARTBEAT_SECONDS, ScanPolicy::READ_TIMEOUT_SECONDS);
         $heartbeats = ScanPolicy::HEARTBEAT_SECONDS * 2;
         $this->assertLessThan(ScanPolicy::LEASE_SECONDS, $heartbeats, 'one missed beat is survived');
         $this->assertLessThan(ScanPolicy::DEADLINE_SECONDS, ScanPolicy::LEASE_SECONDS);
+        // @phpstan-ignore method.alreadyNarrowedType (the assertion IS the test — pins the constant ordering)
         $this->assertLessThan(
             ScanPolicy::MAX_OUTAGE_RETURNS,
             ScanPolicy::OUTAGE_ALARM_AT,

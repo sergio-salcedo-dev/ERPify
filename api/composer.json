@@ -31,7 +31,7 @@
         "doctrine/dbal": "^4.6.0",
         "doctrine/doctrine-bundle": "^3.4.2",
         "doctrine/doctrine-migrations-bundle": "^4.0.1",
-        "doctrine/orm": "^3.7.5",
+        "doctrine/orm": "^3.8.0",
         "doctrine/persistence": "^4.2.1",
         "intervention/image": "^4.4.1",
         "league/flysystem": "^3.36",
