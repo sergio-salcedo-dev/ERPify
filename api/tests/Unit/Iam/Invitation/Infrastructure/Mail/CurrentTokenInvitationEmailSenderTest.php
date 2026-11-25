@@ -25,6 +25,7 @@ use PHPUnit\Framework\TestCase;
  * @internal
  */
 #[CoversClass(CurrentTokenInvitationEmailSender::class)]
+#[CoversClass(InvitationLinkSuperseded::class)]
 final class CurrentTokenInvitationEmailSenderTest extends TestCase
 {
     private const string INVITATION_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';

@@ -6,7 +6,7 @@ namespace Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\EntityNotFoundException;
+use Doctrine\ORM\Query;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
@@ -51,20 +51,17 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
     #[Override]
     public function findByIdFresh(string $id): ?Invitation
     {
-        $invitation = $this->entityManager->find(Invitation::class, $id);
+        // A query, not `find()` + `refresh()`: `find()` answers from the unit of work without touching the table, and
+        // `refresh()` of a row deleted since it was loaded leaves the in-memory entity standing. The refresh hint
+        // makes the query overwrite a managed entity with what the row holds now, and an absent row answers null.
+        $invitation = $this->entityManager
+            ->createQuery('SELECT i FROM ' . Invitation::class . ' i WHERE i.id = :id')
+            ->setParameter('id', $id)
+            ->setHint(Query::HINT_REFRESH, true)
+            ->getOneOrNullResult()
+        ;
 
-        if (!$invitation instanceof Invitation) {
-            return null;
-        }
-
-        try {
-            $this->entityManager->refresh($invitation);
-        } catch (EntityNotFoundException) {
-            // Deleted since it was loaded: to this caller there is no such invitation.
-            return null;
-        }
-
-        return $invitation;
+        return $invitation instanceof Invitation ? $invitation : null;
     }
 
     #[Override]
