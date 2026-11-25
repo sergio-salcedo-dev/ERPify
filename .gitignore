@@ -31,6 +31,7 @@ api/var/
 # to warn about it.
 /storage/
 api/storage/
+api/storage-test/
 api/public/bundles/
 api/.phpunit.result.cache
 api/.phpunit.cache/

@@ -1271,10 +1271,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       lock comes a day later, so two rows a day apart are not one) — or a deployment scales that consumer past
       one, or the send-then-stamp race this rides on is picked up for a fix, which closes the audit duplicate
       with it.
-- [ ] **`api/storage-test/` is outside `.gitignore`.** It is a Flysystem test-storage directory the
-      suite writes into, so any `git add -A` commits whatever a test last wrote — into a **public**
-      repository. Today the residue is a 91-byte 1×1 PNG; the exposure grows the day a test writes
-      realistic fixture data. Add the path to `.gitignore` and delete the residue.
+- [x] **`api/storage-test/` was outside `.gitignore` — closed 2026-11-25.** The path is now ignored beside
+      `api/storage/`, so a `git add -A` cannot commit whatever a test last wrote into a **public**
+      repository. The directory does not exist in a clean checkout and no test, config or compose file names
+      it, so there was no tracked residue to delete; the original 91-byte PNG it described is not in the tree.
+      **Residual:** nothing in the tree writes there today, so the line guards a path another checkout or an
+      older suite may still create, and no gate holds it.
 - [x] **No shipped dependency tracks an untagged upstream branch — closed 2026-08-12.**
       `symfony/mercure-bundle` was pinned to `0.4.x-dev` because the `v0.4.2` tag extended a class
       deprecated in Symfony 8.1 and `failOnDeprecation="true"` turned the suite red, so the only
