@@ -62,6 +62,18 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // `public/` files are served unversioned, so they cannot be `immutable`; a day in the
+      // browser plus a week of stale-while-revalidate stops a conditional request per page view.
+      // Hashed `/_next/static` assets already carry `immutable` from Next itself.
+      {
+        source: "/:file(favicon\\.ico|robots\\.txt)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=86400, stale-while-revalidate=604800",
+          },
+        ],
+      },
       // Screens whose URL is itself sensitive send no Referer at all — not even
       // the origin. The token screens receive `?token=<id>.<secret>`; the audit
       // screen holds its filter state in the query string, so its URL names the
