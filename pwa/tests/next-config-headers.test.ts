@@ -72,3 +72,14 @@ describe("next.config headers — Content-Security-Policy", () => {
     }
   });
 });
+
+describe("next.config headers — public asset caching", () => {
+  it("lets the browser cache the unversioned public files without making them immutable", async () => {
+    const entries = await headerEntries();
+    const entry = entries.find((candidate) => candidate.source.startsWith("/:file("));
+    const cacheControl = entry?.headers.find((header) => header.key === "Cache-Control")?.value;
+
+    expect(cacheControl).toContain("max-age=86400");
+    expect(cacheControl).not.toContain("immutable");
+  });
+});
