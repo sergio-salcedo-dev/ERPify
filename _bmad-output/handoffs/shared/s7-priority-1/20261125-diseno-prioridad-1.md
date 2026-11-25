@@ -8,17 +8,20 @@ Las líneas `file:line` son del checkout en `main` a fecha 2026-11-25 y se mueve
 Ejecución prevista: worktree `fix/shared-s7-priority-1`, una sola PR, las tres capas de revisión de
 `CLAUDE.md` antes de darla por hecha. Pasa `make php.quality` y `make pwa.quality`.
 
-## Decisiones que son del propietario (bloquean la implementación)
+## Decisiones del propietario — TOMADAS el 2026-11-25 (Sergio, desde el móvil: "de acuerdo con todo")
 
-| # | Decisión | Recomendación |
+Aceptó las recomendaciones tal como se le propusieron. No quedan decisiones abiertas para empezar a implementar.
+
+| # | Decisión | Resolución |
 |---|---|---|
-| D1 | L1867: borrar usuario pasa de `DELETE` a `POST /backoffice/users/{id}/erase` para llevar `currentPassword` | Sí (precedente: `documents_erase`, `recovery-secret/revoke`). Rompe la API pública del backoffice |
-| D2 | L191: retirar o dejar reservado el exit code 3 de `audit:gdpr:erase` | Retirarlo; es contrato con jobs externos |
-| D3 | L1397/L58: servir `WITHHELD` el diff de campos desconocidos | Sí, fail-closed |
-| D4 | L1397: registro `resource_type -> clase`, por reflexión o a mano | A mano; el docblock de `AuditedEntity` dice que `resource_type` es contrato independiente de la clase |
-| D5 | L58: allowlist por patrón (recomendada) o HMAC con clave | Allowlist; un hash sin clave de un email es oráculo de reidentificación |
-| D6 | L373: cerrar la carrera del todo con lock durante SMTP | No; bloquea revoke/accept durante el envío |
-| D7 | L298: ¿ignorar `api/storage-test/` aunque hoy no exista? | Sí, una línea |
+| D1 | L1867: borrar usuario pasa de `DELETE` a `POST /backoffice/users/{id}/erase` con `currentPassword` | **Sí.** Rompe la API pública del backoffice; aceptado porque no hay despliegue ni clientes externos |
+| D2 | L191: exit code 3 de `audit:gdpr:erase` | **Retirarlo** (deja de ser alcanzable con la transacción atómica) |
+| D3 | L1397/L58: diff de campos desconocidos | **`WITHHELD`, fail-closed** |
+| D4 | L1397: registro `resource_type -> clase` | **A mano**, con un gate que exija que cada implementador de `AuditedEntity` figure en él |
+| D5 | L58: `orphan_role_values` | **Allowlist por patrón** (`^[A-Z][A-Z0-9_]*$` más centinelas `<null>` y `<non-role-shaped>`); sin HMAC |
+| D6 | L373: lock durante el SMTP | **No.** Solo la comprobación de vigencia justo antes de enviar; en §7 se escribe como "ventana reducida, no cerrada" |
+| D7 | L298: ignorar `api/storage-test/` | **Hecho** (PR #1299) |
+| L24 | Carrera GDPR vs. recovery-secret | **No cerrar hasta** revisar `git log -S IdentityRowLock` y ampliar el test funcional (acciones restantes, eje actor, caso inverso) |
 
 ## 1. L1867 — `backoffice_user_erase` no re-prueba la contraseña
 
