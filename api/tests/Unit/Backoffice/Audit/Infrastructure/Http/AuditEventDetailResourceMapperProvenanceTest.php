@@ -92,7 +92,11 @@ final class AuditEventDetailResourceMapperProvenanceTest extends TestCase
         $this->assertInstanceOf(ArrayObject::class, $changes);
 
         $this->assertSame(['old' => 'Acme', 'new' => 'Acme Bank'], $changes['name'], 'a classified clear field is served');
-        $this->assertSame($sealed, $changes['holderName']['old'], 'a sealed value is served as sealed');
+        $this->assertSame(
+            ['old' => $sealed, 'new' => $sealed],
+            $changes['holderName'],
+            'a sealed value is served as sealed',
+        );
         $this->assertSame(['old' => null, 'new' => $sealed], $changes['iban'], 'an absent side beside a sealed one is served');
         $this->assertSame(
             ['old' => AuditEventDetailResourceMapper::WITHHELD, 'new' => AuditEventDetailResourceMapper::WITHHELD],
@@ -162,7 +166,10 @@ final class AuditEventDetailResourceMapperProvenanceTest extends TestCase
 
         $changes = $this->mapper()->toResource($detail)->metadata['changes'];
         $this->assertInstanceOf(ArrayObject::class, $changes);
-        $this->assertSame(AuditEventDetailResourceMapper::WITHHELD, $changes['name']['old']);
+        $this->assertSame(
+            ['old' => AuditEventDetailResourceMapper::WITHHELD, 'new' => AuditEventDetailResourceMapper::WITHHELD],
+            $changes['name'],
+        );
     }
 
     private function mapper(): AuditEventDetailResourceMapper

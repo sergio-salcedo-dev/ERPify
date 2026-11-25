@@ -1358,14 +1358,26 @@ mitigated state. Accepting one means recording who accepted it and against which
       injection, under `shadcn` → `@dotenvx/dotenvx`) was closed in #1166 by a lock-only move to
       5.33.16. **Before a customer deployment:** re-run `npm audit --omit=dev`; the build-time
       `glob` path closes when `@sentry/bundler-plugins` takes `glob` ≥14.0.2.
-- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order.** `SendInvitation`
-      and `ResendInvitation` commit the token rotation and then mail the link synchronously, outside the
-      transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent resends of one person are
-      serialised by the invitation row lock, but their SMTP sends race after the commit, so the email that
-      arrives last can carry the link the other resend already killed. And an SMTP exchange slower than the
-      PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. Both are
-      bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
-      operator to resend again, and a refused send answers 503 rather than a false 204.
+- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order — narrowed
+      2026-11-25, not closed.** `SendInvitation` and `ResendInvitation` commit the token rotation and then mail the
+      link synchronously, outside the transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent
+      resends of one person are serialised by the invitation row lock, but their SMTP sends race after the commit, so
+      the email that arrives last can carry the link the other resend already killed. And an SMTP exchange slower than
+      the PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. **The first is
+      now narrowed:** `CurrentTokenInvitationEmailSender` decorates `InvitationEmailSender` and refuses to hand a link
+      to the mailer unless it is still the live one of a `SENT` invitation (the selector names the row, the secret is
+      verified against the stored digest in constant time, the TTL and the status are read), so a link a later resend
+      replaced is dropped instead of mailed; the best-effort wrapper above it already turns that refusal into "not
+      accepted", which the resend answers as `invitation-email-not-sent` for the older request. That shrinks the window
+      from a whole SMTP exchange to the gap between one read and one call. **It does not close it** — two sends that
+      both pass the check before either resend commits can still cross — and closing it needs the row held through
+      the SMTP exchange, which would block an accept or a revoke for as long as a mail server takes; that was weighed
+      and declined (owner, 2026-11-25). A messenger-routed send is closed by policy: the invitee is a person and
+      `Iam.Invitation` is classified so in `api/.persistent-transport-policy`. The second consequence is untouched and
+      both are bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
+      operator to resend again, and a refused send answers 503 rather than a false 204. The decorator costs one
+      indexed read per send and is pinned by `CurrentTokenInvitationEmailSenderTest` (live, replaced by a later resend,
+      expired, no longer `SENT`, absent, four malformed shapes) and by the container resolving the port to it.
       **When an outbox earns its place** — any one of: a second transactional email producer that needs
       at-least-once delivery rather than best-effort; the 30 s timeout observed against real SMTP latency; an
       invitee who reports holding only a dead link after a resend; or invitations sent in bulk, where a
@@ -1374,7 +1386,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       would enqueue the INTENT — "deliver the current link of invitation X" — and mint the token when the
       message is delivered, not enqueue the rendered email. That moves the token rotation off the request, so
       the resend's answer stops meaning "the old link is dead", and that contract change is the real cost to
-      weigh. **Accepted:** not recorded (opened 2026-10-26).
+      weigh. **Accepted:** not recorded (opened 2026-10-26); the narrowing and the declined lock are the owner's of
+      2026-11-25.
 - [ ] **Three administrator identities acting together can hold one invitee's HTTP resend shut for a day.** The
       per-invitee budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`,
       5 / day, shared by every administrator — §6) is what stops the lever from killing a person's link for ever,
