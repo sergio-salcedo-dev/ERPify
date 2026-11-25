@@ -51,8 +51,16 @@ final class AuditDiffDisclosureRegistryTest extends KernelTestCase
             $declared = AuditDiffDisclosure::CLEAR_FIELDS[$type];
             \sort($declared);
 
-            $this->assertSame($expected, $declared, $type . ': the clear fields differ from the mapping minus #[PersonalData]');
-            $this->assertSame([], \array_values(\array_intersect($declared, $personal)), $type . ' lists a personal field');
+            $this->assertSame(
+                $expected,
+                $declared,
+                $type . ': the clear fields differ from the mapping minus #[PersonalData]',
+            );
+            $this->assertSame(
+                [],
+                \array_values(\array_intersect($declared, $personal)),
+                $type . ' lists a personal field',
+            );
         }
 
         $declaredTypes = \array_keys(AuditDiffDisclosure::CLEAR_FIELDS);
@@ -105,8 +113,10 @@ final class AuditDiffDisclosureRegistryTest extends KernelTestCase
         $file = $method->getFileName();
         $this->assertIsString($file);
 
-        $lines = \array_slice(\file($file) ?: [], $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
-        $this->assertSame(1, \preg_match("/AuditResource::of\\('([A-Za-z0-9]+)'/", \implode('', $lines), $found), $class);
+        $first = $method->getStartLine() - 1;
+        $lines = \array_slice(\file($file) ?: [], $first, $method->getEndLine() - $first);
+        $matched = \preg_match("/AuditResource::of\\('([A-Za-z0-9]+)'/", \implode('', $lines), $found);
+        $this->assertSame(1, $matched, $class);
 
         return $found[1];
     }

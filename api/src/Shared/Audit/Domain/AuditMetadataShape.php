@@ -16,11 +16,11 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *
  * One admits text the server did not choose, and is named for it: {@see FieldDiff} carries a change diff whose
  * personal fields are sealed before they get here ({@see SEALED_VALUE_KEY}); its clear fields are whatever the
- * aggregate held. {@see StoredValues} used to be the other, carrying the raw cells an integrity probe could not
- * explain; it now admits only a value shaped like a role name, or the sentinel standing for one that is not, so
- * a corrupted cell holding somebody's address can no longer be written into the one column no erasure rewrites.
- * The complete raw list stays where an operator reaches it deliberately — the inspection's own output.
- * Neither is a licence for a third.
+ * aggregate held. {@see StoredValues} carries a sample of the cells an integrity probe could not explain, and
+ * admits only a value shaped like a role name or the sentinel standing for one that is not, so free text and an
+ * address cannot reach the one column no erasure rewrites. A shape is not a classification: a corrupted cell that
+ * is itself an upper-case word passes. The complete raw list stays where an operator reaches it deliberately — the
+ * inspection's own output. Neither is a licence for a third.
  */
 enum AuditMetadataShape
 {

@@ -212,6 +212,23 @@ describe("UserEraseControl", () => {
     await waitFor(() => expect(screen.queryByTestId("user-erase__error")).not.toBeInTheDocument());
   });
 
+  it("forgets the retyped email when the password step is cancelled, so the first brake applies again", async () => {
+    renderControl();
+
+    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
+    fireEvent.change(await screen.findByTestId("user-erase__confirm-input"), {
+      target: { value: TARGET_EMAIL },
+    });
+    fireEvent.click(screen.getByTestId("user-erase__confirm"));
+
+    fireEvent.click(await screen.findByTestId("user-erase-proof__cancel"));
+    expect(eraseRun).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
+    expect(await screen.findByTestId("user-erase__confirm")).toBeDisabled();
+    expect(screen.getByTestId("user-erase__confirm-input")).toHaveValue("");
+  });
+
   it("resets the typed confirmation when the dialog is cancelled", async () => {
     renderControl();
 

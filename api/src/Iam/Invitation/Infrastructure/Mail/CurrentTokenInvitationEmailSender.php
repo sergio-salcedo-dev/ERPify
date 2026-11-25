@@ -30,6 +30,9 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
  * `PRODUCTION_SECURITY_CHECKLIST.md` §7. A messenger-routed send was the other way to order the mails and is closed
  * by policy: the invitee is a person and `Iam.Invitation` is classified so in `api/.persistent-transport-policy`.
  *
+ * The row is read FRESH. `findById()` may return the entity this request already manages, which holds what this
+ * request wrote and nothing a concurrent resend committed since — and that concurrent one is the whole case.
+ *
  * The check is the invitation's own: the link's selector names the row, the secret is verified against the stored
  * digest in constant time, and the row must still be `SENT` — an accepted, revoked or expired invitation has no
  * link worth delivering. A refusal is an exception the best-effort wrapper above this port already turns into
@@ -74,9 +77,9 @@ final readonly class CurrentTokenInvitationEmailSender implements InvitationEmai
             return false;
         }
 
-        $invitation = $this->invitations->findById($selector);
+        $invitation = $this->invitations->findByIdFresh($selector);
 
-        return null !== $invitation
+        return $invitation instanceof \Erpify\Iam\Invitation\Domain\Entity\Invitation
             && InvitationStatus::SENT === $invitation->status()
             && $invitation->verify($secret, $this->clock->now());
     }

@@ -17,8 +17,8 @@ use Symfony\Component\HttpFoundation\RateLimiter\PeekableRequestRateLimiterInter
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Http\Event\LoginFailureEvent;
-use Symfony\Component\Security\Http\SecurityRequestAttributes;
 use Symfony\Component\Security\Http\EventListener\LoginThrottlingListener;
+use Symfony\Component\Security\Http\SecurityRequestAttributes;
 
 /**
  * A failed login spends the `login_throttling` budget, read through the firewall's real wiring.

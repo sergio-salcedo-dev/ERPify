@@ -65,6 +65,13 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
     if (!next) setConfirmText("");
   }
 
+  // Leaving the password step by any route discards the retyped email too: otherwise reopening the first dialog
+  // would show "Continue" already enabled, and the which-identity brake would have been passed once for good.
+  function onProofOpenChange(next: boolean): void {
+    setProving(next);
+    if (!next) setConfirmText("");
+  }
+
   // The email gate hands over to the password step; nothing is sent until that step confirms.
   const onEmailConfirmed = (): void => {
     if (!confirmed) return;
@@ -207,7 +214,7 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
       </section>
       <CurrentPasswordDialog
         open={proving}
-        onOpenChange={setProving}
+        onOpenChange={onProofOpenChange}
         title="Confirm with your password"
         description={`Enter your password to permanently erase ${user.email}. This cannot be undone.`}
         confirmLabel="Erase permanently"

@@ -10,6 +10,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\IdentityRowLock;
 use Erpify\Iam\Identity\Application\RecordLockoutAuditBestEffort;
 use Erpify\Iam\Identity\Application\RecordLockoutNoticeAuditBestEffort;
@@ -19,6 +20,7 @@ use Erpify\Iam\Identity\Application\RecoveryThrottleAuditBudget;
 use Erpify\Iam\Identity\Domain\Email;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalIdentityRowLock;
+use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\DataFixtures\UserFixtureFactory;
@@ -34,13 +36,11 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use SensitiveParameter;
-use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
-use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Throwable;
 
 /**
@@ -62,6 +62,7 @@ use Throwable;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  * @SuppressWarnings("PHPMD.TooManyPublicMethods")
+ * @SuppressWarnings("PHPMD.TooManyMethods")
  * @SuppressWarnings("PHPMD.ExcessiveClassLength")
  */
 #[CoversClass(DbalIdentityRowLock::class)]
@@ -264,6 +265,32 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     }
 
     /**
+     * The same four, with how many resource-less rows each writes once the subject is gone: the throttle still
+     * reports the throttle, as for an address that never named anyone.
+     *
+     * @return iterable<string, array{string, string, int}>
+     */
+    public static function writersAgainstAnErasedSubject(): iterable
+    {
+        yield 'lockout' => ['lockout', 'USER_LOCKED', 0];
+        yield 'lockout notice' => ['lockout notice', 'ACCOUNT_LOCKOUT_NOTIFIED', 0];
+        yield 'recovery throttle' => ['recovery throttle', 'PASSWORD_RECOVERY_THROTTLED', 1];
+        yield 'recovery secret' => ['recovery secret', 'RECOVERY_SECRET_MINTED', 0];
+        yield 'recovery secret redeemed' => ['recovery secret redeemed', 'RECOVERY_SECRET_REDEEMED', 0];
+        yield 'recovery secret revoked' => ['recovery secret revoked', 'RECOVERY_SECRET_REVOKED', 0];
+        yield 'recovery secret redemption compensated' => [
+            'recovery secret redemption compensated',
+            'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
+            0,
+        ];
+        yield 'recovery secret redemption interrupted' => [
+            'recovery secret redemption interrupted',
+            'RECOVERY_SECRET_REDEMPTION_INTERRUPTED',
+            0,
+        ];
+    }
+
+    /**
      * The actor axis, which is the one the compensation row actually lands on. A redemption has authenticated by the
      * time it is compensated, so the row is sealed from the session's token and names the subject as its ACTOR as
      * well as its resource; dropping the person from the resource would leave the id one column over. What closes it
@@ -275,7 +302,9 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     {
         $tokens = $this->service(TokenStorageInterface::class);
         $requests = $this->service(RequestStack::class);
-        $subject = new SecurityUser(UserFixtureFactory::create($this->subjectId, $this->subjectEmail, 'late-audit-password'));
+        $subject = new SecurityUser(
+            UserFixtureFactory::create($this->subjectId, $this->subjectEmail, 'late-audit-password'),
+        );
 
         $requests->push(Request::create('/api/v1/backoffice/recovery'));
         $tokens->setToken(new UsernamePasswordToken($subject, 'main', $subject->getRoles()));
@@ -316,32 +345,6 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         $this->assertIsNumeric($count);
 
         return (int) $count;
-    }
-
-    /**
-     * The same four, with how many resource-less rows each writes once the subject is gone: the throttle still
-     * reports the throttle, as for an address that never named anyone.
-     *
-     * @return iterable<string, array{string, string, int}>
-     */
-    public static function writersAgainstAnErasedSubject(): iterable
-    {
-        yield 'lockout' => ['lockout', 'USER_LOCKED', 0];
-        yield 'lockout notice' => ['lockout notice', 'ACCOUNT_LOCKOUT_NOTIFIED', 0];
-        yield 'recovery throttle' => ['recovery throttle', 'PASSWORD_RECOVERY_THROTTLED', 1];
-        yield 'recovery secret' => ['recovery secret', 'RECOVERY_SECRET_MINTED', 0];
-        yield 'recovery secret redeemed' => ['recovery secret redeemed', 'RECOVERY_SECRET_REDEEMED', 0];
-        yield 'recovery secret revoked' => ['recovery secret revoked', 'RECOVERY_SECRET_REVOKED', 0];
-        yield 'recovery secret redemption compensated' => [
-            'recovery secret redemption compensated',
-            'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
-            0,
-        ];
-        yield 'recovery secret redemption interrupted' => [
-            'recovery secret redemption interrupted',
-            'RECOVERY_SECRET_REDEMPTION_INTERRUPTED',
-            0,
-        ];
     }
 
     /**

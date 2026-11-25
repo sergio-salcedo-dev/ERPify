@@ -18,6 +18,7 @@ use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Throwable;
 
 /**
  * The erasure of an actor's trail and the entry that attests it commit together or not at all, against a real
@@ -29,6 +30,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * touch `audit_log` with a `DELETE`, which the production sources are forbidden.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the price of driving the real use case against the real
+ * database rather than doubling either, for the reason the sibling functional tests state
  */
 #[CoversClass(EraseActorAuditTrail::class)]
 final class EraseActorAuditTrailAtomicityFunctionalTest extends KernelTestCase
@@ -52,7 +56,7 @@ final class EraseActorAuditTrailAtomicityFunctionalTest extends KernelTestCase
             try {
                 $useCase->erase($actorId);
                 $this->fail('A failing self-audit must propagate.');
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // Expected: the rewrite and its evidence are one unit, and the unit failed.
             }
 

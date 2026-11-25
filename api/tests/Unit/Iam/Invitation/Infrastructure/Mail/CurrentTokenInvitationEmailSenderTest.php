@@ -75,7 +75,8 @@ final class CurrentTokenInvitationEmailSenderTest extends TestCase
         }
 
         $replacement = new SpyInvitationEmailSender();
-        $this->sender($replacement, $invitation)->send(self::RECIPIENT, self::INVITATION_ID . '.' . $second->plaintext());
+        $secondLink = self::INVITATION_ID . '.' . $second->plaintext();
+        $this->sender($replacement, $invitation)->send(self::RECIPIENT, $secondLink);
         $this->assertCount(1, $replacement->sent, 'the replacement is still mailed');
     }
 
@@ -122,18 +123,7 @@ final class CurrentTokenInvitationEmailSenderTest extends TestCase
         $sender->send(self::RECIPIENT, self::INVITATION_ID . '.some-secret');
     }
 
-    /**
-     * @return iterable<string, array{string}>
-     */
-    public static function provideMalformedTokens(): iterable
-    {
-        yield 'no separator' => ['not-a-token'];
-        yield 'an empty secret' => [self::INVITATION_ID . '.'];
-        yield 'a selector that is not an id' => ['selector.some-secret'];
-        yield 'nothing at all' => [''];
-    }
-
-    #[DataProvider('provideMalformedTokens')]
+    #[DataProvider('provideAMalformedTokenIsNotMailedCases')]
     public function testAMalformedTokenIsNotMailed(string $token): void
     {
         [$invitation] = $this->sentInvitation();
@@ -146,6 +136,17 @@ final class CurrentTokenInvitationEmailSenderTest extends TestCase
         } finally {
             $this->assertSame([], $spy->sent);
         }
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function provideAMalformedTokenIsNotMailedCases(): iterable
+    {
+        yield 'no separator' => ['not-a-token'];
+        yield 'an empty secret' => [self::INVITATION_ID . '.'];
+        yield 'a selector that is not an id' => ['selector.some-secret'];
+        yield 'nothing at all' => [''];
     }
 
     public function testTheRefusalNamesNeitherTheAddressNorTheToken(): void

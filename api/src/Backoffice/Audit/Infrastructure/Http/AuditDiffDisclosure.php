@@ -26,6 +26,9 @@ use Erpify\Shared\Audit\Domain\AuditMetadataShape;
  */
 final readonly class AuditDiffDisclosure
 {
+    /** base64url without padding, at least a 24-byte nonce plus a 16-byte tag. */
+    private const string SEALED_ENVELOPE_PATTERN = '/^[A-Za-z0-9_-]{54,}$/D';
+
     /**
      * @var array<string, list<string>> resource type => the fields of that type that carry no personal data
      */
@@ -45,12 +48,18 @@ final readonly class AuditDiffDisclosure
         $disclosed = [];
 
         foreach ($changes as $field => $pair) {
-            $disclosed[$field] = $this->mayServe((string) $field, $pair, $clear)
-                ? $pair
-                : ['old' => AuditEventDetailResourceMapper::WITHHELD, 'new' => AuditEventDetailResourceMapper::WITHHELD];
+            $disclosed[$field] = $this->mayServe((string) $field, $pair, $clear) ? $pair : $this->withheldPair();
         }
 
         return $disclosed;
+    }
+
+    /**
+     * @return array{old: string, new: string}
+     */
+    private function withheldPair(): array
+    {
+        return ['old' => AuditEventDetailResourceMapper::WITHHELD, 'new' => AuditEventDetailResourceMapper::WITHHELD];
     }
 
     /**
@@ -58,20 +67,59 @@ final readonly class AuditDiffDisclosure
      */
     private function mayServe(string $field, mixed $pair, array $clear): bool
     {
-        if (!\is_array($pair) || !\array_key_exists('old', $pair) || !\array_key_exists('new', $pair)) {
+        // Exactly the two sides the diff builder writes: a pair carrying anything else is not one it produced.
+        if (!\is_array($pair) || ['new', 'old'] !== $this->sortedKeys($pair)) {
             return false;
         }
 
-        return \in_array($field, $clear, true) || ($this->isSealedSide($pair['old']) && $this->isSealedSide($pair['new']));
+        // Both keys are present: the check above admits no other key set.
+        $old = $pair['old'] ?? null;
+        $new = $pair['new'] ?? null;
+
+        if (\in_array($field, $clear, true)) {
+            return $this->isScalarOrNull($old) && $this->isScalarOrNull($new);
+        }
+
+        return $this->isSealedSide($old) && $this->isSealedSide($new);
     }
 
     /**
-     * A side that is absent, or the envelope a sealed value travels in and nothing else: an array carrying any other
-     * key beside it is a map somebody built, and is not served on the strength of containing the marker.
+     * A side that is absent, or the envelope a sealed value travels in and nothing else, holding what a sealed value
+     * looks like: the writer's base64url (no padding) of a 24-byte nonce, the ciphertext and a 16-byte tag, so at
+     * least 54 characters of that alphabet. A shape test and not a proof — it refuses an address, a name or a nested
+     * map put under the marker, and cannot tell a long plaintext token from a ciphertext — but an array carrying
+     * any other key beside the marker is a map somebody built and is not served on the strength of containing it.
      */
     private function isSealedSide(mixed $side): bool
     {
-        return null === $side
-            || (\is_array($side) && [AuditMetadataShape::SEALED_VALUE_KEY] === \array_keys($side));
+        if (null === $side) {
+            return true;
+        }
+
+        if (!\is_array($side) || [AuditMetadataShape::SEALED_VALUE_KEY] !== \array_keys($side)) {
+            return false;
+        }
+
+        $envelope = $side[AuditMetadataShape::SEALED_VALUE_KEY] ?? null;
+
+        return \is_string($envelope) && 1 === \preg_match(self::SEALED_ENVELOPE_PATTERN, $envelope);
+    }
+
+    private function isScalarOrNull(mixed $value): bool
+    {
+        return null === $value || \is_scalar($value);
+    }
+
+    /**
+     * @param array<array-key, mixed> $pair
+     *
+     * @return list<array-key>
+     */
+    private function sortedKeys(array $pair): array
+    {
+        $keys = \array_keys($pair);
+        \sort($keys);
+
+        return $keys;
     }
 }

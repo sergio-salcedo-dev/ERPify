@@ -768,7 +768,7 @@ you change anything here.
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 - [ ] **Persisted per-identity lockout (`identity_user.failed_attempts` / `locked_until`):** a second line
-      behind the ephemeral per-IP+email `login_throttling` (built-in, `max_attempts: 5`). After **10** consecutive
+      behind the ephemeral per-IP+email `login_throttling` (`CanonicalLoginRateLimiter`: 5 failures a minute per resolved mailbox and client address, 25 per client address). After **10** consecutive
       failed attempts against a **resolved** identity it is locked for **15 minutes**, refused BEFORE the password
       is verified (`LockedIdentityLoginRefusalListener`) with the uniform **401 `unauthenticated`** behind the
       timing floor, minting no session; a reset, a recovery-secret redemption, a change of password, an administrator's unlock or
@@ -1008,9 +1008,12 @@ mitigated state. Accepting one means recording who accepted it and against which
       columns; the erasure first, and the writer's locked read finds no subject and writes nothing. What was missing
       was the proof, and the register: `LateAuditWriterErasureSerialisationFunctionalTest` covered only
       `RECOVERY_SECRET_MINTED`, and read only the resource axis. It now drives all five actions through the real race
-      (a second process holding the row), reads BOTH axes (`resource_id` and `actor_id`), and adds the case the
-      item turned on — a row sealed from the subject's own token, which names them as actor, written and then erased,
-      leaving no row naming them and the row itself anonymised on both axes. **Not established:** which commit
+      (a second process holding the row) and reads BOTH axes (`resource_id` and `actor_id`) afterwards. Those races
+      run with no session token, so the actor of a row they write is the system; the case the item turned on — a row
+      sealed from the subject's own token, which names them as ACTOR — is a separate test that writes it and then
+      erases, in sequence, leaving no row naming them and the row itself anonymised on both axes. **No test runs the
+      erasure-first order with an actor-sealed row:** that order is the writer finding no subject, and the lock that
+      yields it is the one the race tests exercise. **Not established:** which commit
       introduced the lock — the checkout's history is shallow and `git log -S` reached only a documentation commit —
       so this records that it holds at this head, not when it started to. The residual the item cited stays what it
       was: a writer outside `Iam/Identity/Application` is outside `SubjectAuditWriteSerialisationGateTest`, which reads
@@ -1035,8 +1038,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       shape and any `metadata` over 16 KiB, so a producer can no longer drop an `iban` or a request body into the
       one column no erasure pass rewrites. **Closed 2026-11-25: `orphan_role_values`** carried a sample of the raw
       `identity_user.roles` text the integrity probe could not explain — whatever the corruption wrote there, a
-      person's email included. It now admits only a value shaped like a role name (`[A-Z][A-Z0-9_]{0,63}`), the
-      absent-cell sentinel or `<non-role-shaped>`, decided in one place (`AuditMetadataShape::storedValue()`) that
+      person's email included. It now admits only a value shaped like a role name (`[A-Z][A-Z0-9_]{0,63}`; a cell
+      longer than that is the sentinel, never a prefix of itself), the
+      `<null>` sentinel (reserved: the one producer today hands over strings, so it is exercised by the vocabulary test
+      only) or `<non-role-shaped>`, decided in one place (`AuditMetadataShape::storedValue()`) that
       the producer calls and the shape agrees with; the complete raw list stays in the inspection's own output,
       which an operator reaches deliberately. This governs new writes, not old rows: a row written before
       this change keeps what it held, and there is none in this deployment. **What remains:** (a) **the clear fields
@@ -1376,8 +1381,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       `Iam.Invitation` is classified so in `api/.persistent-transport-policy`. The second consequence is untouched and
       both are bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
       operator to resend again, and a refused send answers 503 rather than a false 204. The decorator costs one
-      indexed read per send and is pinned by `CurrentTokenInvitationEmailSenderTest` (live, replaced by a later resend,
-      expired, no longer `SENT`, absent, four malformed shapes) and by the container resolving the port to it.
+      indexed read per send, deliberately a fresh one (`findByIdFresh()`: a plain `find()` answers from the entity this
+      request already manages and would never see a resend another process committed). It is pinned by
+      `CurrentTokenInvitationEmailSenderTest` (live, replaced by a later resend, expired, no longer `SENT`, absent,
+      four malformed shapes) and by `CurrentTokenInvitationEmailSenderFunctionalTest`, which replaces the digest behind
+      this process's back with a raw `UPDATE`, shows that a plain read would let the old link through, and shows the
+      decorator refusing it, the best-effort wrapper reporting `false`, the replacement still mailed, and the container
+      resolving the port to the decorator.
       **When an outbox earns its place** — any one of: a second transactional email producer that needs
       at-least-once delivery rather than best-effort; the 30 s timeout observed against real SMTP latency; an
       invitee who reports holding only a dead link after a resend; or invitations sent in bulk, where a
@@ -2559,7 +2569,11 @@ mitigated state. Accepting one means recording who accepted it and against which
       the HTTP path itself is not covered end to end, because the test kernel keeps `cache.rate_limiter` on an
       array adapter that the services resetter empties between requests, so a sequence of requests cannot
       observe an accumulating budget; and the secret behind the HMAC is `kernel.secret`, so rotating it resets
-      every bucket. The persisted lockout keys on the resolved row and was never affected.
+      every bucket; and a request with no client address at all shares one bucket per kind with every other such request
+      (`getClientIp()` is `null` only where no `REMOTE_ADDR` exists, which a FrankenPHP deployment does not produce, but
+      a trusted-proxy misconfiguration that collapses every client onto the proxy's address has the same shape, and
+      the framework's default limiter had it too). The persisted lockout keys on the resolved row and was never
+      affected.
 
 - [x] **`/forgot-password` latency separated an active account from every other address — closed.**
       `RequestPasswordReset::request()` ran a `FOR UPDATE` transaction (supersede, insert, event publish) and a
@@ -2890,7 +2904,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       `credential-affecting` in `api/.credential-proof-policy` and pinned with the other erasures by
       `CredentialProofGateTest`. The proof precedes the id check, the self-erasure refusal and the lookup, so a
       malformed id, an absent identity and a self-targeted request all answer `403 invalid-current-password` to a caller
-      who has not proved the password — the route is never an existence oracle; `erase.feature` pins both. The console
+      who has not proved the password — the route is never an existence oracle. `erase.feature` pins the absent and the
+      malformed id, and `UserEraseFunctionalTest` pins all three, the self-targeted one included, plus the spent budget
+      answering 429 to the correct password. The console
       keeps its type-to-confirm step and adds the password dialog behind it (two brakes: which identity, and whose
       session). **Residuals:** `identity:gdpr:erase-subject` drives the same use case from the console with no session
       and asks no password — the proof is the controller's, as for the other two authority writes, so a holder of a

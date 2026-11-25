@@ -6,6 +6,7 @@ namespace Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine;
 
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\EntityNotFoundException;
 use Erpify\Iam\Invitation\Domain\Entity\Invitation;
 use Erpify\Iam\Invitation\Domain\Enum\InvitationStatus;
 use Erpify\Iam\Invitation\Domain\Repository\InvitationRepository;
@@ -45,6 +46,25 @@ final readonly class DoctrineInvitationRepository implements InvitationRepositor
     public function findById(string $id): ?Invitation
     {
         return $this->entityManager->find(Invitation::class, $id);
+    }
+
+    #[Override]
+    public function findByIdFresh(string $id): ?Invitation
+    {
+        $invitation = $this->entityManager->find(Invitation::class, $id);
+
+        if (!$invitation instanceof Invitation) {
+            return null;
+        }
+
+        try {
+            $this->entityManager->refresh($invitation);
+        } catch (EntityNotFoundException) {
+            // Deleted since it was loaded: to this caller there is no such invitation.
+            return null;
+        }
+
+        return $invitation;
     }
 
     #[Override]

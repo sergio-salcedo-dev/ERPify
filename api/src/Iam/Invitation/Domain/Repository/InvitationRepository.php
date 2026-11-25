@@ -22,6 +22,14 @@ interface InvitationRepository
     public function findById(string $id): ?Invitation;
 
     /**
+     * The invitation as the database holds it NOW, not as this process last saw it. {@see findById()} may hand back
+     * an entity the unit of work already manages, which reflects what THIS process wrote and nothing a concurrent
+     * one committed since; a caller deciding whether a token is still the live one has to read past that. Reloads
+     * the managed state, so it must not be used while the caller holds unsaved changes to the same invitation.
+     */
+    public function findByIdFresh(string $id): ?Invitation;
+
+    /**
      * Loads the invitation under a pessimistic write lock, so two concurrent accepts of the same single-use
      * token serialise on the row: the second caller blocks until the first commits, then re-reads the retired
      * (`ACCEPTED`) status and is rejected. A plain read cannot enforce single-use across two connections — the

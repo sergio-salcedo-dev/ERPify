@@ -118,6 +118,20 @@ final class StoredIdentityDriftTest extends TestCase
     }
 
     /**
+     * 64 characters is the longest value kept; one more is a different cell, recorded as the sentinel rather than as
+     * a 64-character prefix that reads as a role nobody defined.
+     */
+    #[Test]
+    public function itKeepsAValueOfTheLongestAdmittedLengthAndSentinelsOneCharacterMore(): void
+    {
+        $longest = \str_repeat('A', 64);
+
+        $metadata = (new StoredIdentityDrift([$longest, $longest . 'A'], 0, 0, 0))->toAuditMetadata();
+
+        $this->assertSame([$longest, AuditMetadataShape::NOT_ROLE_SHAPED], $metadata['orphan_role_values']);
+    }
+
+    /**
      * The corruption decides how many orphan values there are and how long each is, and the audit row is bounded:
      * a row refused for its size would leave the trail with no record of the finding. So the row samples them,
      * keeps the total, and must still fit the bound when every sampled value is as long as it can be.
@@ -135,8 +149,9 @@ final class StoredIdentityDriftTest extends TestCase
         $this->assertSame(500, $metadata['orphan_role_value_count']);
         $this->assertCount(StoredIdentityDrift::SAMPLED_ORPHAN_VALUES, $metadata['orphan_role_values']);
         $this->assertSame(
-            'R001' . \str_repeat('X', StoredIdentityDrift::SAMPLED_VALUE_LENGTH - 4),
+            AuditMetadataShape::NOT_ROLE_SHAPED,
             \array_first($metadata['orphan_role_values']),
+            'a cell longer than any role name is recorded as the sentinel, never as a prefix of itself',
         );
 
         $entry = AuditLogEntry::create(

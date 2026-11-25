@@ -131,8 +131,8 @@ final class EraseActorAuditTrailCommandTest extends TestCase
 
     /**
      * The self-audit failing means the transaction rolled back, so the erasure did not happen: an ordinary
-     * `FAILURE` that is safe to repeat, never the "erased but unrecorded" outcome this command used to need a code of
-     * its own for. The rollback itself is the use case's, proved against a real database by the functional test.
+     * `FAILURE` that is safe to repeat, and there is no "erased but unrecorded" outcome to give a code of its own.
+     * The rollback itself is the use case's, proved against a real database by the functional test.
      */
     public function testItReportsAnOrdinaryFailureWhenTheSelfAuditFails(): void
     {

@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Shared\Audit\Application;
 
-use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
-use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
-use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\EraseActorAuditTrail;
 use Erpify\Shared\Audit\Domain\AuditLevel;
-use Erpify\Shared\Audit\Domain\AuditResource;
 use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -29,8 +24,6 @@ final class EraseActorAuditTrailTest extends TestCase
 {
     private const string ACTOR_ID = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c';
 
-    public const string PSEUDONYM = 'a1b2c3d4-0000-7000-8000-000000000001';
-
     public function testTheRewriteAndItsEvidenceBothHappenInsideTheTransactionInThatOrder(): void
     {
         $transaction = new InlineTransactionManager();
@@ -44,10 +37,10 @@ final class EraseActorAuditTrailTest extends TestCase
 
         $this->assertSame(['anonymise:inside', 'log:inside'], $steps->events);
         $this->assertSame(3, $result->affectedRows);
-        $this->assertSame(self::PSEUDONYM, $result->pseudonym);
+        $this->assertSame(TracingAuditActorAnonymiser::PSEUDONYM, $result->pseudonym);
         $this->assertSame(
             [['action' => 'GDPR_ERASURE_EXECUTED', 'level' => AuditLevel::SECURITY, 'metadata' => [
-                'anonymized_actor_id' => self::PSEUDONYM,
+                'anonymized_actor_id' => TracingAuditActorAnonymiser::PSEUDONYM,
                 'affected_rows' => 3,
             ]]],
             $steps->logged,
@@ -76,93 +69,28 @@ final class EraseActorAuditTrailTest extends TestCase
         $steps = new TransactionTrace($transaction);
         $useCase = new EraseActorAuditTrail(
             $this->anonymiser($steps, affectedRows: 2),
-            $this->logger($steps, failing: true),
+            $this->logger($steps, new RuntimeException('the audit writer is down')),
             $transaction,
         );
 
         try {
             $useCase->erase(self::ACTOR_ID);
             $this->fail('A failed self-audit must propagate so the transaction rolls back.');
-        } catch (RuntimeException $failure) {
-            $this->assertSame('the audit writer is down', $failure->getMessage());
+        } catch (RuntimeException $runtimeException) {
+            $this->assertSame('the audit writer is down', $runtimeException->getMessage());
         }
 
         $this->assertSame(['anonymise:inside', 'log:inside'], $steps->events);
         $this->assertFalse($transaction->committed, 'the unit of work never completed, so nothing was committed');
     }
 
-    private function anonymiser(TransactionTrace $steps, int $affectedRows): AuditActorAnonymiser
+    private function anonymiser(TransactionTrace $trace, int $affectedRows): TracingAuditActorAnonymiser
     {
-        return new class($steps, $affectedRows) implements AuditActorAnonymiser {
-            public function __construct(
-                private readonly TransactionTrace $steps,
-                private readonly int $affectedRows,
-            ) {
-            }
-
-            #[Override]
-            public function countFor(string $actorId): int
-            {
-                return $this->affectedRows;
-            }
-
-            #[Override]
-            public function anonymise(string $actorId): ActorAnonymisationResult
-            {
-                $this->steps->record('anonymise');
-
-                return new ActorAnonymisationResult(EraseActorAuditTrailTest::PSEUDONYM, $this->affectedRows);
-            }
-        };
+        return new TracingAuditActorAnonymiser($trace, $affectedRows);
     }
 
-    private function logger(TransactionTrace $steps, bool $failing = false): AuditLogger
+    private function logger(TransactionTrace $trace, ?RuntimeException $failure = null): TracingAuditLogger
     {
-        return new class($steps, $failing) implements AuditLogger {
-            public function __construct(
-                private readonly TransactionTrace $steps,
-                private readonly bool $failing,
-            ) {
-            }
-
-            #[Override]
-            public function log(
-                string $action,
-                AuditLevel $level,
-                ?AuditResource $resource = null,
-                array $metadata = [],
-            ): void {
-                $this->steps->record('log');
-
-                if ($this->failing) {
-                    throw new RuntimeException('the audit writer is down');
-                }
-
-                $this->steps->logged[] = ['action' => $action, 'level' => $level, 'metadata' => $metadata];
-            }
-        };
-    }
-}
-
-/**
- * Records each step with whether it ran inside the unit of work, which is the one fact the ordering assertion needs.
- *
- * @internal
- */
-final class TransactionTrace
-{
-    /** @var list<string> */
-    public array $events = [];
-
-    /** @var list<array{action: string, level: AuditLevel, metadata: array<string, mixed>}> */
-    public array $logged = [];
-
-    public function __construct(private readonly InlineTransactionManager $transaction)
-    {
-    }
-
-    public function record(string $step): void
-    {
-        $this->events[] = $step . ($this->transaction->inside ? ':inside' : ':outside');
+        return new TracingAuditLogger($trace, $failure);
     }
 }

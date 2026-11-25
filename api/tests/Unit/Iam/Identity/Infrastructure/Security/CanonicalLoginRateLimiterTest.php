@@ -8,6 +8,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\CanonicalLoginRateLimiter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
@@ -21,13 +22,26 @@ final class CanonicalLoginRateLimiterTest extends TestCase
 {
     private const string IP = '203.0.113.7';
 
+    #[DataProvider('provideEverySpellingOfOneMailboxSharesTheSameBudgetCases')]
+    public function testEverySpellingOfOneMailboxSharesTheSameBudget(string $spelling): void
+    {
+        $limiter = $this->limiter(localLimit: 2);
+
+        $this->assertTrue($limiter->consume($this->request('nora@erpify.test'))->isAccepted());
+        $this->assertTrue($limiter->consume($this->request($spelling))->isAccepted());
+        $this->assertFalse(
+            $limiter->consume($this->request('nora@erpify.test'))->isAccepted(),
+            'a third attempt on the same mailbox must be refused whatever the spelling',
+        );
+    }
+
     /**
      * Each spelling resolves to the identity `nora@erpify.test` through `Email`, so each must draw on the one
      * per-mailbox budget instead of opening its own.
      *
      * @return iterable<string, array{string}>
      */
-    public static function spellingsOfOneMailbox(): iterable
+    public static function provideEverySpellingOfOneMailboxSharesTheSameBudgetCases(): iterable
     {
         yield 'upper case' => ['NORA@ERPIFY.TEST'];
         yield 'mixed case' => ['Nora@Erpify.Test'];
@@ -38,16 +52,15 @@ final class CanonicalLoginRateLimiterTest extends TestCase
         yield 'byte order mark' => ["\u{FEFF}nora@erpify.test"];
     }
 
-    #[DataProvider('spellingsOfOneMailbox')]
-    public function testEverySpellingOfOneMailboxSharesTheSameBudget(string $spelling): void
+    public function testDecomposedAndComposedSpellingsOfOneAccentedMailboxShareTheSameBudget(): void
     {
         $limiter = $this->limiter(localLimit: 2);
 
-        $this->assertTrue($limiter->consume($this->request('nora@erpify.test'))->isAccepted());
-        $this->assertTrue($limiter->consume($this->request($spelling))->isAccepted());
+        $this->assertTrue($limiter->consume($this->request("jos\u{00E9}@erpify.test"))->isAccepted());
+        $this->assertTrue($limiter->consume($this->request("jose\u{0301}@erpify.test"))->isAccepted());
         $this->assertFalse(
-            $limiter->consume($this->request('nora@erpify.test'))->isAccepted(),
-            'a third attempt on the same mailbox must be refused whatever the spelling',
+            $limiter->consume($this->request("jos\u{00E9}@erpify.test"))->isAccepted(),
+            'NFC and NFD spell one mailbox, so they draw on one budget',
         );
     }
 
@@ -116,7 +129,7 @@ final class CanonicalLoginRateLimiterTest extends TestCase
 
         $limiter->consume($this->request('nora@erpify.test'));
 
-        $stored = \serialize((new \ReflectionProperty($storage, 'buckets'))->getValue($storage));
+        $stored = \serialize((new ReflectionProperty($storage, 'buckets'))->getValue($storage));
         $this->assertStringNotContainsString('nora', $stored);
         $this->assertStringNotContainsString(self::IP, $stored);
     }

@@ -11,14 +11,15 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 /**
  * Erases the ACTOR axis of one person's audit trail and records that it did, as one unit.
  *
- * The anonymisation and its compliance self-audit commit together or not at all. They did not: the `UPDATE`
- * committed on its own and the `GDPR_ERASURE_EXECUTED` row was written afterwards, so a failure between the two
- * left the rows anonymised with nothing attesting it — and the original id now matched nothing, so a re-run
- * reported "nothing to erase" over a subject that had in fact been erased. Inside one transaction a failed
- * self-audit rolls the rewrite back, the original id still matches, and the operation is safe to repeat.
+ * The anonymisation and its compliance self-audit commit together or not at all. Were the self-audit written after
+ * the `UPDATE` committed, a failure between the two would leave the rows anonymised with nothing attesting it, and
+ * the original id would match nothing, so a re-run would report "nothing to erase" over a subject that had in fact
+ * been erased. Inside one transaction a failed self-audit rolls the rewrite back, the original id still matches,
+ * and the operation is safe to repeat.
  *
- * The transaction is the {@see TransactionManager}'s, never a raw connection call: no savepoint nesting is
- * configured, and a use case that opens its own boundary through the port composes with a caller's.
+ * The transaction is the {@see TransactionManager}'s, never a raw connection call, so the boundary is the same one
+ * every other use case here owns. Called while its caller already holds a transaction it joins it, and then a
+ * failure inside it can only mark the outer one for rollback — which fails closed.
  *
  * **The zero-rows guard lives HERE, beside the write it defends.** An `UPDATE` that matched nothing is not an
  * erasure, and `AuditErasureEvidence` exempts the self-audit action from the retention prune for ever, so a row

@@ -22,9 +22,6 @@ final readonly class StoredIdentityDrift
     /** How many orphan values the audit row samples; the total travels beside them. */
     public const int SAMPLED_ORPHAN_VALUES = 20;
 
-    /** How many characters of each sampled value the audit row keeps. */
-    public const int SAMPLED_VALUE_LENGTH = 64;
-
     /**
      * @param list<string> $orphanRoleValues
      */
@@ -45,11 +42,12 @@ final readonly class StoredIdentityDrift
     }
 
     /**
-     * The orphan values are SAMPLED, not listed, and a sampled value is recorded as itself only when it is shaped like
-     * a role name ({@see AuditMetadataShape::storedValue()}); any other cell is recorded as a sentinel, because a
-     * corrupted `roles` column can hold anything, an address included, and this JSON is rewritten by no erasure.
-     * They are raw column text, as many and as long as the corruption made them, and the audit row is bounded — a row refused for its size would leave the trail with no record
-     * that the drift was ever detected, which is the one thing this finding exists to leave. The sample and the
+     * The orphan values are SAMPLED, not listed, and a sampled value is recorded as itself only when it is
+     * shaped like a role name ({@see AuditMetadataShape::storedValue()}); any other cell is recorded as a
+     * sentinel, because a corrupted `roles` column can hold anything, an address included, and this JSON is
+     * rewritten by no erasure. They are raw column text, as many and as long as the corruption made them,
+     * and the audit row is bounded — a row refused for its size would leave the trail with no record that
+     * the drift was ever detected, which is the one thing this finding exists to leave. The sample and the
      * total keep the row actionable; the complete list is what the inspection prints for the operator.
      *
      * @return array{
@@ -64,9 +62,7 @@ final readonly class StoredIdentityDrift
     {
         return [
             'orphan_role_values' => \array_map(
-                static fn (string $value): string => AuditMetadataShape::storedValue(
-                    \mb_substr($value, 0, self::SAMPLED_VALUE_LENGTH),
-                ),
+                AuditMetadataShape::storedValue(...),
                 \array_slice($this->orphanRoleValues, 0, self::SAMPLED_ORPHAN_VALUES),
             ),
             'orphan_role_value_count' => \count($this->orphanRoleValues),

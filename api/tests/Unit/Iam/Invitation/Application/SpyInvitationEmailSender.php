@@ -18,6 +18,11 @@ final class SpyInvitationEmailSender implements InvitationEmailSender
     /** @var list<array{recipient: string, token: string}> */
     public array $sent = [];
 
+    public function sentCount(): int
+    {
+        return \count($this->sent);
+    }
+
     #[Override]
     public function send(string $recipientEmail, string $acceptToken): void
     {

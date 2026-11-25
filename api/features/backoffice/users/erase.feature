@@ -444,3 +444,20 @@ Feature: Erase an identity (GDPR right to erasure)
     """
     Then the response status code should be 403
     And the JSON node "type" should be equal to "invalid-current-password"
+
+  # The budget is primed in the SAME scenario as the request that observes it: the test cache pool is the array
+  # adapter, reset on every kernel.terminate, so "five succeed and the sixth is refused" cannot be expressed as
+  # six sequential HTTP steps. Last in the file because the drained bucket belongs to the administrator.
+  Scenario: A drained proof budget refuses even the correct password and erases nobody
+    Given I am logged in as an administrator
+    And the password-change budget is exhausted for identity "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
+    Then the response status code should be 429
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "rate-limited"
+    And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"

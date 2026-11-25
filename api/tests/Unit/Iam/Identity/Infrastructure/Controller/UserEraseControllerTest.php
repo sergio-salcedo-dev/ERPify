@@ -36,6 +36,9 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
  * Only the failure paths are driven; the erasure itself and the 204 are the functional and Behat lanes'.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the price of weaving the real proof (hasher, limiter, use case
+ * doubles) rather than mocking it, for the reason the sibling controller tests state
  */
 #[CoversClass(UserEraseController::class)]
 final class UserEraseControllerTest extends TestCase
@@ -77,7 +80,7 @@ final class UserEraseControllerTest extends TestCase
             // The budget is spent by the attempt, not by its outcome — which is what leaves none for below.
         }
 
-        // The CORRECT password now: only a refusal on the budget keeps this from reaching the erasure.
+        // With the CORRECT password: only a refusal on the budget keeps this from reaching the erasure.
         $this->expectException(RateLimitExceeded::class);
 
         $controller($this->caller(), self::TARGET_ID, new EraseIdentityRequest(self::PASSWORD));

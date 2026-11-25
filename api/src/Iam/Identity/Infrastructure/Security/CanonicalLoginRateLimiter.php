@@ -16,13 +16,13 @@ use Symfony\Component\Security\Http\SecurityRequestAttributes;
 /**
  * The login throttle: one bucket per client address, and one per (resolved mailbox + client address).
  *
- * It replaces the framework's default limiter for a single reason — the default folds the submitted username
- * with `strtolower` alone, while an identity is resolved through {@see \Erpify\Iam\Identity\Domain\Email}, which
- * also strips edge whitespace and zero-width characters and normalises to NFC. Every spelling that resolves to
- * one identity but folds to a different string therefore got a fresh budget per client, so the five-a-minute
- * ceiling bounded spellings, not attempts. The mailbox is keyed through {@see RecoveryBudgetKey}, the rule
- * every other per-address budget here already uses, including its fallback: a submission that is not an address
- * still spends a bucket, so the throttle never reveals which spellings denote a mailbox.
+ * The framework's default limiter lower-cases the submitted username and nothing else, while an identity is
+ * resolved through {@see \Erpify\Iam\Identity\Domain\Email}, which also strips edge whitespace and zero-width
+ * characters and normalises to NFC. A spelling that resolves to the same identity but folds to a different string
+ * would draw on a fresh budget per client, so the five-a-minute ceiling would bound spellings, not attempts.
+ * The mailbox is therefore keyed through {@see RecoveryBudgetKey}, the rule every other per-address budget here
+ * already uses, including its fallback: a submission that is not an address still spends a bucket, so the
+ * throttle never reveals which spellings denote a mailbox.
  *
  * Keys are HMACs, as in the default, so neither the address nor the client IP reaches the cache pool in clear.
  * The bucket policy is the default's (fixed window, global ceiling five times the local one) and is declared in
@@ -37,7 +37,7 @@ final class CanonicalLoginRateLimiter extends AbstractRequestRateLimiter
         #[Autowire(service: 'limiter.login_local')]
         private readonly RateLimiterFactory $localFactory,
         #[SensitiveParameter]
-        #[Autowire('%kernel.secret%')]
+        #[Autowire(param: 'kernel.secret')]
         private readonly string $secret,
     ) {
     }

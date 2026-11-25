@@ -29,15 +29,15 @@ use Throwable;
  * rewrite and that entry are one transaction ({@see EraseActorAuditTrail}): either both exist or neither does.
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen.
- * `SUCCESS` means the trail is anonymised, or that a no-op happened on a run that could answer — no
- * matching rows, `--dry-run`, or a confirmation answered "no"; a run that could not put its confirmation
- * answers `INVALID` whatever the trail holds. `FAILURE` means the erasure did not complete: either the count failed, so
- * nothing was attempted, or the transaction failed and rolled back, so the rows keep their original id and the run
- * is safe to repeat. The one ambiguity left is a connection lost at the `COMMIT` itself, whose outcome nobody can
- * know from here — which is why the message says to verify with `--dry-run` (zero rows for the original id means
- * it committed) rather than to repeat blindly. `INVALID` means nothing was attempted and the command line is what needs repairing —
- * a malformed id, or a confirmation this run could not put — and it is the one code a caller must not retry
- * on.
+ * `SUCCESS` means the trail is anonymised, or that a no-op happened on a run that could answer — no matching
+ * rows, `--dry-run`, or a confirmation answered "no"; a run that could not put its confirmation answers `INVALID`
+ * whatever the trail holds. `FAILURE` means the erasure did not complete: either the count failed, so nothing was
+ * attempted, or the transaction failed and rolled back, so the rows keep their original id and the run is safe to
+ * repeat. The one ambiguity left is a connection lost at the `COMMIT` itself, whose outcome nobody can know from
+ * here — which is why the message says to verify with `--dry-run` (zero rows for the original id means it
+ * committed) rather than to repeat blindly. `INVALID` means nothing was attempted and the command line is what
+ * needs repairing — a malformed id, or a confirmation this run could not put — and it is the one code a caller
+ * must not retry on.
  *
  * Three spellings suppress the refusal's own message while still refusing: `--quiet`, `--silent`, and a
  * negative `SHELL_VERBOSITY` inherited from a parent process. An unattended run that means to erase passes
