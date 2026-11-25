@@ -6,7 +6,9 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Cli;
 
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Application\EraseActorAuditTrail;
 use Erpify\Shared\Audit\Infrastructure\Cli\EraseActorAuditTrailCommand;
+use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
@@ -206,7 +208,10 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
     {
         $anonymiser = new RecordingAuditActorAnonymiser(5);
         $logger = new RecordingAuditLogger();
-        $command = new EraseActorAuditTrailCommand($anonymiser, $logger);
+        $command = new EraseActorAuditTrailCommand(
+            $anonymiser,
+            new EraseActorAuditTrail($anonymiser, $logger, new InlineTransactionManager()),
+        );
 
         $input = new ArrayInput(['actor-id' => self::ACTOR_ID], $command->getDefinition());
         $input->setInteractive(true);
@@ -225,6 +230,9 @@ final class EraseActorAuditTrailCommandConfirmationTest extends TestCase
 
     private function testerFor(AuditActorAnonymiser $anonymiser, AuditLogger $logger): CommandTester
     {
-        return new CommandTester(new EraseActorAuditTrailCommand($anonymiser, $logger));
+        return new CommandTester(new EraseActorAuditTrailCommand(
+            $anonymiser,
+            new EraseActorAuditTrail($anonymiser, $logger, new InlineTransactionManager()),
+        ));
     }
 }

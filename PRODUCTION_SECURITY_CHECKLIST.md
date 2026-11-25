@@ -1164,14 +1164,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       `metadata`, by value and case-insensitively, so it reaches every event holding it without anyone
       listing them. It is the log's one sanctioned mutation, recorded as D12 of
       [`docs/adr/event-store-and-projections.md`](docs/adr/event-store-and-projections.md).
-- [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
-      `GDPR_ERASURE_EXECUTED` self-audit is written _after_, outside any transaction — a crash
-      between them leaves the erasure done with no evidence of it, and the original id no longer
-      matches anything, so a re-run falsely reports "nothing to erase". Accepted while the only
-      trigger is a synchronous operator command (`audit-activity-log.md` D4). **Its revisit trigger
-      fires** if #555 lands a second mutation statement, or the day a non-CLI trigger appears:
-      route it through `TransactionManager`, never a raw DBAL transaction nested under
-      `wrapInTransaction` (no `nest_transactions_with_savepoints` is configured).
+- [x] **`audit:gdpr:erase` was not atomic — closed 2026-11-25.** The anonymisation `UPDATE` committed and the
+      `GDPR_ERASURE_EXECUTED` self-audit was written _after_, outside any transaction — a crash between them left the
+      erasure done with no evidence of it, and the original id no longer matched anything, so a re-run falsely
+      reported "nothing to erase". Both now run in one `EraseActorAuditTrail` transaction through `TransactionManager`
+      (never a raw DBAL transaction nested under `wrapInTransaction`, which has no savepoints): a failed self-audit rolls
+      the rewrite back, the original id still matches and the run is safe to repeat. The command's `ERASED_UNRECORDED`
+      exit code (3), which existed only to say "erased but unrecorded", is retired because that state is no longer
+      reachable. Pinned by `EraseActorAuditTrailTest` (both writes inside the boundary, in order; no evidence for a
+      statement that matched nothing; a failure leaves it) and by `EraseActorAuditTrailAtomicityFunctionalTest`, which
+      runs against Postgres with nothing enclosing the use case and shows the original ids restored after a failing
+      audit — and goes red if the work runs outside a transaction. **Residual:** a connection lost at the `COMMIT`
+      itself leaves an outcome nobody can know from the caller; the command's message points at `--dry-run` (zero rows
+      for the original id means it committed). A job that treated exit code 3 specially no longer sees it, which fails
+      toward the safe reading.
 - [ ] **A GDPR erasure CLI never answers its own confirmation.** All three (`identity:gdpr:erase-subject`,
       `bank-account:gdpr:erase-subject`, `audit:gdpr:erase`) call `SymfonyStyle::confirm()`, whose default a
       run that cannot be asked would otherwise take for an operator's answer — reporting `0` for an erasure

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Shared\Audit\Infrastructure\Cli;
 
-use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
-use Erpify\Shared\Audit\Application\AuditLogger;
-use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
-use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Application\EraseActorAuditTrail;
 use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -28,17 +25,17 @@ use Throwable;
  * the identity context can protect it. Synchronous: the scope is one subject's rows, not a table sweep.
  *
  * The erasure is itself recorded as a `security` audit entry carrying the resulting pseudonym (never the
- * original id), so the act of forgetting is provable for compliance without re-identifying the person.
+ * original id), so the act of forgetting is provable for compliance without re-identifying the person. The
+ * rewrite and that entry are one transaction ({@see EraseActorAuditTrail}): either both exist or neither does.
  *
  * **Exit codes are this command's contract with an unattended caller**, which reads `$?` and never the screen.
  * `SUCCESS` means the trail is anonymised, or that a no-op happened on a run that could answer — no
  * matching rows, `--dry-run`, or a confirmation answered "no"; a run that could not put its confirmation
  * answers `INVALID` whatever the trail holds. `FAILURE` means the erasure did not complete: either the count failed, so
- * nothing was attempted, or the `UPDATE` failed, so the rows may or may not have changed — a connection lost
- * mid-statement can commit without acknowledging — which is why the message says how far it got and only the
- * first is unconditionally safe to repeat. {@see ERASED_UNRECORDED} is the opposite outcome and carries its
- * own code because no message can reach a caller reading `$?`: the erasure IS done, irreversibly, and
- * nothing attests it. `INVALID` means nothing was attempted and the command line is what needs repairing —
+ * nothing was attempted, or the transaction failed and rolled back, so the rows keep their original id and the run
+ * is safe to repeat. The one ambiguity left is a connection lost at the `COMMIT` itself, whose outcome nobody can
+ * know from here — which is why the message says to verify with `--dry-run` (zero rows for the original id means
+ * it committed) rather than to repeat blindly. `INVALID` means nothing was attempted and the command line is what needs repairing —
  * a malformed id, or a confirmation this run could not put — and it is the one code a caller must not retry
  * on.
  *
@@ -54,24 +51,9 @@ use Throwable;
 )]
 final class EraseActorAuditTrailCommand extends Command
 {
-    private const string ERASURE_ACTION = AuditErasureEvidence::ACTOR_TRAIL_ERASED;
-
-    /**
-     * The erasure committed and its compliance self-audit did not. It earns a code of its own because it is
-     * the one outcome a caller must treat differently from every other failure and cannot tell apart by
-     * reading `$?` alone: the rows ARE anonymised, irreversibly, and no `GDPR_ERASURE_EXECUTED` row attests
-     * it — so retrying with the original id matches nothing and reports "nothing to erase" over a subject
-     * that was in fact erased. What it asks for is not a retry but a hand-written compliance record.
-     *
-     * Outside `Command`'s own vocabulary on purpose: `FAILURE` already means "the erasure did not complete",
-     * and this is its opposite. A job that does not know the code sees a non-zero and stops, which is the
-     * safe reading.
-     */
-    public const int ERASED_UNRECORDED = 3;
-
     public function __construct(
         private readonly AuditActorAnonymiser $anonymiser,
-        private readonly AuditLogger $auditLogger,
+        private readonly EraseActorAuditTrail $eraseActorAuditTrail,
     ) {
         parent::__construct();
     }
@@ -97,9 +79,9 @@ final class EraseActorAuditTrailCommand extends Command
 
                 Exit codes: <comment>0</comment> anonymised, or the no-op you asked for on a run that
                 could answer (including an actor with no matching rows); <comment>1</comment> the erasure
-                did not complete — read the message, which says how far it got, since only a failed row
-                count is unconditionally safe to repeat; <comment>3</comment> the rows WERE anonymised and
-                the compliance entry recording it was not — do not retry, record the erasure by hand;
+                did not complete — the rows keep their original id and the run is safe to repeat, unless
+                the connection was lost at the commit itself, which <comment>--dry-run</comment> settles
+                (zero rows for the original id means it committed);
                 <comment>2</comment> nothing was attempted and the command line needs fixing — a malformed
                 id, or a confirmation this run could not put. Do not retry on <comment>2</comment>.
                 A run that cannot be asked (<comment>--no-interaction</comment>, a closed or already-exhausted
@@ -289,74 +271,36 @@ final class EraseActorAuditTrailCommand extends Command
     }
 
     /**
-     * The irreversible half: change the rows, then hand the outcome on to be recorded. It carries its own
+     * The irreversible half: change the rows and record that it happened, as one transaction. It carries its own
      * `catch` and does not merely lose a distinction without one — the throwable would escape `execute()`,
      * and the console derives the process exit code from `Throwable::getCode()`, so a DBAL driver code
      * surfaces as that number, or as 255 once it exceeds the byte, and a caller reading `$?` sees neither
      * `1` nor anything it can map.
      *
-     * A failure here answers `FAILURE`, and `FAILURE` is not a promise that nothing changed: a connection
-     * lost mid-statement can commit without acknowledging, which is why the message says to verify with
-     * `--dry-run` rather than to repeat the run. Only a failed row COUNT is unconditionally safe to repeat.
+     * A failure here answers `FAILURE` and means the transaction rolled back, with one exception the message
+     * names: a connection lost at the `COMMIT` can commit without acknowledging, which is why it says to
+     * verify with `--dry-run` rather than to repeat the run blindly.
      */
     private function eraseAndReport(SymfonyStyle $io, string $actorId): int
     {
         try {
-            $result = $this->anonymiser->anonymise($actorId);
+            $result = $this->eraseActorAuditTrail->erase($actorId);
         } catch (Throwable $throwable) {
             $io->error(\sprintf(
-                'Anonymisation failed: %s. The rows may or may not have been changed — a lost connection '
-                . 'can commit without acknowledging — so verify with --dry-run before repeating this run.',
+                'Erasure failed: %s. The rows and their compliance entry are written together, so they keep their '
+                . 'original id and this run is safe to repeat — unless the connection was lost at the commit, which '
+                . 'only --dry-run can settle: zero rows for this id means it committed.',
                 $throwable->getMessage(),
             ));
 
             return Command::FAILURE;
         }
 
-        return $this->recordErasure($io, $result);
-    }
-
-    /**
-     * The compliance self-audit, and everything it can do is on the far side of a commit that cannot be
-     * undone. Its failure is not the same failure as a failed `UPDATE`, and the exit code alone cannot
-     * separate them — the message must: the rows ARE anonymised, the original id now matches nothing, and
-     * a naive re-run would falsely report "nothing to erase" over a subject that was in fact erased. So it
-     * answers with a code of its own and tells the operator to record the erasure out of band.
-     *
-     * The zero-rows guard lives HERE, in the same method as the write it defends, rather than in the
-     * caller: a seam between them is a seam a future second caller can enter on the wrong side.
-     */
-    private function recordErasure(SymfonyStyle $io, ActorAnonymisationResult $result): int
-    {
-        // An UPDATE that matched nothing is not an erasure, and saying so before the self-audit is what
-        // keeps the evidence honest: `AuditErasureEvidence` exempts this action from the retention prune
-        // for ever, so a row written here for a subject that was already anonymised is an immortal claim
-        // that an erasure happened. Reached from `--force`, which takes no preview, and from a confirmed
-        // run whose rows were pruned or anonymised between the count and the statement — a preview is
-        // only ever approximate by the time the statement runs.
+        // An UPDATE that matched nothing is not an erasure, and the use case wrote no evidence for it. Reached
+        // from `--force`, which takes no preview, and from a confirmed run whose rows were pruned or anonymised
+        // between the count and the statement — a preview is only ever approximate by the time it runs.
         if (0 === $result->affectedRows) {
             return $this->reportNothingToErase($io);
-        }
-
-        try {
-            $this->auditLogger->log(self::ERASURE_ACTION, AuditLevel::SECURITY, null, [
-                'anonymized_actor_id' => $result->pseudonym,
-                'affected_rows' => $result->affectedRows,
-            ]);
-        } catch (Throwable $throwable) {
-            $io->error([
-                \sprintf(
-                    'Anonymised %d row(s) to actor id %s, but recording the %s audit entry failed: %s',
-                    $result->affectedRows,
-                    $result->pseudonym,
-                    self::ERASURE_ACTION,
-                    $throwable->getMessage(),
-                ),
-                'The erasure is done and irreversible — do not re-run with the original id. '
-                . 'Record this erasure manually for compliance.',
-            ]);
-
-            return self::ERASED_UNRECORDED;
         }
 
         $io->success(\sprintf(
