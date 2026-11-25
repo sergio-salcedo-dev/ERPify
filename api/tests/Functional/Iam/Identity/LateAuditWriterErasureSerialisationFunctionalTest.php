@@ -34,6 +34,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use SensitiveParameter;
+use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
+use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Throwable;
 
@@ -72,6 +78,10 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         'ACCOUNT_LOCKOUT_NOTIFIED',
         'PASSWORD_RECOVERY_THROTTLED',
         'RECOVERY_SECRET_MINTED',
+        'RECOVERY_SECRET_REDEEMED',
+        'RECOVERY_SECRET_REVOKED',
+        'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
+        'RECOVERY_SECRET_REDEMPTION_INTERRUPTED',
     ];
 
     /** How long the other process holds the row before it deletes and commits: well inside the writers' bound. */
@@ -254,6 +264,61 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     }
 
     /**
+     * The actor axis, which is the one the compensation row actually lands on. A redemption has authenticated by the
+     * time it is compensated, so the row is sealed from the session's token and names the subject as its ACTOR as
+     * well as its resource; dropping the person from the resource would leave the id one column over. What closes it
+     * is the same lock as everywhere else: the row is written under it, so the erasure that follows sees it and
+     * anonymises both columns in one pass. This writes the row as the subject, then erases, and reads both axes.
+     */
+    #[Test]
+    public function aRowSealedFromTheSubjectsOwnTokenIsAnonymisedOnBothAxesByTheErasureThatFollows(): void
+    {
+        $tokens = $this->service(TokenStorageInterface::class);
+        $requests = $this->service(RequestStack::class);
+        $subject = new SecurityUser(UserFixtureFactory::create($this->subjectId, $this->subjectEmail, 'late-audit-password'));
+
+        $requests->push(Request::create('/api/v1/backoffice/recovery'));
+        $tokens->setToken(new UsernamePasswordToken($subject, 'main', $subject->getRoles()));
+
+        try {
+            $this->runWriter('recovery secret redemption compensated');
+
+            $actorRows = $this->outsideConnection()->fetchFirstColumn(
+                'SELECT action FROM audit_log WHERE actor_id = CAST(:id AS UUID)',
+                ['id' => $this->subjectId],
+            );
+            $this->assertSame(
+                ['RECOVERY_SECRET_REDEMPTION_COMPENSATED'],
+                $actorRows,
+                'positive control: the row really does name the subject as its actor',
+            );
+        } finally {
+            $tokens->setToken(null);
+            $requests->pop();
+        }
+
+        $this->service(FulfilIdentityErasure::class)->execute($this->subjectId);
+
+        $this->assertSame([], $this->actionsNamingTheSubject(), 'no row names the erased subject on either axis');
+        $this->assertSame(
+            1,
+            $this->rowsAnonymisedOnBothAxes('RECOVERY_SECRET_REDEMPTION_COMPENSATED'),
+            'the row survives, anonymised on the actor axis and on the resource axis',
+        );
+    }
+
+    private function rowsAnonymisedOnBothAxes(string $action): int
+    {
+        $count = $this->outsideConnection()->fetchOne(
+            'SELECT COUNT(*) FROM audit_log WHERE action = :action AND actor_erased = TRUE AND resource_erased = TRUE',
+            ['action' => $action],
+        );
+        $this->assertIsNumeric($count);
+
+        return (int) $count;
+    }
+
+    /**
      * The same four, with how many resource-less rows each writes once the subject is gone: the throttle still
      * reports the throttle, as for an address that never named anyone.
      *
@@ -265,6 +330,18 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
         yield 'lockout notice' => ['lockout notice', 'ACCOUNT_LOCKOUT_NOTIFIED', 0];
         yield 'recovery throttle' => ['recovery throttle', 'PASSWORD_RECOVERY_THROTTLED', 1];
         yield 'recovery secret' => ['recovery secret', 'RECOVERY_SECRET_MINTED', 0];
+        yield 'recovery secret redeemed' => ['recovery secret redeemed', 'RECOVERY_SECRET_REDEEMED', 0];
+        yield 'recovery secret revoked' => ['recovery secret revoked', 'RECOVERY_SECRET_REVOKED', 0];
+        yield 'recovery secret redemption compensated' => [
+            'recovery secret redemption compensated',
+            'RECOVERY_SECRET_REDEMPTION_COMPENSATED',
+            0,
+        ];
+        yield 'recovery secret redemption interrupted' => [
+            'recovery secret redemption interrupted',
+            'RECOVERY_SECRET_REDEMPTION_INTERRUPTED',
+            0,
+        ];
     }
 
     /**
@@ -394,6 +471,18 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
             'recovery secret' => fn () => (
                 new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger)
             )->recordMinted($this->subjectId),
+            'recovery secret redeemed' => fn () => (
+                new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger)
+            )->recordRedeemed($this->subjectId),
+            'recovery secret revoked' => fn () => (
+                new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger)
+            )->recordRevoked($this->subjectId),
+            'recovery secret redemption compensated' => fn () => (
+                new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger)
+            )->recordRedemptionCompensated($this->subjectId),
+            'recovery secret redemption interrupted' => fn () => (
+                new RecordRecoverySecretAuditBestEffort($identityRows, $auditLogger, $logger)
+            )->recordRedemptionInterrupted($this->subjectId),
             default => $this->fail("unknown writer {$writer}"),
         };
     }
@@ -521,13 +610,18 @@ final class LateAuditWriterErasureSerialisationFunctionalTest extends KernelTest
     }
 
     /**
+     * The actions of every row that names the subject on EITHER axis: as the resource it is about, or as the actor
+     * it is attributed to. The recovery-secret rows are the ones that can carry the second, because a redemption
+     * has already authenticated by the time its compensation or interruption is recorded, so a row sealed from the
+     * session's token would name the subject as its actor. Reading one axis only would call that row absent.
+     *
      * @return list<string>
      */
     private function actionsNamingTheSubject(): array
     {
         /** @var list<string> */
         return $this->outsideConnection()->fetchFirstColumn(
-            'SELECT action FROM audit_log WHERE resource_id = CAST(:id AS UUID)',
+            'SELECT action FROM audit_log WHERE resource_id = CAST(:id AS UUID) OR actor_id = CAST(:id AS UUID)',
             ['id' => $this->subjectId],
         );
     }

@@ -997,25 +997,24 @@ mitigated state. Accepting one means recording who accepted it and against which
       and the old regex reds them. **Residual:** `safeHref` is unchanged and still admits an absolute
       `https://` URL by design; it is `safeInternalPath` that a redirect target must additionally pass.
 
-- [ ] **A GDPR erasure racing a recovery-secret redemption reinserts the subject into `audit_log`,
-      on the ACTOR axis.** `RedeemRecoverySecret` compensates a redemption that authenticated and then
-      could not consume, and that compensation writes its `RECOVERY_SECRET_REDEMPTION_COMPENSATED` row
-      **post-commit** — outside any transaction, after `Security::login()` has committed the session.
-      If `identity:gdpr:erase-subject` commits inside that window the row lands after the anonymiser
-      has finished, and the subject is back in the table their erasure had just cleaned.
-      **The axis is `actor_id`, not `resource_id`, and that is what makes the obvious fix useless:**
-      `SealedAuditEntryFactory` seals the actor from `SecurityActorContextFactory`, which reads the
-      security token — by then the just-authenticated subject — so dropping the person reference from
-      the event's RESOURCE leaves the identifier one column over. A synchronous "does the identity
-      still exist" guard is a TOCTOU rather than a fix: the erasure can equally commit between that
-      read and the write. **Detection exists, repair is manual:** `audit_log.actor_id` is already
-      characterised in [`api/.person-reference-policy`](api/.person-reference-policy) as holding
-      person ids, having no entity, and being outside the coverage gate; the reconciler
-      (`identity:gdpr:reconcile-subject-references`) anti-joins it and reports the divergence on its
-      next tick. So this is an instance of a residual this repository has already argued, not a new
-      class — recorded here because the redemption is a new writer on that axis, and because the
-      window is one an operator can hit rather than a theoretical interleaving.
-
+- [x] **A GDPR erasure racing a recovery-secret redemption reinserted the subject into `audit_log`, on the ACTOR
+      axis — found already closed, pinned 2026-11-25.** The item described the compensation row
+      (`RECOVERY_SECRET_REDEMPTION_COMPENSATED`) as written post-commit with no lock, so an erasure committing inside
+      that window left the subject back in the table. The tree no longer does that: `RecordRecoverySecretAuditBestEffort`
+      writes all five recovery-secret actions inside `IdentityRowLock::whileHeld()` (`FOR KEY SHARE` on the identity
+      row), and `FulfilIdentityErasure` holds that row `FOR UPDATE` from its administrator re-check to its commit,
+      ahead of the trail pass — the same serialisation as the lockout, lockout-notice and recovery-throttle writers.
+      Both orders end clean: the writer first, and the erasure's pass sees the committed row and anonymises both
+      columns; the erasure first, and the writer's locked read finds no subject and writes nothing. What was missing
+      was the proof, and the register: `LateAuditWriterErasureSerialisationFunctionalTest` covered only
+      `RECOVERY_SECRET_MINTED`, and read only the resource axis. It now drives all five actions through the real race
+      (a second process holding the row), reads BOTH axes (`resource_id` and `actor_id`), and adds the case the
+      item turned on — a row sealed from the subject's own token, which names them as actor, written and then erased,
+      leaving no row naming them and the row itself anonymised on both axes. **Not established:** which commit
+      introduced the lock — the checkout's history is shallow and `git log -S` reached only a documentation commit —
+      so this records that it holds at this head, not when it started to. The residual the item cited stays what it
+      was: a writer outside `Iam/Identity/Application` is outside `SubjectAuditWriteSerialisationGateTest`, which reads
+      that one directory.
 - [ ] **The audit trail is not tamper-evident.** No hash chain, signature or checksum column exists
       in any migration; append-only is a property of the mutation paths, not cryptography. Anyone
       with database credentials can rewrite history undetectably — the app's RBAC is irrelevant to
@@ -1039,7 +1038,7 @@ mitigated state. Accepting one means recording who accepted it and against which
       person's email included. It now admits only a value shaped like a role name (`[A-Z][A-Z0-9_]{0,63}`), the
       absent-cell sentinel or `<non-role-shaped>`, decided in one place (`AuditMetadataShape::storedValue()`) that
       the producer calls and the shape agrees with; the complete raw list stays in the inspection's own output,
-      which an operator reaches deliberately. A rolled-back write, not a rewrite of old rows: a row written before
+      which an operator reaches deliberately. This governs new writes, not old rows: a row written before
       this change keeps what it held, and there is none in this deployment. **What remains:** (a) **the clear fields
       of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]` field is sealed) carry what
       a user typed and are not reached by the anonymisers, which rewrite columns and never this JSON — the detail
