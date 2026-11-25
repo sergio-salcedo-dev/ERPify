@@ -43,6 +43,11 @@ use Erpify\Shared\Audit\Domain\AuditLevel;
  * The test is the decoded shape: `json_decode()` reads an object keyed `"0"`, `"1"`, … as a list, so such a map
  * is withheld as one — a shape the writer never produces.
  *
+ * **Within a `change` row a field is served in clear only when it is classified** ({@see AuditDiffDisclosure}):
+ * the level proves who wrote the map, not what a field in it holds, and nothing on the erasure path reaches
+ * `metadata`. A sealed value and a field the registry names as non-personal for the row's resource type are
+ * served; any other field keeps its place in the diff with both sides withheld.
+ *
  * **A map is served only on a `change` row, because the level is the diff's provenance and the shape is not.**
  * A map has exactly the shape of a sealed diff whether or not anything sealed it, so serving every map would
  * hand out in clear a `{"email": {"old": …}}` that any other writer put there. The level does prove it: only
@@ -68,6 +73,11 @@ final readonly class AuditEventDetailResourceMapper
     /** ISO-8601 with the microsecond fraction `occurred_on` (TIMESTAMPTZ(6)) carries. */
     private const string TIMESTAMP_FORMAT = 'Y-m-d\TH:i:s.uP';
 
+    public function __construct(
+        private AuditDiffDisclosure $disclosure = new AuditDiffDisclosure(),
+    ) {
+    }
+
     public function toResource(AuditEventDetail $detail): AuditEventDetailResource
     {
         return new AuditEventDetailResource(
@@ -82,7 +92,7 @@ final readonly class AuditEventDetailResourceMapper
             $detail->resourceId,
             $detail->actorErased,
             $detail->resourceErased,
-            new ArrayObject($this->withChangesAsMap($detail->metadata, $detail->level)),
+            new ArrayObject($this->withChangesAsMap($detail->metadata, $detail->level, $detail->resourceType)),
         );
     }
 
@@ -91,12 +101,14 @@ final readonly class AuditEventDetailResourceMapper
      *
      * @return array<string, mixed>
      */
-    private function withChangesAsMap(array $metadata, string $level): array
+    private function withChangesAsMap(array $metadata, string $level, ?string $resourceType): array
     {
         $changes = $metadata[AuditLogEntry::CHANGES_KEY] ?? null;
 
         if (\is_array($changes) && ([] === $changes || $this->isSealedDiff($changes, $level))) {
-            $metadata[AuditLogEntry::CHANGES_KEY] = new ArrayObject($changes);
+            $metadata[AuditLogEntry::CHANGES_KEY] = new ArrayObject(
+                [] === $changes ? $changes : $this->disclosure->disclose($resourceType, $changes),
+            );
 
             return $metadata;
         }

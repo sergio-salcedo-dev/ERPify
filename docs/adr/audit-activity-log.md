@@ -605,8 +605,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   fila ningún constructor de diff la escribió, y rechazar el sobre escondería un registro de actividad o de
   seguridad tras el error de un escritor. Descartadas: decidir sólo en lectura (el dato seguiría guardado en
   claro) y sólo en escritura (no cubre filas ya guardadas ni las escritas por SQL a mano). Residual: una fila
-  `change` escrita antes de existir el sellado o directamente en la base de datos —
-  `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+  `change` escrita antes de existir el sellado o directamente en la base de datos — cerrado el 2026-11-25 en el
+  lado de lectura (`AuditDiffDisclosure`): dentro de una fila `change` un campo se sirve en claro solo si es un
+  sobre sellado o figura como campo no personal del tipo de recurso; el resto conserva su sitio en el diff con
+  ambos lados retenidos. Lo que queda es lo que la fila *guarda*, no lo que la ruta *sirve* —
+  `PRODUCTION_SECURITY_CHECKLIST.md` §7. Del mismo modo, `orphan_role_values` solo admite valores con forma de
+  nombre de rol o un centinela, de modo que una celda corrupta con una dirección no llega a este JSON.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` es `Request::getClientIp()`, la misma decisión
 que toma el rate-limiter de la API. FrankenPHP es el borde —ejecuta PHP dentro del Caddy que aceptó la

@@ -195,6 +195,12 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
         yield 'an instant that does not exist' => ['lockedUntil', '2026-02-30T12:59:47+00:00'];
         yield 'stored values that are not strings' => ['orphan_role_values', [42]];
         yield 'stored values as a map' => ['orphan_role_values', ['row' => 'SUPERVISOR']];
+        yield 'a stored value that is an address' => ['orphan_role_values', ['jane.doe@example.test']];
+        yield 'a stored value that is free text' => ['orphan_role_values', ['Jane Doe']];
+        yield 'a stored value with a control character' => ['orphan_role_values', ["SUPERVISOR\n"]];
+        yield 'a stored value that is a person id' => ['orphan_role_values', ['0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c']];
+        yield 'a stored value longer than the sampled length' => ['orphan_role_values', [\str_repeat('A', 65)]];
+        yield 'a stored value in lower case' => ['orphan_role_values', ['supervisor']];
         yield 'a diff side that is not a finite number' => ['changes', ['rate' => ['old' => 1.5, 'new' => INF]]];
         yield 'a diff side that is not a number' => ['changes', ['rate' => ['old' => NAN, 'new' => 1.5]]];
         yield 'a diff that is a list' => ['changes', [['old' => 'a', 'new' => 'b']]];

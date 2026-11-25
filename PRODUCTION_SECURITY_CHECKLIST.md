@@ -1031,16 +1031,21 @@ mitigated state. Accepting one means recording who accepted it and against which
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
       **The pass clears what is committed when it runs**, so it is closed only together with the item below.
-- [ ] **`audit_log.metadata` is a closed vocabulary, but two of its shapes still admit text the server did
-      not choose, and none of it is erasable.** `AuditLogEntry::create()` refuses any key outside
-      `AuditMetadataKey`, any value outside its key's shape and any `metadata` over 16 KiB, so a producer
-      can no longer drop an `iban` or a request body into the one column no erasure pass rewrites. What it
-      does not close: (a) **`orphan_role_values`** carries a sample of the raw `identity_user.roles` text the
-      integrity probe could not explain — whatever the corruption wrote there, a person's email included —
-      and **the clear fields of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]`
-      field is sealed) carry what a user typed; neither is reached by the anonymisers, which rewrite columns
-      and never this JSON. (b) **A UUID under a key is indistinguishable from a person's id**: the shape
-      admits a pseudonym under `anonymized_actor_id` exactly as it would admit the real id, so what keeps a
+- [ ] **`audit_log.metadata` is a closed vocabulary, and one shape still admits text the server did not
+      choose.** `AuditLogEntry::create()` refuses any key outside `AuditMetadataKey`, any value outside its key's
+      shape and any `metadata` over 16 KiB, so a producer can no longer drop an `iban` or a request body into the
+      one column no erasure pass rewrites. **Closed 2026-11-25: `orphan_role_values`** carried a sample of the raw
+      `identity_user.roles` text the integrity probe could not explain — whatever the corruption wrote there, a
+      person's email included. It now admits only a value shaped like a role name (`[A-Z][A-Z0-9_]{0,63}`), the
+      absent-cell sentinel or `<non-role-shaped>`, decided in one place (`AuditMetadataShape::storedValue()`) that
+      the producer calls and the shape agrees with; the complete raw list stays in the inspection's own output,
+      which an operator reaches deliberately. A rolled-back write, not a rewrite of old rows: a row written before
+      this change keeps what it held, and there is none in this deployment. **What remains:** (a) **the clear fields
+      of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]` field is sealed) carry what
+      a user typed and are not reached by the anonymisers, which rewrite columns and never this JSON — the detail
+      route now serves only classified fields (next item), but the row keeps them; and a role-shaped word that is
+      somebody's name passes the pattern. (b) **A UUID under a key is indistinguishable from a person's id**: the
+      shape admits a pseudonym under `anonymized_actor_id` exactly as it would admit the real id, so what keeps a
       person's id out is the identity erasure's acceptance witness (`features/backoffice/users/erase.feature`),
       not the vocabulary. Decision and costs: ADR [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4.
 
@@ -2378,15 +2383,22 @@ mitigated state. Accepting one means recording who accepted it and against which
         of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
         vetoes.
       Re-affirm or close before the first customer.
-- [ ] **A `change` row's `metadata.changes` map holding a personal field in clear is served by the audit detail
-      route past its subject's erasure.** Nothing on the erasure path reaches `metadata`, so the route reads the
-      row's level as the diff's provenance: a map is served only on a `change` row and withheld whole on every
-      other, `AuditLogEntry` refuses a `changes` key outside that level so no other writer can store one, and
-      `ChangeLevelProvenanceGateTest` holds the producers of that level and the `audit_log` insert path closed.
-      What remains is a `change` row that never went through `PiiDiffSealer`: one written before sealing
-      existed, or inserted directly in the database. Telling such a map apart needs the field classification
-      at read time. Nothing in this deployment holds one today; close it (re-seal or redact by classification)
-      or accept it before the first customer.
+- [x] **A `change` row's `metadata.changes` map holding a personal field in clear was served by the audit detail
+      route past its subject's erasure — closed 2026-11-25.** Nothing on the erasure path reaches `metadata`, and
+      the level only proves who wrote a map, not what a field in it holds: a `change` row that never went through
+      `PiiDiffSealer` (written before sealing existed, or inserted directly in the database) was served verbatim.
+      The read side is now closed by default (`AuditDiffDisclosure`): within a `change` row a field is served in
+      clear only when it is a sealed envelope or the registry names it as a non-personal field of the row's resource
+      type; any other field keeps its place in the diff with `old` and `new` both withheld, so the client still
+      renders that something changed. A row with no resource type, an unknown type and a field that is not a
+      well-formed `old`/`new` pair are withheld the same way, and a "sealed-looking" side carrying any key beside
+      `__enc__` is not trusted as sealed. The registry holds strings (the audit module may not import the modules
+      it records) and is tied to the entities by `AuditDiffDisclosureRegistryTest`, which requires each type's clear
+      fields to equal its ORM-mapped fields minus its `#[PersonalData]` ones — a new column, or one that becomes
+      personal, reds the test instead of being served by accident. **Residuals:** this governs what the route
+      serves, not what the row stores — the clear fields stay in `metadata`, and the table is readable under the
+      access it already demands; a field wrongly left unmarked `#[PersonalData]` is served in clear and review is
+      the only control on that direction; an audited aggregate that is not ORM-mapped is outside the registry test.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.

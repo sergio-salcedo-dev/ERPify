@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Erpify\Iam\Identity\Application;
 
+use Erpify\Shared\Audit\Domain\AuditMetadataShape;
+
 /**
  * What one run of the stored-identity inspection found, as one value.
  *
@@ -43,8 +45,10 @@ final readonly class StoredIdentityDrift
     }
 
     /**
-     * The orphan values are SAMPLED, not listed: they are raw column text, as many and as long as the corruption
-     * made them, and the audit row is bounded — a row refused for its size would leave the trail with no record
+     * The orphan values are SAMPLED, not listed, and a sampled value is recorded as itself only when it is shaped like
+     * a role name ({@see AuditMetadataShape::storedValue()}); any other cell is recorded as a sentinel, because a
+     * corrupted `roles` column can hold anything, an address included, and this JSON is rewritten by no erasure.
+     * They are raw column text, as many and as long as the corruption made them, and the audit row is bounded — a row refused for its size would leave the trail with no record
      * that the drift was ever detected, which is the one thing this finding exists to leave. The sample and the
      * total keep the row actionable; the complete list is what the inspection prints for the operator.
      *
@@ -60,7 +64,9 @@ final readonly class StoredIdentityDrift
     {
         return [
             'orphan_role_values' => \array_map(
-                static fn (string $value): string => \mb_substr($value, 0, self::SAMPLED_VALUE_LENGTH),
+                static fn (string $value): string => AuditMetadataShape::storedValue(
+                    \mb_substr($value, 0, self::SAMPLED_VALUE_LENGTH),
+                ),
                 \array_slice($this->orphanRoleValues, 0, self::SAMPLED_ORPHAN_VALUES),
             ),
             'orphan_role_value_count' => \count($this->orphanRoleValues),
