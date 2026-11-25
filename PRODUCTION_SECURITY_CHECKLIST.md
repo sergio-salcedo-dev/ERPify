@@ -2514,13 +2514,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       bucket's state for the address as typed and IP, the same for an address that exists and one that does not,
       so it is no existence oracle.
 
-- [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
-      username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to
-      NFC, so spellings resolving to one identity may each get their own bucket. Unmeasured; the persisted lockout
-      above keys on the resolved row and is unaffected. Live since the throttle is spent (*The login throttle was
-      declared and never spent*): each spelling is a fresh per-address budget, so the per-IP bucket (25 a minute)
-      is the throttle's only bound on one identity from one source — the persisted lockout, keyed on the resolved
-      row, still stops the guessing at ten.
+- [x] **The login throttle keyed on the address as typed, not as resolved — closed 2026-11-25.**
+      `login_throttling` bucketed on the username lower-cased, while `Email` also strips edge whitespace and
+      zero-width characters and normalises to NFC, so spellings resolving to one identity each drew a fresh
+      per-address budget and the per-IP bucket (25 a minute) was the only bound on one identity from one
+      source. `CanonicalLoginRateLimiter` is now the firewall's `login_throttling.limiter`: it keys the local
+      bucket by `RecoveryBudgetKey::forEmail()`, the rule every other per-address budget here already uses, and
+      keeps the framework's two fixed windows (5 per mailbox and client address, 25 per client address), now
+      declared as `login_local` / `login_global` in `rate_limiter.yaml` because a custom limiter replaces the
+      firewall's own block. Keys stay HMACs, so neither the mailbox nor the client address reaches the cache
+      pool in clear. Pinned by `CanonicalLoginRateLimiterTest` (seven spellings of one mailbox share one budget,
+      a non-address still spends one, the stored keys name neither the mailbox nor the address) and by
+      `LoginThrottleSpendFunctionalTest`, which drives the limiter the container wires. **Residuals:**
+      the HTTP path itself is not covered end to end, because the test kernel keeps `cache.rate_limiter` on an
+      array adapter that the services resetter empties between requests, so a sequence of requests cannot
+      observe an accumulating budget; and the secret behind the HMAC is `kernel.secret`, so rotating it resets
+      every bucket. The persisted lockout keys on the resolved row and was never affected.
 
 - [x] **`/forgot-password` latency separated an active account from every other address — closed.**
       `RequestPasswordReset::request()` ran a `FOR UPDATE` transaction (supersede, insert, event publish) and a

@@ -38,6 +38,23 @@
 # bypassing the contract.
 framework:
     rate_limiter:
+        # `login_local` / `login_global` — the two buckets behind the login throttle, consumed by
+        # CanonicalLoginRateLimiter (wired as `login_throttling.limiter` in security.yaml). The framework's own
+        # default declares the same two fixed windows internally; they are declared here because a custom
+        # limiter replaces that block, and with it the firewall's `max_attempts`/`interval`. Per resolved
+        # mailbox and client address: 5 a minute; per client address alone: five times that, so one client
+        # cannot spray the whole address space either. `lock_factory: null` for the reason `anonymous_api` gives.
+        login_local:
+            policy: 'fixed_window'
+            limit: 5
+            interval: '1 minute'
+            lock_factory: null
+        login_global:
+            policy: 'fixed_window'
+            limit: 25
+            interval: '1 minute'
+            lock_factory: null
+
         anonymous_api:
             policy: 'sliding_window'
             limit: '%env(int:RATE_LIMIT_ANONYMOUS_API_LIMIT)%'
