@@ -726,7 +726,7 @@ you change anything here.
       plus its reset tokens (`GDPR_SUBJECT_ERASED`), anonymises every audit row the subject authored, hard-deletes
       its `iam_session` rows (no residual `ip`/`device` PII) and self-audits `GDPR_ERASURE_EXECUTED` — all in one
       transaction, rolled back as a unit on any failure. It is reachable both by the `identity:gdpr:erase-subject`
-      CLI and, new here, by the **ADMIN-only `DELETE /api/v1/backoffice/users/{id}`** (gated `#[IsGranted('users.erase')]`,
+      CLI and, new here, by the **ADMIN-only `POST /api/v1/backoffice/users/{id}/erase`** (gated `#[IsGranted('users.erase')]`,
       route-id `Uuid::ensure`'d, all errors through the RFC 9457 pipeline — never a manual body; a 204 carries no
       body to leak). The console surfaces it as a **type-to-confirm** destructive action (the admin retypes the
       subject's email); the redirect is `safeHref`-wrapped and no PII/JWT is written to client storage. The write
@@ -2851,12 +2851,23 @@ mitigated state. Accepting one means recording who accepted it and against which
       finish, writes a `warning` line with `complete: false` even if no name failed, so a store too large for one run
       is only covered where it reaches and says so. **Accepted — the user,
       2026-11-17 (ADMIN only; no listing audit row).**
-- [ ] **The Documents erasure re-proves the caller's password and the identity erasure route does not (doc-7).**
-      `POST /api/v1/documents/{id}/erase` spends the shared `CurrentPasswordProofThrottle` budget and re-proves the caller's
-      current password before any ledger write (`documents_erase :: credential-affecting`), because a stolen session could
-      otherwise erase documents for good and evicting it undoes nothing. `backoffice_user_erase`, which erases an identity,
-      is the same gap and is classified `ordinary` with no proof; it was not fixed here. **Open — owner: the identity
-      erasure route's next change; the credential-proof gate pins the Documents route and cannot see this one.**
+- [x] **The identity erasure route did not re-prove the caller's password, though the Documents erasure did — closed 2026-11-25.**
+      `POST /api/v1/documents/{id}/erase` already spent the shared `CurrentPasswordProofThrottle` budget and re-proved the
+      caller's current password before any ledger write, because a stolen session could otherwise erase documents for good
+      and evicting it undoes nothing; `backoffice_user_erase` erased an identity and its trail on the permission alone.
+      It is now `POST /api/v1/backoffice/users/{id}/erase` carrying `currentPassword` (the shared HTTP client sends no body
+      with a `DELETE`, and the document erasure already had a verb and path of its own), classified
+      `credential-affecting` in `api/.credential-proof-policy` and pinned with the other erasures by
+      `CredentialProofGateTest`. The proof precedes the id check, the self-erasure refusal and the lookup, so a
+      malformed id, an absent identity and a self-targeted request all answer `403 invalid-current-password` to a caller
+      who has not proved the password — the route is never an existence oracle; `erase.feature` pins both. The console
+      keeps its type-to-confirm step and adds the password dialog behind it (two brakes: which identity, and whose
+      session). **Residuals:** `identity:gdpr:erase-subject` drives the same use case from the console with no session
+      and asks no password — the proof is the controller's, as for the other two authority writes, so a holder of a
+      shell is not stopped by it; `CredentialProofGateTest` reads call order inside the controller and cannot see
+      whether the proof precedes the lookup *inside* a use case, so the Behat scenarios are the only control on that
+      direction; and the shared per-identity budget (5 per window) means an administrator who erases several
+      members in a row will meet a 429 from it.
 - [ ] **The digest, size and timestamps of an erased document survive its erasure (doc-7).** Erasure destroys the key,
       nulls the sealed filename and deletes the sealed object, but the row keeps its sha256 digest, byte size, retention
       fields and timestamps, and its custody trail stays. Anyone who holds a known file can confirm it is the one

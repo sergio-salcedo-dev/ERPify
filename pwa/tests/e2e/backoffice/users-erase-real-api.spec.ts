@@ -1,6 +1,6 @@
 import { request } from "@playwright/test";
 import { test, expect, type APIRequestContext } from "../fixtures/authenticatedTest";
-import { VIEWPORT_DESKTOP } from "../constants";
+import { E2E_USER_PASSWORD, VIEWPORT_DESKTOP } from "../constants";
 import { apiBaseURL } from "../fixtures/api";
 
 /**
@@ -70,12 +70,17 @@ test.describe("BackOffice - Erase a user (real API)", () => {
     await page.getByTestId("user-erase__trigger").click();
     await expect(page.getByTestId("user-erase__dialog")).toBeVisible();
 
-    // Type-to-confirm: the confirm stays disabled until the typed text matches the subject's email.
+    // Type-to-confirm: continue stays disabled until the typed text matches the subject's email.
     const confirm = page.getByTestId("user-erase__confirm");
     await expect(confirm).toBeDisabled();
     await page.getByTestId("user-erase__confirm-input").fill(email);
     await expect(confirm).toBeEnabled();
     await confirm.click();
+
+    // The second brake: nothing is erased until the caller re-proves their own password.
+    await expect(page.getByTestId("user-erase-proof__dialog")).toBeVisible();
+    await page.getByTestId("user-erase-proof__password").fill(E2E_USER_PASSWORD);
+    await page.getByTestId("user-erase-proof__confirm").click();
 
     // Success redirects to the register…
     await expect(page).toHaveURL(/\/backoffice\/users$/);

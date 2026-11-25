@@ -44,6 +44,7 @@ import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetail
 
 const TARGET_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
 const TARGET_EMAIL = "mallory@erpify.test";
+const PASSWORD = "callerPassword1";
 
 const ADMIN: Identity = {
   id: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b5c",
@@ -74,6 +75,29 @@ function problem(): ProblemDetails {
     instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b60",
     "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b61",
   };
+}
+
+function wrongPassword(): HttpError {
+  return new HttpError({
+    type: "invalid-current-password",
+    title: "The current password is incorrect.",
+    status: 403,
+    instance: "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b62",
+    "correlation-id": "0190ffff-aaaa-7bbb-8ccc-0d1e2f3a4b63",
+  });
+}
+
+/** Retype the email, continue, and submit the password step: the two brakes in front of the erasure. */
+async function eraseWith(password: string = PASSWORD): Promise<void> {
+  fireEvent.click(await screen.findByTestId("user-erase__trigger"));
+  fireEvent.change(await screen.findByTestId("user-erase__confirm-input"), {
+    target: { value: TARGET_EMAIL },
+  });
+  fireEvent.click(screen.getByTestId("user-erase__confirm"));
+  fireEvent.change(await screen.findByTestId("user-erase-proof__password"), {
+    target: { value: password },
+  });
+  fireEvent.click(screen.getByTestId("user-erase-proof__confirm"));
 }
 
 function renderControl() {
@@ -116,7 +140,7 @@ describe("UserEraseControl", () => {
     expect(screen.queryByTestId("user-erase")).not.toBeInTheDocument();
   });
 
-  it("keeps confirm disabled until the email is typed, then erases and redirects to the list", async () => {
+  it("keeps continue disabled until the email is typed, then asks for the password before erasing", async () => {
     eraseRun.mockResolvedValueOnce(undefined);
     renderControl();
 
@@ -137,7 +161,33 @@ describe("UserEraseControl", () => {
 
     fireEvent.click(confirm);
 
-    await waitFor(() => expect(eraseRun).toHaveBeenCalledWith(TARGET_ID));
+    // Continuing sends nothing: the request leaves only once the caller proves their password.
+    const password = await screen.findByTestId("user-erase-proof__password");
+    expect(eraseRun).not.toHaveBeenCalled();
+
+    fireEvent.change(password, { target: { value: PASSWORD } });
+    fireEvent.click(screen.getByTestId("user-erase-proof__confirm"));
+
+    await waitFor(() => expect(eraseRun).toHaveBeenCalledWith(TARGET_ID, PASSWORD));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+  });
+
+  it("answers a wrong password on its field, erases nothing and lets the next try through", async () => {
+    eraseRun.mockRejectedValueOnce(wrongPassword()).mockResolvedValueOnce(undefined);
+    renderControl();
+
+    await eraseWith("wrongPassword1");
+
+    expect(await screen.findByText("The current password is incorrect.")).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("user-erase__error")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("user-erase-proof__password"), {
+      target: { value: PASSWORD },
+    });
+    fireEvent.click(screen.getByTestId("user-erase-proof__confirm"));
+
+    await waitFor(() => expect(eraseRun).toHaveBeenLastCalledWith(TARGET_ID, PASSWORD));
     await waitFor(() => expect(push).toHaveBeenCalled());
   });
 
@@ -145,11 +195,7 @@ describe("UserEraseControl", () => {
     eraseRun.mockRejectedValueOnce(new HttpError(problem()));
     renderControl();
 
-    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
-    fireEvent.change(await screen.findByTestId("user-erase__confirm-input"), {
-      target: { value: TARGET_EMAIL },
-    });
-    fireEvent.click(screen.getByTestId("user-erase__confirm"));
+    await eraseWith();
 
     expect(await screen.findByTestId("user-erase__error")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
@@ -159,11 +205,7 @@ describe("UserEraseControl", () => {
     eraseRun.mockRejectedValueOnce(new HttpError(problem()));
     renderControl();
 
-    fireEvent.click(await screen.findByTestId("user-erase__trigger"));
-    fireEvent.change(await screen.findByTestId("user-erase__confirm-input"), {
-      target: { value: TARGET_EMAIL },
-    });
-    fireEvent.click(screen.getByTestId("user-erase__confirm"));
+    await eraseWith();
 
     fireEvent.click(await screen.findByTestId("user-erase__error__dismiss"));
 

@@ -27,6 +27,7 @@ import { safeHref } from "@/context/shared/navigation/domain/safeHref";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { userRoutes } from "../_lib/userRoutes";
 import { isOwnIdentity } from "../_lib/isOwnIdentity";
+import { CurrentPasswordDialog, isInvalidCurrentPassword } from "./CurrentPasswordDialog";
 
 const INPUT_CLASS =
   "border-border bg-background text-foreground focus-visible:ring-ring h-9 any-pointer-coarse:h-11 w-full rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none";
@@ -39,8 +40,11 @@ interface UserEraseControlProps {
  * GDPR erasure for an identity, gated by `users.erase`. Deliberately set apart from the lifecycle
  * {@link UserStatusControl}: a destructive visual language and a type-to-confirm gate (the confirm button stays
  * disabled until the operator retypes the user's email) mark it as irreversible and unmistakable — it can never
- * be confused with "deactivate". On success it redirects to the list (the detail is now a 404); on a mapped
- * `HttpError` the dialog closes and the problem surfaces in the persistent {@link MutationError}, never inline.
+ * be confused with "deactivate". Two distinct brakes, not one: retyping the email proves the operator read WHICH
+ * identity goes, and the {@link CurrentPasswordDialog} that follows proves the session is theirs, so a borrowed
+ * one cannot erase anybody. On success it redirects to the list (the detail is now a 404); on a mapped
+ * `HttpError` the dialogs close and the problem surfaces in the persistent {@link MutationError}, never inline —
+ * except a wrong password, which stays on its field for another try.
  *
  * On the operator's own identity it offers no trigger: the API refuses a self-targeted erasure, so the section
  * says another administrator performs it.
@@ -50,7 +54,7 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
   const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
-  const [erasing, setErasing] = useState(false);
+  const [proving, setProving] = useState(false);
 
   const { session } = useSession();
 
@@ -61,23 +65,29 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
     if (!next) setConfirmText("");
   }
 
-  const onConfirm = async (): Promise<void> => {
-    if (erasing || !confirmed) return;
-    setErasing(true);
+  // The email gate hands over to the password step; nothing is sent until that step confirms.
+  const onEmailConfirmed = (): void => {
+    if (!confirmed) return;
+    setOpen(false);
+    setProving(true);
+  };
+
+  // A wrong password is the dialog's to show on its field, so it is handed back; every other failure is
+  // surfaced here and the dialog closes behind it.
+  const erase = async (currentPassword: string): Promise<void> => {
     try {
-      await container.get<FulfilIdentityErasure>("BackOfficeFulfilIdentityErasure").run(user.id);
-      setOpen(false);
+      await container
+        .get<FulfilIdentityErasure>("BackOfficeFulfilIdentityErasure")
+        .run(user.id, currentPassword);
       setProblem(null);
       toastNotifier.success("User erased", { description: user.email });
       router.push(safeHref(userRoutes.list));
     } catch (err) {
       if (!(err instanceof HttpError)) throw err;
-      setOpen(false);
+      if (isInvalidCurrentPassword(err)) throw err;
       setConfirmText("");
       setProblem(err.problem);
       toastNotifier.error("Couldn't erase user — see error details");
-    } finally {
-      setErasing(false);
     }
   };
 
@@ -164,7 +174,6 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
                 className={INPUT_CLASS}
                 value={confirmText}
                 onChange={(event) => setConfirmText(event.target.value)}
-                disabled={erasing}
                 data-testid="user-erase__confirm-input"
               />
             </div>
@@ -174,7 +183,6 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
                 render={
                   <Button
                     variant="ghost"
-                    disabled={erasing}
                     aria-label="Cancel erasure"
                     title="Cancel erasure"
                     data-testid="user-erase__cancel"
@@ -185,18 +193,27 @@ export function UserEraseControl({ user }: Readonly<UserEraseControlProps>) {
               />
               <Button
                 variant="destructive"
-                onClick={() => void onConfirm()}
-                disabled={erasing || !confirmed}
-                aria-label="Confirm erasure"
-                title={`Confirm erasure of ${user.email}`}
+                onClick={onEmailConfirmed}
+                disabled={!confirmed}
+                aria-label="Continue to erase"
+                title={`Continue to erase ${user.email}`}
                 data-testid="user-erase__confirm"
               >
-                {erasing ? "Erasing…" : "Erase permanently"}
+                Continue
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </section>
+      <CurrentPasswordDialog
+        open={proving}
+        onOpenChange={setProving}
+        title="Confirm with your password"
+        description={`Enter your password to permanently erase ${user.email}. This cannot be undone.`}
+        confirmLabel="Erase permanently"
+        testIdPrefix="user-erase-proof"
+        onConfirm={erase}
+      />
     </Can>
   );
 }

@@ -13,7 +13,7 @@ export class FulfilIdentityErasure {
     private readonly repository: EraseIdentityRepository,
   ) {}
 
-  async run(id: string): Promise<void> {
-    return this.repository.erase(id);
+  async run(id: string, currentPassword: string): Promise<void> {
+    return this.repository.erase(id, currentPassword);
   }
 }
