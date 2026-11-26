@@ -92,6 +92,6 @@ final class ConsoleFailureMessageGateTest extends TestCase
 
     private function isGetMessage(?PhpToken $token): bool
     {
-        return $token instanceof \PhpToken && $token->is(T_STRING) && 'getmessage' === \strtolower($token->text);
+        return $token instanceof PhpToken && $token->is(T_STRING) && 'getmessage' === \strtolower($token->text);
     }
 }
