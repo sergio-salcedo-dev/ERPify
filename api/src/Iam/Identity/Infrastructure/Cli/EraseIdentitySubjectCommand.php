@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Cli;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasure;
 use Erpify\Iam\Identity\Application\FulfilIdentityErasureResult;
 use Erpify\Shared\Console\Infrastructure\ConfirmedErasureCommand;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -178,7 +179,7 @@ final class EraseIdentitySubjectCommand extends ConfirmedErasureCommand
         try {
             $result = $this->eraser->execute($userId);
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Erasure failed: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Erasure failed: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

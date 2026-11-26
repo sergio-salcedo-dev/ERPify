@@ -22,6 +22,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one case per outcome of the command's exit-code contract
  */
 #[CoversClass(EraseActorAuditTrailCommand::class)]
 final class EraseActorAuditTrailCommandTest extends TestCase
@@ -147,6 +149,23 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $this->assertStringContainsString('safe to repeat', $display);
         $this->assertStringContainsString('--dry-run', $display, 'the operator is told how to settle a lost commit');
         $this->assertStringNotContainsString('do not re-run', $display, 'nothing was erased, so a re-run is allowed');
+    }
+
+    /**
+     * A driver can quote the very id the run was asked to erase. The command echoes the id its operator typed, so what
+     * must not appear is the driver's own quotation of it inside the failure report.
+     */
+    public function testAFailureDoesNotRepeatTheValueTheDriverQuoted(): void
+    {
+        $tester = $this->testerFor(
+            ThrowingAuditActorAnonymiser::onAnonymiseWithMessage('DETAIL: Key (actor_id)=(' . self::ACTOR_ID . ')'),
+            new RecordingAuditLogger(),
+        );
+
+        $tester->execute(['actor-id' => self::ACTOR_ID, '--force' => true]);
+
+        $this->assertStringNotContainsString('actor_id)=(' . self::ACTOR_ID, $tester->getDisplay());
+        $this->assertStringContainsString('actor_id)=(<id>)', $tester->getDisplay());
     }
 
     /**
