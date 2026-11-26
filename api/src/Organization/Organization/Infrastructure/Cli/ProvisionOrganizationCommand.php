@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Organization\Organization\Infrastructure\Cli;
 
 use Erpify\Organization\Organization\Application\ProvisionOrganization;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -52,7 +53,7 @@ final class ProvisionOrganizationCommand extends Command
         try {
             $organization = $this->provisionOrganization->provision($name);
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Could not provision the organization: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Could not provision the organization: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

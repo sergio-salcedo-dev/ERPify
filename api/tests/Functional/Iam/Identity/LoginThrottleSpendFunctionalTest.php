@@ -145,6 +145,34 @@ final class LoginThrottleSpendFunctionalTest extends WebTestCase
         $this->assertSame(0, $limiter->peek($this->loginRequest("\u{FEFF}" . $mailbox))->getRemainingTokens());
     }
 
+    /**
+     * The per-address ceiling declared as `login_global` is what stops one client spraying the address space: it
+     * is reached by spending one token on each of 25 distinct mailboxes, none of which comes near its own five.
+     */
+    public function testOneClientAddressIsBoundedAcrossMailboxesByTheWiredGlobalBudget(): void
+    {
+        $dispatcher = self::getContainer()->get(self::FIREWALL_DISPATCHER);
+        $this->assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $limiter = $this->loginLimiter($dispatcher);
+
+        $this->assertSame(5, $limiter->peek($this->loginRequest($this->freshMailbox()))->getRemainingTokens());
+
+        for ($attempt = 0; $attempt < 25; ++$attempt) {
+            $limiter->consume($this->loginRequest($this->freshMailbox()));
+        }
+
+        $this->assertSame(
+            0,
+            $limiter->peek($this->loginRequest($this->freshMailbox()))->getRemainingTokens(),
+            'a 26th mailbox from the same address met a spent per-address budget, whatever its own bucket holds',
+        );
+    }
+
+    private function freshMailbox(): string
+    {
+        return 'spray-' . Uuid::generate() . '@erpify.test';
+    }
+
     private function loginRequest(string $username): Request
     {
         $request = Request::create(self::LOGIN_PATH, Request::METHOD_POST, server: ['REMOTE_ADDR' => '127.0.0.1']);

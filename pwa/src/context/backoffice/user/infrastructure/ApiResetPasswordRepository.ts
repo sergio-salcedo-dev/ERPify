@@ -4,6 +4,7 @@ import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient";
 import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
+import { markCredentialReplaced } from "@/context/shared/navigation/infrastructure/credentialReplacement";
 import type { ResetPasswordCommand } from "../domain/ResetPasswordCommand";
 import type { ResetPasswordRepository } from "../domain/ResetPasswordRepository";
 import {
@@ -57,6 +58,7 @@ export class ApiResetPasswordRepository implements ResetPasswordRepository {
         undefined,
         { headers: { "X-CSRF-Token": uuidV7() } },
       );
+      markCredentialReplaced();
       return { kind: ResetPasswordOutcomeKind.RESET };
     } catch (error) {
       if (error instanceof HttpError) {

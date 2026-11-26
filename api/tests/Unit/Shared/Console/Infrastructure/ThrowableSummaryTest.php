@@ -39,6 +39,16 @@ final class ThrowableSummaryTest extends TestCase
             'a@b.test and 0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c and c@d.test',
             '<address> and <id> and <address>',
         ];
+        yield 'an address with an apostrophe' => [
+            "Key (email)=(O'Brien@example.test) already exists",
+            'Key (email)=(<address>) already exists',
+        ];
+        yield 'an ipv4 address' => ['Key (ip)=(203.0.113.9) is not present', 'Key (ip)=(<ip>) is not present'];
+        yield 'an ipv6 address' => [
+            'Key (ip)=(2001:db8:85a3:0:0:8a2e:370:7334) is not present',
+            'Key (ip)=(<ip>) is not present',
+        ];
+        yield 'a time of day is not an address' => ['failed at 07:15:41', 'failed at 07:15:41'];
         yield 'nothing to hide' => ['connection refused', 'connection refused'];
     }
 
@@ -50,5 +60,11 @@ final class ThrowableSummaryTest extends TestCase
 
         $this->assertStringContainsString('<id>', $summary);
         $this->assertStringNotContainsString('0190a1b2', $summary);
+    }
+
+    #[Test]
+    public function itNamesTheClassWhenThereIsNoMessage(): void
+    {
+        $this->assertSame(RuntimeException::class, ThrowableSummary::of(new RuntimeException('')));
     }
 }

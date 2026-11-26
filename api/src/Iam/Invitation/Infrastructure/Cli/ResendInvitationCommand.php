@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Infrastructure\Cli;
 
 use Erpify\Iam\Invitation\Application\ResendInvitation;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -65,7 +66,7 @@ final class ResendInvitationCommand extends Command
         try {
             $issued = $this->resendInvitation->resend($invitationId);
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Could not resend the invitation: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Could not resend the invitation: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

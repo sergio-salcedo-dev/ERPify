@@ -690,6 +690,55 @@ describe("FetchHttpClient", () => {
       expect(assign).not.toHaveBeenCalled();
     });
 
+    describe("a 401 right after this browser replaced its own credential", () => {
+      const MARKER_KEY = "erpify:credential-replaced";
+
+      afterEach(() => {
+        localStorage.removeItem(MARKER_KEY);
+      });
+
+      it("reloads the current page instead of sending the user to /login", async () => {
+        localStorage.setItem(MARKER_KEY, String(Date.now()));
+        respond401();
+        const client = await freshClient();
+
+        await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+          problem: { status: HttpStatus.UNAUTHORIZED },
+        });
+
+        expect(replace).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith("/backoffice/banks?page=2");
+      });
+
+      it("still bounces to /login when the replacement is older than the request budget", async () => {
+        localStorage.setItem(MARKER_KEY, String(Date.now() - 31_000));
+        respond401();
+        const client = await freshClient();
+
+        await expect(client.get("/api/v1/backoffice/banks")).rejects.toMatchObject({
+          problem: { status: HttpStatus.UNAUTHORIZED },
+        });
+
+        expect(replace).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith(expect.stringContaining("reason=session-expired"));
+      });
+
+      it("navigates once for a burst of 401s, not once per request", async () => {
+        localStorage.setItem(MARKER_KEY, String(Date.now()));
+        respond401();
+        const client = await freshClient();
+
+        await Promise.allSettled([
+          client.get("/api/v1/backoffice/banks"),
+          client.get("/api/v1/backoffice/users"),
+          client.get("/api/v1/backoffice/audit/timeline"),
+        ]);
+
+        expect(replace).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith("/backoffice/banks?page=2");
+      });
+    });
+
     it("preserves an already-observed 401 through a body-read abort, agreeing with the redirect it already fired", async () => {
       // The direction G2's "headers land, body never does" case cannot see: this time the
       // status line WAS a 401, so the redirect above already fired before the body read then

@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEn
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/domain/HttpClient";
+import { markCredentialReplaced } from "@/context/shared/navigation/infrastructure/credentialReplacement";
 import { UserStatus } from "../domain/UserStatus";
 import { ALL_PERMISSIONS, type HeldPermission, type Permission } from "../domain/Permission";
 import type { Identity } from "../domain/Identity";
@@ -120,5 +121,6 @@ export class ApiIdentityRepository implements IdentityRepository {
       API_ENDPOINTS.IDENTITY.CHANGE_PASSWORD,
       command,
     );
+    markCredentialReplaced();
   }
 }

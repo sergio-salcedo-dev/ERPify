@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\StoredIdentityDrift;
 use Erpify\Iam\Identity\Application\StoredIdentityProbeFailed;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -74,7 +75,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
             $io->error([
                 'The inspection could not be completed, so nothing is known about the stored identity rows. '
                 . 'This is NOT a finding: do not repair anything on the strength of it.',
-                $storedIdentityProbeFailed->getMessage(),
+                ThrowableSummary::of($storedIdentityProbeFailed),
             ]);
 
             return Command::INVALID;
@@ -127,7 +128,7 @@ final class InspectStoredIdentityIntegrityCommand extends Command
             // stops an operator concluding, from a trail with no such row, that the drift was never detected.
             $io->error(\sprintf(
                 'The finding above could not be recorded in the audit trail: %s',
-                $throwable->getMessage(),
+                ThrowableSummary::of($throwable),
             ));
         }
     }

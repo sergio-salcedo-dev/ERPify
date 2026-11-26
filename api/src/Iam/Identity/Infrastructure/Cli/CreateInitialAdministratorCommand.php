@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher;
 use Erpify\Iam\Identity\Infrastructure\Security\PasswordPolicyCheck;
 use Erpify\Organization\Membership\Application\GrantMembership;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use RuntimeException;
 use SensitiveParameter;
@@ -135,7 +136,7 @@ final class CreateInitialAdministratorCommand extends Command
                 $this->grantMembership->grant($userId);
             });
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Could not create the administrator: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Could not create the administrator: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

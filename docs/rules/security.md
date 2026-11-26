@@ -81,8 +81,8 @@ session gate. The `/api` boundary has one definition, `ApiRequestMatcher::PATH_P
   silenced; token endpoints keep the opaque `invalid-token`). A per-target 429 here is an oracle over which
   accounts/selectors exist and are under attack. **The test is who is asking, not how the budget is keyed:**
   a per-target budget may answer 429 once the caller has already proved it holds the target, which is why
-  `password_change_per_identity` refuses out loud on each of the three routes that spend it
-  (`POST /me/password`, `POST /me/recovery-secret`, `POST /me/recovery-secret/revoke`) and nothing on this
+  `password_change_per_identity` refuses out loud on every route that spends it
+  (`POST /me/password`, `POST /me/recovery-secret`, `POST /me/recovery-secret/revoke`, the three administrative-authority routes and the three erasures — nine in all, classified in `api/.credential-proof-policy`) and nothing on this
   surface does. `invitation_resend_per_invitee` refuses out loud for the same reason: only an administrator
   who can already list the invitee reaches it.
 - **Token hygiene:** a single-use token travels ONLY in the emailed link and the request body — never in a

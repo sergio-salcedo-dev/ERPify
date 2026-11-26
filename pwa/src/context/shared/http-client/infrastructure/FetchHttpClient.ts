@@ -22,6 +22,7 @@ import { uuidV7 } from "@/context/shared/uuid/infrastructure/uuidV7";
 import { Routes } from "@/context/shared/routing/domain/Routes";
 import { safeInternalPath } from "@/context/shared/navigation/domain/safeInternalPath";
 import { hardNavigate } from "@/context/shared/navigation/infrastructure/hardNavigate";
+import { takeCredentialReplacement } from "@/context/shared/navigation/infrastructure/credentialReplacement";
 import {
   claimDeparture,
   releaseDeparture,
@@ -131,6 +132,16 @@ function redirectToLoginOnSessionExpiry(input: string): void {
   // reload it for as long as the call keeps failing.
   if (globalThis.location.pathname === Routes.LOGIN) return;
   if (bouncesGivenUpOn >= MAX_EXPIRY_BOUNCES) return;
+  // A 401 right after this browser replaced its own credential is the old cookie meeting the new
+  // session, not an expiry: reload under the new cookie instead of sending the user to a login screen
+  // that tells them the change they just made threw them out. Taken at most once per replacement, so a
+  // document that keeps getting 401 falls through to the bounce below instead of reloading for ever.
+  if (takeCredentialReplacement()) {
+    if (!claimDeparture(DepartureReason.CREDENTIAL_REPLACED)) return;
+    const here = `${globalThis.location.pathname}${globalThis.location.search}`;
+    hardNavigate(safeInternalPath(here, Routes.BACKOFFICE), releaseDeparture);
+    return;
+  }
   // Losing the claim is not a failure to report. Either a sign-out is already leaving — and it is
   // going somewhere better than "session expired" — or another 401 in this same burst already
   // started the bounce. Both are the single flight working.

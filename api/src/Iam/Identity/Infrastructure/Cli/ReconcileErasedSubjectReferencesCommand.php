@@ -7,6 +7,7 @@ namespace Erpify\Iam\Identity\Infrastructure\Cli;
 use Erpify\Iam\Identity\Application\PersonReferenceProbeFailed;
 use Erpify\Iam\Identity\Application\ReconcileErasedSubjectReferences;
 use Erpify\Iam\Identity\Application\UnreconciledPersonReferences;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use LogicException;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -120,7 +121,7 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
             'The reconciliation could not be completed, so nothing is known about whether a person '
             . 'reference survived its erasure. This is NOT a finding: do not repair anything on the '
             . 'strength of it.',
-            $probeFailed->getMessage(),
+            ThrowableSummary::of($probeFailed),
         ]);
 
         return Command::INVALID;
@@ -143,7 +144,7 @@ final class ReconcileErasedSubjectReferencesCommand extends Command
             'The control is miswired, so this run reached no verdict. This is NOT a finding and NOT an '
             . 'infrastructure fault: a place is claimed by more than one source, which means some other '
             . 'place is going unchecked. Do not repair any subject on the strength of this run.',
-            $logicException->getMessage(),
+            ThrowableSummary::of($logicException),
             'Fix the duplicate registration, then run `make php.lint.person-reference`, whose one-source-'
             . 'per-axis direction is what should have caught this before it shipped.',
         ]);
