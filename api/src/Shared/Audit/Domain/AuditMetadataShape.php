@@ -64,7 +64,10 @@ enum AuditMetadataShape
                 static fn (mixed $role): bool => self::matches($role, self::ROLE_NAME_PATTERN),
             ),
             self::Instant => self::isInstant($value),
-            self::StoredValues => self::isListOf($value, static fn (mixed $stored): bool => self::isStoredValue($stored)),
+            self::StoredValues => self::isListOf(
+                $value,
+                static fn (mixed $stored): bool => self::isStoredValue($stored),
+            ),
             self::FieldDiff => self::isFieldDiff($value),
             self::WriteOperation => self::isWriteOperation($value),
         };

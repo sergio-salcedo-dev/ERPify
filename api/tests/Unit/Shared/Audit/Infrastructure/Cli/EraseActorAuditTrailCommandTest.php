@@ -22,6 +22,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one case per outcome of the command's exit-code contract
  */
 #[CoversClass(EraseActorAuditTrailCommand::class)]
 final class EraseActorAuditTrailCommandTest extends TestCase
