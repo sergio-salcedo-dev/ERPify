@@ -150,6 +150,23 @@ final class EraseActorAuditTrailCommandTest extends TestCase
     }
 
     /**
+     * A driver can quote the very id the run was asked to erase. The command echoes the id its operator typed, so what
+     * must not appear is the driver's own quotation of it inside the failure report.
+     */
+    public function testAFailureDoesNotRepeatTheValueTheDriverQuoted(): void
+    {
+        $tester = $this->testerFor(
+            ThrowingAuditActorAnonymiser::onAnonymiseWithMessage('DETAIL: Key (actor_id)=(' . self::ACTOR_ID . ')'),
+            new RecordingAuditLogger(),
+        );
+
+        $tester->execute(['actor-id' => self::ACTOR_ID, '--force' => true]);
+
+        $this->assertStringNotContainsString('actor_id)=(' . self::ACTOR_ID, $tester->getDisplay());
+        $this->assertStringContainsString('actor_id)=(<id>)', $tester->getDisplay());
+    }
+
+    /**
      * `--force` takes no preview, so this is the one path that can reach the `UPDATE` for an actor whose rows
      * are already gone. The self-audit must not fire: `AuditErasureEvidence` exempts this action from the
      * retention prune for ever, so a row written here is an immortal claim that an erasure happened when the

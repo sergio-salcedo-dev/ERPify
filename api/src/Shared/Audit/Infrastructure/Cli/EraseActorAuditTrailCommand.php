@@ -6,6 +6,7 @@ namespace Erpify\Shared\Audit\Infrastructure\Cli;
 
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\EraseActorAuditTrail;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Erpify\Shared\Console\Infrastructure\UnattendedRunPolicy;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
@@ -252,7 +253,7 @@ final class EraseActorAuditTrailCommand extends Command
             $io->error(\sprintf(
                 'Could not read the trail: %s. Nothing was attempted — this run is safe to repeat with the '
                 . 'same id.',
-                $throwable->getMessage(),
+                ThrowableSummary::of($throwable),
             ));
 
             return null;
@@ -290,7 +291,7 @@ final class EraseActorAuditTrailCommand extends Command
                 'Erasure failed: %s. The rows and their compliance entry are written together, so they keep their '
                 . 'original id and this run is safe to repeat — unless the connection was lost at the commit, which '
                 . 'only --dry-run can settle: zero rows for this id means it committed.',
-                $throwable->getMessage(),
+                ThrowableSummary::of($throwable),
             ));
 
             return Command::FAILURE;

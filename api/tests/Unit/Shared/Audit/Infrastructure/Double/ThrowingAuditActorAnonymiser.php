@@ -27,6 +27,7 @@ final readonly class ThrowingAuditActorAnonymiser implements AuditActorAnonymise
     private function __construct(
         private bool $failOnCount,
         private int $matchCount,
+        private string $message = self::MESSAGE,
     ) {
     }
 
@@ -38,6 +39,14 @@ final readonly class ThrowingAuditActorAnonymiser implements AuditActorAnonymise
     public static function onAnonymise(int $matchCount = 3): self
     {
         return new self(false, $matchCount);
+    }
+
+    /**
+     * Fails the statement with a message of the caller's choosing, for the case where a driver quotes a value.
+     */
+    public static function onAnonymiseWithMessage(string $message): self
+    {
+        return new self(false, 3, $message);
     }
 
     #[Override]
@@ -53,6 +62,6 @@ final readonly class ThrowingAuditActorAnonymiser implements AuditActorAnonymise
     #[Override]
     public function anonymise(string $actorId): ActorAnonymisationResult
     {
-        throw new RuntimeException(self::MESSAGE);
+        throw new RuntimeException($this->message);
     }
 }
