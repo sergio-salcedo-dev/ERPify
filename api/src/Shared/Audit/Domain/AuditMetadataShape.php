@@ -14,11 +14,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * value `metadata` can hold and stay outside every erasure pass: both anonymisers rewrite columns and never
  * this JSON, so anything person-shaped written here outlives the erasure of the person it names.
  *
- * The two that admit text the server did not choose are named for it. {@see StoredValues} carries the raw
- * cells an integrity probe could not explain, because an operator repairs the string they were shown and a
- * normalised one would be useless to them. {@see FieldDiff} carries a change diff whose personal fields are
- * sealed before they get here ({@see SEALED_VALUE_KEY}); its clear fields are whatever the aggregate held.
- * Neither is a licence for a third.
+ * One admits text the server did not choose, and is named for it: {@see FieldDiff} carries a change diff whose
+ * personal fields are sealed before they get here ({@see SEALED_VALUE_KEY}); its clear fields are whatever the
+ * aggregate held. {@see StoredValues} carries a sample of the cells an integrity probe could not explain, and
+ * admits only a value shaped like a role name or the sentinel standing for one that is not, so free text and an
+ * address cannot reach the one column no erasure rewrites. A shape is not a classification: a corrupted cell that
+ * is itself an upper-case word passes. The complete raw list stays where an operator reaches it deliberately — the
+ * inspection's own output. Neither is a licence for a third.
  */
 enum AuditMetadataShape
 {
@@ -38,6 +40,15 @@ enum AuditMetadataShape
 
     private const string ROLE_NAME_PATTERN = '/^[A-Z][A-Z0-9_]*$/D';
 
+    /** A stored cell that may be written as itself: role-shaped and short enough to be sampled whole. */
+    private const string STORED_ROLE_VALUE_PATTERN = '/^[A-Z][A-Z0-9_]{0,63}$/D';
+
+    /** What a stored cell that is not role-shaped is recorded as: the server's word, never the cell's text. */
+    public const string NOT_ROLE_SHAPED = '<non-role-shaped>';
+
+    /** What an absent stored cell is recorded as, so the sample still says a row had nothing there. */
+    public const string STORED_NULL = '<null>';
+
     public function admits(mixed $value): bool
     {
         return match ($this) {
@@ -53,10 +64,30 @@ enum AuditMetadataShape
                 static fn (mixed $role): bool => self::matches($role, self::ROLE_NAME_PATTERN),
             ),
             self::Instant => self::isInstant($value),
-            self::StoredValues => self::isListOf($value, \is_string(...)),
+            self::StoredValues => self::isListOf($value, self::isStoredValue(...)),
             self::FieldDiff => self::isFieldDiff($value),
             self::WriteOperation => self::isWriteOperation($value),
         };
+    }
+
+    /**
+     * The one place that decides what a raw stored cell is recorded as: itself when it is role-shaped, otherwise the
+     * sentinel. A producer calls this and {@see admits()} agrees with it, so what is written is what is admitted.
+     */
+    public static function storedValue(?string $raw): string
+    {
+        return match (true) {
+            null === $raw => self::STORED_NULL,
+            1 === \preg_match(self::STORED_ROLE_VALUE_PATTERN, $raw) => $raw,
+            default => self::NOT_ROLE_SHAPED,
+        };
+    }
+
+    private static function isStoredValue(mixed $value): bool
+    {
+        return self::STORED_NULL === $value
+            || self::NOT_ROLE_SHAPED === $value
+            || self::matches($value, self::STORED_ROLE_VALUE_PATTERN);
     }
 
     /**

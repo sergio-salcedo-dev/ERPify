@@ -22,7 +22,7 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * End-to-end wire-gate for `DELETE /api/v1/backoffice/users/{id}` on the real, wired container. It proves the
+ * End-to-end wire-gate for `POST /api/v1/backoffice/users/{id}/erase` on the real, wired container. It proves the
  * endpoint autowires the whole chained erasure — a live subject is hard-deleted, its historical audit rows are
  * anonymised (`actor_erased = TRUE`), its sessions are dropped and the compliance rows land signed by the
  * acting ADMIN — and that the surface answers 204 / 403 / 400 / 404 / 409 as the contract requires.
@@ -44,6 +44,9 @@ final class UserEraseFunctionalTest extends WebTestCase
     use AuthenticatesFunctionalRequests;
 
     private const string ENDPOINT = '/api/v1/backoffice/users';
+
+    /** The password `authenticateAs()` gives the seated administrator. */
+    private const string ADMIN_PASSWORD = 'functional-password';
 
     private const string TARGET_ID = '0190f200-0000-7000-8000-0000000000e1';
 
@@ -136,6 +139,29 @@ final class UserEraseFunctionalTest extends WebTestCase
         $this->assertSame(1, $this->countIdentity($adminId));
     }
 
+    /**
+     * The proof comes before anything the caller named is looked at, so each refusal below answers the same 403 to a
+     * caller who has not proved the password: the route is never an oracle for whether an id is well-formed, exists,
+     * or is the caller's own.
+     */
+    public function testAWrongPasswordIsRefusedBeforeTheTargetIsExaminedAndNothingIsErased(): void
+    {
+        $this->resetSubject();
+        $this->persistSubject();
+        $this->authenticateAdminClient($this->client);
+        $adminId = $this->idOfEmail(self::FUNCTIONAL_ADMIN_EMAIL);
+
+        $this->erase(self::TARGET_ID, expectedStatusCode: 403, currentPassword: 'not-the-password');
+        self::assertResponseHeaderSame('Content-Type', 'application/problem+json');
+        $this->assertSame(1, $this->countIdentity(self::TARGET_ID), 'a refused proof erases nobody');
+
+        $this->erase('not-a-uuid', expectedStatusCode: 403, currentPassword: 'not-the-password');
+        $unknown = '2e6d865c-17b0-476a-85f2-037bf6d3b3dc';
+        $this->erase($unknown, expectedStatusCode: 403, currentPassword: 'not-the-password');
+        $this->erase($adminId, expectedStatusCode: 403, currentPassword: 'not-the-password');
+        $this->assertSame(1, $this->countIdentity($adminId), 'nor does a self-targeted request with a wrong password');
+    }
+
     public function testAMalformedIdIsRejectedWithFourHundred(): void
     {
         $this->authenticateAdminClient($this->client);
@@ -150,12 +176,13 @@ final class UserEraseFunctionalTest extends WebTestCase
         $this->erase('2e6d865c-17b0-476a-85f2-037bf6d3b3dc', expectedStatusCode: 404);
     }
 
-    private function erase(string $id, int $expectedStatusCode): void
+    private function erase(string $id, int $expectedStatusCode, string $currentPassword = self::ADMIN_PASSWORD): void
     {
         $this->client->request(
-            Request::METHOD_DELETE,
-            self::ENDPOINT . '/' . $id,
-            server: ['HTTP_ACCEPT' => 'application/json'],
+            Request::METHOD_POST,
+            self::ENDPOINT . '/' . $id . '/erase',
+            server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
+            content: (string) \json_encode(['currentPassword' => $currentPassword]),
         );
 
         self::assertResponseStatusCodeSame($expectedStatusCode);

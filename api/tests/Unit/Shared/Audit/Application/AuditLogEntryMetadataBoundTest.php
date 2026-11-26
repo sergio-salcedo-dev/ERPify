@@ -70,7 +70,8 @@ final class AuditLogEntryMetadataBoundTest extends TestCase
 
     public function testRefusesMetadataOverItsBoundAndReportsTheMeasuredSize(): void
     {
-        $metadata = ['orphan_role_values' => [\str_repeat('A', AuditLogEntry::MAX_METADATA_BYTES)]];
+        // A role name is unbounded in length by its shape, which makes it a vehicle that reaches the size bound itself.
+        $metadata = ['new_roles' => [\str_repeat('A', AuditLogEntry::MAX_METADATA_BYTES)]];
         $size = $this->storedBytes($metadata);
 
         try {
@@ -95,9 +96,13 @@ final class AuditLogEntryMetadataBoundTest extends TestCase
     public function testMeasuresTheBoundOnTheUnescapedBytes(): void
     {
         $fourByteCharacters = \intdiv(AuditLogEntry::MAX_METADATA_BYTES, 8);
-        $metadata = ['orphan_role_values' => [\str_repeat("\u{1F3E6}", $fourByteCharacters)]];
+        // A diff is the one shape that admits arbitrary text, so it is the one that can carry four-byte characters.
+        $metadata = [
+            'changes' => ['name' => ['old' => \str_repeat("\u{1F3E6}", $fourByteCharacters), 'new' => null]],
+            'operation' => 'UPDATED',
+        ];
 
-        $this->assertSame($metadata, $this->entry(AuditLevel::SECURITY, $metadata)->metadata);
+        $this->assertSame($metadata, $this->entry(AuditLevel::CHANGE, $metadata)->metadata);
     }
 
     /**

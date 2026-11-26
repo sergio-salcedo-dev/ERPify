@@ -6,9 +6,10 @@ import type { HttpClient } from "@/context/shared/http-client/domain/HttpClient"
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 
 const USER_ID = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
+const PASSWORD = "the-callers-current-password";
 
 // Built inline so each `vi.fn()` is contextually typed to the matching (generic)
-// HttpClient method; recover the spy for assertions via `vi.mocked(client.delete)`.
+// HttpClient method; recover the spy for assertions via `vi.mocked(client.post)`.
 function httpClient(): HttpClient {
   return {
     get: vi.fn(),
@@ -21,18 +22,23 @@ function httpClient(): HttpClient {
 }
 
 describe("ApiEraseIdentityRepository", () => {
-  it("DELETEs the identity's detail URL and resolves to void", async () => {
+  it("POSTs the caller's password to the identity's erase action and resolves to void", async () => {
     const client = httpClient();
-    vi.mocked(client.delete).mockResolvedValue(undefined);
+    vi.mocked(client.post).mockResolvedValue(undefined);
 
-    await expect(new ApiEraseIdentityRepository(client).erase(USER_ID)).resolves.toBeUndefined();
+    await expect(
+      new ApiEraseIdentityRepository(client).erase(USER_ID, PASSWORD),
+    ).resolves.toBeUndefined();
 
-    expect(client.delete).toHaveBeenCalledWith(API_ENDPOINTS.BACKOFFICE.USERS.ERASE(USER_ID));
+    expect(client.post).toHaveBeenCalledWith(API_ENDPOINTS.BACKOFFICE.USERS.ERASE(USER_ID), {
+      currentPassword: PASSWORD,
+    });
+    expect(client.delete).not.toHaveBeenCalled();
   });
 
   it("propagates a typed HttpError (e.g. a 409 self-erasure refusal) without swallowing it", async () => {
     const client = httpClient();
-    vi.mocked(client.delete).mockRejectedValue(
+    vi.mocked(client.post).mockRejectedValue(
       new HttpError({
         type: "self-erasure-forbidden",
         title: "An administrator cannot erase their own identity.",
@@ -42,8 +48,8 @@ describe("ApiEraseIdentityRepository", () => {
       }),
     );
 
-    await expect(new ApiEraseIdentityRepository(client).erase(USER_ID)).rejects.toBeInstanceOf(
-      HttpError,
-    );
+    await expect(
+      new ApiEraseIdentityRepository(client).erase(USER_ID, PASSWORD),
+    ).rejects.toBeInstanceOf(HttpError);
   });
 });

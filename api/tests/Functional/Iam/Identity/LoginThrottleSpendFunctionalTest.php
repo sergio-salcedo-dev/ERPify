@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Http\Event\LoginFailureEvent;
 use Symfony\Component\Security\Http\EventListener\LoginThrottlingListener;
+use Symfony\Component\Security\Http\SecurityRequestAttributes;
 
 /**
  * A failed login spends the `login_throttling` budget, read through the firewall's real wiring.
@@ -107,6 +108,49 @@ final class LoginThrottleSpendFunctionalTest extends WebTestCase
         $this->assertCount(1, $budgets->seen, 'LoginFailureEvent never reached a listener below the throttle.');
         $spent = $budgets->seen[0];
         $this->assertSame($spent['limit'] - 1, $spent['remaining']);
+    }
+
+    /**
+     * Drives the limiter the firewall is wired to, not the HTTP path: the test kernel keeps `cache.rate_limiter` on
+     * an array adapter that the services resetter empties between requests, so a sequence of requests cannot
+     * observe an accumulating budget. What this proves is the wiring — the declared limit and the canonical key —
+     * which the unit test, built on hand-made factories, cannot.
+     */
+    public function testEverySpellingOfOneMailboxDrawsOnTheWiredFiveAttemptBudget(): void
+    {
+        $dispatcher = self::getContainer()->get(self::FIREWALL_DISPATCHER);
+        $this->assertInstanceOf(EventDispatcherInterface::class, $dispatcher);
+        $limiter = $this->loginLimiter($dispatcher);
+
+        $mailbox = 'spelling-' . Uuid::generate() . '@erpify.test';
+        $spellings = [
+            $mailbox,
+            \strtoupper($mailbox),
+            '  ' . $mailbox,
+            $mailbox . "\u{200B}",
+            "\u{00A0}" . $mailbox,
+        ];
+
+        foreach ($spellings as $attempt => $spelling) {
+            $this->assertSame(
+                5 - $attempt,
+                $limiter->peek($this->loginRequest($spelling))->getRemainingTokens(),
+                'spelling ' . ($attempt + 1) . ' did not see the budget the earlier ones spent',
+            );
+            $limiter->consume($this->loginRequest($spelling));
+        }
+
+        // The listener refuses on `0 === getRemainingTokens()`: `peek()` consumes nothing, so `isAccepted()` alone
+        // stays true on an empty bucket.
+        $this->assertSame(0, $limiter->peek($this->loginRequest("\u{FEFF}" . $mailbox))->getRemainingTokens());
+    }
+
+    private function loginRequest(string $username): Request
+    {
+        $request = Request::create(self::LOGIN_PATH, Request::METHOD_POST, server: ['REMOTE_ADDR' => '127.0.0.1']);
+        $request->attributes->set(SecurityRequestAttributes::LAST_USERNAME, $username);
+
+        return $request;
     }
 
     /**

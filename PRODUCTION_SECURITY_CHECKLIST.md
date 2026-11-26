@@ -726,7 +726,7 @@ you change anything here.
       plus its reset tokens (`GDPR_SUBJECT_ERASED`), anonymises every audit row the subject authored, hard-deletes
       its `iam_session` rows (no residual `ip`/`device` PII) and self-audits `GDPR_ERASURE_EXECUTED` — all in one
       transaction, rolled back as a unit on any failure. It is reachable both by the `identity:gdpr:erase-subject`
-      CLI and, new here, by the **ADMIN-only `DELETE /api/v1/backoffice/users/{id}`** (gated `#[IsGranted('users.erase')]`,
+      CLI and, new here, by the **ADMIN-only `POST /api/v1/backoffice/users/{id}/erase`** (gated `#[IsGranted('users.erase')]`,
       route-id `Uuid::ensure`'d, all errors through the RFC 9457 pipeline — never a manual body; a 204 carries no
       body to leak). The console surfaces it as a **type-to-confirm** destructive action (the admin retypes the
       subject's email); the redirect is `safeHref`-wrapped and no PII/JWT is written to client storage. The write
@@ -768,7 +768,7 @@ you change anything here.
       handler (Postgres/Redis) is a follow-up before horizontal scaling. ADR
       [`docs/adr/auth-rbac-subsystem.md`](docs/adr/auth-rbac-subsystem.md).
 - [ ] **Persisted per-identity lockout (`identity_user.failed_attempts` / `locked_until`):** a second line
-      behind the ephemeral per-IP+email `login_throttling` (built-in, `max_attempts: 5`). After **10** consecutive
+      behind the ephemeral per-IP+email `login_throttling` (`CanonicalLoginRateLimiter`: 5 failures a minute per resolved mailbox and client address, 25 per client address). After **10** consecutive
       failed attempts against a **resolved** identity it is locked for **15 minutes**, refused BEFORE the password
       is verified (`LockedIdentityLoginRefusalListener`) with the uniform **401 `unauthenticated`** behind the
       timing floor, minting no session; a reset, a recovery-secret redemption, a change of password, an administrator's unlock or
@@ -997,25 +997,27 @@ mitigated state. Accepting one means recording who accepted it and against which
       and the old regex reds them. **Residual:** `safeHref` is unchanged and still admits an absolute
       `https://` URL by design; it is `safeInternalPath` that a redirect target must additionally pass.
 
-- [ ] **A GDPR erasure racing a recovery-secret redemption reinserts the subject into `audit_log`,
-      on the ACTOR axis.** `RedeemRecoverySecret` compensates a redemption that authenticated and then
-      could not consume, and that compensation writes its `RECOVERY_SECRET_REDEMPTION_COMPENSATED` row
-      **post-commit** — outside any transaction, after `Security::login()` has committed the session.
-      If `identity:gdpr:erase-subject` commits inside that window the row lands after the anonymiser
-      has finished, and the subject is back in the table their erasure had just cleaned.
-      **The axis is `actor_id`, not `resource_id`, and that is what makes the obvious fix useless:**
-      `SealedAuditEntryFactory` seals the actor from `SecurityActorContextFactory`, which reads the
-      security token — by then the just-authenticated subject — so dropping the person reference from
-      the event's RESOURCE leaves the identifier one column over. A synchronous "does the identity
-      still exist" guard is a TOCTOU rather than a fix: the erasure can equally commit between that
-      read and the write. **Detection exists, repair is manual:** `audit_log.actor_id` is already
-      characterised in [`api/.person-reference-policy`](api/.person-reference-policy) as holding
-      person ids, having no entity, and being outside the coverage gate; the reconciler
-      (`identity:gdpr:reconcile-subject-references`) anti-joins it and reports the divergence on its
-      next tick. So this is an instance of a residual this repository has already argued, not a new
-      class — recorded here because the redemption is a new writer on that axis, and because the
-      window is one an operator can hit rather than a theoretical interleaving.
-
+- [x] **A GDPR erasure racing a recovery-secret redemption reinserted the subject into `audit_log`, on the ACTOR
+      axis — found already closed, pinned 2026-11-25.** The item described the compensation row
+      (`RECOVERY_SECRET_REDEMPTION_COMPENSATED`) as written post-commit with no lock, so an erasure committing inside
+      that window left the subject back in the table. The tree no longer does that: `RecordRecoverySecretAuditBestEffort`
+      writes all five recovery-secret actions inside `IdentityRowLock::whileHeld()` (`FOR KEY SHARE` on the identity
+      row), and `FulfilIdentityErasure` holds that row `FOR UPDATE` from its administrator re-check to its commit,
+      ahead of the trail pass — the same serialisation as the lockout, lockout-notice and recovery-throttle writers.
+      Both orders end clean: the writer first, and the erasure's pass sees the committed row and anonymises both
+      columns; the erasure first, and the writer's locked read finds no subject and writes nothing. What was missing
+      was the proof, and the register: `LateAuditWriterErasureSerialisationFunctionalTest` covered only
+      `RECOVERY_SECRET_MINTED`, and read only the resource axis. It now drives all five actions through the real race
+      (a second process holding the row) and reads BOTH axes (`resource_id` and `actor_id`) afterwards. Those races
+      run with no session token, so the actor of a row they write is the system; the case the item turned on — a row
+      sealed from the subject's own token, which names them as ACTOR — is a separate test that writes it and then
+      erases, in sequence, leaving no row naming them and the row itself anonymised on both axes. **No test runs the
+      erasure-first order with an actor-sealed row:** that order is the writer finding no subject, and the lock that
+      yields it is the one the race tests exercise. **Not established:** which commit
+      introduced the lock — the checkout's history is shallow and `git log -S` reached only a documentation commit —
+      so this records that it holds at this head, not when it started to. The residual the item cited stays what it
+      was: a writer outside `Iam/Identity/Application` is outside `SubjectAuditWriteSerialisationGateTest`, which reads
+      that one directory.
 - [ ] **The audit trail is not tamper-evident.** No hash chain, signature or checksum column exists
       in any migration; append-only is a property of the mutation paths, not cryptography. Anyone
       with database credentials can rewrite history undetectably — the app's RBAC is irrelevant to
@@ -1031,16 +1033,23 @@ mitigated state. Accepting one means recording who accepted it and against which
       names. Verify when adding a person-denoting `resource_type`: classify it, wire its erasure, and
       cover it with a Behat scenario — the gate checks declaration and wiring, not runtime reach.
       **The pass clears what is committed when it runs**, so it is closed only together with the item below.
-- [ ] **`audit_log.metadata` is a closed vocabulary, but two of its shapes still admit text the server did
-      not choose, and none of it is erasable.** `AuditLogEntry::create()` refuses any key outside
-      `AuditMetadataKey`, any value outside its key's shape and any `metadata` over 16 KiB, so a producer
-      can no longer drop an `iban` or a request body into the one column no erasure pass rewrites. What it
-      does not close: (a) **`orphan_role_values`** carries a sample of the raw `identity_user.roles` text the
-      integrity probe could not explain — whatever the corruption wrote there, a person's email included —
-      and **the clear fields of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]`
-      field is sealed) carry what a user typed; neither is reached by the anonymisers, which rewrite columns
-      and never this JSON. (b) **A UUID under a key is indistinguishable from a person's id**: the shape
-      admits a pseudonym under `anonymized_actor_id` exactly as it would admit the real id, so what keeps a
+- [ ] **`audit_log.metadata` is a closed vocabulary, and one shape still admits text the server did not
+      choose.** `AuditLogEntry::create()` refuses any key outside `AuditMetadataKey`, any value outside its key's
+      shape and any `metadata` over 16 KiB, so a producer can no longer drop an `iban` or a request body into the
+      one column no erasure pass rewrites. **Closed 2026-11-25: `orphan_role_values`** carried a sample of the raw
+      `identity_user.roles` text the integrity probe could not explain — whatever the corruption wrote there, a
+      person's email included. It now admits only a value shaped like a role name (`[A-Z][A-Z0-9_]{0,63}`; a cell
+      longer than that is the sentinel, never a prefix of itself), the
+      `<null>` sentinel (reserved: the one producer today hands over strings, so it is exercised by the vocabulary test
+      only) or `<non-role-shaped>`, decided in one place (`AuditMetadataShape::storedValue()`) that
+      the producer calls and the shape agrees with; the complete raw list stays in the inspection's own output,
+      which an operator reaches deliberately. This governs new writes, not old rows: a row written before
+      this change keeps what it held, and there is none in this deployment. **What remains:** (a) **the clear fields
+      of a `change` diff** (a `Bank`'s `name` and `shortName`; every `#[PersonalData]` field is sealed) carry what
+      a user typed and are not reached by the anonymisers, which rewrite columns and never this JSON — the detail
+      route now serves only classified fields (next item), but the row keeps them; and a role-shaped word that is
+      somebody's name passes the pattern. (b) **A UUID under a key is indistinguishable from a person's id**: the
+      shape admits a pseudonym under `anonymized_actor_id` exactly as it would admit the real id, so what keeps a
       person's id out is the identity erasure's acceptance witness (`features/backoffice/users/erase.feature`),
       not the vocabulary. Decision and costs: ADR [`docs/adr/audit-activity-log.md`](docs/adr/audit-activity-log.md) D4.
 
@@ -1164,14 +1173,20 @@ mitigated state. Accepting one means recording who accepted it and against which
       `metadata`, by value and case-insensitively, so it reaches every event holding it without anyone
       listing them. It is the log's one sanctioned mutation, recorded as D12 of
       [`docs/adr/event-store-and-projections.md`](docs/adr/event-store-and-projections.md).
-- [ ] **`audit:gdpr:erase` is not atomic.** The anonymisation `UPDATE` commits and the
-      `GDPR_ERASURE_EXECUTED` self-audit is written _after_, outside any transaction — a crash
-      between them leaves the erasure done with no evidence of it, and the original id no longer
-      matches anything, so a re-run falsely reports "nothing to erase". Accepted while the only
-      trigger is a synchronous operator command (`audit-activity-log.md` D4). **Its revisit trigger
-      fires** if #555 lands a second mutation statement, or the day a non-CLI trigger appears:
-      route it through `TransactionManager`, never a raw DBAL transaction nested under
-      `wrapInTransaction` (no `nest_transactions_with_savepoints` is configured).
+- [x] **`audit:gdpr:erase` was not atomic — closed 2026-11-25.** The anonymisation `UPDATE` committed and the
+      `GDPR_ERASURE_EXECUTED` self-audit was written _after_, outside any transaction — a crash between them left the
+      erasure done with no evidence of it, and the original id no longer matched anything, so a re-run falsely
+      reported "nothing to erase". Both now run in one `EraseActorAuditTrail` transaction through `TransactionManager`
+      (never a raw DBAL transaction nested under `wrapInTransaction`, which has no savepoints): a failed self-audit rolls
+      the rewrite back, the original id still matches and the run is safe to repeat. The command's `ERASED_UNRECORDED`
+      exit code (3), which existed only to say "erased but unrecorded", is retired because that state is no longer
+      reachable. Pinned by `EraseActorAuditTrailTest` (both writes inside the boundary, in order; no evidence for a
+      statement that matched nothing; a failure leaves it) and by `EraseActorAuditTrailAtomicityFunctionalTest`, which
+      runs against Postgres with nothing enclosing the use case and shows the original ids restored after a failing
+      audit — and goes red if the work runs outside a transaction. **Residual:** a connection lost at the `COMMIT`
+      itself leaves an outcome nobody can know from the caller; the command's message points at `--dry-run` (zero rows
+      for the original id means it committed). A job that treated exit code 3 specially no longer sees it, which fails
+      toward the safe reading.
 - [ ] **A GDPR erasure CLI never answers its own confirmation.** All three (`identity:gdpr:erase-subject`,
       `bank-account:gdpr:erase-subject`, `audit:gdpr:erase`) call `SymfonyStyle::confirm()`, whose default a
       run that cannot be asked would otherwise take for an operator's answer — reporting `0` for an erasure
@@ -1348,14 +1363,31 @@ mitigated state. Accepting one means recording who accepted it and against which
       injection, under `shadcn` → `@dotenvx/dotenvx`) was closed in #1166 by a lock-only move to
       5.33.16. **Before a customer deployment:** re-run `npm audit --omit=dev`; the build-time
       `glob` path closes when `@sentry/bundler-plugins` takes `glob` ≥14.0.2.
-- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order.** `SendInvitation`
-      and `ResendInvitation` commit the token rotation and then mail the link synchronously, outside the
-      transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent resends of one person are
-      serialised by the invitation row lock, but their SMTP sends race after the commit, so the email that
-      arrives last can carry the link the other resend already killed. And an SMTP exchange slower than the
-      PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. Both are
-      bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
-      operator to resend again, and a refused send answers 503 rather than a false 204.
+- [ ] **The invitation emails are sent after the commit, best-effort and in no guaranteed order — narrowed
+      2026-11-25, not closed.** `SendInvitation` and `ResendInvitation` commit the token rotation and then mail the
+      link synchronously, outside the transaction (`SendInvitationEmailBestEffort`). Two consequences. Two concurrent
+      resends of one person are serialised by the invitation row lock, but their SMTP sends race after the commit, so
+      the email that arrives last can carry the link the other resend already killed. And an SMTP exchange slower than
+      the PWA's 30 s client timeout shows the operator a `request-timeout` over a resend that committed. **The first is
+      now narrowed:** `CurrentTokenInvitationEmailSender` decorates `InvitationEmailSender` and refuses to hand a link
+      to the mailer unless it is still the live one of a `SENT` invitation (the selector names the row, the secret is
+      verified against the stored digest in constant time, the TTL and the status are read), so a link a later resend
+      replaced is dropped instead of mailed; the best-effort wrapper above it already turns that refusal into "not
+      accepted", which the resend answers as `invitation-email-not-sent` for the older request. That shrinks the window
+      from a whole SMTP exchange to the gap between one read and one call. **It does not close it** — two sends that
+      both pass the check before either resend commits can still cross — and closing it needs the row held through
+      the SMTP exchange, which would block an accept or a revoke for as long as a mail server takes; that was weighed
+      and declined (owner, 2026-11-25). A messenger-routed send is closed by policy: the invitee is a person and
+      `Iam.Invitation` is classified so in `api/.persistent-transport-policy`. The second consequence is untouched and
+      both are bounded today: the resend budget allows 5 / day per invitee and 2 per caller, the console tells the
+      operator to resend again, and a refused send answers 503 rather than a false 204. The decorator costs one
+      indexed read per send, deliberately a fresh one (`findByIdFresh()`: a plain `find()` answers from the entity this
+      request already manages and would never see a resend another process committed). It is pinned by
+      `CurrentTokenInvitationEmailSenderTest` (live, replaced by a later resend, expired, no longer `SENT`, absent,
+      four malformed shapes) and by `CurrentTokenInvitationEmailSenderFunctionalTest`, which replaces the digest behind
+      this process's back with a raw `UPDATE`, shows that a plain read would let the old link through, and shows the
+      decorator refusing it, the best-effort wrapper reporting `false`, the replacement still mailed, and the container
+      resolving the port to the decorator.
       **When an outbox earns its place** — any one of: a second transactional email producer that needs
       at-least-once delivery rather than best-effort; the 30 s timeout observed against real SMTP latency; an
       invitee who reports holding only a dead link after a resend; or invitations sent in bulk, where a
@@ -1364,7 +1396,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       would enqueue the INTENT — "deliver the current link of invitation X" — and mint the token when the
       message is delivered, not enqueue the rendered email. That moves the token rotation off the request, so
       the resend's answer stops meaning "the old link is dead", and that contract change is the real cost to
-      weigh. **Accepted:** not recorded (opened 2026-10-26).
+      weigh. **Accepted:** not recorded (opened 2026-10-26); the narrowing and the declined lock are the owner's of
+      2026-11-25.
 - [ ] **Three administrator identities acting together can hold one invitee's HTTP resend shut for a day.** The
       per-invitee budget on `POST /backoffice/users/{userId}/invitation/resend` (`invitation_resend_per_invitee`,
       5 / day, shared by every administrator — §6) is what stops the lever from killing a person's link for ever,
@@ -2372,15 +2405,22 @@ mitigated state. Accepting one means recording who accepted it and against which
         of the subject's anonymised trail or stream. Keeping the link would need the id→pseudonym table D4
         vetoes.
       Re-affirm or close before the first customer.
-- [ ] **A `change` row's `metadata.changes` map holding a personal field in clear is served by the audit detail
-      route past its subject's erasure.** Nothing on the erasure path reaches `metadata`, so the route reads the
-      row's level as the diff's provenance: a map is served only on a `change` row and withheld whole on every
-      other, `AuditLogEntry` refuses a `changes` key outside that level so no other writer can store one, and
-      `ChangeLevelProvenanceGateTest` holds the producers of that level and the `audit_log` insert path closed.
-      What remains is a `change` row that never went through `PiiDiffSealer`: one written before sealing
-      existed, or inserted directly in the database. Telling such a map apart needs the field classification
-      at read time. Nothing in this deployment holds one today; close it (re-seal or redact by classification)
-      or accept it before the first customer.
+- [x] **A `change` row's `metadata.changes` map holding a personal field in clear was served by the audit detail
+      route past its subject's erasure — closed 2026-11-25.** Nothing on the erasure path reaches `metadata`, and
+      the level only proves who wrote a map, not what a field in it holds: a `change` row that never went through
+      `PiiDiffSealer` (written before sealing existed, or inserted directly in the database) was served verbatim.
+      The read side is now closed by default (`AuditDiffDisclosure`): within a `change` row a field is served in
+      clear only when it is a sealed envelope or the registry names it as a non-personal field of the row's resource
+      type; any other field keeps its place in the diff with `old` and `new` both withheld, so the client still
+      renders that something changed. A row with no resource type, an unknown type and a field that is not a
+      well-formed `old`/`new` pair are withheld the same way, and a "sealed-looking" side carrying any key beside
+      `__enc__` is not trusted as sealed. The registry holds strings (the audit module may not import the modules
+      it records) and is tied to the entities by `AuditDiffDisclosureRegistryTest`, which requires each type's clear
+      fields to equal its ORM-mapped fields minus its `#[PersonalData]` ones — a new column, or one that becomes
+      personal, reds the test instead of being served by accident. **Residuals:** this governs what the route
+      serves, not what the row stores — the clear fields stay in `metadata`, and the table is readable under the
+      access it already demands; a field wrongly left unmarked `#[PersonalData]` is served in clear and review is
+      the only control on that direction; an audited aggregate that is not ORM-mapped is outside the registry test.
 - [ ] **The repository is public and now documents this posture in detail.** `ADMIN` reads the trail
       that audits it, the bootstrap provisions exactly one administrator, the trail is not
       tamper-evident, and the PR/issue history carries reproductions of defects found in review.
@@ -2514,13 +2554,26 @@ mitigated state. Accepting one means recording who accepted it and against which
       bucket's state for the address as typed and IP, the same for an address that exists and one that does not,
       so it is no existence oracle.
 
-- [ ] **The login throttle keys on the address as typed, not as resolved.** `login_throttling` buckets on the
-      username lower-cased, while `Email` also strips edge whitespace and zero-width characters and normalises to
-      NFC, so spellings resolving to one identity may each get their own bucket. Unmeasured; the persisted lockout
-      above keys on the resolved row and is unaffected. Live since the throttle is spent (*The login throttle was
-      declared and never spent*): each spelling is a fresh per-address budget, so the per-IP bucket (25 a minute)
-      is the throttle's only bound on one identity from one source — the persisted lockout, keyed on the resolved
-      row, still stops the guessing at ten.
+- [x] **The login throttle keyed on the address as typed, not as resolved — closed 2026-11-25.**
+      `login_throttling` bucketed on the username lower-cased, while `Email` also strips edge whitespace and
+      zero-width characters and normalises to NFC, so spellings resolving to one identity each drew a fresh
+      per-address budget and the per-IP bucket (25 a minute) was the only bound on one identity from one
+      source. `CanonicalLoginRateLimiter` is now the firewall's `login_throttling.limiter`: it keys the local
+      bucket by `RecoveryBudgetKey::forEmail()`, the rule every other per-address budget here already uses, and
+      keeps the framework's two fixed windows (5 per mailbox and client address, 25 per client address), now
+      declared as `login_local` / `login_global` in `rate_limiter.yaml` because a custom limiter replaces the
+      firewall's own block. Keys stay HMACs, so neither the mailbox nor the client address reaches the cache
+      pool in clear. Pinned by `CanonicalLoginRateLimiterTest` (seven spellings of one mailbox share one budget,
+      a non-address still spends one, the stored keys name neither the mailbox nor the address) and by
+      `LoginThrottleSpendFunctionalTest`, which drives the limiter the container wires. **Residuals:**
+      the HTTP path itself is not covered end to end, because the test kernel keeps `cache.rate_limiter` on an
+      array adapter that the services resetter empties between requests, so a sequence of requests cannot
+      observe an accumulating budget; and the secret behind the HMAC is `kernel.secret`, so rotating it resets
+      every bucket; and a request with no client address at all shares one bucket per kind with every other such request
+      (`getClientIp()` is `null` only where no `REMOTE_ADDR` exists, which a FrankenPHP deployment does not produce, but
+      a trusted-proxy misconfiguration that collapses every client onto the proxy's address has the same shape, and
+      the framework's default limiter had it too). The persisted lockout keys on the resolved row and was never
+      affected.
 
 - [x] **`/forgot-password` latency separated an active account from every other address — closed.**
       `RequestPasswordReset::request()` ran a `FOR UPDATE` transaction (supersede, insert, event publish) and a
@@ -2842,12 +2895,25 @@ mitigated state. Accepting one means recording who accepted it and against which
       finish, writes a `warning` line with `complete: false` even if no name failed, so a store too large for one run
       is only covered where it reaches and says so. **Accepted — the user,
       2026-11-17 (ADMIN only; no listing audit row).**
-- [ ] **The Documents erasure re-proves the caller's password and the identity erasure route does not (doc-7).**
-      `POST /api/v1/documents/{id}/erase` spends the shared `CurrentPasswordProofThrottle` budget and re-proves the caller's
-      current password before any ledger write (`documents_erase :: credential-affecting`), because a stolen session could
-      otherwise erase documents for good and evicting it undoes nothing. `backoffice_user_erase`, which erases an identity,
-      is the same gap and is classified `ordinary` with no proof; it was not fixed here. **Open — owner: the identity
-      erasure route's next change; the credential-proof gate pins the Documents route and cannot see this one.**
+- [x] **The identity erasure route did not re-prove the caller's password, though the Documents erasure did — closed 2026-11-25.**
+      `POST /api/v1/documents/{id}/erase` already spent the shared `CurrentPasswordProofThrottle` budget and re-proved the
+      caller's current password before any ledger write, because a stolen session could otherwise erase documents for good
+      and evicting it undoes nothing; `backoffice_user_erase` erased an identity and its trail on the permission alone.
+      It is now `POST /api/v1/backoffice/users/{id}/erase` carrying `currentPassword` (the shared HTTP client sends no body
+      with a `DELETE`, and the document erasure already had a verb and path of its own), classified
+      `credential-affecting` in `api/.credential-proof-policy` and pinned with the other erasures by
+      `CredentialProofGateTest`. The proof precedes the id check, the self-erasure refusal and the lookup, so a
+      malformed id, an absent identity and a self-targeted request all answer `403 invalid-current-password` to a caller
+      who has not proved the password — the route is never an existence oracle. `erase.feature` pins the absent and the
+      malformed id, and `UserEraseFunctionalTest` pins all three, the self-targeted one included, plus the spent budget
+      answering 429 to the correct password. The console
+      keeps its type-to-confirm step and adds the password dialog behind it (two brakes: which identity, and whose
+      session). **Residuals:** `identity:gdpr:erase-subject` drives the same use case from the console with no session
+      and asks no password — the proof is the controller's, as for the other two authority writes, so a holder of a
+      shell is not stopped by it; `CredentialProofGateTest` reads call order inside the controller and cannot see
+      whether the proof precedes the lookup *inside* a use case, so the Behat scenarios are the only control on that
+      direction; and the shared per-identity budget (5 per window) means an administrator who erases several
+      members in a row will meet a 429 from it.
 - [ ] **The digest, size and timestamps of an erased document survive its erasure (doc-7).** Erasure destroys the key,
       nulls the sealed filename and deletes the sealed object, but the row keeps its sha256 digest, byte size, retention
       fields and timestamps, and its custody trail stays. Anyone who holds a known file can confirm it is the one

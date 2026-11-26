@@ -9,6 +9,7 @@ use Erpify\Iam\Identity\Application\StoredIdentityDrift;
 use Erpify\Shared\Audit\Application\AuditLogEntry;
 use Erpify\Shared\Audit\Domain\ActorContext;
 use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Audit\Domain\AuditMetadataShape;
 use Erpify\Shared\Audit\Domain\AuditProvenance;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -85,15 +86,61 @@ final class StoredIdentityDriftTest extends TestCase
     }
 
     /**
+     * A corrupted `roles` cell can hold anything — an address, a name, an id — and `audit_log.metadata` is rewritten
+     * by no erasure pass. A role-shaped value is kept because it is what an operator repairs; anything else becomes
+     * the sentinel, while the count still says how many cells were affected.
+     */
+    #[Test]
+    public function itRecordsOnlyRoleShapedValuesAndASentinelForEverythingElse(): void
+    {
+        $drift = new StoredIdentityDrift(
+            ['SUPERVISOR', 'jane.doe@example.test', 'Jane Doe', 'GHOST_ROLE', "ADMIN\n", ''],
+            0,
+            0,
+            0,
+        );
+
+        $metadata = $drift->toAuditMetadata();
+
+        $this->assertSame(
+            [
+                'SUPERVISOR',
+                AuditMetadataShape::NOT_ROLE_SHAPED,
+                AuditMetadataShape::NOT_ROLE_SHAPED,
+                'GHOST_ROLE',
+                AuditMetadataShape::NOT_ROLE_SHAPED,
+                AuditMetadataShape::NOT_ROLE_SHAPED,
+            ],
+            $metadata['orphan_role_values'],
+        );
+        $this->assertSame(6, $metadata['orphan_role_value_count'], 'the count still names every affected cell');
+        $this->assertStringNotContainsString('jane', \json_encode($metadata, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * 64 characters is the longest value kept; one more is a different cell, recorded as the sentinel rather than as
+     * a 64-character prefix that reads as a role nobody defined.
+     */
+    #[Test]
+    public function itKeepsAValueOfTheLongestAdmittedLengthAndSentinelsOneCharacterMore(): void
+    {
+        $longest = \str_repeat('A', 64);
+
+        $metadata = (new StoredIdentityDrift([$longest, $longest . 'A'], 0, 0, 0))->toAuditMetadata();
+
+        $this->assertSame([$longest, AuditMetadataShape::NOT_ROLE_SHAPED], $metadata['orphan_role_values']);
+    }
+
+    /**
      * The corruption decides how many orphan values there are and how long each is, and the audit row is bounded:
      * a row refused for its size would leave the trail with no record of the finding. So the row samples them,
-     * keeps the total, and must still fit the bound when every sampled character costs the most it can.
+     * keeps the total, and must still fit the bound when every sampled value is as long as it can be.
      */
     #[Test]
     public function itSamplesTheOrphanValuesSoTheAuditRowAlwaysFitsItsBound(): void
     {
         $values = \array_map(
-            static fn (int $index): string => \sprintf('%03d', $index) . \str_repeat("\u{0001}", 1_000),
+            static fn (int $index): string => 'R' . \sprintf('%03d', $index) . \str_repeat('X', 1_000),
             \range(1, 500),
         );
 
@@ -102,8 +149,9 @@ final class StoredIdentityDriftTest extends TestCase
         $this->assertSame(500, $metadata['orphan_role_value_count']);
         $this->assertCount(StoredIdentityDrift::SAMPLED_ORPHAN_VALUES, $metadata['orphan_role_values']);
         $this->assertSame(
-            '001' . \str_repeat("\u{0001}", StoredIdentityDrift::SAMPLED_VALUE_LENGTH - 3),
+            AuditMetadataShape::NOT_ROLE_SHAPED,
             \array_first($metadata['orphan_role_values']),
+            'a cell longer than any role name is recorded as the sentinel, never as a prefix of itself',
         );
 
         $entry = AuditLogEntry::create(

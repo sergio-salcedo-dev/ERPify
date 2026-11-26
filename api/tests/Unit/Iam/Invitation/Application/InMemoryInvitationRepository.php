@@ -92,6 +92,13 @@ final class InMemoryInvitationRepository implements InvitationRepository
         return $this->byId[\strtolower($id)] ?? null;
     }
 
+    /** The in-memory store has no second process to be stale against, so a fresh read IS a plain one. */
+    #[Override]
+    public function findByIdFresh(string $id): ?Invitation
+    {
+        return $this->byId[\strtolower($id)] ?? null;
+    }
+
     #[Override]
     public function findByIdForUpdate(string $id): ?Invitation
     {

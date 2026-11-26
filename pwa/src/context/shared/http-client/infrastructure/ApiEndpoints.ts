@@ -110,8 +110,9 @@ export const API_ENDPOINTS = {
       // (204, no body: the accept token leaves only in the email). The previous link dies with it. Nothing
       // resendable → 404; a link minted but whose email the mailer refused → 503 `invitation-email-not-sent`.
       RESEND_INVITATION: (id: string): string => `${userPath(id)}/invitation/resend`,
-      // GDPR erasure — a DELETE on the detail URL (204, no body). Same target as DETAILS, different verb.
-      ERASE: userPath,
+      // GDPR erasure — a POST carrying the caller's `currentPassword` (204, no body). A verb and path of its
+      // own, like the document erasure, because the shared HTTP client sends no body with a `DELETE`.
+      ERASE: (id: string): string => `${userPath(id)}/erase`,
     },
     AUDIT: {
       TIMELINE: `${BACKOFFICE_PREFIX}/audit/timeline`,

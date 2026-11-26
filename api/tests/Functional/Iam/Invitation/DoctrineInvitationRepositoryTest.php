@@ -71,6 +71,59 @@ final class DoctrineInvitationRepositoryTest extends KernelTestCase
         });
     }
 
+    /**
+     * `find()` answers from the unit of work, so an entity this process manages keeps the digest it last wrote even
+     * after another process replaced it. `findByIdFresh()` goes back to the table. The other process is a raw
+     * `UPDATE`, which bypasses the identity map exactly as a concurrent writer does.
+     */
+    public function testFindByIdFreshSeesAWriteThatBypassedTheUnitOfWork(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $now = new DateTimeImmutable('2026-07-22T00:00:00+00:00');
+            $first = SingleUseToken::mint(new DateTimeImmutable('2026-08-21T13:00:00+00:00'));
+            $id = Uuid::generate();
+            $invitation = Invitation::create($id, Uuid::generate(), Uuid::generate(), $first->token);
+            $invitation->markSent();
+            $invitation->pullDomainEvents();
+
+            $this->repository->save($invitation);
+
+            $replacement = SingleUseToken::mint(new DateTimeImmutable('2026-08-21T13:00:00+00:00'));
+            $this->connection->executeStatement(
+                'UPDATE iam_invitation SET token_hash = :hash WHERE id = :id',
+                ['hash' => $replacement->token->toHash(), 'id' => $id],
+            );
+
+            $stale = $this->repository->findById($id);
+            $this->assertInstanceOf(Invitation::class, $stale);
+            $this->assertTrue(
+                $stale->verify($first->plaintext(), $now),
+                'the premise: a plain read still holds the digest this process wrote',
+            );
+
+            $fresh = $this->repository->findByIdFresh($id);
+            $this->assertInstanceOf(Invitation::class, $fresh);
+            $this->assertFalse($fresh->verify($first->plaintext(), $now), 'the replaced link no longer verifies');
+            $this->assertTrue($fresh->verify($replacement->plaintext(), $now), 'the live one does');
+        });
+    }
+
+    public function testFindByIdFreshAnswersNullForAnUnknownIdAndForARowDeletedSinceItWasLoaded(): void
+    {
+        $this->inRolledBackTransaction(function (): void {
+            $this->assertNull($this->repository->findByIdFresh(Uuid::generate()), 'no such invitation');
+
+            $invitation = $this->invitationFor(Uuid::generate());
+            $this->repository->save($invitation);
+            $id = $invitation->getId() ?? $this->fail('A persisted invitation carries an id.');
+            $this->assertInstanceOf(Invitation::class, $this->repository->findById($id));
+
+            $this->connection->executeStatement('DELETE FROM iam_invitation WHERE id = :id', ['id' => $id]);
+
+            $this->assertNull($this->repository->findByIdFresh($id), 'a row another process deleted is absent');
+        });
+    }
+
     public function testDeleteAllForInvitedUserIsIdempotent(): void
     {
         $this->inRolledBackTransaction(function (): void {

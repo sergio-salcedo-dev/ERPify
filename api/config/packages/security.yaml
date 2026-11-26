@@ -44,8 +44,11 @@ security:
             # counter's UPDATE, a row's hydration and a wait on that row's lock for an existing identity —
             # unmeasured and presumed noise under the KDF, not shown unclassifiable
             # (PRODUCTION_SECURITY_CHECKLIST.md §7).
+            # The limiter is ours so that the bucket is keyed by the RESOLVED mailbox (`Email`'s canonical form)
+            # rather than by the username as typed; its two fixed windows (5 per mailbox+IP, 25 per IP, one
+            # minute) are declared in rate_limiter.yaml, which is why this block carries no `max_attempts`.
             login_throttling:
-                max_attempts: 5
+                limiter: Erpify\Iam\Identity\Infrastructure\Security\CanonicalLoginRateLimiter
 
     # Default-deny: every /api route needs an authenticated session unless it is on this allowlist, which is
     # the complete set of routes with a legitimate unauthenticated caller — the login handshake, the one

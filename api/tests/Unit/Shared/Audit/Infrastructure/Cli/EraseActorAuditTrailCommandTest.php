@@ -6,8 +6,10 @@ namespace Erpify\Tests\Unit\Shared\Audit\Infrastructure\Cli;
 
 use Erpify\Shared\Audit\Application\AuditActorAnonymiser;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Audit\Application\EraseActorAuditTrail;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Infrastructure\Cli\EraseActorAuditTrailCommand;
+use Erpify\Tests\Unit\Iam\Identity\Application\InlineTransactionManager;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\FailingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
@@ -15,7 +17,6 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\ThrowingAuditActorAnony
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use ReflectionClass;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -128,31 +129,24 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $this->assertSame(0, $anonymiser->countForCalls, '--force needs no preview; affectedRows is authoritative');
     }
 
-    public function testItReportsFailureWhenTheSelfAuditFailsAfterTheRowsAreAnonymised(): void
+    /**
+     * The self-audit failing means the transaction rolled back, so the erasure did not happen: an ordinary
+     * `FAILURE` that is safe to repeat, and there is no "erased but unrecorded" outcome to give a code of its own.
+     * The rollback itself is the use case's, proved against a real database by the functional test.
+     */
+    public function testItReportsAnOrdinaryFailureWhenTheSelfAuditFails(): void
     {
-        $anonymiser = new RecordingAuditActorAnonymiser(2);
-        $tester = $this->testerFor($anonymiser, new FailingAuditLogger());
+        $tester = $this->testerFor(new RecordingAuditActorAnonymiser(2), new FailingAuditLogger());
 
         $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID, '--force' => true]);
 
-        $this->assertSame(
-            EraseActorAuditTrailCommand::ERASED_UNRECORDED,
-            $exitCode,
-            'an erasure that committed without its compliance entry is neither a success nor an ordinary failure',
-        );
-        // Comparing two literal constants is a tautology PHPStan rejects outright, so the claim that matters
-        // — the code sits OUTSIDE the vocabulary a caller already knows — is derived from `Command` instead
-        // of restated. Setting `ERASED_UNRECORDED` to any of the three reds this line.
-        $this->assertNotContains(
-            EraseActorAuditTrailCommand::ERASED_UNRECORDED,
-            (new ReflectionClass(Command::class))->getConstants(),
-            'the erased-but-unrecorded outcome must not collide with a code a caller already reads',
-        );
-        $this->assertSame([self::ACTOR_ID], $anonymiser->anonymisedActorIds, 'the rows were still anonymised');
+        $this->assertSame(Command::FAILURE, $exitCode);
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString($anonymiser->pseudonym, $display, 'the operator is shown the new pseudonym');
-        $this->assertStringContainsString('GDPR_ERASURE_EXECUTED', $display);
+        $this->assertStringContainsString('Erasure failed', $display);
+        $this->assertStringContainsString('safe to repeat', $display);
+        $this->assertStringContainsString('--dry-run', $display, 'the operator is told how to settle a lost commit');
+        $this->assertStringNotContainsString('do not re-run', $display, 'nothing was erased, so a re-run is allowed');
     }
 
     /**
@@ -209,7 +203,7 @@ final class EraseActorAuditTrailCommandTest extends TestCase
 
     /**
      * The `UPDATE` failing is the one outcome the exit code cannot describe on its own: a connection lost
-     * mid-statement can commit without acknowledging, so the message must not promise the rows are untouched.
+     * at the commit can commit without acknowledging, so the message must say how to settle it.
      */
     public function testAFailedAnonymisationIsReportedAsAFailure(): void
     {
@@ -219,13 +213,16 @@ final class EraseActorAuditTrailCommandTest extends TestCase
         $exitCode = $tester->execute(['actor-id' => self::ACTOR_ID, '--force' => true]);
 
         $this->assertSame(Command::FAILURE, $exitCode);
-        $this->assertStringContainsString('Anonymisation failed', $tester->getDisplay());
+        $this->assertStringContainsString('Erasure failed', $tester->getDisplay());
         $this->assertStringContainsString('--dry-run', $tester->getDisplay(), 'the operator is told how to verify');
         $this->assertCount(0, $logger->records, 'an erasure that did not complete is not self-audited');
     }
 
     private function testerFor(AuditActorAnonymiser $anonymiser, AuditLogger $logger): CommandTester
     {
-        return new CommandTester(new EraseActorAuditTrailCommand($anonymiser, $logger));
+        return new CommandTester(new EraseActorAuditTrailCommand(
+            $anonymiser,
+            new EraseActorAuditTrail($anonymiser, $logger, new InlineTransactionManager()),
+        ));
     }
 }

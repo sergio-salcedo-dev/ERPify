@@ -461,6 +461,13 @@ stolen session does not hold, so "whoever has the cookie" becomes "whoever has t
 **What it costs, and what it does not close.** An owner who drained the shared budget waits for the window
 before an admin act, as in D8. A stolen session can still invite identities holding a role below `ADMIN`; an
 attacker who also holds the password is outside what any session-level control reaches. Acts over another
-identity's credentials (unlock, erase, invitation resend and revoke) stay under permissions alone. Erase
-cannot remove the owner: `FulfilIdentityErasure` refuses a subject that still carries `ADMIN` until it is demoted,
-and the demotion is gated. Unlock only reopens a sign-in.
+identity's credentials (unlock, invitation resend and revoke) stay under permissions alone; unlock only reopens
+a sign-in.
+
+*Amendment (2026-11-25).* `POST /backoffice/users/{id}/erase` joins the set. Erasure cannot remove the owner
+(`FulfilIdentityErasure` refuses a subject that still carries `ADMIN` until it is demoted, and the demotion is
+gated), which is why it was left out above; but it can remove every other member, irreversibly, and evicting the
+session that did it brings nobody back. It moved from `DELETE` to `POST` because the proof travels in a body and the
+shared HTTP client sends none with a `DELETE`; the proof is the controller's, so `identity:gdpr:erase-subject`,
+which drives the same use case with no session, still asks nothing. The proof precedes the id check and the lookup,
+so a malformed or absent id answers `403 invalid-current-password` to a caller who has not proved it.

@@ -3,7 +3,7 @@ Feature: Erase an identity (GDPR right to erasure)
   In order to honour a data-subject's right to erasure without a developer running a CLI
   I need a gated endpoint that de-identifies the subject and their audit trail as one atomic unit
 
-  # ADMIN-only (users.erase). One DELETE chains, in a single transaction: the identity hard-delete (the module's
+  # ADMIN-only (users.erase), and the caller re-proves their own password in the body. One POST chains, in a single transaction: the identity hard-delete (the module's
   # PII — email and credential hash), the anonymisation of every audit row the subject authored, the hard-delete
   # of the subject's sessions, of the membership that admitted them and of every invitation addressed to them,
   # and the combined compliance self-audit — all attributed to the acting admin, never
@@ -11,7 +11,8 @@ Feature: Erase an identity (GDPR right to erasure)
   # still carries the role (409 administrator-erasure-requires-demotion) — which subsumes the ≥1-active-admin
   # invariant here, since the last active admin necessarily carries it.
   Background:
-    Given I add "Accept" header equal to "application/json"
+    Given I add "Content-Type" header equal to "application/json"
+    And I add "Accept" header equal to "application/json"
 
   Scenario: An administrator erases a subject, its audit trail and its sessions in one atomic unit
     # A live session and a past audit row for the subject, seeded on a side connection the query counter ignores.
@@ -29,7 +30,12 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT event_id FROM event_store WHERE event_id IN ('0190f200-0000-7000-8000-00000000ea01', '0190f200-0000-7000-8000-00000000ea02', '0190f200-0000-7000-8000-00000000ea03')" on connection "seed"
     And there should have 3 records in SQL result
     And I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 204
     # Identity hard-deleted.
     And the "Erpify\Iam\Identity\Domain\Entity\User" entity found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c" does not exist
@@ -139,7 +145,12 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "INSERT INTO upload_intent (id, actor_id, scope_id, state, declared_size, declared_sha256, key_hash, retention_reason, legal_basis, created_at, ttl_expires_at) VALUES ('0190f200-0000-7000-8000-00000000ab01', '0190f200-0000-7000-8000-00000000fb01', '5b1f6a58-3f0e-4d5b-9c43-0f6d2a7e9b02', 'declared', 10, repeat('c', 64), repeat('d', 64), 'technical-file', 'contract', NOW(), NOW() + INTERVAL '1 day')" on connection "seed"
     And I execute the SQL query "INSERT INTO upload_intent (id, actor_id, scope_id, state, declared_size, declared_sha256, key_hash, retention_reason, legal_basis, created_at, ttl_expires_at, claimed_at, lease_expires_at, upload_deadline_at) VALUES ('0190f200-0000-7000-8000-00000000ab02', '0190f200-0000-7000-8000-00000000fb01', '5b1f6a58-3f0e-4d5b-9c43-0f6d2a7e9b03', 'streaming', 10, repeat('c', 64), repeat('e', 64), 'technical-file', 'contract', NOW(), NOW() + INTERVAL '1 day', NOW(), NOW() + INTERVAL '90 seconds', NOW() + INTERVAL '10 minutes')" on connection "seed"
     And I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190f200-0000-7000-8000-00000000fb01"
+    When I send a POST request to "/backoffice/users/0190f200-0000-7000-8000-00000000fb01/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 204
     # No document table holds the subject, the hash is gone, and the document and its digest are still there.
     And I execute the SQL query "SELECT id FROM document WHERE uploader_id = '0190f200-0000-7000-8000-00000000fb01' OR idempotency_key_hash IS NOT NULL" on connection "seed"
@@ -162,7 +173,12 @@ Feature: Erase an identity (GDPR right to erasure)
     # and `resourceId` is an indexed, queryable filter — so the pseudonym would be re-linkable to the person.
     Given I execute the SQL query "INSERT INTO audit_log (id, level, action, actor_type, actor_id, correlation_id, resource_type, resource_id, metadata, actor_erased, resource_erased, occurred_on) VALUES ('0190f200-0000-7000-8000-00000000ef01', 'security', 'USER_ROLES_CHANGED', 'user', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f', '0190f200-0000-7000-8000-00000000ef11', 'User', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f', '{}', false, false, '2026-03-02 12:00:00+00')" on connection "seed"
     And I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 204
     # Neither column names the person any more.
     And I execute the SQL query "SELECT id FROM audit_log WHERE resource_type = 'User' AND resource_id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5f'"
@@ -184,7 +200,12 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "SELECT id FROM audit_log WHERE id = '0190f200-0000-7000-8000-00000000fb11' AND ip = '198.51.100.23' AND user_agent = 'ProbeAgent/1.0'" on connection "seed"
     And there should have 1 records in SQL result
     And I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190f200-0000-7000-8000-00000000fb01"
+    When I send a POST request to "/backoffice/users/0190f200-0000-7000-8000-00000000fb01/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 204
     # The negative: the captured address is gone from the whole table, not merely from this row.
     And I execute the SQL query "SELECT id FROM audit_log WHERE ip = '198.51.100.23'"
@@ -219,7 +240,12 @@ Feature: Erase an identity (GDPR right to erasure)
     And I execute the SQL query "INSERT INTO iam_invitation (id, organization_id, invited_user_id, token_hash, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa21', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', '0190f200-0000-7000-8000-00000000fa01', '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29', '2099-01-01 00:00:00', 'SENT', NOW(), NOW())" on connection "seed"
     And I execute the SQL query "INSERT INTO iam_invitation (id, organization_id, invited_user_id, token_hash, expires_at, status, created_at, updated_at) VALUES ('0190f200-0000-7000-8000-00000000fa31', '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a50', '0190f200-0000-7000-8000-00000000fa01', '70f0759d523f100bb31c67201828646721d77adfb44ce75ab59d9c6c5bf99b29', '2099-01-01 00:00:00', 'ACCEPTED', NOW(), NOW())" on connection "seed"
     And I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190f200-0000-7000-8000-00000000fa01"
+    When I send a POST request to "/backoffice/users/0190f200-0000-7000-8000-00000000fa01/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 204
     # Neither reference outlives the identity it pointed at.
     And I execute the SQL query "SELECT id FROM membership WHERE user_id = '0190f200-0000-7000-8000-00000000fa01'"
@@ -232,24 +258,44 @@ Feature: Erase an identity (GDPR right to erasure)
 
   @anonymous
   Scenario: An unauthenticated erase is a 401, not a 403
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 401
     And the JSON node "type" should be equal to "unauthenticated"
 
   Scenario: A viewer is refused the erase with 403 — users opts out of tier auto-grant
     Given I am logged in as a viewer
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
   Scenario: The default audit-reader session is refused the erase with 403 — erase is ADMIN-only
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 403
     And the JSON node "type" should be equal to "forbidden"
 
   Scenario: An administrator cannot erase their own identity — 409 self-erasure-forbidden
     Given I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 409
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "self-erasure-forbidden"
@@ -274,7 +320,12 @@ Feature: Erase an identity (GDPR right to erasure)
 
   Scenario: Self-erasure is refused even when the admin spells their own id in a different case
     Given I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A66"
+    When I send a POST request to "/backoffice/users/0190A1B2-C3D4-7E5F-8A9B-0C1D2E3F4A66/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 409
     And the JSON node "type" should be equal to "self-erasure-forbidden"
     And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
@@ -297,7 +348,12 @@ Feature: Erase an identity (GDPR right to erasure)
 
   Scenario Outline: A malformed id returns a 400 invalid-uuid Problem Details body
     Given I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/<id>"
+    When I send a POST request to "/backoffice/users/<id>/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 400
     And the JSON node "type" should be equal to "invalid-uuid"
     And the JSON node "status" should be equal to the number 400
@@ -315,7 +371,12 @@ Feature: Erase an identity (GDPR right to erasure)
     # `json_build_array` rather than a `["ADMIN"]` literal: the step matcher truncates on double quotes.
     Given I execute the SQL query "UPDATE identity_user SET roles = json_build_array('ADMIN') WHERE id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d'" on connection "seed"
     And I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 409
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "administrator-erasure-requires-demotion"
@@ -323,6 +384,80 @@ Feature: Erase an identity (GDPR right to erasure)
 
   Scenario: Erasing a well-formed but unknown id is a 404 user-not-found
     Given I am logged in as an administrator
-    When I send a "DELETE" request to "/backoffice/users/2e6d865c-17b0-476a-85f2-037bf6d3b3dc"
+    When I send a POST request to "/backoffice/users/2e6d865c-17b0-476a-85f2-037bf6d3b3dc/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
     Then the response status code should be 404
     And the JSON node "type" should be equal to "user-not-found"
+
+  # These scenarios target 0190…a5d, a member no earlier scenario erases: fixtures are restored per feature, so
+  # the subject of the first scenario is gone by now.
+  # The proof comes first, so the answers below never depend on whether the target exists or is well-formed: a
+  # caller who has not proved the password learns nothing about the id they named.
+  Scenario: A wrong current password is refused before anything is erased
+    Given I am logged in as an administrator
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "not-the-admin-password"
+    }
+    """
+    Then the response status code should be 403
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "invalid-current-password"
+    And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+    And I execute the SQL query "SELECT id FROM audit_log WHERE correlation_id = '<correlationId>' AND action IN ('GDPR_SUBJECT_ERASED', 'GDPR_ERASURE_EXECUTED')"
+    And there should have 0 records in SQL result
+
+  Scenario: An erase that carries no current password is a 422, never an erasure
+    Given I am logged in as an administrator
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {}
+    """
+    Then the response status code should be 422
+    And the JSON node "type" should be equal to "validation-failed"
+    And the JSON node "violations[0].field" should be equal to "currentPassword"
+    And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"
+
+  Scenario: An id that names nobody is answered as a wrong password, never as a 404
+    Given I am logged in as an administrator
+    When I send a POST request to "/backoffice/users/2e6d865c-17b0-476a-85f2-037bf6d3b3dc/erase" with body:
+    """
+    {
+      "currentPassword": "not-the-admin-password"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "invalid-current-password"
+
+  Scenario: A malformed id is answered as a wrong password, never as an invalid id
+    Given I am logged in as an administrator
+    When I send a POST request to "/backoffice/users/not-a-uuid/erase" with body:
+    """
+    {
+      "currentPassword": "not-the-admin-password"
+    }
+    """
+    Then the response status code should be 403
+    And the JSON node "type" should be equal to "invalid-current-password"
+
+  # The budget is primed in the SAME scenario as the request that observes it: the test cache pool is the array
+  # adapter, reset on every kernel.terminate, so "five succeed and the sixth is refused" cannot be expressed as
+  # six sequential HTTP steps. Last in the file because the drained bucket belongs to the administrator.
+  Scenario: A drained proof budget refuses even the correct password and erases nobody
+    Given I am logged in as an administrator
+    And the password-change budget is exhausted for identity "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a66"
+    When I send a POST request to "/backoffice/users/0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d/erase" with body:
+    """
+    {
+      "currentPassword": "admin-password"
+    }
+    """
+    Then the response status code should be 429
+    And the header "Content-Type" should contain "application/problem+json"
+    And the JSON node "type" should be equal to "rate-limited"
+    And there should have 1 "Erpify\Iam\Identity\Domain\Entity\User" entities found by "id=0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d"

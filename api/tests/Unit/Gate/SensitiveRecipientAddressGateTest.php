@@ -78,6 +78,7 @@ final class SensitiveRecipientAddressGateTest extends TestCase
         \Erpify\Iam\Identity\Infrastructure\Mail\SymfonyPasswordResetEmailSender::class . '::send($recipientEmail)',
         \Erpify\Iam\Invitation\Application\InvitationEmailSender::class . '::send($recipientEmail)',
         \Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort::class . '::send($recipientEmail)',
+        \Erpify\Iam\Invitation\Infrastructure\Mail\CurrentTokenInvitationEmailSender::class . '::send($recipientEmail)',
         \Erpify\Iam\Invitation\Infrastructure\Mail\SymfonyInvitationEmailSender::class . '::send($recipientEmail)',
         \Erpify\Shared\Mailer\Infrastructure\RedactingMailer::class . '::send($recipientEmail)',
         \Erpify\Shared\Mailer\Infrastructure\SecurityLinkMailer::class . '::send($recipientEmail)',

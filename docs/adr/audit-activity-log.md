@@ -185,7 +185,7 @@ agota su cota es una proyección omitida y reportada, no una fila escrita; lo qu
 `identity:gdpr:reconcile-subject-references`. Los comandos de operador
 (`EraseActorAuditTrailCommand`, `InspectStoredIdentityIntegrityCommand`) escriben en su propio proceso y
 no pierden el fallo en silencio: lo cuentan por la salida de error al operador, y `audit:gdpr:erase` lo
-distingue además con su propio código de salida (`ERASED_UNRECORDED`).
+ya no necesita un código de salida propio para "borrado pero sin registrar": la reescritura y su `GDPR_ERASURE_EXECUTED` se confirman en una sola transacción (`EraseActorAuditTrail`), de modo que un fallo del autoaudit revierte el borrado y la ejecución se puede repetir.
 
 El sistema es, por diseño, **observabilidad operativa con pérdida parcial tolerada en `activity`**,
 **no** logging forense uniforme: `security` es traza *compliance-grade* (durable), `activity` es
@@ -395,23 +395,19 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   Coherente con "hard delete por defecto, salvo que el borrado rompa un requisito" de
   [`rules/database.md`](../rules/database.md); se registra en [`rules/security.md`](../rules/security.md)
   y `PRODUCTION_SECURITY_CHECKLIST.md`.
-  **Atomicidad borrado ↔ auto-auditoría (limitación conocida).** El `UPDATE` de anonimización commitea y
-  *luego* se emite la entrada `security` `GDPR_ERASURE_EXECUTED`; no comparten transacción. Una caída del
-  proceso entre ambos pasos deja el borrado hecho sin su evidencia de auditoría — no corrompe datos ni
-  incumple el "olvídame", pero erosiona la trazabilidad que este eje preserva. Aceptable mientras el único
-  disparador sea un comando de consola síncrono y operador-driven. **Trigger de revisita:** el día que
-  aparezca un segundo disparador (endpoint HTTP, Scheduler, API) o se exija garantía dura, envolver
-  `anonymise` + self-audit en un único caso de uso transaccional (`EraseActorAuditTrailUseCase`) con el CLI
-  como adaptador fino — el mismo tipo de invariante de transacción que D3 fija para la escritura `security`.
-  **Un segundo *statement* lo dispara igual que un segundo disparador:** si la decisión de #555 hace que
-  `anonymise` ejecute dos `UPDATE`, la ventana deja de ser «borrado sin evidencia» y pasa a ser un borrado
-  *a medias* — actor anonimizado y recurso no — sobre un camino hoy correcto. Enrutar entonces por
-  `TransactionManager`, nunca una transacción DBAL cruda anidada bajo `wrapInTransaction`. *Nota sobre la
-  razón, corregida al medir contra `doctrine/dbal` 4.4.4:* la justificación era «no hay
-  `nest_transactions_with_savepoints` configurado, así que anidar degradaría a rollback-only», y esa premisa
-  ya no describe esta versión — DBAL usa savepoints en toda transacción anidada y
-  `setNestTransactionsWithSavepoints(false)` lanza. La regla se mantiene por su otra razón, que sigue en
-  pie: el borrado a medias es un estado observable, y una sola frontera de transacción es lo que lo impide.
+  **Atomicidad borrado ↔ auto-auditoría (cerrada 2026-11-25).** El `UPDATE` de anonimización y la entrada
+  `security` `GDPR_ERASURE_EXECUTED` se confirman en una sola transacción (`EraseActorAuditTrail`, por el puerto
+  `TransactionManager`, nunca una transacción DBAL cruda anidada): si el autoaudit falla, el borrado se revierte,
+  el id original sigue coincidiendo y la ejecución se puede repetir. Antes, una caída entre ambos pasos dejaba el
+  borrado hecho sin su evidencia y un reintento informaba falsamente «nada que borrar». El comando CLI es un
+  adaptador fino: conserva la confirmación, el `--dry-run` y los códigos de salida, y el código 3
+  (`ERASED_UNRECORDED`) desaparece porque su estado ya no es alcanzable. **Residuo:** una conexión perdida en el
+  propio `COMMIT` deja un resultado que el llamador no puede conocer; el mensaje remite a `--dry-run` (cero filas
+  para el id original significa que se confirmó). **Un segundo *statement* en `anonymise`** (#555) queda ahora
+  dentro de la misma frontera, de modo que el borrado a medias — actor anonimizado y recurso no — sigue sin ser un
+  estado observable. *Nota sobre la regla de no anidar:* DBAL 4.4.4 usa savepoints en toda transacción anidada y
+  `setNestTransactionsWithSavepoints(false)` lanza; la regla se mantiene por su otra razón, que sigue en pie: una
+  sola frontera de transacción es lo que impide el borrado a medias.
 - **`resource_id` no es identidad del sujeto borrado, y su borrado es del contexto dueño.** Esta política
   de auditoría anonimiza el eje de *actor* y aporta el `UPDATE` del eje de recurso, pero no decide qué
   tipos denotan personas: si un recurso representa **directamente** a una persona física, su borrado GDPR
@@ -609,8 +605,12 @@ tablas: una cuarta política pone el build en rojo, y también la desaparición 
   fila ningún constructor de diff la escribió, y rechazar el sobre escondería un registro de actividad o de
   seguridad tras el error de un escritor. Descartadas: decidir sólo en lectura (el dato seguiría guardado en
   claro) y sólo en escritura (no cubre filas ya guardadas ni las escritas por SQL a mano). Residual: una fila
-  `change` escrita antes de existir el sellado o directamente en la base de datos —
-  `PRODUCTION_SECURITY_CHECKLIST.md` §7.
+  `change` escrita antes de existir el sellado o directamente en la base de datos — cerrado el 2026-11-25 en el
+  lado de lectura (`AuditDiffDisclosure`): dentro de una fila `change` un campo se sirve en claro solo si es un
+  sobre sellado o figura como campo no personal del tipo de recurso; el resto conserva su sitio en el diff con
+  ambos lados retenidos. Lo que queda es lo que la fila *guarda*, no lo que la ruta *sirve* —
+  `PRODUCTION_SECURITY_CHECKLIST.md` §7. Del mismo modo, `orphan_role_values` solo admite valores con forma de
+  nombre de rol o un centinela, de modo que una celda corrupta con una dirección no llega a este JSON.
 
 **Origen de `ip` (trust boundary).** El valor de `ip` es `Request::getClientIp()`, la misma decisión
 que toma el rate-limiter de la API. FrankenPHP es el borde —ejecuta PHP dentro del Caddy que aceptó la
@@ -666,10 +666,9 @@ así que conviene un **único punto de escritura testeable**. Es una decisión d
 normalización.
 
 **Atomicidad.** El flag vive en el **mismo `UPDATE`** que el remint de `actor_id` y la redacción de
-`ip`/`user_agent`, **no** en el paso de auto-auditoría. D4 ya reconoce que ese `UPDATE` y la entrada
-`GDPR_ERASURE_EXECUTED` **no comparten transacción**; poniendo el flag en el `UPDATE` de redacción,
-hereda exactamente su atomicidad (una caída antes del self-audit deja las filas **correctamente
-marcadas**). Derivar el estado (alternativa descartada abajo) convertiría esa misma ventana de caída
+`ip`/`user_agent`, **no** en el paso de auto-auditoría. Ese `UPDATE` y la entrada `GDPR_ERASURE_EXECUTED` comparten ahora transacción (D4); el flag
+en el `UPDATE` de redacción sigue siendo lo que lo hace correcto aun si algún día se separaran: una caída
+antes del self-audit dejaría las filas **correctamente marcadas**. Derivar el estado (alternativa descartada abajo) convertiría esa misma ventana de caída
 en **falsos negativos**.
 
 **Evidencia independiente + comprobación de integridad.** `GDPR_ERASURE_EXECUTED` se conserva como
