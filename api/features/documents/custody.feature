@@ -5,8 +5,8 @@ Feature: List documents and read a document's custody trail
 
   # Both routes are ADMIN-only (`document.custody`). They serve no bytes, so `documents.read_enabled` does not gate them;
   # the sealed original filename is opened once per document and degrades to `null`, never failing the page. The
-  # listing's caps, the cursor walk of a long trail, the query cost and the 410 of the erasure-ledger override are held
-  # by the PHPUnit functional tests; this is the acceptance of what a caller sees.
+  # listing's caps, the cursor walk of a long trail and the 410 of the erasure-ledger override are held by the PHPUnit
+  # functional tests, and the listing's query cost by `query_budget.feature`; this is the acceptance of what a caller sees.
 
   # The Documents tables are not part of the per-feature fixture backup, so each scenario starts them empty.
   Background:
