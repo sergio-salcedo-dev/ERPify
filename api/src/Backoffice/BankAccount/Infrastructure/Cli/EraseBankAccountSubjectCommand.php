@@ -6,6 +6,7 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
 use Erpify\Shared\Console\Infrastructure\ConfirmedErasureCommand;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -116,7 +117,7 @@ final class EraseBankAccountSubjectCommand extends ConfirmedErasureCommand
         try {
             $result = $this->eraser->execute($bankAccountId);
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Erasure failed: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Erasure failed: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

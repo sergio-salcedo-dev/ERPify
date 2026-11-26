@@ -18,9 +18,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * 204 of a successful change writes nothing generic, and {@see InvalidCurrentPassword} deliberately carries no
  * `AccessDeniedException` in its chain, so the sibling
  * {@see \Erpify\Shared\Audit\Infrastructure\Http\EventListener\AccessDeniedAuditListener} skips the 403 it
- * produces. Without this a sustained guessing run against any of the three routes that re-prove the current
- * password — `POST /me/password`, `POST /me/recovery-secret` and `POST /me/recovery-secret/revoke` — is
- * invisible to the trail. The listener matches on the throwable rather than on a route, so a fourth such
+ * produces. Without this a sustained guessing run against any of the routes that re-prove the current password
+ * (the three `/me` ones, and the administrative and erasure routes that share their budget) is invisible to the
+ * trail. The listener matches on the throwable rather than on a route, so a further such
  * route is covered the day it exists, and the route itself travels in the row's metadata.
  *
  * The row is deliberately RESOURCE-LESS. The only candidate resource is the caller's own identity, and naming

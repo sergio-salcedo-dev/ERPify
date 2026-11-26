@@ -1587,19 +1587,28 @@ mitigated state. Accepting one means recording who accepted it and against which
       is not on the table. **Related, and also open:** `PasswordHashingTimingFloor` mints its dummy hash lazily,
       so the first floor paid by each FrankenPHP worker costs a hash plus a verification — one slower answer per
       worker lifetime, on whichever pre-identity branch reaches it first.
-- [ ] **A credential change can sign a second browser tab out of the application, and it is accepted.** Both
+- [x] **A credential change no longer signs a second browser tab out of the application.** Both
       flows that replace a credential from a live browser — `ChangeMyPassword` and `CompletePasswordReset` —
       revoke **every** session and mint a replacement onto the requesting tab. A request already in flight from
       another tab of the same browser carries the old cookie, meets the gate's `401 session-expired`, and
       `FetchHttpClient` diverts it to `/login?reason=session-expired` irreversibly — so a change that fully
-      succeeded reads, in that tab, as being thrown out. The alternative is `revoke-others`, which needs three
-      new cross-context seams to know which session is the caller's own; the exposure is a stale tab meeting a
-      login screen, never an access leak. **Both flows are named on purpose:** the reset surface has carried the
-      identical window since it shipped, and recording only the change flow would leave the register
-      inconsistent and invite the next reviewer to re-raise the other half as new.
-      **Accepted 2026-08-05 (Sergio):** no customer, and the cost of closing it is three seams across two
-      contexts for a recoverable UX papercut. Re-assess if a session-scoped revoke becomes cheap for another
-      reason, or the first time a user reports it.
+      succeeded reads, in that tab, as being thrown out. **Closed in the client, with no new server seam:** the two
+      flows leave an instant in `localStorage` (`erpify:credential-replaced`, written on success only — nothing
+      about who or why), and a gated 401 that arrives within 30 s of it reloads the CURRENT page instead of
+      bouncing to `/login`, once per marker per document (`credentialReplacement.ts`, the `credential-replaced`
+      departure reason). The cookie is shared by every tab of the browser, so the reload runs under the new
+      session; a session that really ended answers the page's own `/me` with a 401 and reaches the login screen
+      by the ordinary route. The server-side alternative, `revoke-others`, would have needed three new
+      cross-context seams to know which session is the caller's own, and bought nothing this does not.
+      **Not covered, and why that is acceptable:** (1) the reload discards the stale tab's in-memory state, so
+      an unsaved form there is lost — the same loss the login bounce caused; (2) the in-flight request that
+      raised the 401 still fails, and its error may paint for the instant before the reload (the
+      `credential-replaced` reason deliberately raises no curtain, so the message is not "session expired");
+      (3) with storage blocked the marker cannot be written, and the previous behaviour — a login screen —
+      returns; (4) a request that meets a 401 more than 30 s after the change is not attributed to it; (5) a
+      second browser or device, whose sessions are genuinely revoked, correctly goes to the login screen.
+      **Both flows are named on purpose:** the reset surface carried the identical window. History: accepted
+      2026-08-05 (Sergio) while it cost three seams; closed once a client-only fix made it cheap.
 - [x] **The security stack's four person-data carriers do not reach the buffered application log.** The
       console `command` key is a fifth reach, closed separately and by a separate rule — see the entry below
       for [#788](https://github.com/sergio-salcedo-dev/ERPify/issues/788). The security stack
@@ -2905,8 +2914,9 @@ mitigated state. Accepting one means recording who accepted it and against which
       `CredentialProofGateTest`. The proof precedes the id check, the self-erasure refusal and the lookup, so a
       malformed id, an absent identity and a self-targeted request all answer `403 invalid-current-password` to a caller
       who has not proved the password — the route is never an existence oracle. `erase.feature` pins the absent and the
-      malformed id, and `UserEraseFunctionalTest` pins all three, the self-targeted one included, plus the spent budget
-      answering 429 to the correct password. The console
+      malformed id, and `UserEraseFunctionalTest` pins all three, the self-targeted one included; the spent budget answering 429
+      to the correct password is `UserEraseControllerTest::aSpentBudgetRefusesBeforeThePasswordIsEvenChecked` and the
+      last scenario of `erase.feature`. The console
       keeps its type-to-confirm step and adds the password dialog behind it (two brakes: which identity, and whose
       session). **Residuals:** `identity:gdpr:erase-subject` drives the same use case from the console with no session
       and asks no password — the proof is the controller's, as for the other two authority writes, so a holder of a
@@ -3090,6 +3100,17 @@ mitigated state. Accepting one means recording who accepted it and against which
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
       `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
       first UI story that uploads evidence.**
+
+- [ ] **Console failures print a masked summary, and the mask is a floor.** Every command under an
+      `Infrastructure/Cli/` directory prints `ThrowableSummary::of($throwable)` and never the throwable's own
+      message, because a driver quotes the values involved and the output reaches a container log no erasure
+      path touches. `ConsoleFailureMessageGateTest` refuses a `getMessage()` call there. The summary replaces
+      UUIDs, address-shaped tokens and IPv4/IPv6 addresses; **it does not catch** a 32-hex id, a quoted local
+      part containing a space, a compressed IPv6 form, or a name, holder or account number quoted inside a
+      `Failing row contains (…)`. Closing that fully means printing only the SQLSTATE and the constraint name
+      and dropping everything after `DETAIL:`, at the price of an operator-facing message that no longer says
+      which value collided. **Open — owner: the operator-experience decision; revisit the first time a failing
+      row is seen carrying a name or an IBAN in a log.**
 
 ## 8. Deploy & verify
 

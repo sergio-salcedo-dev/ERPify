@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Documents\Document\Infrastructure\Cli;
 
 use Erpify\Documents\Document\Infrastructure\Storage\StorageBootProbe;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -37,7 +38,7 @@ final class ProbeDocumentStorageCommand extends Command
         try {
             $this->probe->probe();
         } catch (Throwable $throwable) {
-            $io->error('The document storage refused the boot probe: ' . $throwable->getMessage());
+            $io->error('The document storage refused the boot probe: ' . ThrowableSummary::of($throwable));
 
             return Command::FAILURE;
         }

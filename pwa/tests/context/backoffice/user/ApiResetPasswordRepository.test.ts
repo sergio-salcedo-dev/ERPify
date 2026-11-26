@@ -132,4 +132,20 @@ describe("ApiResetPasswordRepository.reset", () => {
       new ApiResetPasswordRepository(httpClientPosting(post)).reset(COMMAND),
     ).rejects.toBe(boom);
   });
+
+  it("leaves a marker that this browser replaced its credential, and only on a completed reset", async () => {
+    localStorage.removeItem("erpify:credential-replaced");
+    const invalid = vi
+      .fn()
+      .mockRejectedValue(new HttpError(problem(HttpStatus.BAD_REQUEST, "invalid-token")));
+
+    await new ApiResetPasswordRepository(httpClientPosting(invalid)).reset(COMMAND);
+    expect(localStorage.getItem("erpify:credential-replaced")).toBeNull();
+
+    await new ApiResetPasswordRepository(
+      httpClientPosting(vi.fn().mockResolvedValue(undefined)),
+    ).reset(COMMAND);
+    expect(localStorage.getItem("erpify:credential-replaced")).not.toBeNull();
+    localStorage.removeItem("erpify:credential-replaced");
+  });
 });

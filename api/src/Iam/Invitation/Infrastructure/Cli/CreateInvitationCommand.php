@@ -6,6 +6,7 @@ namespace Erpify\Iam\Invitation\Infrastructure\Cli;
 
 use Erpify\Iam\Invitation\Application\SendInvitation;
 use Erpify\Shared\Access\Domain\Role;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -74,7 +75,7 @@ final class CreateInvitationCommand extends Command
         try {
             $issued = $this->sendInvitation->invite($email, ...$this->resolveRoles($input));
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Could not create the invitation: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Could not create the invitation: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

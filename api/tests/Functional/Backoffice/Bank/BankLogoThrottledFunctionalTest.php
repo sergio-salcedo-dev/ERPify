@@ -138,7 +138,9 @@ final class BankLogoThrottledFunctionalTest extends WebTestCase
     private function seedBankHolding(string $logo): string
     {
         $id = Uuid::generate();
-        $token = \strtoupper(\substr(\str_replace('-', '', $id), 0, 12));
+        // The LAST twelve hex digits: a UUID v7 opens with its millisecond timestamp, so two banks seeded in
+        // one millisecond would share a prefix and collide on the unique normalized name.
+        $token = \strtoupper(\substr(\str_replace('-', '', $id), -12));
         $this->connection()->executeStatement(
             'INSERT INTO bank (id, name, name_normalized, short_name, created_at, updated_at, logo_image_id) '
             . 'VALUES (?, ?, ?, ?, NOW(), NOW(), ?)',

@@ -291,6 +291,24 @@ describe("ApiIdentityRepository.changePassword", () => {
     expect(post).toHaveBeenCalledWith(API_ENDPOINTS.IDENTITY.CHANGE_PASSWORD, COMMAND);
   });
 
+  it("leaves a marker that this browser replaced its credential, and only when the change succeeded", async () => {
+    localStorage.removeItem("erpify:credential-replaced");
+    const refused = vi
+      .fn()
+      .mockRejectedValue(new HttpError(problem(HttpStatus.FORBIDDEN, "invalid-current-password")));
+
+    await expect(
+      new ApiIdentityRepository(httpClientPosting(refused)).changePassword(COMMAND),
+    ).rejects.toBeInstanceOf(HttpError);
+    expect(localStorage.getItem("erpify:credential-replaced")).toBeNull();
+
+    await new ApiIdentityRepository(
+      httpClientPosting(vi.fn().mockResolvedValue(undefined)),
+    ).changePassword(COMMAND);
+    expect(localStorage.getItem("erpify:credential-replaced")).not.toBeNull();
+    localStorage.removeItem("erpify:credential-replaced");
+  });
+
   // No response guard: the 204 carries no body, so passing one would reject every success.
   it("applies no response guard to the empty 204 body", async () => {
     const post = vi.fn().mockResolvedValue(undefined);

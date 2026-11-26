@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Iam\Invitation\Infrastructure\Cli;
 
 use Erpify\Iam\Invitation\Application\RevokeInvitation;
+use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -57,7 +58,7 @@ final class RevokeInvitationCommand extends Command
         try {
             $this->revokeInvitation->revoke($invitationId);
         } catch (Throwable $throwable) {
-            $io->error(\sprintf('Could not revoke the invitation: %s', $throwable->getMessage()));
+            $io->error(\sprintf('Could not revoke the invitation: %s', ThrowableSummary::of($throwable)));
 
             return Command::FAILURE;
         }

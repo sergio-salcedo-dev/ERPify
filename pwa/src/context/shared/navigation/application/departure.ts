@@ -7,6 +7,13 @@ export const DepartureReason = {
   SIGN_OUT: "sign-out",
   /** A gated request came back 401. Ends on `/login?next=…&reason=session-expired`. */
   SESSION_EXPIRED: "session-expired",
+  /**
+   * A gated request came back 401 moments after this browser replaced its own credential (change
+   * password, complete a reset). The cookie is shared, so the session is alive under its new value and
+   * the request was simply sent under the old one. Ends on a reload of the current page — never on
+   * `/login`, which would tell the user their change threw them out.
+   */
+  CREDENTIAL_REPLACED: "credential-replaced",
 } as const;
 
 export type DepartureReason = (typeof DepartureReason)[keyof typeof DepartureReason];
