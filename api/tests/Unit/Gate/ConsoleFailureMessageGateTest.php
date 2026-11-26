@@ -37,7 +37,7 @@ final class ConsoleFailureMessageGateTest extends TestCase
     public function noConsoleCommandPrintsAThrowablesOwnMessage(): void
     {
         $root = ApiSourceFiles::root();
-        $swept = 0;
+        $swept = [];
         $offenders = [];
 
         foreach (ApiSourceFiles::phpFiles($root) as $file) {
@@ -47,7 +47,7 @@ final class ConsoleFailureMessageGateTest extends TestCase
                 continue;
             }
 
-            ++$swept;
+            $swept[] = $path;
             $source = \file_get_contents($file->getPathname());
             $this->assertIsString($source, $path . ' could not be read, so it was never swept');
 
@@ -56,7 +56,7 @@ final class ConsoleFailureMessageGateTest extends TestCase
             }
         }
 
-        $this->assertGreaterThanOrEqual(self::MIN_CLI_FILES, $swept, 'the sweep reached too few command files');
+        $this->assertGreaterThanOrEqual(self::MIN_CLI_FILES, \count($swept), 'the sweep reached too few command files');
         $this->assertSame(
             [],
             $offenders,
