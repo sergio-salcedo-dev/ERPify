@@ -426,6 +426,38 @@ function dockerInstructions(dockerfile: string): string[] {
   return instructions;
 }
 
+/**
+ * Violations of the server-map half: a step between the build and the `prod` stage deletes every `.map` the
+ * standalone output carries. The upload runs inside the build, so deleting any earlier would defeat it, and
+ * deleting nothing leaves the original source readable to whoever can pull the image.
+ */
+function serverMapDeletionViolations(dockerfile: string): string[] {
+  const instructions = dockerInstructions(dockerfile);
+  const build = instructions.findIndex(
+    (line) => /^RUN\s/i.test(line) && line.includes("npm run build"),
+  );
+  const prod = instructions.findIndex((line) => /^FROM\s.+\sAS\s+prod\b/i.test(line));
+  if (build === -1 || prod === -1 || prod < build) {
+    return ["the Dockerfile must still run `npm run build` and then start the `prod` stage"];
+  }
+  const deletes = instructions
+    .slice(build + 1, prod)
+    .some(
+      (line) =>
+        /^RUN\s/i.test(line) &&
+        /\bfind\s+\.next\/standalone\b/.test(line) &&
+        /-name\s+['"]?\*\.map['"]?/.test(line) &&
+        /-delete\b/.test(line),
+    );
+  return deletes
+    ? []
+    : [
+        "no step between the build and the `prod` stage runs " +
+          "`find .next/standalone -type f -name '*.map' -delete`: the standalone output carries the server maps, " +
+          "and the image would ship them",
+      ];
+}
+
 /** Violations of invariant 5's image half in a Dockerfile source. */
 function tokenInImageViolations(dockerfile: string): string[] {
   return dockerInstructions(dockerfile)
@@ -507,6 +539,10 @@ describe("Sentry source maps are uploaded, never published", () => {
     expect(existsSync(path.join(PWA_ROOT, TOKEN_SCRIPT))).toBe(true);
   });
 
+  it("deletes the server maps the standalone output carries, after the upload and before the image", () => {
+    expect(serverMapDeletionViolations(dockerfile)).toEqual([]);
+  });
+
   it("keeps the token server-only — it never carries the public prefix", () => {
     for (const source of [nextConfig, dockerfile]) {
       expect(source).not.toContain(`NEXT_PUBLIC_${TOKEN_VAR}`);
@@ -521,6 +557,50 @@ describe("the source-map rules reject what they exist to reject", () => {
     export default withSentryConfig(nextConfig, ${options});
   `;
   const PINNED = `{ sourcemaps: { disable: false, deleteSourcemapsAfterUpload: true } }`;
+
+  describe("the server-map deletion", () => {
+    const image = (steps: string): string => `
+      FROM node AS builder
+      RUN --mount=type=secret,id=sentry_auth_token sh docker/read-sentry-token.sh npm run build
+      ${steps}
+      FROM node AS prod
+      COPY --from=builder /app/pwa/.next/standalone ./
+    `;
+    const DELETE = "RUN find .next/standalone -type f -name '*.map' -delete";
+
+    it("accepts a deletion between the build and the prod stage", () => {
+      expect(serverMapDeletionViolations(image(DELETE))).toEqual([]);
+    });
+
+    it("refuses an image that never deletes them", () => {
+      expect(serverMapDeletionViolations(image(""))).toHaveLength(1);
+    });
+
+    it("refuses a deletion that does not name every map", () => {
+      expect(
+        serverMapDeletionViolations(image("RUN find .next/standalone -name 'x.map' -delete")),
+      ).toHaveLength(1);
+      expect(
+        serverMapDeletionViolations(image("RUN find .next/standalone -name '*.map'")),
+      ).toHaveLength(1);
+    });
+
+    it("refuses a deletion in the wrong tree", () => {
+      expect(
+        serverMapDeletionViolations(image("RUN find .next/cache -name '*.map' -delete")),
+      ).toHaveLength(1);
+    });
+
+    it("refuses a deletion that runs before the build, where the upload would find nothing", () => {
+      const early = `
+        FROM node AS builder
+        ${DELETE}
+        RUN --mount=type=secret,id=sentry_auth_token sh docker/read-sentry-token.sh npm run build
+        FROM node AS prod
+      `;
+      expect(serverMapDeletionViolations(early)).toHaveLength(1);
+    });
+  });
 
   it("accepts the pinned shape", () => {
     expect(sourcemapDeletionViolations(config(PINNED))).toEqual([]);

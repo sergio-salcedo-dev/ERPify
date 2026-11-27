@@ -273,3 +273,4 @@ tests/Unit/Gate/BoundarySecurityAuditSeamGateTest.php :: home
 tests/Unit/Gate/SubjectAuditWriteSerialisationGateTest.php :: home
 tests/Unit/Documents/Document/Domain/Erasure/DerivativeReleaseBoundsTest.php :: mirrored :: src/Documents/Document/Domain/Erasure
 tests/Unit/Gate/ConsoleFailureMessageGateTest.php :: home
+tests/Unit/Gate/ProdDebugPinGateTest.php :: home

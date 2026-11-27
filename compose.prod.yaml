@@ -29,6 +29,10 @@ services:
       context: ./api
       target: frankenphp_prod
     environment:
+      # A literal, never interpolated: `kernel.debug` is what switches on Doctrine's DBAL logging middleware (bound
+      # parameters, so the login address, onto the unrotated container log) and Monolog's debug-level records.
+      # Left to Dotenv's `'prod' !== $env` default the claim holds only until one `APP_DEBUG` reaches the stack.
+      APP_DEBUG: "0"
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
       AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       # Require explicit DB identity + password; close the weak fallbacks
@@ -209,6 +213,10 @@ services:
       target: frankenphp_prod
     environment:
       APP_ENV: prod
+      # A literal, never interpolated: `kernel.debug` is what switches on Doctrine's DBAL logging middleware (bound
+      # parameters, so the login address, onto the unrotated container log) and Monolog's debug-level records.
+      # Left to Dotenv's `'prod' !== $env` default the claim holds only until one `APP_DEBUG` reaches the stack.
+      APP_DEBUG: "0"
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
       AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}
@@ -320,6 +328,10 @@ services:
     working_dir: /app/api
     environment:
       APP_ENV: prod
+      # A literal, never interpolated: `kernel.debug` is what switches on Doctrine's DBAL logging middleware (bound
+      # parameters, so the login address, onto the unrotated container log) and Monolog's debug-level records.
+      # Left to Dotenv's `'prod' !== $env` default the claim holds only until one `APP_DEBUG` reaches the stack.
+      APP_DEBUG: "0"
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
       AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
       DATABASE_URL: postgresql://${POSTGRES_USER:?POSTGRES_USER is required in prod}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in prod}@database:5432/${POSTGRES_DB:?POSTGRES_DB is required in prod}?serverVersion=${POSTGRES_VERSION:-18}&charset=${POSTGRES_CHARSET:-utf8}

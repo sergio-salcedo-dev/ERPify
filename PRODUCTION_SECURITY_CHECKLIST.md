@@ -139,10 +139,10 @@ you change anything here.
       `sourcemaps` the SDK spreads last and so replaces the deletion glob; and
       `productionBrowserSourceMaps: true`, which generates maps in a build with
       upload off, where nothing deletes them. **Server maps** are emitted into
-      `.next/server` on every production build and the SDK's deletion covers
-      `static/**` only, so they ship inside the standalone image; Next never
-      serves that directory (its static routes are `public/` and `.next/static`),
-      so they are readable by whoever can pull the image, never at a URL. The
+      `.next/server` on every production build and the SDK's deletion covers `static/**` only, so the standalone
+      output carries them. A step after the build (`find .next/standalone -type f -name '*.map' -delete`) removes
+      them before the `prod` stage copies the tree, and after the upload, which runs inside the build. Measured on
+      a real build: 75 maps, 300 KB, and the standalone server boots and answers 200 without them. The
       token reaches the build as a **BuildKit secret**
       (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` or an
       `ENV` — `docker history` prints args, `docker inspect` prints env, and this
@@ -1637,9 +1637,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       appears in the test container and appears **nowhere** in the prod one, so it is a property of the
       `kernel.debug` and not of the environment name — `doctrine.dbal.logging` defaults to `%kernel.debug%`
       and `config/packages/doctrine.yaml` never sets it, so one `APP_DEBUG` on the prod stack turns that
-      carrier on into the same unrotated sink. `compose.prod.yaml` sets no `APP_DEBUG` at all and relies on
-      Dotenv's `'prod' !== $env` default; pinning it there would make the claim structural instead of
-      default-dependent, and is not done here. The console `ErrorListener`'s `command` key is deliberately
+      carrier on into the same unrotated sink. `compose.prod.yaml` pins `APP_DEBUG: "0"` as a literal on the three PHP services (`php`,
+      `messenger_worker`, `scheduler_worker`), so the claim is structural and no longer depends on Dotenv's
+      `'prod' !== $env` default; `ProdDebugPinGateTest` keeps it pinned. It does not see an `-e APP_DEBUG=1` asked for
+      on a command line. The console `ErrorListener`'s `command` key is deliberately
       NOT in this carrier set: a whole-value sentinel would have destroyed the one diagnostic that line
       carries, so it earned a rule of its own — `ConsoleCommandRedactionProcessor`, which keeps the command
       NAME and drops the argv after it. The
