@@ -2,7 +2,7 @@
 title: 'doc-9: Document versioning'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-review'
+status: 'done'
 baseline_commit: '98d6d449989b97fbeb625dd8f40cc89374fe8e93'
 route: 'dispatch'
 review_loop_iteration: 0
