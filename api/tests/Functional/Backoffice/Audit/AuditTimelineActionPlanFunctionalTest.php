@@ -57,7 +57,7 @@ final class AuditTimelineActionPlanFunctionalTest extends KernelTestCase
             'EXPLAIN (FORMAT JSON) SELECT a.id, a.occurred_on FROM audit_log a WHERE a.action LIKE :pattern '
             . 'ORDER BY a.occurred_on DESC, a.id DESC LIMIT 26',
             ['pattern' => '%PLAN_TEST_RARE%'],
-            avoidSequentialScan: true,
+            settings: ['SET LOCAL enable_seqscan = off'],
         );
 
         $this->assertStringContainsString(
@@ -79,13 +79,15 @@ final class AuditTimelineActionPlanFunctionalTest extends KernelTestCase
     }
 
     /**
-     * `$avoidSequentialScan` is for a statement whose index only pays over a table far larger than a test can seed:
-     * a scan of 30k rows is rightly the cheaper plan, so the question asked is whether the index CAN serve the
-     * operator (right column, right operator class), which is what disappears when it is removed or mis-declared.
+     * `$settings` are session statements run before the plan is read. The contains statement uses one to rule out a
+     * sequential scan: its index only pays over a table far larger than a test can seed, and a scan of 30k rows is
+     * rightly the cheaper plan there. What it asks instead is whether the index CAN serve the operator (right column,
+     * right operator class), which is what disappears when the index is removed or mis-declared.
      *
      * @param array<string, string> $parameters
+     * @param list<string>          $settings
      */
-    private function planFor(string $statement, array $parameters, bool $avoidSequentialScan = false): string
+    private function planFor(string $statement, array $parameters, array $settings = []): string
     {
         self::bootKernel();
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
@@ -96,8 +98,8 @@ final class AuditTimelineActionPlanFunctionalTest extends KernelTestCase
         try {
             $this->seed($connection);
 
-            if ($avoidSequentialScan) {
-                $connection->executeStatement('SET LOCAL enable_seqscan = off');
+            foreach ($settings as $setting) {
+                $connection->executeStatement($setting);
             }
 
             $plan = $connection->fetchOne($statement, $parameters);
