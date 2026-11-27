@@ -20,10 +20,9 @@ you change anything here.
       a service `env_file:` — compose interpolation cannot read that.
 - [ ] `make prod.env.check` passes (no missing file, no empty/`CHANGE_ME`
       required key). The deploy script runs this before touching Docker.
-- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were freshly
-      generated (`openssl rand …`), not reused from dev. **Rotating `APP_SECRET` later silently unmatches every
-      stored evidence idempotency key** (HMAC-SHA256 under `kernel.secret`): a client retrying an upload across
-      the rotation files the same evidence twice — a duplicate, never a loss. Recorded in §7.
+- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, `CADDY_MERCURE_JWT_SECRET` and `DOCUMENTS_IDEMPOTENCY_SECRET` were freshly
+      generated (`openssl rand …`), not reused from dev. Rotating `APP_SECRET` later no longer touches the stored evidence idempotency keys: they are keyed by
+      `DOCUMENTS_IDEMPOTENCY_SECRET`, a secret of their own (§7).
 - [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is used as **raw 32-byte**
       key material — `make prod.env.check` refuses any value that is not exactly 32 bytes,
       and the app throws `InvalidKek` on the first audited write if one gets past it.
@@ -3097,11 +3096,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       warning with the document's id. The sweep stops after five failures in a row and never examines more than ten
       times its limit per tick, so an outage cannot hold the single-replica scheduler. **Recorded — a consequence of
       the transactional-publish guard (#872); revisit if the scan stops keying on `promoted_at`.**
-- [ ] **Rotating `APP_SECRET` silently unmatches every stored idempotency key.** The key hashes on upload intents
-      and documents are HMAC-SHA256 under `kernel.secret`, so after a rotation no replay matches its earlier
-      declare: a client retrying across the rotation files the same evidence twice — a duplicate, never a loss —
-      and nothing reports it. No separate secret is introduced. **Recorded — the user chose documentation over a
-      separate secret, 2026-11-08.**
+- [x] **Rotating `APP_SECRET` no longer unmatches the stored idempotency keys — closed 2026-11-27.** The key
+      hashes on upload intents and documents are HMAC-SHA256 under `DOCUMENTS_IDEMPOTENCY_SECRET`
+      (`HmacIdempotencyKeyHasher`), a secret of their own that `compose.prod.yaml` requires on the `php` service
+      (`${…:?}`, so a deploy without it does not start), `.env.prod.example` ships as a `CHANGE_ME` placeholder and
+      `ProdEnvTemplateGateTest` pins as a required guard. The workers never build the hasher and do not receive it.
+      **What survives, narrower than before:** rotating THIS secret still unmatches every earlier hash, so a client
+      retrying an upload across that rotation files the same evidence twice — a duplicate, never a loss — and nothing
+      reports it; the difference is that the application secret, which rotates for unrelated reasons (sessions,
+      CSRF), no longer drags it along. **The change itself costs one such window:** hashes written under
+      `kernel.secret` before this closed match nothing under the new key. There is no live deployment, so there is no
+      stored hash to strand. `DeclareUploadThrottle` keeps `kernel.secret` on purpose: rotating it only resets
+      limiter buckets. History: the user chose documentation over a separate secret on 2026-11-08, and asked for the
+      secret on 2026-11-27; the cost is one more required production secret to generate and custody.
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
       `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
       first UI story that uploads evidence.**

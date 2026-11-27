@@ -62,6 +62,7 @@ final class ProdEnvTemplateGateTest extends TestCase
         'APP_SECRET',
         'AUDIT_KEK',
         'CADDY_MERCURE_JWT_SECRET',
+        'DOCUMENTS_IDEMPOTENCY_SECRET',
         'MAILER_DSN',
         'MAILER_SECURITY_FROM',
         'POSTGRES_PASSWORD',

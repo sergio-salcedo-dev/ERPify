@@ -35,6 +35,8 @@ services:
       APP_DEBUG: "0"
       APP_SECRET: ${APP_SECRET:?APP_SECRET is required in prod}
       AUDIT_KEK: ${AUDIT_KEK:?AUDIT_KEK is required in prod (32-byte audit crypto-shredding key-encryption key)}
+      # Only this service hashes an upload idempotency key; the workers never build the hasher.
+      DOCUMENTS_IDEMPOTENCY_SECRET: ${DOCUMENTS_IDEMPOTENCY_SECRET:?DOCUMENTS_IDEMPOTENCY_SECRET is required in prod (HMAC key of the upload idempotency hashes, independent of APP_SECRET)}
       # Require explicit DB identity + password; close the weak fallbacks
       # (erpify_user / erpify_db / erpify_password) that compose.yaml keeps for
       # `make app.dev`. serverVersion/charset stay defaulted — non-secret knobs.
