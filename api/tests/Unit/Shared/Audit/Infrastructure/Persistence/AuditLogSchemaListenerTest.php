@@ -98,6 +98,7 @@ final class AuditLogSchemaListenerTest extends TestCase
             'audit_log_level_idx' => SchemaShape::regularIndex('level', 'occurred_on'),
             'audit_log_resource_idx' => SchemaShape::regularIndex('resource_type', 'resource_id'),
             'audit_log_timeline_idx' => SchemaShape::regularIndex('occurred_on', 'id'),
+            'idx_audit_log_action_trgm' => SchemaShape::regularIndex('action'),
         ];
     }
 }

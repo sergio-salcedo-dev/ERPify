@@ -20,8 +20,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * frequent action and a few old rows of a rare one, `ANALYZE`d, because a plan asserted over ambient data is a
  * property of the data. The rows live in a transaction that is rolled back.
  *
- * The statement restates the shape the keyset paginator emits for an equality filter (`WHERE action = :a ORDER BY
- * occurred_on DESC, id DESC LIMIT 26`); it does not run the paginator.
+ * The statements restate the shape the keyset paginator emits for an equality filter (`WHERE action = :a ORDER BY
+ * occurred_on DESC, id DESC LIMIT 26`) and for a contains one (`LIKE :pattern`); they do not run the paginator.
  *
  * @internal
  */
@@ -50,7 +50,44 @@ final class AuditTimelineActionPlanFunctionalTest extends KernelTestCase
         );
     }
 
+    #[Test]
+    public function aContainsFilterOnAnActionIsServedFromTheTrigramIndex(): void
+    {
+        $plan = $this->planFor(
+            'EXPLAIN (FORMAT JSON) SELECT a.id, a.occurred_on FROM audit_log a WHERE a.action LIKE :pattern '
+            . 'ORDER BY a.occurred_on DESC, a.id DESC LIMIT 26',
+            ['pattern' => '%PLAN_TEST_RARE%'],
+            settings: ['SET LOCAL enable_seqscan = off'],
+        );
+
+        $this->assertStringContainsString(
+            'idx_audit_log_action_trgm',
+            $plan,
+            'A contains filter on action no longer reads its trigram index, so it scans the whole table, and so '
+            . 'does a typo that matches nothing. Plan: ' . $plan,
+        );
+        $this->assertStringNotContainsString('"Seq Scan"', $plan, 'Plan: ' . $plan);
+    }
+
     private function planForRareAction(): string
+    {
+        return $this->planFor(
+            'EXPLAIN (FORMAT JSON) SELECT a.id, a.occurred_on FROM audit_log a WHERE a.action = :action '
+            . 'ORDER BY a.occurred_on DESC, a.id DESC LIMIT 26',
+            ['action' => 'PLAN_TEST_RARE_ACTION'],
+        );
+    }
+
+    /**
+     * `$settings` are session statements run before the plan is read. The contains statement uses one to rule out a
+     * sequential scan: its index only pays over a table far larger than a test can seed, and a scan of 30k rows is
+     * rightly the cheaper plan there. What it asks instead is whether the index CAN serve the operator (right column,
+     * right operator class), which is what disappears when the index is removed or mis-declared.
+     *
+     * @param array<string, string> $parameters
+     * @param list<string>          $settings
+     */
+    private function planFor(string $statement, array $parameters, array $settings = []): string
     {
         self::bootKernel();
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
@@ -61,11 +98,11 @@ final class AuditTimelineActionPlanFunctionalTest extends KernelTestCase
         try {
             $this->seed($connection);
 
-            $plan = $connection->fetchOne(
-                'EXPLAIN (FORMAT JSON) SELECT a.id, a.occurred_on FROM audit_log a WHERE a.action = :action '
-                . 'ORDER BY a.occurred_on DESC, a.id DESC LIMIT 26',
-                ['action' => 'PLAN_TEST_RARE_ACTION'],
-            );
+            foreach ($settings as $setting) {
+                $connection->executeStatement($setting);
+            }
+
+            $plan = $connection->fetchOne($statement, $parameters);
             $this->assertIsString($plan);
 
             return $plan;
