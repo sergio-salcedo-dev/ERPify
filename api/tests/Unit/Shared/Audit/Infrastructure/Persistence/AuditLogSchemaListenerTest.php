@@ -92,6 +92,7 @@ final class AuditLogSchemaListenerTest extends TestCase
     {
         return [
             'audit_log_action_idx' => SchemaShape::regularIndex('action', 'occurred_on', 'id'),
+            'audit_log_action_trgm_idx' => SchemaShape::regularIndex('action'),
             'audit_log_actor_idx' => SchemaShape::regularIndex('actor_id', 'occurred_on'),
             'audit_log_actor_type_idx' => SchemaShape::regularIndex('actor_type', 'occurred_on'),
             'audit_log_correlation_idx' => SchemaShape::regularIndex('correlation_id'),

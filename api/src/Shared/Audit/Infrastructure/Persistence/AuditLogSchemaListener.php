@@ -98,9 +98,14 @@ final class AuditLogSchemaListener extends InjectedTableSchemaListener
                 // Filtering the timeline by `action` serves the keyset order straight from this index. Without it a
                 // rare action walks `audit_log_timeline_idx` and discards every other row: measured over 1.5M rows,
                 // 866k rows read and 201 ms for 26 results, against 0.1 ms with it. Costs 91 MB there and about
-                // 3 microseconds per audit write. A `contains` filter on `action` cannot use it (523 ms over 1.5M
-                // rows).
+                // 3 microseconds per audit write.
                 $this->index('audit_log_action_idx', 'action', 'occurred_on', 'id')->create(),
+                // A `contains` filter on `action` is a `LIKE '%…%'`, which no btree serves: 95 ms over 1.5M rows
+                // (a typo that matches nothing pays it in full), 0.1 ms through the trigram index. Declared here as
+                // a plain index on the column, as `bank_account`'s trigram is, because the schema comparison matches
+                // columns and not the access method; the migration creates it as GIN over `gin_trgm_ops`. 32 MB there
+                // and about 8 microseconds per audit write.
+                $this->index('audit_log_action_trgm_idx', 'action')->create(),
             )
         ;
     }
