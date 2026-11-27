@@ -95,6 +95,12 @@ final class AuditLogSchemaListener extends InjectedTableSchemaListener
                 // (actor_type, occurred_on) backs filtering a timeline by actor kind without a full scan.
                 $this->index('audit_log_timeline_idx', 'occurred_on', 'id')->create(),
                 $this->index('audit_log_actor_type_idx', 'actor_type', 'occurred_on')->create(),
+                // Filtering the timeline by `action` serves the keyset order straight from this index. Without it a
+                // rare action walks `audit_log_timeline_idx` and discards every other row: measured over 1.5M rows,
+                // 866k rows read and 201 ms for 26 results, against 0.1 ms with it. Costs 91 MB there and about
+                // 3 microseconds per audit write. A `contains` filter on `action` cannot use it (523 ms over 1.5M
+                // rows).
+                $this->index('audit_log_action_idx', 'action', 'occurred_on', 'id')->create(),
             )
         ;
     }

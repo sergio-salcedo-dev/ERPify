@@ -56,6 +56,9 @@ use InvalidArgumentException;
 #[ORM\UniqueConstraint(name: self::SCOPE_ID_CONSTRAINT, columns: ['scope_id'])]
 #[ORM\UniqueConstraint(name: self::IDEMPOTENCY_KEY_CONSTRAINT, columns: ['idempotency_key_hash'])]
 #[ORM\Index(name: 'idx_document_uploader_id', columns: ['uploader_id'])]
+// The listing's default order and its keyset cursor: `(created_at, id)`, the same pair the sort and the tie-break use.
+// Without it the page is a parallel scan of the table plus a top-N sort (30 ms over 200k rows, linear in the table).
+#[ORM\Index(name: 'idx_document_created_at_id', columns: ['created_at', 'id'])]
 // The scan sweep's candidate list: only promoted `Received` rows are ever due, and they are few next to the table.
 // The predicate is spelled as PostgreSQL prints it back (`pg_get_expr`), because the schema comparison matches it as
 // text: the migration writes the plain form and the database stores this one.
