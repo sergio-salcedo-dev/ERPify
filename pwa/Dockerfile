@@ -107,6 +107,11 @@ ENV SENTRY_REPOSITORY=${SENTRY_REPOSITORY}
 RUN --mount=type=secret,id=sentry_auth_token \
     sh docker/read-sentry-token.sh npm run build
 
+# The upload has run, so the maps the standalone output still carries have served their purpose. Next never serves
+# `.next/server`, but the `prod` stage copies the standalone tree whole and a map holds the original source, so
+# whoever can pull the image could read it. The SDK deletes the client maps after the upload and does not reach these.
+RUN find .next/standalone -type f -name '*.map' -delete
+
 # Production — copy standalone output (same idea as upstream `prod` stage)
 FROM node_upstream AS prod
 

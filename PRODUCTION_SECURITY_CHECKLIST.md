@@ -20,10 +20,9 @@ you change anything here.
       a service `env_file:` — compose interpolation cannot read that.
 - [ ] `make prod.env.check` passes (no missing file, no empty/`CHANGE_ME`
       required key). The deploy script runs this before touching Docker.
-- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, and `CADDY_MERCURE_JWT_SECRET` were freshly
-      generated (`openssl rand …`), not reused from dev. **Rotating `APP_SECRET` later silently unmatches every
-      stored evidence idempotency key** (HMAC-SHA256 under `kernel.secret`): a client retrying an upload across
-      the rotation files the same evidence twice — a duplicate, never a loss. Recorded in §7.
+- [ ] `APP_SECRET`, `POSTGRES_PASSWORD`, `CADDY_MERCURE_JWT_SECRET` and `DOCUMENTS_IDEMPOTENCY_SECRET` were freshly
+      generated (`openssl rand …`), not reused from dev. Rotating `APP_SECRET` later no longer touches the stored evidence idempotency keys: they are keyed by
+      `DOCUMENTS_IDEMPOTENCY_SECRET`, a secret of their own (§7).
 - [ ] `AUDIT_KEK` (audit crypto-shredding key-encryption key) is used as **raw 32-byte**
       key material — `make prod.env.check` refuses any value that is not exactly 32 bytes,
       and the app throws `InvalidKek` on the first audited write if one gets past it.
@@ -139,10 +138,10 @@ you change anything here.
       `sourcemaps` the SDK spreads last and so replaces the deletion glob; and
       `productionBrowserSourceMaps: true`, which generates maps in a build with
       upload off, where nothing deletes them. **Server maps** are emitted into
-      `.next/server` on every production build and the SDK's deletion covers
-      `static/**` only, so they ship inside the standalone image; Next never
-      serves that directory (its static routes are `public/` and `.next/static`),
-      so they are readable by whoever can pull the image, never at a URL. The
+      `.next/server` on every production build and the SDK's deletion covers `static/**` only, so the standalone
+      output carries them. A step after the build (`find .next/standalone -type f -name '*.map' -delete`) removes
+      them before the `prod` stage copies the tree, and after the upload, which runs inside the build. Measured on
+      a real build: 75 maps, 300 KB, and the standalone server boots and answers 200 without them. The
       token reaches the build as a **BuildKit secret**
       (`--mount=type=secret,id=sentry_auth_token`), never as a build `ARG` or an
       `ENV` — `docker history` prints args, `docker inspect` prints env, and this
@@ -1637,9 +1636,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       appears in the test container and appears **nowhere** in the prod one, so it is a property of the
       `kernel.debug` and not of the environment name — `doctrine.dbal.logging` defaults to `%kernel.debug%`
       and `config/packages/doctrine.yaml` never sets it, so one `APP_DEBUG` on the prod stack turns that
-      carrier on into the same unrotated sink. `compose.prod.yaml` sets no `APP_DEBUG` at all and relies on
-      Dotenv's `'prod' !== $env` default; pinning it there would make the claim structural instead of
-      default-dependent, and is not done here. The console `ErrorListener`'s `command` key is deliberately
+      carrier on into the same unrotated sink. `compose.prod.yaml` pins `APP_DEBUG: "0"` as a literal on the three PHP services (`php`,
+      `messenger_worker`, `scheduler_worker`), so the claim is structural and no longer depends on Dotenv's
+      `'prod' !== $env` default; `ProdDebugPinGateTest` keeps it pinned. It does not see an `-e APP_DEBUG=1` asked for
+      on a command line. The console `ErrorListener`'s `command` key is deliberately
       NOT in this carrier set: a whole-value sentinel would have destroyed the one diagnostic that line
       carries, so it earned a rule of its own — `ConsoleCommandRedactionProcessor`, which keeps the command
       NAME and drops the argv after it. The
@@ -1657,9 +1657,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       `make php.lint.prod-container` is the evidence, and it is read rather than assumed: 14 channel loggers,
       14 `pushProcessor` sites for this rule, `monolog.logger.security` and `monolog.logger.request` among
       them, on the **logger** and not on a handler — so the record is redacted before `FingersCrossedHandler`
-      buffers it. **The count is a reading, not a gate** — nothing recomputes it, so reproduce it with
-      `make php.lint.prod-container` plus a grep, over a PURGED `var/cache/prod` (a warmup on a stale cache
-      answers with the previous build). What IS gated is the property that lets the test container stand in
+      buffers it. **The enrolment is a gate**: `PersonDataRedactionEnrolmentGateTest` reads the DUMPED production container
+      (the compiled class, one `new \Monolog\Logger('<channel>')` at a time) and fails naming every channel logger that
+      does not push the rule, with `security`, `request` and `app` required to be present and a floor on the number
+      found so a changed dumper shape reds instead of passing over nothing. It runs under `php.lint.log-carriers`,
+      whose prerequisite is `php.lint.prod-container`: a prod kernel never revalidates its cache, so the clear and
+      rebuild is what makes the reading fresh. Measured falsification: scoping the tag to one channel names eight
+      loggers. It does not cover a logger built at run time. What IS gated is the property that lets the test container stand in
       for prod: the class carries no `#[When]`/`#[WhenNot]`, asserted in `PersonDataRedactionArrivalTest`, so
       it cannot be conditioned out of production while every test stays green. Unenrolment takes BOTH
       mechanisms, measured on four arms with the cache purged each time: tag + autoconfiguration → 14 sites;
@@ -3092,11 +3096,19 @@ mitigated state. Accepting one means recording who accepted it and against which
       warning with the document's id. The sweep stops after five failures in a row and never examines more than ten
       times its limit per tick, so an outage cannot hold the single-replica scheduler. **Recorded — a consequence of
       the transactional-publish guard (#872); revisit if the scan stops keying on `promoted_at`.**
-- [ ] **Rotating `APP_SECRET` silently unmatches every stored idempotency key.** The key hashes on upload intents
-      and documents are HMAC-SHA256 under `kernel.secret`, so after a rotation no replay matches its earlier
-      declare: a client retrying across the rotation files the same evidence twice — a duplicate, never a loss —
-      and nothing reports it. No separate secret is introduced. **Recorded — the user chose documentation over a
-      separate secret, 2026-11-08.**
+- [x] **Rotating `APP_SECRET` no longer unmatches the stored idempotency keys — closed 2026-11-27.** The key
+      hashes on upload intents and documents are HMAC-SHA256 under `DOCUMENTS_IDEMPOTENCY_SECRET`
+      (`HmacIdempotencyKeyHasher`), a secret of their own that `compose.prod.yaml` requires on the `php` service
+      (`${…:?}`, so a deploy without it does not start), `.env.prod.example` ships as a `CHANGE_ME` placeholder and
+      `ProdEnvTemplateGateTest` pins as a required guard. The workers never build the hasher and do not receive it.
+      **What survives, narrower than before:** rotating THIS secret still unmatches every earlier hash, so a client
+      retrying an upload across that rotation files the same evidence twice — a duplicate, never a loss — and nothing
+      reports it; the difference is that the application secret, which rotates for unrelated reasons (sessions,
+      CSRF), no longer drags it along. **The change itself costs one such window:** hashes written under
+      `kernel.secret` before this closed match nothing under the new key. There is no live deployment, so there is no
+      stored hash to strand. `DeclareUploadThrottle` keeps `kernel.secret` on purpose: rotating it only resets
+      limiter buckets. History: the user chose documentation over a separate secret on 2026-11-08, and asked for the
+      secret on 2026-11-27; the cost is one more required production secret to generate and custody.
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
       `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
       first UI story that uploads evidence.**

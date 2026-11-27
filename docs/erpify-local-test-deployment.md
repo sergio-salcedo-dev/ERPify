@@ -22,6 +22,7 @@ cp .env.prod.example .env.prod.local
 #   POSTGRES_PASSWORD=$(openssl rand -hex 24)   # hex: it goes raw into DATABASE_URL
 #   CADDY_MERCURE_JWT_SECRET=$(openssl rand -base64 48)
 #   AUDIT_KEK=$(openssl rand -base64 24)        # exactly 32 bytes; -hex 32 / -base64 32 are wrong
+#   DOCUMENTS_IDEMPOTENCY_SECRET=$(openssl rand -base64 48)   # its own secret, not APP_SECRET
 #   MAILER_DSN=smtp://mailpit:1025              # compose.rehearsal.yaml's mailpit
 #   MAILER_SECURITY_FROM=security@erpify.dev    # a real TLD: .local/.test/.example/
 #                                               # .invalid/localhost and no-reply@ are refused
