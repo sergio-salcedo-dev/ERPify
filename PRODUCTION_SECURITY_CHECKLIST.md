@@ -1658,9 +1658,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       `make php.lint.prod-container` is the evidence, and it is read rather than assumed: 14 channel loggers,
       14 `pushProcessor` sites for this rule, `monolog.logger.security` and `monolog.logger.request` among
       them, on the **logger** and not on a handler — so the record is redacted before `FingersCrossedHandler`
-      buffers it. **The count is a reading, not a gate** — nothing recomputes it, so reproduce it with
-      `make php.lint.prod-container` plus a grep, over a PURGED `var/cache/prod` (a warmup on a stale cache
-      answers with the previous build). What IS gated is the property that lets the test container stand in
+      buffers it. **The enrolment is a gate**: `PersonDataRedactionEnrolmentGateTest` reads the DUMPED production container
+      (the compiled class, one `new \Monolog\Logger('<channel>')` at a time) and fails naming every channel logger that
+      does not push the rule, with `security`, `request` and `app` required to be present and a floor on the number
+      found so a changed dumper shape reds instead of passing over nothing. It runs under `php.lint.log-carriers`,
+      whose prerequisite is `php.lint.prod-container`: a prod kernel never revalidates its cache, so the clear and
+      rebuild is what makes the reading fresh. Measured falsification: scoping the tag to one channel names eight
+      loggers. It does not cover a logger built at run time. What IS gated is the property that lets the test container stand in
       for prod: the class carries no `#[When]`/`#[WhenNot]`, asserted in `PersonDataRedactionArrivalTest`, so
       it cannot be conditioned out of production while every test stays green. Unenrolment takes BOTH
       mechanisms, measured on four arms with the cache purged each time: tag + autoconfiguration → 14 sites;

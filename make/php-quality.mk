@@ -652,9 +652,12 @@ php.lint.gate-placement: ## Artifact-gate placement classification gate
 # levels each installed producer on those two channels activates at, so a framework bump that adds an
 # activating record — or puts a message PAYLOAD back into one — goes red instead of silently widening what
 # the sink holds.
-php.lint.log-carriers: ## Buffered-log carrier gate (console argv redaction + channel amplification)
+# The enrolment gate reads the DUMPED production container, which a prod kernel never revalidates: a cache from an earlier
+# configuration would answer for this one, so the compile target that clears and rebuilds it is a prerequisite.
+php.lint.log-carriers: php.lint.prod-container ## Buffered-log carrier gate (console argv redaction + channel amplification + redaction enrolment)
 	@$(PHP_TEST) bin/phpunit --filter=ConsoleCommandCarrierGateTest
 	@$(PHP_TEST) bin/phpunit --filter=BufferedChannelAmplificationGateTest
+	@$(PHP_TEST) bin/phpunit --filter=PersonDataRedactionEnrolmentGateTest
 
 # RETENTION. No compose file declared a `logging:` block, so every container ran the json-file driver's
 # unbounded default and any record that reached it outlived the `audit_log` prune, the
@@ -669,8 +672,9 @@ php.lint.log-carriers: ## Buffered-log carrier gate (console argv redaction + ch
 # started outside these files, and it does not make the sink erasable: rotation evicts by VOLUME, so an
 # idle deployment keeps its oldest line indefinitely. There is still no TTL and no erasure path, recorded
 # as a residual in PRODUCTION_SECURITY_CHECKLIST.md §7 rather than implied closed by this target existing.
-php.lint.log-retention: ## Bounded container-log retention gate (compose `logging:` blocks)
+php.lint.log-retention: ## Bounded container-log retention gate (compose `logging:` blocks) and the production APP_DEBUG pin
 	@$(PHP_TEST) bin/phpunit --filter=BoundedContainerLogRetentionGateTest
+	@$(PHP_TEST) bin/phpunit --filter=ProdDebugPinGateTest
 
 ## —— Accepted-risk tag (structural half only — issue #863) ——————————————————
 

@@ -48,7 +48,9 @@ final class ProdDebugPinGateTest extends TestCase
         $phpServices = [];
 
         foreach ($this->services() as $name => $definition) {
-            if (!\is_array($definition) || !\str_contains((string) ($definition['image'] ?? ''), self::PHP_IMAGE)) {
+            $image = \is_array($definition) ? ($definition['image'] ?? null) : null;
+
+            if (!\is_array($definition) || !\is_string($image) || !\str_contains($image, self::PHP_IMAGE)) {
                 continue;
             }
 
