@@ -105,7 +105,7 @@ final class AuditLogSchemaListener extends InjectedTableSchemaListener
                 // a plain index on the column, as `bank_account`'s trigram is, because the schema comparison matches
                 // columns and not the access method; the migration creates it as GIN over `gin_trgm_ops`. 32 MB there
                 // and about 8 microseconds per audit write.
-                $this->index('audit_log_action_trgm_idx', 'action')->create(),
+                $this->index('idx_audit_log_action_trgm', 'action')->create(),
             )
         ;
     }

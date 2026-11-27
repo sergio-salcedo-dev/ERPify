@@ -61,7 +61,7 @@ final class AuditTimelineActionPlanFunctionalTest extends KernelTestCase
         );
 
         $this->assertStringContainsString(
-            'audit_log_action_trgm_idx',
+            'idx_audit_log_action_trgm',
             $plan,
             'A contains filter on action no longer reads its trigram index, so it scans the whole table, and so '
             . 'does a typo that matches nothing. Plan: ' . $plan,

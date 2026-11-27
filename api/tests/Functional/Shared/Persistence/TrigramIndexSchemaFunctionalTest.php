@@ -6,6 +6,8 @@ namespace Erpify\Tests\Functional\Shared\Persistence;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
+use Erpify\Tests\Support\Persistence\SchemaShape;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -35,12 +37,17 @@ final class TrigramIndexSchemaFunctionalTest extends KernelTestCase
     {
         $declared = $this->declaredTrigramIndexes();
 
-        $this->assertArrayHasKey(
-            'idx_bank_account_holder_name_trgm',
-            $declared,
-            'The mapping walk found no trigram index on bank_account, which declares one: the sweep below '
-            . 'would pass over an empty or partial universe.',
-        );
+        foreach (['idx_bank_account_holder_name_trgm', 'idx_audit_log_action_trgm'] as $known) {
+            $this->assertArrayHasKey(
+                $known,
+                $declared,
+                \sprintf(
+                    'The mapping walk found no trigram index "%s", which is declared: the sweep below would pass '
+                    . 'over an empty or partial universe.',
+                    $known,
+                ),
+            );
+        }
 
         $migrated = $this->migratedTrigramIndexes();
 
@@ -82,6 +89,31 @@ final class TrigramIndexSchemaFunctionalTest extends KernelTestCase
                 $column = $columns[0];
 
                 $declared[$name] = \sprintf('%s gin %s gin_trgm_ops', $classMetadata->getTableName(), $column);
+            }
+        }
+
+        // The tables a schema listener declares (`audit_log` is raw DBAL, with no entity) are in the generated
+        // schema and nowhere in the entity metadata, so a trigram index on one was invisible to the walk above.
+        $schema = (new SchemaTool($entityManager))->getSchemaFromMetadata(
+            $entityManager->getMetadataFactory()->getAllMetadata(),
+        );
+
+        foreach ($schema->getTables() as $table) {
+            foreach (SchemaShape::indexesOf($table) as $name => $shape) {
+                if (!\str_ends_with($name, self::SUFFIX)) {
+                    continue;
+                }
+
+                $this->assertCount(
+                    1,
+                    $shape['columns'],
+                    \sprintf('Trigram index "%s" must cover exactly one column.', $name),
+                );
+                $declared[$name] = \sprintf(
+                    '%s gin %s gin_trgm_ops',
+                    $table->getObjectName()->toString(),
+                    $shape['columns'][0],
+                );
             }
         }
 

@@ -81,19 +81,27 @@ final class PersonDataRedactionEnrolmentGateTest extends TestCase
     {
         $apiRoot = \dirname(__DIR__, 3);
 
-        // Compiles the container when the cache is absent or stale; the output is not read.
-        (new Process(
+        // Compiles the container when the cache is absent, and reports where it put it. The child must not inherit the
+        // runner markers: `Kernel::getCacheDir()` moves its cache to `prod_phpunit` / `prod_behat` under them, which
+        // is neither the directory `php.lint.prod-container` clears and rebuilds nor the one a deploy ships.
+        $process = new Process(
             ['php', 'bin/console', 'debug:container', '--parameters', '--format=json', '--no-interaction'],
             $apiRoot,
-            ['APP_ENV' => 'prod', 'APP_DEBUG' => '0'],
-        ))->mustRun();
+            ['APP_ENV' => 'prod', 'APP_DEBUG' => '0', 'PHPUNIT_RUNNING' => false, 'BEHAT_RUNNING' => false],
+        );
+        $process->mustRun();
 
-        $loader = \file_get_contents($apiRoot . '/var/cache/prod/Erpify_KernelProdContainer.php');
+        $parameters = \json_decode($process->getOutput(), true);
+        $this->assertIsArray($parameters, 'the prod container parameters could not be read');
+        $cacheDir = $parameters['kernel.cache_dir'] ?? null;
+        $this->assertIsString($cacheDir, 'the prod container does not say where its cache is');
+
+        $loader = \file_get_contents($cacheDir . '/Erpify_KernelProdContainer.php');
         $this->assertIsString($loader, 'the compiled prod container loader could not be read');
         $named = \preg_match('/\bContainer[A-Za-z0-9]{7}\b/', $loader, $match);
         $this->assertSame(1, $named, 'no container directory named');
 
-        $files = \glob($apiRoot . '/var/cache/prod/' . $match[0] . '/*.php');
+        $files = \glob($cacheDir . '/' . $match[0] . '/*.php');
         $this->assertIsArray($files);
 
         $loggers = [];

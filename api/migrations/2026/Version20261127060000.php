@@ -24,11 +24,11 @@ final class Version20261127060000 extends AbstractMigration
     public function up(Schema $schema): void
     {
         $this->addSql('CREATE EXTENSION IF NOT EXISTS pg_trgm');
-        $this->addSql('CREATE INDEX IF NOT EXISTS audit_log_action_trgm_idx ON audit_log USING gin (action gin_trgm_ops)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idx_audit_log_action_trgm ON audit_log USING gin (action gin_trgm_ops)');
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql('DROP INDEX IF EXISTS audit_log_action_trgm_idx');
+        $this->addSql('DROP INDEX IF EXISTS idx_audit_log_action_trgm');
     }
 }
