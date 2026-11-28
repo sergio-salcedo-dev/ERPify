@@ -13,6 +13,32 @@ import type {
 } from "../domain/DocumentUploader";
 import { documentsUrl, problemFrom, unreachable } from "./documentsTransport";
 
+/**
+ * The refusals the server answers before it claims the upload, so the upload is still `Declared`
+ * and can take the body again: a name or a length it refused, the in-flight cap, an expired
+ * session. A transfer that failed before a byte left is the same case.
+ */
+const PRE_CLAIM_TYPES: ReadonlySet<string> = new Set([
+  "invalid-filename",
+  "content-length-mismatch",
+  "length-required",
+  "rate-limited",
+]);
+
+/** A transfer that failed with nothing sent: the upload was never claimed. */
+class UnclaimedUploadError extends HttpError {
+  constructor(cause: HttpError) {
+    super(cause.problem);
+    this.name = "HttpError";
+  }
+}
+
+function refusedBeforeTheClaim(error: unknown): boolean {
+  if (error instanceof UnclaimedUploadError) return true;
+  if (!(error instanceof HttpError)) return false;
+  return error.problem.status === 401 || PRE_CLAIM_TYPES.has(error.problem.type);
+}
+
 interface DeclaredUpload {
   data: { id: string };
 }
@@ -67,13 +93,34 @@ function isFiledDocument(body: unknown): body is { data: FiledDocument } {
 export class ApiDocumentUploader implements DocumentUploader {
   constructor(@inject("HttpClient") private readonly httpClient: HttpClient) {}
 
+  /**
+   * Uploads the server still holds as `Declared` because their PUT was refused before it was
+   * claimed, keyed by the file's size and modification time — what the declare named, since the
+   * declare carries no name. A retry of the same file sends its body to that upload instead of
+   * declaring again, so a refusal does not cost one of the per-actor declared slots each time.
+   */
+  private readonly unclaimed = new Map<string, string>();
+
   async upload(file: File, terms: RetentionTerms, options?: UploadOptions): Promise<FiledDocument> {
-    const declared = await this.httpClient.post(
-      API_ENDPOINTS.DOCUMENTS.UPLOAD_DECLARE,
-      { size: file.size, retentionReason: terms.retentionReason, legalBasis: terms.legalBasis },
-      isDeclaredUpload,
-    );
-    return this.send(declared.data.id, file, options);
+    // Everything the PUT carries is built before anything is declared: a name that cannot be
+    // spelled (`encodeURIComponent` throws on a lone surrogate) refuses here, before the server
+    // holds an upload for it.
+    const encodedFilename = encodeURIComponent(normalisedFilename(file));
+    const key = `${file.size}:${file.lastModified}`;
+    const uploadId = this.unclaimed.get(key) ?? (await this.declare(file, terms));
+
+    try {
+      const filed = await this.send(uploadId, encodedFilename, file, options);
+      this.unclaimed.delete(key);
+      return filed;
+    } catch (error) {
+      if (refusedBeforeTheClaim(error)) {
+        this.unclaimed.set(key, uploadId);
+      } else {
+        this.unclaimed.delete(key);
+      }
+      throw error;
+    }
   }
 
   /** Test seam: the request object the PUT is sent with. */
@@ -81,11 +128,23 @@ export class ApiDocumentUploader implements DocumentUploader {
     return new XMLHttpRequest();
   }
 
-  private send(uploadId: string, file: File, options?: UploadOptions): Promise<FiledDocument> {
+  private async declare(file: File, terms: RetentionTerms): Promise<string> {
+    const declared = await this.httpClient.post(
+      API_ENDPOINTS.DOCUMENTS.UPLOAD_DECLARE,
+      { size: file.size, retentionReason: terms.retentionReason, legalBasis: terms.legalBasis },
+      isDeclaredUpload,
+    );
+    return declared.data.id;
+  }
+
+  private send(
+    uploadId: string,
+    encodedFilename: string,
+    file: File,
+    options?: UploadOptions,
+  ): Promise<FiledDocument> {
     const url = documentsUrl(
-      `${API_ENDPOINTS.DOCUMENTS.UPLOAD_CONTENT(uploadId)}?filename=${encodeURIComponent(
-        normalisedFilename(file),
-      )}`,
+      `${API_ENDPOINTS.DOCUMENTS.UPLOAD_CONTENT(uploadId)}?filename=${encodedFilename}`,
     );
     const body = new Blob([file], { type: "application/octet-stream" });
 
@@ -105,7 +164,9 @@ export class ApiDocumentUploader implements DocumentUploader {
 
       request.open("PUT", url);
       request.setRequestHeader("Accept", "application/json");
+      let sent = 0;
       request.upload.onprogress = (event: ProgressEvent): void => {
+        sent = event.loaded;
         options?.onProgress?.({
           loaded: event.loaded,
           total: event.lengthComputable ? event.total : file.size,
@@ -140,7 +201,8 @@ export class ApiDocumentUploader implements DocumentUploader {
           resolve(parsed.data);
         });
       };
-      request.onerror = (): void => settle(() => reject(unreachable()));
+      request.onerror = (): void =>
+        settle(() => reject(sent === 0 ? new UnclaimedUploadError(unreachable()) : unreachable()));
       request.onabort = (): void =>
         settle(() => reject(new DOMException("The upload was cancelled.", "AbortError")));
 

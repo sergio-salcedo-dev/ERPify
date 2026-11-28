@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AttachBankAccountEvidence } from "@/context/backoffice/bankaccount/application/AttachBankAccountEvidence";
+import { DetachBankAccountEvidence } from "@/context/backoffice/bankaccount/application/DetachBankAccountEvidence";
 import {
   DownloadBankAccountEvidence,
   savedFilename,
@@ -18,7 +19,7 @@ describe("AttachBankAccountEvidence", () => {
       sizeBytes: 1,
     });
     const attach = vi.fn().mockResolvedValue({ id: "link-1" });
-    const repository: BankAccountEvidenceRepository = { list: vi.fn(), attach };
+    const repository: BankAccountEvidenceRepository = { list: vi.fn(), attach, detach: vi.fn() };
     const uploader: DocumentUploader = { upload };
     const file = new File(["1"], "certificate.pdf");
     const onProgress = vi.fn();
@@ -45,10 +46,47 @@ describe("AttachBankAccountEvidence", () => {
     await expect(
       new AttachBankAccountEvidence(
         { upload: vi.fn().mockRejectedValue(failure) },
-        { list: vi.fn(), attach },
+        { list: vi.fn(), attach, detach: vi.fn() },
       ).run(ACCOUNT_ID, new File(["1"], "a.pdf"), "ownership-certificate"),
     ).rejects.toBe(failure);
     expect(attach).not.toHaveBeenCalled();
+  });
+
+  it("reports the original filed before it sends the attach, so the caller can stop offering a cancel", async () => {
+    const order: string[] = [];
+    const attach = vi.fn().mockImplementation(async () => {
+      order.push("attach");
+      return { id: "link-1" };
+    });
+    const uploader: DocumentUploader = {
+      upload: vi.fn().mockImplementation(async () => {
+        order.push("upload");
+        return { id: "doc-1", state: "received", digest: "d", sizeBytes: 1 };
+      }),
+    };
+
+    await new AttachBankAccountEvidence(uploader, {
+      list: vi.fn(),
+      attach,
+      detach: vi.fn(),
+    }).run(ACCOUNT_ID, new File(["1"], "a.pdf"), "ownership-certificate", {
+      onFiled: () => order.push("filed"),
+    });
+
+    expect(order).toEqual(["upload", "filed", "attach"]);
+  });
+});
+
+describe("DetachBankAccountEvidence", () => {
+  it("detaches the link from the account it is on", async () => {
+    const detach = vi.fn().mockResolvedValue(undefined);
+
+    await new DetachBankAccountEvidence({ list: vi.fn(), attach: vi.fn(), detach }).run(
+      ACCOUNT_ID,
+      "link-1",
+    );
+
+    expect(detach).toHaveBeenCalledWith(ACCOUNT_ID, "link-1");
   });
 });
 

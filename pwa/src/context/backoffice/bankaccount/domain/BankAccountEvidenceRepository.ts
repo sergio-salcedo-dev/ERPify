@@ -5,7 +5,8 @@ export const BANK_ACCOUNT_EVIDENCE_REPOSITORY_KEY = "BackOfficeBankAccountEviden
 
 /**
  * The documents a bank account holds as evidence. The attach names a document an earlier upload
- * filed, by id; the bytes never travel through this port.
+ * filed, by id; the bytes never travel through this port. A document is evidence of one account,
+ * so attaching it elsewhere means detaching it here first.
  */
 export interface BankAccountEvidenceRepository {
   list(bankAccountId: string): Promise<BankAccountEvidence[]>;
@@ -14,4 +15,5 @@ export interface BankAccountEvidenceRepository {
     documentId: string,
     kind: BankAccountEvidenceKind,
   ): Promise<BankAccountEvidence>;
+  detach(bankAccountId: string, evidenceId: string): Promise<void>;
 }

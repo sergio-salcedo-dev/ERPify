@@ -203,7 +203,9 @@ export default function BankAccountsPage() {
 
   // Typed recovery in the persistent error surface: a stale 404 heals via a
   // refresh; a 409 `bank-account-not-closed` deep-links to the account's edit
-  // form so the user can set it to CLOSED first. Other types carry no action.
+  // form so the user can set it to CLOSED first; a `bank-account-has-live-evidence`
+  // links to the account's detail, where its evidence is listed. Other types carry
+  // no action.
   const deleteRecoveryAction = ((): ReactNode => {
     if (!deleteError) return undefined;
     switch (deleteError.problem.type) {
@@ -233,6 +235,18 @@ export default function BankAccountsPage() {
             data-testid="bank-accounts__delete-error-edit"
           >
             Edit account
+          </Link>
+        );
+      case BankAccountProblemType.HAS_LIVE_EVIDENCE:
+        return (
+          <Link
+            href={safeHref(bankAccountRoutes.detail(deleteError.itemId))}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="View evidence"
+            title="Open this account to see the evidence it still holds"
+            data-testid="bank-accounts__delete-error-evidence"
+          >
+            View evidence
           </Link>
         );
       default:

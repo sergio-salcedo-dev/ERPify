@@ -36,6 +36,7 @@ import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/D
 import { AttachBankAccountEvidence } from "../../../backoffice/bankaccount/application/AttachBankAccountEvidence";
 import { ListBankAccountEvidence } from "../../../backoffice/bankaccount/application/ListBankAccountEvidence";
 import { DownloadBankAccountEvidence } from "../../../backoffice/bankaccount/application/DownloadBankAccountEvidence";
+import { DetachBankAccountEvidence } from "../../../backoffice/bankaccount/application/DetachBankAccountEvidence";
 import {
   BANK_ACCOUNT_EVIDENCE_REPOSITORY_KEY,
   type BankAccountEvidenceRepository,
@@ -240,6 +241,9 @@ container
 container
   .bind<DownloadBankAccountEvidence>("BackOfficeDownloadBankAccountEvidence")
   .to(DownloadBankAccountEvidence);
+container
+  .bind<DetachBankAccountEvidence>("BackOfficeDetachBankAccountEvidence")
+  .to(DetachBankAccountEvidence);
 
 // Audit investigation read context (epic 4): read-only ports over the 4.1 timeline read model —
 // no write use case is bound, so a consumer can inject only the read capability (Backoffice

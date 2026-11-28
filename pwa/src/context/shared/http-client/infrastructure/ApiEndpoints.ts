@@ -42,6 +42,10 @@ function bankAccountEvidencePath(id: string): string {
   return `${bankAccountPath(id)}/evidence`;
 }
 
+function bankAccountEvidenceLinkPath(id: string, evidenceId: string): string {
+  return `${bankAccountEvidencePath(id)}/${encodeURIComponent(evidenceId)}`;
+}
+
 function documentUploadContentPath(uploadId: string): string {
   return `${API_PREFIX_V1}/documents/uploads/${encodeURIComponent(uploadId)}/content`;
 }
@@ -112,6 +116,9 @@ export const API_ENDPOINTS = {
       // two-step upload filed, by id; the bytes never travel through this path.
       EVIDENCE_LIST: bankAccountEvidencePath,
       EVIDENCE_ATTACH: bankAccountEvidencePath,
+      // Removes one link (204), so the document can be attached to the account it belongs to;
+      // the document itself stays filed.
+      EVIDENCE_DETACH: bankAccountEvidenceLinkPath,
     },
     USERS: {
       LIST: `${BACKOFFICE_PREFIX}/users`,

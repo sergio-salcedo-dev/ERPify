@@ -24,6 +24,22 @@ describe("checkDocumentFile", () => {
     expect(checkDocumentFile({ name: "é".repeat(128), size: 1 }).ok).toBe(false);
   });
 
+  it("refuses a name that is not well-formed Unicode or carries a character the API refuses", () => {
+    expect(checkDocumentFile({ name: "a\uD800.pdf", size: 1 }).ok).toBe(false);
+    expect(checkDocumentFile({ name: "a\u0007.pdf", size: 1 }).ok).toBe(false);
+    expect(checkDocumentFile({ name: "a\u2028.pdf", size: 1 }).ok).toBe(false);
+    expect(checkDocumentFile({ name: "a\uE000.pdf", size: 1 }).ok).toBe(false);
+    expect(checkDocumentFile({ name: "a\u200B.pdf", size: 1 }).ok).toBe(false);
+    expect(checkDocumentFile({ name: "a\u202E.pdf", size: 1 }).ok).toBe(false);
+  });
+
+  it("keeps the zero-width joiner and non-joiner, which some scripts need", () => {
+    expect(checkDocumentFile({ name: "\u0645\u200C\u06CC.pdf", size: 1 })).toEqual({ ok: true });
+    expect(checkDocumentFile({ name: "\u0915\u094D\u200D\u0937.pdf", size: 1 })).toEqual({
+      ok: true,
+    });
+  });
+
   it("normalises a decomposed name to NFC", () => {
     expect(normalisedFilename({ name: "Café.pdf" })).toBe("Café.pdf");
   });

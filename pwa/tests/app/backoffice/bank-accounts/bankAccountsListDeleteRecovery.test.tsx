@@ -49,6 +49,11 @@ function problem(type: string, status: number, title: string): ProblemDetails {
 
 const NOT_FOUND = problem("bank-account-not-found", 404, "Bank account not found");
 const NOT_CLOSED = problem("bank-account-not-closed", 409, "Account is not closed");
+const LIVE_EVIDENCE = problem(
+  "bank-account-has-live-evidence",
+  409,
+  "The bank account still holds evidence that is not erased.",
+);
 const SERVER_ERROR = problem("about:blank", 500, "Internal Server Error");
 
 /**
@@ -189,6 +194,19 @@ describe("BankAccountsListPage — delete outcomes", () => {
       `/backoffice/bank-accounts/${BETA_RESERVE.id}/edit`,
     );
     expect(screen.queryByTestId("bank-accounts-list__delete-error-refresh")).toBeNull();
+  });
+
+  it("links to the account's detail when it still holds live evidence", async () => {
+    deleteRun.mockRejectedValue(new HttpError(LIVE_EVIDENCE));
+    await renderInCardsView();
+
+    await confirmDeleteOf(BETA_RESERVE.id);
+
+    const surface = await screen.findByTestId("bank-accounts-list__delete-error");
+    expect(
+      within(surface).getByTestId("bank-accounts-list__delete-error-evidence"),
+    ).toHaveAttribute("href", `/backoffice/bank-accounts/${BETA_RESERVE.id}`);
+    expect(screen.queryByTestId("bank-accounts-list__delete-error-edit")).toBeNull();
   });
 
   it("drops the edit link once the not-closed account is no longer on the page", async () => {

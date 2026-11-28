@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 
 const held = vi.hoisted(() => ({ permissions: new Set<string>() }));
 const list = vi.hoisted(() => vi.fn());
 const attach = vi.hoisted(() => vi.fn());
 const download = vi.hoisted(() => vi.fn());
+const detach = vi.hoisted(() => vi.fn());
 const saveBlob = vi.hoisted(() => vi.fn());
 
 vi.mock("@/context/shared/access/application/useCan", () => ({
@@ -18,6 +19,7 @@ vi.mock("@/context/shared/dependency-injection/infrastructure/Container", () => 
       if (token === "BackOfficeListBankAccountEvidence") return { run: list };
       if (token === "BackOfficeAttachBankAccountEvidence") return { run: attach };
       if (token === "BackOfficeDownloadBankAccountEvidence") return { run: download };
+      if (token === "BackOfficeDetachBankAccountEvidence") return { run: detach };
       throw new Error(`Unexpected container token: ${token}`);
     },
   },
@@ -61,7 +63,7 @@ function pick(file: File): void {
 describe("BankAccountEvidencePanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    grant("document.custody", "document.write", "document.download");
+    grant("document.custody", "document.write", "document.download", "bankAccount.write");
     list.mockResolvedValue([READY, ERASED]);
   });
 
@@ -107,13 +109,51 @@ describe("BankAccountEvidencePanel", () => {
   });
 
   it("offers no attach without document.write and no download without document.download", async () => {
-    grant("document.custody");
+    grant("document.custody", "bankAccount.write");
 
     render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
 
     await screen.findByTestId(`bank-account-evidence__name-${READY.id}`);
     expect(screen.queryByTestId("bank-account-evidence__attach")).toBeNull();
+    expect(screen.queryByTestId(`bank-account-evidence__detach-${READY.id}`)).toBeNull();
     expect(screen.queryByTestId(`bank-account-evidence__download-${READY.id}`)).toBeNull();
+  });
+
+  it("offers no attach and no detach without bankAccount.write, which both routes also demand", async () => {
+    grant("document.custody", "document.write", "document.download");
+
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+
+    await screen.findByTestId(`bank-account-evidence__name-${READY.id}`);
+    expect(screen.queryByTestId("bank-account-evidence__attach")).toBeNull();
+    expect(screen.queryByTestId(`bank-account-evidence__detach-${READY.id}`)).toBeNull();
+    expect(screen.getByTestId(`bank-account-evidence__download-${READY.id}`)).toBeInTheDocument();
+  });
+
+  it("shows a kind or state this client does not know as unknown, and keeps the other items", async () => {
+    list.mockResolvedValue([{ ...READY, kind: "unknown", state: "unknown" }, ERASED]);
+
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+
+    expect(await screen.findByTestId(`bank-account-evidence__state-${READY.id}`)).toHaveTextContent(
+      "Unknown",
+    );
+    expect(screen.getByTestId(`bank-account-evidence__item-${READY.id}`)).toHaveTextContent(
+      "Unknown kind",
+    );
+    expect(screen.queryByTestId(`bank-account-evidence__download-${READY.id}`)).toBeNull();
+    expect(screen.getByTestId(`bank-account-evidence__state-${ERASED.id}`)).toHaveTextContent(
+      "Erased",
+    );
+  });
+
+  it("keeps its status announcements outside the subtree it marks busy", async () => {
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+    await screen.findByTestId(`bank-account-evidence__name-${READY.id}`);
+
+    const status = screen.getByTestId("bank-account-evidence__status");
+    expect(status).toHaveAttribute("role", "status");
+    expect(status.closest("[aria-busy]")).toBeNull();
   });
 
   it("shows the empty state", async () => {
@@ -141,7 +181,7 @@ describe("BankAccountEvidencePanel", () => {
 
     pick(file);
     await waitFor(() => expect(report).toBeDefined());
-    report?.({ loaded: 2, total: 4 });
+    act(() => report?.({ loaded: 2, total: 4 }));
 
     expect(await screen.findByTestId("bank-account-evidence__progress")).toHaveAttribute(
       "value",
@@ -154,7 +194,7 @@ describe("BankAccountEvidencePanel", () => {
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
 
-    finish?.();
+    await act(async () => finish?.());
 
     await waitFor(() => expect(screen.queryByTestId("bank-account-evidence__upload")).toBeNull());
     expect(list).toHaveBeenCalledTimes(2);
@@ -191,8 +231,53 @@ describe("BankAccountEvidencePanel", () => {
     pick(new File(["1"], "certificate.pdf"));
 
     const error = await screen.findByTestId("bank-account-evidence__error");
-    expect(error).toHaveTextContent("other retention terms");
+    expect(error).toHaveTextContent("disagree on how this kind of evidence is kept");
+    expect(error).toHaveTextContent("Contact an administrator.");
+    expect(error).not.toHaveTextContent("attach it again");
     expect(error).toHaveTextContent('"certificate.pdf" was not attached.');
+  });
+
+  it("reloads the list after a failed attach, since a document may have been filed or linked", async () => {
+    attach.mockRejectedValue(
+      new HttpError({
+        type: "network-error",
+        title: "Network error",
+        status: 0,
+        instance: "i",
+        "correlation-id": "c",
+      }),
+    );
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+    await screen.findByTestId(`bank-account-evidence__name-${READY.id}`);
+
+    pick(new File(["1"], "certificate.pdf"));
+
+    const error = await screen.findByTestId("bank-account-evidence__error");
+    expect(error).toHaveTextContent("The outcome is unknown.");
+    expect(error).toHaveTextContent("Check the list below before trying again.");
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+  });
+
+  it("stops offering a cancel once the original is filed", async () => {
+    let filed: (() => void) | undefined;
+    attach.mockImplementation(
+      (_id: string, _file: File, _kind: string, options: { onFiled: () => void }) => {
+        filed = options.onFiled;
+        return new Promise<void>(() => undefined);
+      },
+    );
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+    await screen.findByTestId(`bank-account-evidence__name-${READY.id}`);
+
+    pick(new File(["1"], "certificate.pdf"));
+    expect(await screen.findByTestId("bank-account-evidence__cancel")).toBeInTheDocument();
+    await waitFor(() => expect(filed).toBeDefined());
+    act(() => filed?.());
+
+    await waitFor(() => expect(screen.queryByTestId("bank-account-evidence__cancel")).toBeNull());
+    expect(screen.getByTestId("bank-account-evidence__upload")).toHaveTextContent(
+      "Attaching certificate.pdf",
+    );
   });
 
   it("cancels an upload without reporting an error", async () => {
@@ -229,6 +314,41 @@ describe("BankAccountEvidencePanel", () => {
     expect(download).toHaveBeenCalledWith(
       expect.objectContaining({ documentId: READY.documentId }),
     );
+  });
+
+  it("detaches a link behind a confirmation and reloads the list", async () => {
+    detach.mockResolvedValue(undefined);
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+
+    fireEvent.click(await screen.findByTestId(`bank-account-evidence__detach-${READY.id}`));
+    fireEvent.click(await screen.findByTestId(`bank-account-evidence__detach-confirm-${READY.id}`));
+
+    await waitFor(() => expect(detach).toHaveBeenCalledWith(ACCOUNT_ID, READY.id));
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("bank-account-evidence__status")).toHaveTextContent(
+      "certificate.pdf detached.",
+    );
+  });
+
+  it("surfaces a refused detach in the persistent error surface and reloads the list", async () => {
+    detach.mockRejectedValue(
+      new HttpError({
+        type: "bank-account-evidence-not-found",
+        title: "The evidence is not attached to this bank account.",
+        status: 404,
+        instance: "i",
+        "correlation-id": "c",
+      }),
+    );
+    render(<BankAccountEvidencePanel bankAccountId={ACCOUNT_ID} />);
+
+    fireEvent.click(await screen.findByTestId(`bank-account-evidence__detach-${READY.id}`));
+    fireEvent.click(await screen.findByTestId(`bank-account-evidence__detach-confirm-${READY.id}`));
+
+    expect(await screen.findByTestId("bank-account-evidence__error")).toHaveTextContent(
+      "The evidence is not attached to this bank account.",
+    );
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
   });
 
   it("shows the problem when the list cannot be read", async () => {

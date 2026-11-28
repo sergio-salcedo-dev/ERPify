@@ -225,6 +225,7 @@ const METHOD_BY_KEY: Readonly<Record<string, string>> = {
   "BACKOFFICE.BANK_ACCOUNTS.DELETE": "DELETE",
   "BACKOFFICE.BANK_ACCOUNTS.DETAILS": "GET",
   "BACKOFFICE.BANK_ACCOUNTS.EVIDENCE_ATTACH": "POST",
+  "BACKOFFICE.BANK_ACCOUNTS.EVIDENCE_DETACH": "DELETE",
   "BACKOFFICE.BANK_ACCOUNTS.EVIDENCE_LIST": "GET",
   "BACKOFFICE.BANK_ACCOUNTS.IBAN_LOOKUP": "POST",
   "BACKOFFICE.BANK_ACCOUNTS.LIST": "GET",
@@ -311,9 +312,12 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
 // Symbolic evaluation of the registry module.
 // -------------------------------------------------------------------------------------------
 
-/** A path-builder: one parameter, one expression that returns the path. */
+/**
+ * A path-builder: its parameters, one expression that returns the path. Each parameter is a
+ * segment slot, so a builder of a nested resource (an account's evidence link) takes one per id.
+ */
 interface Builder {
-  param: string;
+  params: string[];
   body: ts.Expression;
 }
 
@@ -375,7 +379,7 @@ class Registry {
       if (constant !== undefined) return constant;
       const builder = this.builders.get(node.text);
       // `DETAILS: bankPath` — the builder referenced, not called.
-      if (builder) return this.apply(builder, PARAM);
+      if (builder) return this.apply(builder, []);
       throw new Error(`unresolved identifier ${node.text}`);
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
@@ -385,14 +389,23 @@ class Registry {
       // A percent-encode of a value is still that value's slot.
       if (callee === "encodeURIComponent") return this.resolve(argument, locals);
       const builder = this.builders.get(callee);
-      if (builder) return this.apply(builder, this.resolve(argument, locals));
+      if (builder) {
+        return this.apply(
+          builder,
+          node.arguments.map((each) => this.resolve(each, locals)),
+        );
+      }
       throw new Error(`unresolved call to ${callee}`);
     }
     throw new Error(`unsupported ${ts.SyntaxKind[node.kind]}`);
   }
 
-  private apply(builder: Builder, argument: string): string {
-    return this.resolve(builder.body, new Map([[builder.param, argument]]));
+  /** Binds each parameter to its argument, and a missing argument to the segment slot. */
+  private apply(builder: Builder, args: string[]): string {
+    return this.resolve(
+      builder.body,
+      new Map(builder.params.map((param, index) => [param, args[index] ?? PARAM])),
+    );
   }
 
   /** Every leaf of the exported registry object, reduced to a comparable path. */
@@ -417,7 +430,7 @@ class Registry {
         const key = trail.join(".");
         try {
           const builder = toBuilder(value);
-          const raw = builder ? this.apply(builder, PARAM) : this.resolve(value, new Map());
+          const raw = builder ? this.apply(builder, []) : this.resolve(value, new Map());
           resolved.push({ key, path: collapse(raw), line: lineOf(this.source, property) });
         } catch (error) {
           unresolved.push(`${key}: ${(error as Error).message}`);
@@ -450,7 +463,7 @@ class Registry {
   }
 }
 
-/** An arrow / function with exactly one parameter and one returned expression, or null. */
+/** An arrow / function with one or more parameters and one returned expression, or null. */
 function toBuilder(node: ts.Node): Builder | null {
   if (
     !ts.isArrowFunction(node) &&
@@ -459,12 +472,15 @@ function toBuilder(node: ts.Node): Builder | null {
   ) {
     return null;
   }
-  const [parameter] = node.parameters;
-  if (!parameter || !ts.isIdentifier(parameter.name)) return null;
-  const param = parameter.name.text;
+  if (node.parameters.length === 0) return null;
+  const params: string[] = [];
+  for (const parameter of node.parameters) {
+    if (!ts.isIdentifier(parameter.name)) return null;
+    params.push(parameter.name.text);
+  }
   const body = node.body;
   if (!body) return null;
-  if (!ts.isBlock(body)) return { param, body };
+  if (!ts.isBlock(body)) return { params, body };
   const [statement] = body.statements;
   if (
     body.statements.length === 1 &&
@@ -472,7 +488,7 @@ function toBuilder(node: ts.Node): Builder | null {
     ts.isReturnStatement(statement) &&
     statement.expression
   ) {
-    return { param, body: statement.expression };
+    return { params, body: statement.expression };
   }
   return null;
 }

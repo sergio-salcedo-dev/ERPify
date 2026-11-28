@@ -229,6 +229,81 @@ describe("ApiDocumentUploader", () => {
     expect(uploader.requests).toHaveLength(0);
   });
 
+  it("declares nothing for a name the PUT could not carry", async () => {
+    const post = vi.fn().mockResolvedValue({ data: { id: UPLOAD_ID } });
+    const uploader = new UploaderUnderTest(httpClient(post));
+
+    // A `File` coerces its name to a USVString; the getter stands for any name that escapes it.
+    const file = Object.defineProperty(new File(["1"], "a.pdf"), "name", { value: "a\uD800.pdf" });
+
+    await expect(uploader.upload(file, TERMS)).rejects.toBeInstanceOf(URIError);
+    expect(post).not.toHaveBeenCalled();
+    expect(uploader.requests).toHaveLength(0);
+  });
+
+  it.each([
+    ["invalid-filename", 422],
+    ["content-length-mismatch", 422],
+    ["rate-limited", 429],
+    ["unauthenticated", 401],
+  ])(
+    "sends the retry to the same upload after a %s refusal made before the claim",
+    async (type, status) => {
+      const post = vi.fn().mockResolvedValue({ data: { id: UPLOAD_ID } });
+      const uploader = new UploaderUnderTest(httpClient(post));
+      const file = new File(["1"], "a.pdf", { lastModified: 1 });
+
+      const first = uploader.upload(file, TERMS);
+      const refused = await started(uploader);
+      refused.answer(status, { type, title: "t", status, instance: "i", "correlation-id": "c" });
+      await expect(first).rejects.toBeInstanceOf(HttpError);
+
+      const second = uploader.upload(file, TERMS);
+      await vi.waitFor(() => expect(uploader.requests).toHaveLength(2));
+      uploader.requests[1].answer(201, RECEIPT);
+
+      await expect(second).resolves.toEqual(RECEIPT.data);
+      expect(post).toHaveBeenCalledTimes(1);
+      expect(uploader.requests[1].url).toBe(refused.url);
+    },
+  );
+
+  it("sends the retry to the same upload when the transfer failed before a byte left", async () => {
+    const post = vi.fn().mockResolvedValue({ data: { id: UPLOAD_ID } });
+    const uploader = new UploaderUnderTest(httpClient(post));
+    const file = new File(["1"], "a.pdf", { lastModified: 1 });
+
+    const first = uploader.upload(file, TERMS);
+    (await started(uploader)).onerror?.();
+    await expect(first).rejects.toMatchObject({ problem: { type: NETWORK_ERROR } });
+
+    void uploader.upload(file, TERMS);
+    await vi.waitFor(() => expect(uploader.requests).toHaveLength(2));
+
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("declares again once the server may have claimed the upload", async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { id: UPLOAD_ID } })
+      .mockResolvedValueOnce({ data: { id: "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1c02" } });
+    const uploader = new UploaderUnderTest(httpClient(post));
+    const file = new File(["12"], "a.pdf", { lastModified: 1 });
+
+    const first = uploader.upload(file, TERMS);
+    const request = await started(uploader);
+    request.progress(1, 2);
+    request.onerror?.();
+    await expect(first).rejects.toMatchObject({ problem: { type: NETWORK_ERROR } });
+
+    void uploader.upload(file, TERMS);
+    await vi.waitFor(() => expect(uploader.requests).toHaveLength(2));
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(uploader.requests[1].url).toContain("1c02");
+  });
+
   it("guards the declare: only an upload id is accepted", async () => {
     const post = vi.fn().mockResolvedValue({ data: { id: UPLOAD_ID } });
     const uploader = new UploaderUnderTest(httpClient(post));

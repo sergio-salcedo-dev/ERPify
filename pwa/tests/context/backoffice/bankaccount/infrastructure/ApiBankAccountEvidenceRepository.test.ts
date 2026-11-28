@@ -54,7 +54,7 @@ describe("ApiBankAccountEvidenceRepository", () => {
     });
   });
 
-  it("guards the payloads with the closed vocabularies", async () => {
+  it("guards the payloads by shape, keeping an unknown kind or state rather than failing the list", async () => {
     const get = vi.fn().mockResolvedValue({ data: [] });
     const post = vi.fn().mockResolvedValue({ data: ITEM });
     const repository = new ApiBankAccountEvidenceRepository(httpClient({ get, post }));
@@ -64,11 +64,36 @@ describe("ApiBankAccountEvidenceRepository", () => {
     const itemGuard = post.mock.calls[0][2] as (body: unknown) => boolean;
 
     expect(listGuard({ data: [ITEM, { ...ITEM, name: null, state: "erased" }] })).toBe(true);
-    expect(listGuard({ data: [{ ...ITEM, state: "deleted" }] })).toBe(false);
-    expect(listGuard({ data: [{ ...ITEM, kind: "photo" }] })).toBe(false);
+    expect(listGuard({ data: [{ ...ITEM, state: "archived" }] })).toBe(true);
+    expect(listGuard({ data: [{ ...ITEM, kind: "photo" }] })).toBe(true);
+    expect(listGuard({ data: [{ ...ITEM, state: 3 }] })).toBe(false);
     expect(listGuard({ data: ITEM })).toBe(false);
     expect(itemGuard({ data: ITEM })).toBe(true);
     expect(itemGuard({ data: { ...ITEM, sizeBytes: "1024" } })).toBe(false);
     expect(itemGuard(null)).toBe(false);
+  });
+
+  it("reads an unknown kind or state as unknown and keeps the other items", async () => {
+    const other = { ...ITEM, id: "0190e9c2-0000-7000-8000-0000000000cc" };
+    const get = vi.fn().mockResolvedValue({
+      data: [{ ...ITEM, kind: "photo", state: "archived" }, other],
+    });
+
+    const listed = await new ApiBankAccountEvidenceRepository(httpClient({ get })).list(ACCOUNT_ID);
+
+    expect(listed).toEqual([{ ...ITEM, kind: "unknown", state: "unknown" }, other]);
+  });
+
+  it("detaches one link through its own route", async () => {
+    const del = vi.fn().mockResolvedValue(undefined);
+
+    await new ApiBankAccountEvidenceRepository(httpClient({ delete: del })).detach(
+      ACCOUNT_ID,
+      ITEM.id,
+    );
+
+    expect(del.mock.calls[0][0]).toBe(
+      `/api/v1/backoffice/bank-accounts/${ACCOUNT_ID}/evidence/${ITEM.id}`,
+    );
   });
 });

@@ -14,6 +14,11 @@ import {
   type BankAccountEvidenceRepository,
 } from "../domain/BankAccountEvidenceRepository";
 
+export interface AttachOptions extends UploadOptions {
+  /** Called once the original is filed, before the attach is sent: from here the upload cannot be cancelled. */
+  readonly onFiled?: () => void;
+}
+
 /**
  * Files an original through the Documents upload under its kind's retention terms, then attaches
  * the document it filed to the bank account. Two server writes, in that order: a refused attach
@@ -32,9 +37,13 @@ export class AttachBankAccountEvidence {
     bankAccountId: string,
     file: File,
     kind: BankAccountEvidenceKind,
-    options?: UploadOptions,
+    options?: AttachOptions,
   ): Promise<BankAccountEvidence> {
-    const filed = await this.uploader.upload(file, EVIDENCE_RETENTION[kind], options);
+    const filed = await this.uploader.upload(file, EVIDENCE_RETENTION[kind], {
+      onProgress: options?.onProgress,
+      signal: options?.signal,
+    });
+    options?.onFiled?.();
     return this.repository.attach(bankAccountId, filed.id, kind);
   }
 }

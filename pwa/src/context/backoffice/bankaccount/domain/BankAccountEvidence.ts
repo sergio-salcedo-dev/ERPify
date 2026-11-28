@@ -16,9 +16,17 @@ export const EVIDENCE_DOCUMENT_STATES = [
 export type EvidenceDocumentState = (typeof EVIDENCE_DOCUMENT_STATES)[number];
 
 /**
+ * What an item reads when the server sends a kind or a state this client does not know yet — a
+ * newer API ahead of a cached bundle. The item is kept and shown as unknown rather than failing
+ * the whole list over one value.
+ */
+export const UNKNOWN = "unknown" as const;
+
+/**
  * The retention terms each kind is filed under. The kind fixes them, never the user: the API
  * refuses the attach (422 `bank-account-evidence-retention-mismatch`) unless the document was
- * filed under exactly these, so this table and the server's must agree.
+ * filed under exactly these, so this table and the server's must agree (`bank-account-evidence-
+ * parity.test.ts` reads the PHP enum).
  */
 export const EVIDENCE_RETENTION: Readonly<Record<BankAccountEvidenceKind, RetentionTerms>> = {
   "ownership-certificate": {
@@ -33,10 +41,10 @@ export interface BankAccountEvidence {
   readonly id: string;
   /** The document's id — what the audited read route takes to download it. */
   readonly documentId: string;
-  readonly kind: BankAccountEvidenceKind;
+  readonly kind: BankAccountEvidenceKind | typeof UNKNOWN;
   /** The original filename, or `null` when it cannot or must not open (an erased document). */
   readonly name: string | null;
-  readonly state: EvidenceDocumentState;
+  readonly state: EvidenceDocumentState | typeof UNKNOWN;
   readonly digest: string;
   readonly sizeBytes: number;
   readonly attachedAt: string;
@@ -45,22 +53,44 @@ export interface BankAccountEvidence {
 const KINDS: ReadonlySet<string> = new Set(BANK_ACCOUNT_EVIDENCE_KINDS);
 const STATES: ReadonlySet<string> = new Set(EVIDENCE_DOCUMENT_STATES);
 
-/** The payload guard of one item, derived from the two vocabularies above. */
-export function isBankAccountEvidence(value: unknown): value is BankAccountEvidence {
-  if (typeof value !== "object" || value === null) return false;
+function isKind(value: string): value is BankAccountEvidenceKind {
+  return KINDS.has(value);
+}
+
+function isState(value: string): value is EvidenceDocumentState {
+  return STATES.has(value);
+}
+
+/**
+ * Reads one item off the wire, or `null` when its shape is not an item at all. A kind or a state
+ * outside the vocabularies above is kept as {@link UNKNOWN}: the shape is the contract, the
+ * vocabulary may grow on the server first.
+ */
+export function toBankAccountEvidence(value: unknown): BankAccountEvidence | null {
+  if (typeof value !== "object" || value === null) return null;
   const v = value as Record<string, unknown>;
-  return (
-    typeof v.id === "string" &&
-    typeof v.documentId === "string" &&
-    typeof v.kind === "string" &&
-    KINDS.has(v.kind) &&
-    (v.name === null || typeof v.name === "string") &&
-    typeof v.state === "string" &&
-    STATES.has(v.state) &&
-    typeof v.digest === "string" &&
-    typeof v.sizeBytes === "number" &&
-    typeof v.attachedAt === "string"
-  );
+  if (
+    typeof v.id !== "string" ||
+    typeof v.documentId !== "string" ||
+    typeof v.kind !== "string" ||
+    (v.name !== null && typeof v.name !== "string") ||
+    typeof v.state !== "string" ||
+    typeof v.digest !== "string" ||
+    typeof v.sizeBytes !== "number" ||
+    typeof v.attachedAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    id: v.id,
+    documentId: v.documentId,
+    kind: isKind(v.kind) ? v.kind : UNKNOWN,
+    name: v.name,
+    state: isState(v.state) ? v.state : UNKNOWN,
+    digest: v.digest,
+    sizeBytes: v.sizeBytes,
+    attachedAt: v.attachedAt,
+  };
 }
 
 /** Only a `ready` document's original can be read. */
