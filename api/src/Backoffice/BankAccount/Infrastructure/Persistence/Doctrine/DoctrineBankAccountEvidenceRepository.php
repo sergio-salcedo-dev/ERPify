@@ -36,8 +36,7 @@ final readonly class DoctrineBankAccountEvidenceRepository implements BankAccoun
     #[Override]
     public function findByBankAccountId(string $bankAccountId): array
     {
-        /** @var list<BankAccountEvidence> $links */
-        $links = $this->entityManager->createQueryBuilder()
+        return $this->onlyLinks($this->entityManager->createQueryBuilder()
             ->select('e')
             ->from(BankAccountEvidence::class, 'e')
             ->where('e.bankAccountId = :bankAccountId')
@@ -45,10 +44,20 @@ final readonly class DoctrineBankAccountEvidenceRepository implements BankAccoun
             ->orderBy('e.attachedAt', NativeSortDirection::Ascending)
             ->addOrderBy('e.id', NativeSortDirection::Ascending)
             ->getQuery()
-            ->getResult()
-        ;
+            ->getResult());
+    }
 
-        return $links;
+    /**
+     * @return list<BankAccountEvidence>
+     */
+    private function onlyLinks(mixed $result): array
+    {
+        return \is_array($result)
+            ? \array_values(\array_filter(
+                $result,
+                static fn (mixed $link): bool => $link instanceof BankAccountEvidence,
+            ))
+            : [];
     }
 
     #[Override]

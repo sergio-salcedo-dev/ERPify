@@ -90,15 +90,16 @@ final readonly class DoctrineDocumentListingRepository implements DocumentListin
             Uuid::ensure($id);
         }
 
-        /** @var list<DocumentListRow> $rows */
-        $rows = $this->baseQuery()
+        $result = $this->baseQuery()
             ->where('d.id IN (:ids)')
             ->setParameter('ids', \array_values(\array_unique(\array_map(\strtolower(...), $ids))))
             ->getQuery()
             ->getResult()
         ;
 
-        return $rows;
+        return \is_array($result)
+            ? \array_values(\array_filter($result, static fn (mixed $row): bool => $row instanceof DocumentListRow))
+            : [];
     }
 
     private function baseQuery(): QueryBuilder
