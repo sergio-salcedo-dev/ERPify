@@ -68,6 +68,16 @@ src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccou
 # an equality lookup instead of a keyset search — so it joins the same Bank entity for the same reason (see #426).
 src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountIbanLookupRepository.php => Erpify\Backoffice\Bank\Domain\Entity\Bank
 
+# BankAccount → Documents evidence read seam. A bank account holds documents as evidence by id (the
+# `bank_account_evidence` link table, no object graph across the boundary); what it learns about each document —
+# the retention terms it was filed under, its lifecycle state, its opened name — comes through EvidenceDocuments,
+# the read port Documents publishes for its consumers (one keystore query per set, through DocumentNameOpener).
+# Three importers: the composition of a listing, the attach (which verifies on the server that the document was
+# filed under its kind's retention terms), and the release of an account's links on its deletion or erasure.
+src/Backoffice/BankAccount/Application/Evidence/DescribeEvidence.php => Erpify\Documents\Document\Application\Evidence\EvidenceDocuments
+src/Backoffice/BankAccount/Application/Evidence/AttachBankAccountEvidence.php => Erpify\Documents\Document\Application\Evidence\EvidenceDocuments
+src/Backoffice/BankAccount/Application/Evidence/ReleaseBankAccountEvidence.php => Erpify\Documents\Document\Application\Evidence\EvidenceDocuments
+
 # Membership → Organization single-org resolution. GrantMembership (Membership/Application) reads the
 # installation's organization through the published OrganizationRepository port to resolve the org a new
 # member belongs to — same intra-`Organization/` cross-module seam family as Bank ↔ BankAccount above.

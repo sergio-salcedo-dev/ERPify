@@ -3110,8 +3110,36 @@ mitigated state. Accepting one means recording who accepted it and against which
       limiter buckets. History: the user chose documentation over a separate secret on 2026-11-08, and asked for the
       secret on 2026-11-27; the cost is one more required production secret to generate and custody.
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
-      `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
-      first UI story that uploads evidence.**
+      `curl` stops on h1.1 and h2; a browser may keep sending until the server closes. The first browser client now
+      exists (doc-12, `ApiDocumentUploader`): it PUTs with `XMLHttpRequest`, so the refusal surfaces when the browser
+      completes the response, and the user can cancel; whether the browser stops sending at that point, and whether the
+      progress bar keeps advancing until it does, were not measured — the session that wrote it had no running stack or
+      browser. **Open — owner: the doc-12 review, against the running stack (Chrome and Firefox, h1.1 and h2).**
+- [ ] **Bank-account evidence: what the first consumer leaves (doc-12).** An account holds documents by id in
+      `bank_account_evidence`; every residual below is a decision, not a gap found later.
+      - **A bank-account subject's erasure waits on its documents.** `bank-account:gdpr:erase-subject` refuses (409
+        `bank-account-has-live-evidence`, exit 1) while a linked document is not `Erased`, by decision: a document is
+        erased only by its own operator action, which re-proves the password and writes the ledger, and an erasure never
+        erases a document as a side effect. The operator erases each document first; until then the holder's account
+        row, and its PII, stay. The business delete takes the same 409.
+      - **Any ADMIN may attach any document id.** The attach checks existence, state and the retention terms, never who
+        filed the document: an ADMIN already reads every document, so a row-level rule would refuse nothing that
+        audience cannot reach, and the attach's audit row names the actor.
+      - **The evidence routes reuse `document.custody`** beside their `bankAccount` verb rather than minting
+        `bankAccount.attachEvidence`: one fewer catalog entry for the same ADMIN-only audience, at the price that
+        granting `document.custody` to a role later also grants it the evidence listing and attach.
+      - **The PUT and the download bypass `HttpClient`.** The raw-body PUT is an `XMLHttpRequest` (the only browser
+        transport with upload progress and an exact `Content-Length`) and the download a `fetch` read as bytes; neither
+        runs the transport's 401 session-expiry bounce, so an expired session mid-upload surfaces as a refused upload
+        and the next JSON call bounces. Neither has a timeout: the API owns the upload deadline.
+      - **The download holds the whole original in the tab** (one `Blob`, up to 100 MiB) before the browser saves it,
+        because the read route's refusals must be read before anything is saved.
+      - **The upload sends no idempotency key**, which needs the digest of the whole file read in the tab; a retry after
+        an unknown outcome files the original again, and a refused attach leaves a filed document attached to nothing,
+        listed under `GET /api/v1/documents`.
+      - **The cross-context foreign key `bank_account_evidence.document_id → document.id`** is a justified Level 2
+        (`docs/rules/database.md`): Documents never deletes a document, so it costs no write; a future path that does
+        must remove or refuse over the links first.
 
 - [ ] **Console failures print a masked summary, and the mask is a floor.** Every command under an
       `Infrastructure/Cli/` directory prints `ThrowableSummary::of($throwable)` and never the throwable's own

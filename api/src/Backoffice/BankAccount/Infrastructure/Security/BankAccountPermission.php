@@ -32,4 +32,12 @@ final class BankAccountPermission
     public const string DELETE = 'bankAccount.delete';
 
     public const string CHANGE_STATUS = 'bankAccount.changeStatus';
+
+    /**
+     * The second gate of the evidence routes, beside `READ` or `WRITE`: they serve documents' opened names and decide
+     * what an account relies on as proof, so they are ADMIN-only. It is the Documents verb that already reads
+     * documents' metadata and names — no tier carries it, only the ADMIN wildcard reaches it — rather than a verb of
+     * this module, which would be a new entry of the published permission catalog for the same audience.
+     */
+    public const string EVIDENCE_CUSTODY = 'document.custody';
 }

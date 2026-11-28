@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Application;
 
+use Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountHasLiveEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditErasureEvidence;
@@ -32,6 +34,12 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * id names nothing this installation ever held, so a mistyped but well-formed id writes no tombstone and no
  * evidence. Idempotent: a re-run finds nothing live and an already-destroyed key, erases nothing and skips
  * the self-audit.
+ *
+ * Documents attached to the account as evidence are not erased by this: an account holding one that is not erased
+ * refuses, and the operator erases each document through its own re-proven erasure first. Once all are erased their
+ * links are removed in this same transaction, ahead of the account.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the record, its key, its evidence and the erasure's own audit row
  */
 final readonly class EraseBankAccountSubject
 {
@@ -42,9 +50,13 @@ final readonly class EraseBankAccountSubject
         private Keystore $keystore,
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
+        private ReleaseBankAccountEvidence $releaseEvidence,
     ) {
     }
 
+    /**
+     * @throws BankAccountHasLiveEvidence when a document attached to the account is not erased; nothing is erased
+     */
     public function execute(string $bankAccountId): SubjectErasureResult
     {
         Uuid::ensure($bankAccountId);
@@ -69,6 +81,10 @@ final readonly class EraseBankAccountSubject
             }
 
             if ($liveRecordErased) {
+                // Under the account's lock, before anything irreversible: a document still attached and not erased
+                // refuses the whole erasure, which then writes no tombstone and no evidence row.
+                $this->releaseEvidence->releaseAll($canonicalId);
+
                 // Load-bearing: remove() flushes eagerly, so the final BANK_ACCOUNT_DELETED change row is
                 // captured and sealed under the still-live key here, before destroy() below tombstones
                 // it. A future lazy flush would move that capture past the destroy and break erasure.

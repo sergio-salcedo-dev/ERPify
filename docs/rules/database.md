@@ -250,6 +250,11 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
   integrity is upheld by events/policies/ACL. A genuine FK here is a warning to
   **justify in the PR**, not an automatic block — it avoids the "ERPIFY_CORE
   giant graph" where a CRM change breaks Projects.
+  The one justified today is `bank_account_evidence.document_id → document.id`
+  (BankAccount → Documents): a document is never deleted — an erasure changes its
+  state and keeps the tombstone — so the key costs Documents no write, while it is
+  the only thing that would notice a row removed behind both contexts' backs. Its
+  listener (`BankAccountEvidenceDocumentForeignKeySchemaListener`) records why.
 
 **🟢 Level 3 — permitido:**
 
@@ -257,8 +262,9 @@ and the data-modeling strategy in [`../product-roadmap.md`](../product-roadmap.m
   objects under `src/Shared/`. An FK toward a genuinely shared table is fine.
   **`User` is NOT one of them in this codebase**: it is the aggregate of the
   `Iam/Identity` bounded context, so a reference to it crosses a context and
-  follows Level 2 — a bare UUID column, no `FOREIGN KEY`. Measured: the schema
-  holds exactly three foreign keys and none points at `identity_user`.
+  follows Level 2 — a bare UUID column, no `FOREIGN KEY`. Measured: every
+  foreign key in the schema is re-injected by an `InjectedForeignKeySchemaListener`
+  subclass, and none of them points at `identity_user`.
 - **ID-only references** across contexts (`project.leadId`) — no JOIN, no entity
   association, no foreign repository.
 - **Integration via events** — `ProjectCreated → CRM updates its projection`.

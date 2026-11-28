@@ -69,6 +69,7 @@ return RectorConfig::configure()
         // only where that alias is imported, so it still converts a string direction elsewhere;
         // a new file importing the alias reds `php.rector.dry-run` and belongs on this list.
         DoctrineQueryBuilderSortDirectionRector::class => [
+            __DIR__ . '/../../src/Backoffice/BankAccount/Infrastructure/Persistence/Doctrine/DoctrineBankAccountEvidenceRepository.php',
             __DIR__ . '/../../src/Iam/Identity/Infrastructure/Persistence/Doctrine/DoctrineErasureResweepRepository.php',
             __DIR__ . '/../../src/Iam/Invitation/Infrastructure/Persistence/Doctrine/DoctrineInvitationRepository.php',
             __DIR__ . '/../../src/Iam/Session/Infrastructure/Persistence/Doctrine/DoctrineSessionRepository.php',
