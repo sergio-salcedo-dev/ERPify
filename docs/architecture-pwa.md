@@ -60,7 +60,7 @@ Pure cross-cutting helpers/hooks live as capability modules under `src/context/s
 
 ### Images — one upload control, one display (`context/shared/images`, `components/erpify`)
 
-Every consumer of `Shared/Images` (bank logo, user avatar, bank-account image) composes the same pair: `<ImageDisplay>` and `<ImageUploadField>` from `@/components/erpify`. A consumer screen never writes its own `<img>` over a stored image or its own `<input type="file">`.
+Every consumer of `Shared/Images` (bank logo, user avatar) composes the same pair: `<ImageDisplay>` and `<ImageUploadField>` from `@/components/erpify`. A consumer screen never writes its own `<img>` over a stored image or its own `<input type="file">`.
 
 - **Transport.** `HttpClient.putRaw(url, blob, guard?, options?)` sends the blob as the body of a `PUT` with no `Content-Type` of its own (the browser takes it from `blob.type` and fills `Content-Length`), over the same `request()` as the JSON verbs — one timeout, one 401 bounce, one set of minted `network-error` / `request-timeout`.
 - **Port.** `ImageUploader` (`upload(url, file)`, `remove(url)`), bound as a singleton and implemented by `ApiImageUploader`. The **consumer passes its own write URL**: there is no generic upload route, so no write key lives in `API_ENDPOINTS`. Only the shared read route does (`IMAGES.GET`), composed by `imageReadUrl()` through `safeHref` and `encodeURIComponent`.
@@ -68,6 +68,14 @@ Every consumer of `Shared/Images` (bank logo, user avatar, bank-account image) c
 - **Components.** `<ImageDisplay>` shows a placeholder when no id is held, while loading and on **any** load failure (an `<img>` does not expose the status), unmounting the `<img>` so no broken-image glyph paints. `<ImageUploadField>` receives async callbacks rather than resolving the port, because no `components/erpify` piece reaches the container: precheck refusals are inline, a server refusal is a persistent `<MutationError>` naming the kept file with a retry, and a second pick while one is in flight is ignored.
 - **First consumer: the bank logo.** `BankLogoControl` (edit screen, behind `<Can permission={Permission.BANK_WRITE}>`) hands the field the bank's own write URL (`API_ENDPOINTS.BACKOFFICE.BANKS.LOGO_SET` / `LOGO_REMOVE`, one path, one verb each). The edit page owns `logoImageId` — seeded from the loaded bank and set from the write's answer, never refetched — and the control sits outside `BankForm`, so a name typed and not yet saved survives a logo change. The list (table name cell, cards, stacked rows) and the detail header show `<ImageDisplay alt="">` keyed by `row.id`; `Bank.logoImageId` and the realtime row carry the id (`null` when none), and a logo-only change pushes nothing, so other open clients learn of it on their next load.
 - **Harness.** `/backoffice/dev-tools/image-upload` drives the control against a stub write URL (`tests/e2e/backoffice/image-upload.spec.ts`).
+
+### Documents — evidence upload (`context/shared/documents`, first consumer `bankaccount`)
+
+Evidence keeps its original byte, so it never travels through the images pipeline (ADR `images-vs-documents-conservation-contract.md` D2/D3).
+
+- **Port.** `DocumentUploader` (`DOCUMENT_UPLOADER_KEY`), implemented by `ApiDocumentUploader`: the declare (`POST /api/v1/documents/uploads`, size and the retention terms) then the raw `PUT …/{id}/content?filename=<encodeURIComponent(name)>` with the `File` itself as the body, so the browser streams it and sets the exact `Content-Length`. `checkDocumentFile()` refuses an empty file and one over 100 MiB before declaring; the timeout follows the server's own deadline (`uploadBudgetMs`).
+- **Progress.** `RequestOptions.onUploadProgress` on `putRaw`: `fetch` cannot report request-body progress, so `FetchHttpClient` sends that one request through an `XMLHttpRequest` that answers a `Response` and rejects like `fetch`, keeping the budget, the expiry bounce, the debug token and Problem Details parsing on one path (same-origin cookies, as `fetch`'s default).
+- **First consumer: bank-account evidence.** `BankAccountEvidenceSection` on the account detail (shown with `bankAccount.readEvidence`; attach needs `bankAccount.attachEvidence` and `document.write`; download needs `document.download`) lists the evidence and attaches a new document. The kind fixes the retention terms (`EVIDENCE_RETENTION`), never the screen. The control's own label and help say the original is kept unchanged, which is the D3 misfiling guard for a screen with no image control.
 
 ### Shared execution toolkits — access (IAM) & resource (CRUD)
 

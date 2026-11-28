@@ -250,8 +250,11 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
      * A bank account holding one piece of evidence whose document is in `$documentState`. Rows are planted with SQL:
      * the subject under test is the erasure, not the attach.
      */
-    private function accountWithEvidenceIn(EntityManagerInterface $em, Connection $connection, string $documentState): string
-    {
+    private function accountWithEvidenceIn(
+        EntityManagerInterface $em,
+        Connection $connection,
+        string $documentState,
+    ): string {
         $bankId = Uuid::generate();
         $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
         $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
@@ -262,7 +265,10 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
         $em->flush();
 
         $documentId = Uuid::generate();
-        $connection->executeStatement('INSERT INTO document_series (id, created_at) VALUES (:id, NOW())', ['id' => $documentId]);
+        $connection->executeStatement(
+            'INSERT INTO document_series (id, created_at) VALUES (:id, NOW())',
+            ['id' => $documentId],
+        );
         $connection->executeStatement(
             'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, '
             . 'retention_reason, legal_basis, next_scan_at, created_at, updated_at) '

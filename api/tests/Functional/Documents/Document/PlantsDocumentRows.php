@@ -35,7 +35,9 @@ trait PlantsDocumentRows
 
     private function emptyDocumentTables(): void
     {
-        $this->connection()->executeStatement('TRUNCATE bank_account_evidence, document_custody, document, document_series');
+        $this->connection()->executeStatement(
+            'TRUNCATE bank_account_evidence, document_custody, document, document_series',
+        );
     }
 
     private function plantDocument(

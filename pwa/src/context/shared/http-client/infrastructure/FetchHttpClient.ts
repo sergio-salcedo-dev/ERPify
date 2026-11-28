@@ -11,6 +11,7 @@ import {
   type HttpClient,
   type RequestOptions,
   type ResponseGuard,
+  type UploadProgress,
 } from "../domain/HttpClient";
 import { HttpStatus } from "../domain/HttpStatus";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
@@ -202,6 +203,85 @@ function serverApiBase(): string {
   );
 }
 
+// Statuses a `Response` must be built without a body for; the constructor throws otherwise.
+const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 103, 204, 205, 304]);
+
+function headersOf(xhr: XMLHttpRequest): Headers {
+  const headers = new Headers();
+  for (const line of xhr.getAllResponseHeaders().split(/\r?\n/)) {
+    const colon = line.indexOf(":");
+    if (colon <= 0) continue;
+    headers.append(line.slice(0, colon).trim(), line.slice(colon + 1).trim());
+  }
+  return headers;
+}
+
+// `fetch` cannot report how much of a request body has been sent, so a caller asking for upload
+// progress is served by an XMLHttpRequest instead — and only the WIRE changes: it answers a
+// `Response` like `fetch` does and rejects the same way (`TypeError` on a transport failure, an
+// abort through the same signal), so the budget, the expiry bounce, the debug token and the
+// Problem Details parsing in `request()` run unchanged and a caller sees the very same `HttpError`
+// on either path. Credentials match too: `withCredentials` stays false, which sends the session
+// cookie same-origin and nowhere else — `fetch`'s default `credentials: "same-origin"`.
+function sendWithProgress(
+  input: string,
+  init: RequestInit,
+  body: Blob,
+  signal: AbortSignal,
+  onUploadProgress: (progress: UploadProgress) => void,
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const abortError = (): DOMException =>
+      new DOMException("The request was aborted.", "AbortError");
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open(init.method ?? "GET", input);
+    xhr.responseType = "text";
+    new Headers(init.headers).forEach((value, name) => xhr.setRequestHeader(name, value));
+    xhr.upload.onprogress = (event) => {
+      onUploadProgress({
+        loaded: event.loaded,
+        total: event.lengthComputable ? event.total : body.size,
+      });
+    };
+    xhr.onload = () => {
+      try {
+        resolve(
+          new Response(NULL_BODY_STATUSES.has(xhr.status) ? null : xhr.responseText, {
+            status: xhr.status,
+            headers: headersOf(xhr),
+          }),
+        );
+      } catch {
+        reject(new TypeError("The response could not be read."));
+      }
+    };
+    xhr.onerror = () => reject(new TypeError("Network request failed"));
+    xhr.onabort = () => reject(abortError());
+    signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
+function send(
+  input: string,
+  init: RequestInit,
+  signal: AbortSignal,
+  onUploadProgress?: (progress: UploadProgress) => void,
+): Promise<Response> {
+  if (
+    onUploadProgress !== undefined &&
+    init.body instanceof Blob &&
+    typeof XMLHttpRequest !== "undefined"
+  ) {
+    return sendWithProgress(input, init, init.body, signal, onUploadProgress);
+  }
+  return fetch(input, { ...init, signal });
+}
+
 @injectable()
 export class FetchHttpClient implements HttpClient {
   // Optional + defaulted so the ~20 direct `new FetchHttpClient()` call sites in
@@ -242,7 +322,7 @@ export class FetchHttpClient implements HttpClient {
     // apart from one that never observed any status at all.
     let res: Response | undefined;
     try {
-      res = await fetch(input, { ...init, signal: controller.signal });
+      res = await send(input, init, controller.signal, options?.onUploadProgress);
       const token = res.headers.get("X-Debug-Token");
       if (token) {
         this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });

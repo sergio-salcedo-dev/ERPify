@@ -47,6 +47,10 @@ vi.mock("@/context/shared/notification/infrastructure/Toast", async () => ({
   toastNotifier: toast,
 }));
 
+vi.mock("@/context/shared/access/application/useCan", async () =>
+  (await import("./_mocks")).useCanMock(),
+);
+
 vi.mock("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime", async () =>
   (await import("./_mocks")).bankAccountRealtimeMock(),
 );

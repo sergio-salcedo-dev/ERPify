@@ -7,17 +7,8 @@ namespace Erpify\Tests\Unit\Backoffice\BankAccount\Application;
 use DateTimeImmutable;
 use Erpify\Documents\Document\Application\Evidence\DescribeEvidenceDocuments;
 use Erpify\Documents\Document\Application\Listing\DocumentNameOpener;
-use Erpify\Documents\Document\Application\Read\ErasureLedgerOverride;
 use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Documents\Document\Domain\Projection\DocumentListRow;
-use Erpify\Documents\Document\Domain\Repository\DocumentListingRepository;
-use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
-use Erpify\Shared\Crypto\Domain\DestroyReason;
-use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
-use Erpify\Shared\Search\Domain\Page;
-use Erpify\Shared\Search\Domain\SearchCriteria;
-use LogicException;
-use Override;
 
 /**
  * The Documents seam as the BankAccount use cases meet it in a unit test: the real {@see DescribeEvidenceDocuments}
@@ -34,7 +25,7 @@ final class EvidenceDocumentsDouble
 
     private bool $overrideActive = false;
 
-    public int $findManyCalls = 0;
+    private ?InMemoryDocumentListing $listing = null;
 
     public function withDocument(
         string $id,
@@ -70,95 +61,20 @@ final class EvidenceDocumentsDouble
 
     public function seam(): DescribeEvidenceDocuments
     {
-        $listing = new readonly class ($this) implements DocumentListingRepository {
-            public function __construct(private EvidenceDocumentsDouble $double)
-            {
-            }
-
-            #[Override]
-            public function search(SearchCriteria $criteria): Page
-            {
-                throw new LogicException('The evidence seam never searches.');
-            }
-
-            #[Override]
-            public function find(string $id): ?DocumentListRow
-            {
-                throw new LogicException('The evidence seam reads in batches.');
-            }
-
-            #[Override]
-            public function findMany(array $ids): array
-            {
-                return $this->double->rowsFor($ids);
-            }
-        };
-
-        $override = new readonly class ($this->overrideActive) implements ErasureLedgerOverride {
-            public function __construct(private bool $active)
-            {
-            }
-
-            #[Override]
-            public function isActive(): bool
-            {
-                return $this->active;
-            }
-        };
+        $this->listing = new InMemoryDocumentListing($this->rows);
 
         return new DescribeEvidenceDocuments(
-            $listing,
-            new DocumentNameOpener($this->encryptorNeverCalled()),
-            $override,
+            $this->listing,
+            new DocumentNameOpener(new NameOpeningRefusingEncryptor()),
+            new FixedErasureLedgerOverride($this->overrideActive),
         );
     }
 
     /**
-     * @param list<string> $ids
-     *
-     * @return list<DocumentListRow>
+     * How many times the seam asked for rows since {@see seam()} last built it.
      */
-    public function rowsFor(array $ids): array
+    public function findManyCalls(): int
     {
-        ++$this->findManyCalls;
-
-        $found = [];
-
-        foreach (\array_unique(\array_map(\strtolower(...), $ids)) as $id) {
-            if (isset($this->rows[$id])) {
-                $found[] = $this->rows[$id];
-            }
-        }
-
-        return $found;
-    }
-
-    private function encryptorNeverCalled(): EnvelopeEncryptor
-    {
-        return new class implements EnvelopeEncryptor {
-            #[Override]
-            public function encrypt(EncryptionScopeId $scope, string $plaintext, string $aad): string
-            {
-                throw new LogicException('Not used.');
-            }
-
-            #[Override]
-            public function decrypt(EncryptionScopeId $scope, string $ciphertext, string $aad): string
-            {
-                throw new LogicException('Not used.');
-            }
-
-            #[Override]
-            public function decryptMany(array $values): array
-            {
-                throw new LogicException('No row carries a sealed name, so no name is opened.');
-            }
-
-            #[Override]
-            public function destroyScope(EncryptionScopeId $scope, DestroyReason $reason): bool
-            {
-                throw new LogicException('Not used.');
-            }
-        };
+        return $this->listing instanceof InMemoryDocumentListing ? $this->listing->findManyCalls : 0;
     }
 }

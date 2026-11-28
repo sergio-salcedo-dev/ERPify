@@ -31,6 +31,11 @@ use LogicException;
  *
  * Refuses, in order: an unknown account (404), a document that does not exist, is erased or is quarantined (422), a
  * document filed under retention terms other than its kind's (422), and a second link of the same document (409).
+ *
+ * Each refusal is its own exception class and the document is read through the Documents seam, so the use case's
+ * coupling sits above the default threshold by construction.
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 final readonly class AttachBankAccountEvidence
 {

@@ -20,9 +20,9 @@ Feature: Attach evidence documents to a bank account
     Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e01" named "ownership-certificate.pdf" in state "ready" created 100 seconds ago
     And I am logged in as an administrator
     When I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
-      """
-      {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e01", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e01", "kind": "ownership-certificate"}
+    """
     Then the response status code should be 201
     And the header "Cache-Control" should contain "no-store"
     And the JSON node "data.id" should be a valid UUID
@@ -43,9 +43,9 @@ Feature: Attach evidence documents to a bank account
     Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e02" named "invoice.pdf" in state "ready" kept for "tax-and-accounting" under "legal-obligation"
     And I am logged in as an administrator
     When I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
-      """
-      {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e02", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e02", "kind": "ownership-certificate"}
+    """
     Then the response status code should be 422
     And the header "Content-Type" should be equal to "application/problem+json"
     And the JSON node "type" should be equal to "bank-account-evidence-retention-mismatch"
@@ -59,9 +59,9 @@ Feature: Attach evidence documents to a bank account
     Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e03" named "gone.pdf" in state "<state>" created 100 seconds ago
     And I am logged in as an administrator
     When I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
-      """
-      {"documentId": "<documentId>", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "<documentId>", "kind": "ownership-certificate"}
+    """
     Then the response status code should be 422
     And the JSON node "type" should be equal to "bank-account-evidence-unavailable"
 
@@ -75,23 +75,23 @@ Feature: Attach evidence documents to a bank account
     Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e04" named "certificate.pdf" in state "ready" created 100 seconds ago
     And I am logged in as an administrator
     And I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
-      """
-      {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e04", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e04", "kind": "ownership-certificate"}
+    """
     And the response status code should be 201
     When I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
-      """
-      {"documentId": "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1E04", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "0190E9C2-7B5A-7D40-9C8F-2F9B5D3E1E04", "kind": "ownership-certificate"}
+    """
     Then the response status code should be 409
     And the JSON node "type" should be equal to "bank-account-evidence-already-attached"
 
   Scenario Outline: A malformed or incomplete attach is refused before any document is read
     Given I am logged in as an administrator
     When I send a "POST" request to "/backoffice/bank-accounts/<accountId>/evidence" with body:
-      """
-      <body>
-      """
+    """
+    <body>
+    """
     Then the response status code should be <status>
     And the JSON node "type" should be equal to "<type>"
 
@@ -106,9 +106,9 @@ Feature: Attach evidence documents to a bank account
     Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e06" named "secret-certificate.pdf" in state "ready" created 100 seconds ago
     And I am logged in as an editor
     When I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
-      """
-      {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e06", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e06", "kind": "ownership-certificate"}
+    """
     Then the response status code should be 403
     And I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence"
     And the response status code should be 403
@@ -119,9 +119,9 @@ Feature: Attach evidence documents to a bank account
     And a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e07" named "kept-certificate.pdf" in state "ready" created 100 seconds ago
     And I am logged in as an administrator
     And I send a "POST" request to "/backoffice/bank-accounts/acc1de00-0000-7000-8000-0000000000e1/evidence" with body:
-      """
-      {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e07", "kind": "ownership-certificate"}
-      """
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e07", "kind": "ownership-certificate"}
+    """
     And the response status code should be 201
     When I send a "DELETE" request to "/backoffice/bank-accounts/acc1de00-0000-7000-8000-0000000000e1"
     Then the response status code should be 409

@@ -50,7 +50,10 @@ final class InMemoryBankAccountEvidenceRepository implements BankAccountEvidence
     #[Override]
     public function isAttached(string $bankAccountId, string $documentId): bool
     {
-        return \array_any($this->findByBankAccountId($bankAccountId), static fn (BankAccountEvidence $link): bool => $link->documentId() === \strtolower($documentId));
+        return \array_any(
+            $this->findByBankAccountId($bankAccountId),
+            static fn (BankAccountEvidence $link): bool => $link->documentId() === \strtolower($documentId),
+        );
     }
 
     #[Override]

@@ -27,6 +27,7 @@ enum EvidenceKind: string
             self::OwnershipCertificate => 'legitimate-interests',
         };
     }
+
     /**
      * A bank's certificate that the account belongs to its holder. Kept to perform the contract the account serves,
      * under legitimate interests pending the adviser's retention matrix, with no review date.

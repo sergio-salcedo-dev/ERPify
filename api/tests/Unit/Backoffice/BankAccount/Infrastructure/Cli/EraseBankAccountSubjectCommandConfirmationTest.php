@@ -30,6 +30,8 @@ use Symfony\Component\Console\Tester\CommandTester;
  * lets the helper raise at all.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the command, its use case and the doubles of every collaborator
  */
 #[CoversClass(EraseBankAccountSubjectCommand::class)]
 final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase

@@ -427,6 +427,7 @@ deptrac:
             - Vendor.SymfonyUid
             - Vendor.PassiveMetadata
             - Vendor.Doctrine
+            - Vendor.PhpNativeSort
             - Vendor.Symfony
             - Vendor.SymfonyValidatorRuntime
             - Vendor.Monolog

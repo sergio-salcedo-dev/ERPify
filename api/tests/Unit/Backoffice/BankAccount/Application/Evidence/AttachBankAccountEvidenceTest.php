@@ -29,7 +29,12 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
+ * One test per refusal of the attach and per property of a successful one, against the real Documents seam.
+ *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per refusal and per property of the attach
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the use case, its four refusals and the seam it is tested against
  */
 #[CoversClass(AttachBankAccountEvidence::class)]
 #[CoversClass(AttachedEvidence::class)]
@@ -68,7 +73,8 @@ final class AttachBankAccountEvidenceTest extends TestCase
 
     public function testADocumentStillBeingScannedCanBeAttached(): void
     {
-        $attached = $this->attach((new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT, DocumentState::Received));
+        $documents = (new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT, DocumentState::Received);
+        $attached = $this->attach($documents);
 
         $this->assertSame('received', $attached->document?->state);
     }
@@ -103,7 +109,9 @@ final class AttachBankAccountEvidenceTest extends TestCase
     {
         yield 'unknown' => [new EvidenceDocumentsDouble()];
         yield 'erased' => [(new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT, DocumentState::Erased)];
-        yield 'quarantined' => [(new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT, DocumentState::Quarantined)];
+        yield 'quarantined' => [
+            (new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT, DocumentState::Quarantined),
+        ];
     }
 
     #[DataProvider('provideRefusesADocumentFiledUnderOtherRetentionTermsCases')]
@@ -113,13 +121,20 @@ final class AttachBankAccountEvidenceTest extends TestCase
         ?DateTimeImmutable $reviewAt,
     ): void {
         try {
-            $this->attach((new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT, DocumentState::Ready, $reason, $basis, $reviewAt));
+            $this->attach(
+                (new EvidenceDocumentsDouble())
+                    ->withDocument(self::DOCUMENT, DocumentState::Ready, $reason, $basis, $reviewAt),
+            );
             $this->fail('Expected EvidenceRetentionMismatch.');
         } catch (EvidenceRetentionMismatch $evidenceRetentionMismatch) {
             $this->assertSame('bank-account-evidence-retention-mismatch', $evidenceRetentionMismatch->type());
             // The expected terms, never the ones the document holds.
             $this->assertSame(
-                ['kind' => 'ownership-certificate', 'retentionReason' => 'contract-execution', 'legalBasis' => 'legitimate-interests'],
+                [
+                    'kind' => 'ownership-certificate',
+                    'retentionReason' => 'contract-execution',
+                    'legalBasis' => 'legitimate-interests',
+                ],
                 $evidenceRetentionMismatch->context(),
             );
         }
@@ -134,7 +149,11 @@ final class AttachBankAccountEvidenceTest extends TestCase
     {
         yield 'another reason' => ['tax-and-accounting', 'legitimate-interests', null];
         yield 'another basis' => ['contract-execution', 'contract', null];
-        yield 'a review date' => ['contract-execution', 'legitimate-interests', new DateTimeImmutable('2031-01-01T00:00:00+00:00')];
+        yield 'a review date' => [
+            'contract-execution',
+            'legitimate-interests',
+            new DateTimeImmutable('2031-01-01T00:00:00+00:00'),
+        ];
         yield 'no terms at all' => [null, null, null];
     }
 
@@ -152,15 +171,18 @@ final class AttachBankAccountEvidenceTest extends TestCase
     {
         $documents = (new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT);
 
+        $refused = false;
+
         try {
             $this->useCase(new InMemoryBankAccountRepository(), $documents)
-                ->attach(BankAccountMother::DEFAULT_ID, new AttachBankAccountEvidenceCommand(self::DOCUMENT, EvidenceKind::OwnershipCertificate))
+                ->attach(BankAccountMother::DEFAULT_ID, $this->command(self::DOCUMENT))
             ;
-            $this->fail('Expected BankAccountNotFoundException.');
         } catch (BankAccountNotFoundException) {
+            $refused = true;
         }
 
-        $this->assertSame(0, $documents->findManyCalls);
+        $this->assertTrue($refused, 'An unknown account answers 404.');
+        $this->assertSame(0, $documents->findManyCalls());
     }
 
     public function testAnswersGoneWhileTheErasureLedgerOverrideIsSet(): void
@@ -172,11 +194,15 @@ final class AttachBankAccountEvidenceTest extends TestCase
 
     public function testRefusesAMalformedDocumentIdBeforeOpeningATransaction(): void
     {
+        $refused = false;
+
         try {
             $this->attach((new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT), 'not-a-uuid');
-            $this->fail('Expected InvalidUuidException.');
         } catch (InvalidUuidException) {
+            $refused = true;
         }
+
+        $this->assertTrue($refused, 'A malformed id answers 400.');
 
         $this->assertSame(0, $this->transactions->opened);
     }
@@ -184,12 +210,19 @@ final class AttachBankAccountEvidenceTest extends TestCase
     private function attach(EvidenceDocumentsDouble $documents, string $documentId = self::DOCUMENT): AttachedEvidence
     {
         return $this->useCase(new InMemoryBankAccountRepository(BankAccountMother::drained()), $documents)
-            ->attach(BankAccountMother::DEFAULT_ID, new AttachBankAccountEvidenceCommand($documentId, EvidenceKind::OwnershipCertificate))
+            ->attach(BankAccountMother::DEFAULT_ID, $this->command($documentId))
         ;
     }
 
-    private function useCase(InMemoryBankAccountRepository $accounts, EvidenceDocumentsDouble $documents): AttachBankAccountEvidence
+    private function command(string $documentId): AttachBankAccountEvidenceCommand
     {
+        return new AttachBankAccountEvidenceCommand($documentId, EvidenceKind::OwnershipCertificate);
+    }
+
+    private function useCase(
+        InMemoryBankAccountRepository $accounts,
+        EvidenceDocumentsDouble $documents,
+    ): AttachBankAccountEvidence {
         return new AttachBankAccountEvidence($accounts, $this->evidence, $documents->seam(), $this->transactions);
     }
 }

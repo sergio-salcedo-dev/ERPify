@@ -22,6 +22,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the deletion, its three refusals and the evidence seam it consults
  */
 #[CoversClass(BankAccountDeleter::class)]
 #[CoversClass(BankAccountNotClosedException::class)]
@@ -84,8 +86,8 @@ final class BankAccountDeleterTest extends TestCase
         $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
         $repository = new InMemoryBankAccountRepository($account);
         $evidence = new InMemoryBankAccountEvidenceRepository(
-            BankAccountEvidence::attach(self::LINK_A, BankAccountMother::DEFAULT_ID, self::DOCUMENT_A, EvidenceKind::OwnershipCertificate),
-            BankAccountEvidence::attach(self::LINK_B, BankAccountMother::DEFAULT_ID, self::DOCUMENT_B, EvidenceKind::OwnershipCertificate),
+            $this->link(self::LINK_A, self::DOCUMENT_A),
+            $this->link(self::LINK_B, self::DOCUMENT_B),
         );
         $documents = (new EvidenceDocumentsDouble())
             ->withDocument(self::DOCUMENT_A, DocumentState::Erased)
@@ -113,7 +115,7 @@ final class BankAccountDeleterTest extends TestCase
     {
         $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
         $repository = new InMemoryBankAccountRepository($account);
-        $link = BankAccountEvidence::attach(self::LINK_A, BankAccountMother::DEFAULT_ID, self::DOCUMENT_A, EvidenceKind::OwnershipCertificate);
+        $link = $this->link(self::LINK_A, self::DOCUMENT_A);
         $evidence = new InMemoryBankAccountEvidenceRepository($link);
         $documents = (new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT_A, DocumentState::Erased);
         $transactions = new ImmediateTransactionManager();
@@ -130,9 +132,21 @@ final class BankAccountDeleterTest extends TestCase
     {
         $this->expectException(BankAccountNotFoundException::class);
 
-        $this->makeDeleter(new InMemoryBankAccountRepository(), new RecordingEventBus(), new ImmediateTransactionManager())
+        $transactions = new ImmediateTransactionManager();
+
+        $this->makeDeleter(new InMemoryBankAccountRepository(), new RecordingEventBus(), $transactions)
             ->delete(BankAccountMother::DEFAULT_ID)
         ;
+    }
+
+    private function link(string $id, string $documentId): BankAccountEvidence
+    {
+        return BankAccountEvidence::attach(
+            $id,
+            BankAccountMother::DEFAULT_ID,
+            $documentId,
+            EvidenceKind::OwnershipCertificate,
+        );
     }
 
     private function makeDeleter(

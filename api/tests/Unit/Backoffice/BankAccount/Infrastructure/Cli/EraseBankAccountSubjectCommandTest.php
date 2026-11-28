@@ -27,6 +27,8 @@ use Symfony\Component\Console\Tester\CommandTester;
  * {@see EraseBankAccountSubjectCommandConfirmationTest}.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the command, its use case and the doubles of every collaborator
  */
 #[CoversClass(EraseBankAccountSubjectCommand::class)]
 final class EraseBankAccountSubjectCommandTest extends TestCase

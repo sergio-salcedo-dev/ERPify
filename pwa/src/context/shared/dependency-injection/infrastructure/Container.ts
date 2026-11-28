@@ -33,6 +33,9 @@ import { CreateBankAccount } from "../../../backoffice/bankaccount/application/C
 import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
 import { ChangeBankAccountStatus } from "../../../backoffice/bankaccount/application/ChangeBankAccountStatus";
 import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/DeleteBankAccount";
+import { ApiBankAccountEvidenceRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountEvidenceRepository";
+import { ListBankAccountEvidence } from "../../../backoffice/bankaccount/application/ListBankAccountEvidence";
+import { AttachBankAccountEvidence } from "../../../backoffice/bankaccount/application/AttachBankAccountEvidence";
 import { ApiUserRepository } from "../../../backoffice/user/infrastructure/ApiUserRepository";
 import { ApiUserSearchNavigator } from "../../../backoffice/user/infrastructure/ApiUserSearchNavigator";
 import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiLoginRepository";
@@ -77,6 +80,11 @@ import {
   IMAGE_UPLOADER_KEY,
   type ImageUploader,
 } from "@/context/shared/images/domain/ImageUploader";
+import { ApiDocumentUploader } from "@/context/shared/documents/infrastructure/ApiDocumentUploader";
+import {
+  DOCUMENT_UPLOADER_KEY,
+  type DocumentUploader,
+} from "@/context/shared/documents/domain/DocumentUploader";
 import type { DebugTokenObserver } from "@/context/shared/debug-token/domain/DebugTokenObserver";
 import { EventTargetDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/EventTargetDebugTokenObserver";
 import { NoopDebugTokenObserver } from "@/context/shared/debug-token/infrastructure/NoopDebugTokenObserver";
@@ -200,6 +208,18 @@ container
   .bind<ChangeBankAccountStatus>("BackOfficeChangeBankAccountStatus")
   .to(ChangeBankAccountStatus);
 container.bind<DeleteBankAccount>("BackOfficeDeleteBankAccount").to(DeleteBankAccount);
+// The account's evidence: a stateless adapter over the injected HttpClient, and the two use cases —
+// the attach also takes the shared DocumentUploader, since the original is filed through Documents.
+container
+  .bind<ApiBankAccountEvidenceRepository>("BackOfficeBankAccountEvidenceRepository")
+  .to(ApiBankAccountEvidenceRepository)
+  .inSingletonScope();
+container
+  .bind<ListBankAccountEvidence>("BackOfficeListBankAccountEvidence")
+  .to(ListBankAccountEvidence);
+container
+  .bind<AttachBankAccountEvidence>("BackOfficeAttachBankAccountEvidence")
+  .to(AttachBankAccountEvidence);
 
 // Audit investigation read context (epic 4): read-only ports over the 4.1 timeline read model —
 // no write use case is bound, so a consumer can inject only the read capability (Backoffice
@@ -332,5 +352,6 @@ container
 // Writing and removing the single image a consumer holds. The consumer passes its own write URL;
 // the adapter owns only the raw-body transport shape.
 container.bind<ImageUploader>(IMAGE_UPLOADER_KEY).to(ApiImageUploader).inSingletonScope();
+container.bind<DocumentUploader>(DOCUMENT_UPLOADER_KEY).to(ApiDocumentUploader).inSingletonScope();
 
 export { container };

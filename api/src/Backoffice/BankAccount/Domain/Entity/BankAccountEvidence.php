@@ -29,7 +29,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'bank_account_evidence')]
-#[ORM\UniqueConstraint(name: 'uniq_bank_account_evidence_account_document', columns: ['bank_account_id', 'document_id'])]
+#[ORM\UniqueConstraint(
+    name: 'uniq_bank_account_evidence_account_document',
+    columns: ['bank_account_id', 'document_id'],
+)]
 #[ORM\Index(name: 'idx_bank_account_evidence_document_id', columns: ['document_id'])]
 final class BankAccountEvidence implements AuditedEntity
 {
@@ -46,9 +49,13 @@ final class BankAccountEvidence implements AuditedEntity
     #[ORM\Column(name: 'attached_at', type: Types::DATETIMETZ_IMMUTABLE)]
     private DateTimeImmutable $attachedAt;
 
-    private function __construct(string $id, string $bankAccountId, string $documentId, #[ORM\Column(type: Types::TEXT, enumType: EvidenceKind::class)]
-        private EvidenceKind $kind)
-    {
+    private function __construct(
+        string $id,
+        string $bankAccountId,
+        string $documentId,
+        #[ORM\Column(type: Types::TEXT, enumType: EvidenceKind::class)]
+        private EvidenceKind $kind,
+    ) {
         Uuid::ensure($id);
         Uuid::ensure($bankAccountId);
         Uuid::ensure($documentId);
