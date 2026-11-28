@@ -100,7 +100,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
 
     private function tester(EraseBankAccountSubject $eraser): CommandTester
     {
-        return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
+        return new CommandTester(new EraseBankAccountSubjectCommand($eraser, InertEvidenceRelease::create()));
     }
 
     private function inertEraser(): EraseBankAccountSubject

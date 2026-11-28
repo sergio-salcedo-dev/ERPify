@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Application;
 
 use Erpify\Backoffice\BankAccount\Application\BankAccountDeleter;
-use Erpify\Backoffice\BankAccount\Application\BankAccountFinder;
 use Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountEvidenceKind;
@@ -64,6 +63,8 @@ final class BankAccountDeleterTest extends TestCase
         // one boundary too, so a count leaves the dual-write window free to reopen; this is the
         // observable that goes red when the publication moves outside the transaction.
         $this->assertSame([true], $eventBus->publishedInsideUnitOfWork);
+        $this->assertSame(0, $repository->plainReads, 'nothing is decided on a row read without the lock');
+        $this->assertSame(1, $repository->lockedReads);
     }
 
     public function testThrowsNotClosedAndMutatesNothingWhenTheAccountIsNotClosed(): void
@@ -86,8 +87,9 @@ final class BankAccountDeleterTest extends TestCase
 
         $this->assertFalse($repository->removeCalled);
         $this->assertSame([], $eventBus->publishedEvents);
-        // As above: the refusal happens before any transaction is opened.
-        $this->assertSame(0, $transactions->opened);
+        // The precondition is judged under the lock, on the locked instance, and the refusal rolls that unit back.
+        $this->assertSame(1, $transactions->abandoned);
+        $this->assertSame(0, $transactions->committed);
     }
 
     public function testRemovesTheLinksOfEvidenceWhoseDocumentsAreAllErasedWithTheAccount(): void
@@ -144,7 +146,6 @@ final class BankAccountDeleterTest extends TestCase
     ): BankAccountDeleter {
         return new BankAccountDeleter(
             $repository,
-            new BankAccountFinder($repository),
             $eventBus,
             $transactions,
             new ReleaseBankAccountEvidence($this->evidence, $this->documents),

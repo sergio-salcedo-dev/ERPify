@@ -9,13 +9,18 @@ use Erpify\Backoffice\BankAccount\Application\Command\AttachBankAccountEvidenceC
 use Erpify\Backoffice\BankAccount\Application\Evidence\AttachBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Application\Evidence\DescribeEvidence;
 use Erpify\Backoffice\BankAccount\Application\Evidence\ListedEvidence;
+use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountEvidenceKind;
+use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountStatus;
+use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceAccountClosed;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceAlreadyAttached;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceDocumentErased;
+use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceDocumentNotAdmissible;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceDocumentNotFound;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceRetentionMismatch;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotFoundException;
 use Erpify\Documents\Document\Domain\Exception\DocumentGone;
+use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Application\InMemoryBankAccountRepository;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
@@ -140,6 +145,52 @@ final class AttachBankAccountEvidenceTest extends TestCase
             ['contract-execution', 'legitimate-interests', new DateTimeImmutable('2031-01-01T00:00:00+00:00')],
         ];
         yield 'no terms at all' => [[null, null, null]];
+    }
+
+    #[Test]
+    public function aClosedAccountTakesNoNewEvidence(): void
+    {
+        $this->documents->file(self::DOCUMENT_ID);
+        $attach = $this->attachOver(new InMemoryBankAccountRepository(
+            BankAccountMother::create(status: BankAccountStatus::CLOSED),
+        ));
+
+        $this->assertRefusedWith(
+            BankAccountEvidenceAccountClosed::class,
+            fn (): ListedEvidence => $attach->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+        );
+    }
+
+    #[Test]
+    public function aQuarantinedDocumentIsNotAdmissibleWhileAFailedScanStaysAttachable(): void
+    {
+        $this->documents->file(self::DOCUMENT_ID, 'quarantined');
+
+        $this->assertRefusedWith(
+            BankAccountEvidenceDocumentNotAdmissible::class,
+            fn (): ListedEvidence => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+        );
+
+        $this->documents->file(self::DOCUMENT_ID, 'scan_failed');
+        $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command());
+
+        $this->assertCount(1, $this->evidence->links);
+    }
+
+    #[Test]
+    public function aDocumentAnotherAccountHoldsIsAConflict(): void
+    {
+        $this->documents->file(self::DOCUMENT_ID);
+        $this->evidence->add(BankAccountEvidence::attach(
+            Uuid::generate(),
+            '33333333-3333-7000-8000-000000000099',
+            self::DOCUMENT_ID,
+            BankAccountEvidenceKind::OwnershipCertificate,
+        ));
+
+        $this->expectException(BankAccountEvidenceAlreadyAttached::class);
+
+        $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command());
     }
 
     #[Test]

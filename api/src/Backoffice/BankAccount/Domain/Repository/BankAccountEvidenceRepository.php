@@ -16,12 +16,16 @@ interface BankAccountEvidenceRepository
     /**
      * Persists and flushes the link.
      *
-     * @throws BankAccountEvidenceAlreadyAttached when the account already holds that document, including a concurrent
+     * @throws BankAccountEvidenceAlreadyAttached when an account already holds that document, including a concurrent
      *                                            attach that committed first (the unique constraint, by name)
      */
     public function add(BankAccountEvidence $evidence): void;
 
-    public function holds(string $bankAccountId, string $documentId): bool;
+    /** Whether any account already holds the document as evidence: a document is evidence of one account. */
+    public function isAttached(string $documentId): bool;
+
+    /** The link with that id on that account, or null when the account holds no such link. */
+    public function findOnAccount(string $bankAccountId, string $linkId): ?BankAccountEvidence;
 
     /**
      * Every link of one account, most recently attached first. An account holds a handful of certificates, so the
@@ -32,8 +36,8 @@ interface BankAccountEvidenceRepository
     public function ofBankAccount(string $bankAccountId): array;
 
     /**
-     * Removes and flushes the given links, one entity at a time. Must run inside the transaction that removes their
-     * account, after that account's row is locked.
+     * Removes and flushes the given links, one entity at a time. Must run inside a transaction, after the account's
+     * row is locked.
      *
      * @param list<BankAccountEvidence> $links
      */

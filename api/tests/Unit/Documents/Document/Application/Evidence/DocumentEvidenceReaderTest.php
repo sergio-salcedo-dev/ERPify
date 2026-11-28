@@ -143,8 +143,9 @@ final class DocumentEvidenceReaderTest extends TestCase
     public function everyEvidenceKindNamesTermsTheDocumentsVocabularyHolds(): void
     {
         foreach (BankAccountEvidenceKind::cases() as $kind) {
-            $this->assertInstanceOf(RetentionReason::class, RetentionReason::tryFrom($kind->retentionReason()));
-            $this->assertInstanceOf(LegalBasis::class, LegalBasis::tryFrom($kind->legalBasis()));
+            // `from()` throws on a value the vocabulary does not hold, which is the assertion.
+            $this->assertSame($kind->retentionReason(), RetentionReason::from($kind->retentionReason())->value);
+            $this->assertSame($kind->legalBasis(), LegalBasis::from($kind->legalBasis())->value);
         }
     }
 

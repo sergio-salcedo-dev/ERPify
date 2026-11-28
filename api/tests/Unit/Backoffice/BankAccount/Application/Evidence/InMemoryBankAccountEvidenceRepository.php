@@ -10,8 +10,8 @@ use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountEvidenceRepositor
 use Override;
 
 /**
- * In-memory {@see BankAccountEvidenceRepository} that refuses a duplicate pair as the unique constraint does and
- * records what was removed.
+ * In-memory {@see BankAccountEvidenceRepository} that refuses a document some account already holds, as the unique
+ * constraint does, and records what was removed.
  *
  * @internal
  */
@@ -26,20 +26,29 @@ final class InMemoryBankAccountEvidenceRepository implements BankAccountEvidence
     #[Override]
     public function add(BankAccountEvidence $evidence): void
     {
-        if ($this->holds($evidence->bankAccountId(), $evidence->documentId())) {
-            throw BankAccountEvidenceAlreadyAttached::of($evidence->bankAccountId(), $evidence->documentId());
+        if ($this->isAttached($evidence->documentId())) {
+            throw BankAccountEvidenceAlreadyAttached::of($evidence->documentId());
         }
 
         $this->links[] = $evidence;
     }
 
     #[Override]
-    public function holds(string $bankAccountId, string $documentId): bool
+    public function isAttached(string $documentId): bool
     {
         return \array_any(
             $this->links,
-            static fn (BankAccountEvidence $link): bool => $link->bankAccountId() === $bankAccountId
-                && $link->documentId() === $documentId,
+            static fn (BankAccountEvidence $link): bool => $link->documentId() === $documentId,
+        );
+    }
+
+    #[Override]
+    public function findOnAccount(string $bankAccountId, string $linkId): ?BankAccountEvidence
+    {
+        return \array_find(
+            $this->links,
+            static fn (BankAccountEvidence $link): bool => $link->id() === $linkId
+                && $link->bankAccountId() === $bankAccountId,
         );
     }
 

@@ -28,6 +28,12 @@ final readonly class EvidenceFiling
         return DocumentState::Erased->value === $this->state;
     }
 
+    /** `Quarantined`: the scan found the original infected, so it is never served. */
+    public function isQuarantined(): bool
+    {
+        return DocumentState::Quarantined->value === $this->state;
+    }
+
     /**
      * Whether the document was filed under exactly these terms. The consumer fixes the terms per kind of evidence while
      * the caller's declare chose them, so this comparison is what keeps an original filed under other terms from being

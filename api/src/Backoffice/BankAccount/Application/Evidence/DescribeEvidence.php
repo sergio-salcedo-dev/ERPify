@@ -26,10 +26,8 @@ final readonly class DescribeEvidence
      */
     public function of(array $links): array
     {
-        if ([] === $links) {
-            return [];
-        }
-
+        // Asked even for no link, so the erasure ledger's override answers the same 410 whether or not the account
+        // holds anything; an empty set costs no query.
         $documents = $this->documents->describe(
             \array_map(static fn (BankAccountEvidence $link): string => $link->documentId(), $links),
         );

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Erpify\Tests\Functional\Backoffice\BankAccount;
 
 use Erpify\Backoffice\BankAccount\Application\Evidence\AttachBankAccountEvidence;
+use Erpify\Backoffice\BankAccount\Application\Evidence\DetachBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Application\Evidence\ListBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Infrastructure\Controller\BankAccountEvidenceAttachController;
+use Erpify\Backoffice\BankAccount\Infrastructure\Controller\BankAccountEvidenceDetachController;
 use Erpify\Backoffice\BankAccount\Infrastructure\Controller\BankAccountEvidenceListController;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountEvidenceRepository;
 use Erpify\Documents\Document\Application\Evidence\DocumentEvidenceReader;
@@ -38,9 +40,13 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the two routes, the account's removal and their audit
  * @SuppressWarnings("PHPMD.TooManyPublicMethods") each public method is one independent answer of the routes
+ * @SuppressWarnings("PHPMD.ExcessiveClassLength") one scenario per answer, each with its own rows
+ * @SuppressWarnings("PHPMD.TooManyMethods") the scenarios and the request helpers they share
  */
 #[CoversClass(BankAccountEvidenceAttachController::class)]
 #[CoversClass(BankAccountEvidenceListController::class)]
+#[CoversClass(BankAccountEvidenceDetachController::class)]
+#[CoversClass(DetachBankAccountEvidence::class)]
 #[CoversClass(AttachBankAccountEvidence::class)]
 #[CoversClass(ListBankAccountEvidence::class)]
 #[CoversClass(ReleaseBankAccountEvidence::class)]
@@ -56,6 +62,12 @@ final class BankAccountEvidenceRouteFunctionalTest extends WebTestCase
     private const string ACCOUNT_ID = '0197f2b4-5555-7000-8000-000000000002';
 
     private const string IBAN = 'GB82WEST12345698765432';
+
+    private const string OTHER_ACCOUNT_ID = '0197f2b4-5555-7000-8000-000000000003';
+
+    private const string OTHER_IBAN = 'GB33BUKB20201555555555';
+
+    private const string OVERRIDE_ID = '0197f2b4-5555-7000-8000-000000000009';
 
     private KernelBrowser $client;
 
@@ -120,13 +132,19 @@ final class BankAccountEvidenceRouteFunctionalTest extends WebTestCase
 
         $this->assertStatus(Response::HTTP_CREATED);
         $rows = $this->connection()->fetchAllAssociative(
-            'SELECT resource_type, resource_id::text AS resource_id, metadata::text AS metadata FROM audit_log '
-            . "WHERE action = 'BANK_ACCOUNT_EVIDENCE_CREATED'",
+            'SELECT resource_type, resource_id::text AS resource_id, metadata::text AS metadata, '
+            . "encryption_scope_id FROM audit_log WHERE action = 'BANK_ACCOUNT_EVIDENCE_CREATED'",
         );
         $this->assertCount(1, $rows);
         $this->assertSame('BankAccountEvidence', Dig::value($rows, 0, 'resource_type'));
         $this->assertSame(Dig::value($this->data(), 'id'), Dig::value($rows, 0, 'resource_id'));
-        $this->assertStringContainsString($document['id'], Dig::string($rows, 0, 'metadata'));
+        $this->assertSame(
+            'BankAccount:' . self::ACCOUNT_ID,
+            Dig::value($rows, 0, 'encryption_scope_id'),
+            "the document id is sealed under the account's scope, which its subject erasure destroys",
+        );
+        $this->assertStringNotContainsString($document['id'], Dig::string($rows, 0, 'metadata'));
+        $this->assertStringContainsString(self::ACCOUNT_ID, Dig::string($rows, 0, 'metadata'));
         $this->assertStringNotContainsString('audited.pdf', Dig::string($rows, 0, 'metadata'));
     }
 
@@ -221,6 +239,89 @@ final class BankAccountEvidenceRouteFunctionalTest extends WebTestCase
 
         $this->client->request(Request::METHOD_GET, '/api/v1/backoffice/bank-accounts/' . $unknown . '/evidence');
         $this->assertStatus(Response::HTTP_NOT_FOUND);
+
+        $this->client->request(Request::METHOD_GET, '/api/v1/backoffice/bank-accounts/not-a-uuid/evidence');
+        $this->assertStatus(Response::HTTP_BAD_REQUEST);
+        $this->assertSame('invalid-uuid', $this->problemType());
+    }
+
+    #[Test]
+    public function aQuarantinedDocumentAndAClosedAccountAreRefusedWhileAFailedScanIsAttached(): void
+    {
+        $this->authenticateAdminClient($this->client);
+        $quarantined = $this->plantNamedDocument('infected.pdf', DocumentState::Quarantined);
+        $failed = $this->plantNamedDocument('unscannable.pdf', DocumentState::ScanFailed);
+
+        $this->attach($quarantined['id']);
+        $this->assertStatus(Response::HTTP_CONFLICT);
+        $this->assertSame('bank-account-evidence-document-not-admissible', $this->problemType());
+
+        $this->attach($failed['id']);
+        $this->assertStatus(Response::HTTP_CREATED);
+
+        $this->connection()->executeStatement(
+            "UPDATE bank_account SET status = 'CLOSED' WHERE id = CAST(:id AS UUID)",
+            ['id' => self::ACCOUNT_ID],
+        );
+        $other = $this->plantNamedDocument('late.pdf');
+        $this->attach($other['id']);
+        $this->assertStatus(Response::HTTP_CONFLICT);
+        $this->assertSame('bank-account-evidence-account-closed', $this->problemType());
+        $this->assertSame(1, $this->links());
+    }
+
+    #[Test]
+    public function aDocumentIsEvidenceOfOneAccountAndADetachFreesIt(): void
+    {
+        $this->authenticateAdminClient($this->client);
+        $document = $this->plantNamedDocument('certificate.pdf');
+        $otherAccount = $this->plantOtherAccount();
+
+        $this->attach($document['id']);
+        $this->assertStatus(Response::HTTP_CREATED);
+        $linkId = Dig::string($this->data(), 'id');
+
+        $this->post($otherAccount, ['documentId' => $document['id'], 'kind' => 'ownership-certificate']);
+        $this->assertStatus(Response::HTTP_CONFLICT);
+        $this->assertSame('bank-account-evidence-already-attached', $this->problemType());
+        $this->assertStringNotContainsString(self::ACCOUNT_ID, $this->body(), 'the holding account is not named');
+
+        $this->detach($otherAccount, $linkId);
+        $this->assertStatus(Response::HTTP_NOT_FOUND);
+        $this->assertSame('bank-account-evidence-not-found', $this->problemType());
+
+        $this->detach(self::ACCOUNT_ID, 'not-a-uuid');
+        $this->assertStatus(Response::HTTP_BAD_REQUEST);
+
+        $this->detach(self::ACCOUNT_ID, $linkId);
+        $this->assertStatus(Response::HTTP_NO_CONTENT);
+        $this->assertSame(0, $this->links());
+        $this->assertSame(1, $this->intOf($this->connection()->fetchOne(
+            "SELECT COUNT(*) FROM audit_log WHERE action = 'BANK_ACCOUNT_EVIDENCE_DELETED' AND resource_id = :id",
+            ['id' => $linkId],
+        )));
+
+        $this->post($otherAccount, ['documentId' => $document['id'], 'kind' => 'ownership-certificate']);
+        $this->assertStatus(Response::HTTP_CREATED);
+    }
+
+    #[Test]
+    public function theLedgerOverrideAnswersGoneOnTheListingWithNoLinkAndOnTheAttach(): void
+    {
+        $this->authenticateAdminClient($this->client);
+        $document = $this->plantNamedDocument('during-restore.pdf');
+        $this->connection()->executeStatement(
+            'INSERT INTO erasure_ledger_override (id, reason, record_ref, set_at) VALUES (:id, :reason, :ref, NOW())',
+            ['id' => self::OVERRIDE_ID, 'reason' => 'ledger_lost', 'ref' => Uuid::generate()],
+        );
+
+        $this->list();
+        $this->assertStatus(Response::HTTP_GONE);
+        $this->assertSame('gone', $this->problemType());
+
+        $this->attach($document['id']);
+        $this->assertStatus(Response::HTTP_GONE);
+        $this->assertSame(0, $this->links(), 'the override refuses before the link is written');
     }
 
     #[Test]
@@ -316,12 +417,33 @@ final class BankAccountEvidenceRouteFunctionalTest extends WebTestCase
         );
     }
 
+    private function plantOtherAccount(): string
+    {
+        $this->connection()->executeStatement(
+            'INSERT INTO bank_account (id, bank_id, holder_name, iban, currency, status, created_at, updated_at) '
+            . "VALUES (:id, :bank, 'Other Holder', :iban, 'EUR', 'ACTIVE', NOW(), NOW())",
+            ['id' => self::OTHER_ACCOUNT_ID, 'bank' => self::BANK_ID, 'iban' => self::OTHER_IBAN],
+        );
+
+        return self::OTHER_ACCOUNT_ID;
+    }
+
     private function removeTheAccount(): void
     {
         $this->connection()->executeStatement('DELETE FROM bank_account_evidence');
         $this->connection()->executeStatement(
-            'DELETE FROM bank_account WHERE id = CAST(:id AS UUID) OR iban = :iban',
-            ['id' => self::ACCOUNT_ID, 'iban' => self::IBAN],
+            'DELETE FROM erasure_ledger_override WHERE id = CAST(:id AS UUID)',
+            ['id' => self::OVERRIDE_ID],
+        );
+        $this->connection()->executeStatement(
+            'DELETE FROM bank_account WHERE id IN (CAST(:id AS UUID), CAST(:other AS UUID)) '
+            . 'OR iban IN (:iban, :otherIban)',
+            [
+                'id' => self::ACCOUNT_ID,
+                'other' => self::OTHER_ACCOUNT_ID,
+                'iban' => self::IBAN,
+                'otherIban' => self::OTHER_IBAN,
+            ],
         );
         $this->connection()->executeStatement(
             'DELETE FROM bank WHERE id = CAST(:id AS UUID)',
@@ -347,6 +469,14 @@ final class BankAccountEvidenceRouteFunctionalTest extends WebTestCase
             '/api/v1/backoffice/bank-accounts/' . $accountId . '/evidence',
             server: ['CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json'],
             content: \json_encode($body, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    private function detach(string $accountId, string $linkId): void
+    {
+        $this->client->request(
+            Request::METHOD_DELETE,
+            '/api/v1/backoffice/bank-accounts/' . $accountId . '/evidence/' . $linkId,
         );
     }
 

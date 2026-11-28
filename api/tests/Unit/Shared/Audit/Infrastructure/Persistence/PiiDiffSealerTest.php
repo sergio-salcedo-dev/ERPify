@@ -46,6 +46,19 @@ final class PiiDiffSealerTest extends TestCase
     }
 
     #[Test]
+    public function aDependentRowIsSealedUnderItsOwnersScopeSoTheOwnersErasureShredsIt(): void
+    {
+        $ownerId = Uuid::generate();
+
+        $sealed = $this->sealer()->seal(new OwnerSealedAuditedFake(Uuid::generate(), $ownerId), ['changes' => [
+            'secret' => ['old' => null, 'new' => 'owned value'],
+        ]], Uuid::generate());
+
+        $this->assertSame('BankAccount:' . $ownerId, $sealed->encryptionScopeId);
+        $this->assertStringNotContainsString('owned value', \json_encode($sealed->metadata, JSON_THROW_ON_ERROR));
+    }
+
+    #[Test]
     public function itSealsThePersonalFieldAndLeavesThePersonReferenceInClear(): void
     {
         // The two Privacy attributes answer different questions, and the sealer must read only one of them.

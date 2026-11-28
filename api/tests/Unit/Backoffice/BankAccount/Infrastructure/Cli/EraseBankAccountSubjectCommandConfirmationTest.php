@@ -134,7 +134,7 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
     #[Test]
     public function aConfirmationOnAnAlreadyDrainedStreamRefusesInsteadOfReportingSuccess(): void
     {
-        $command = new EraseBankAccountSubjectCommand($this->refusingEraser());
+        $command = new EraseBankAccountSubjectCommand($this->refusingEraser(), InertEvidenceRelease::create());
 
         $input = new ArrayInput(['bank-account-id' => self::ACCOUNT_ID], $command->getDefinition());
         $input->setInteractive(true);
@@ -150,7 +150,7 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
 
     private function tester(EraseBankAccountSubject $eraser): CommandTester
     {
-        return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
+        return new CommandTester(new EraseBankAccountSubjectCommand($eraser, InertEvidenceRelease::create()));
     }
 
     /**

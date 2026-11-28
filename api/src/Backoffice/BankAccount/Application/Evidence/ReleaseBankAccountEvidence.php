@@ -39,18 +39,43 @@ final readonly class ReleaseBankAccountEvidence
             return;
         }
 
-        $filings = $this->documents->filingsOf(
-            \array_map(static fn (BankAccountEvidence $link): string => $link->documentId(), $links),
-        );
-
-        foreach ($links as $link) {
-            $filing = $filings[$link->documentId()] ?? null;
-
-            if (null === $filing || !$filing->isErased()) {
-                throw BankAccountHasLiveEvidence::withId($bankAccountId);
-            }
+        if ([] !== $this->liveAmong($links)) {
+            throw BankAccountHasLiveEvidence::withId($bankAccountId);
         }
 
         $this->evidence->removeAll($links);
+    }
+
+    /**
+     * The ids of the documents linked to the account that are not erased — what would refuse its removal today. Reads
+     * only; an operator's dry run lists them before anything is attempted.
+     *
+     * @return list<string>
+     */
+    public function liveDocumentsOf(string $bankAccountId): array
+    {
+        return $this->liveAmong($this->evidence->ofBankAccount(\strtolower($bankAccountId)));
+    }
+
+    /**
+     * A document the seam no longer returns counts as live: refusing in doubt is the direction that loses nothing.
+     *
+     * @param list<BankAccountEvidence> $links
+     *
+     * @return list<string>
+     */
+    private function liveAmong(array $links): array
+    {
+        if ([] === $links) {
+            return [];
+        }
+
+        $documentIds = \array_map(static fn (BankAccountEvidence $link): string => $link->documentId(), $links);
+        $filings = $this->documents->filingsOf($documentIds);
+
+        return \array_values(\array_filter(
+            $documentIds,
+            static fn (string $documentId): bool => true !== ($filings[$documentId] ?? null)?->isErased(),
+        ));
     }
 }

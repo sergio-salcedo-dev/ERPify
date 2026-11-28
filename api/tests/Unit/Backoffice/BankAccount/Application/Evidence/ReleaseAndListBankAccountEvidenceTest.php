@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountEvidenceKind;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountHasLiveEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotFoundException;
+use Erpify\Documents\Document\Domain\Exception\DocumentGone;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Application\InMemoryBankAccountRepository;
 use Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity\Mother\BankAccountMother;
@@ -121,10 +122,15 @@ final class ReleaseAndListBankAccountEvidenceTest extends TestCase
     }
 
     #[Test]
-    public function anEmptyListingAsksDocumentsNothing(): void
+    public function anEmptyListingStillAsksTheSeamSoTheLedgerOverrideAnswersTheSame(): void
     {
         $this->assertSame([], $this->listing()->list(BankAccountMother::DEFAULT_ID));
-        $this->assertSame(0, $this->documents->describeCalls);
+        $this->assertSame(1, $this->documents->describeCalls);
+
+        $this->documents->gone = true;
+        $this->expectException(DocumentGone::class);
+
+        $this->listing()->list(BankAccountMother::DEFAULT_ID);
     }
 
     private function link(string $accountId, string $documentId): BankAccountEvidence

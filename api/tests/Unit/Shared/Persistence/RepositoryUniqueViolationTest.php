@@ -8,6 +8,10 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Infrastructure\Persistence\Doctrine\DoctrineBankRepository;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
+use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountEvidenceKind;
+use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceAlreadyAttached;
+use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountEvidenceRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountRepository;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DoctrineUserRepository;
 use Erpify\Shared\Images\Domain\Entity\Image;
@@ -55,6 +59,7 @@ use Throwable;
  * @SuppressWarnings("PHPMD.CouplingBetweenObjects")
  */
 #[CoversClass(DoctrineBankAccountRepository::class)]
+#[CoversClass(DoctrineBankAccountEvidenceRepository::class)]
 #[CoversClass(DoctrineBankRepository::class)]
 #[CoversClass(DoctrineUserRepository::class)]
 #[CoversClass(DoctrineImageRepository::class)]
@@ -114,6 +119,8 @@ final class RepositoryUniqueViolationTest extends TestCase
         yield 'bank' => ['bank', 'short_name', 'BNK'];
         yield 'identity user' => ['identity-user', 'email', UserMother::DEFAULT_EMAIL];
         yield 'image' => ['image', 'id', self::IMAGE_ID];
+        // Another constraint than the document one: the evidence port owns only that one.
+        yield 'bank account evidence' => ['bank-account-evidence', 'id', self::IMAGE_ID];
     }
 
     private function save(string $resource, EntityManagerInterface $entityManager): void
@@ -136,12 +143,72 @@ final class RepositoryUniqueViolationTest extends TestCase
             return;
         }
 
+        if ('bank-account-evidence' === $resource) {
+            (new DoctrineBankAccountEvidenceRepository($entityManager))->add($this->evidence());
+
+            return;
+        }
+
         (new DoctrineBankRepository(
             $entityManager,
             $this->unconstructed(DoctrineSearchEngine::class),
             $this->unconstructed(NormalizedTextFieldNormalizer::class),
             $this->unconstructed(AsciiUpperTextFieldNormalizer::class),
         ))->save(BankMother::create());
+    }
+
+    #[Test]
+    public function aLostRaceOnTheEvidenceDocumentConstraintIsAnAttachConflictNamingNoValue(): void
+    {
+        $violation = $this->driverViolation('document_id', self::IMAGE_ID);
+        (new ReflectionProperty(Exception::class, 'message'))->setValue(
+            $violation,
+            \str_replace('uniq_53a23e0afad56e62', BankAccountEvidence::DOCUMENT_CONSTRAINT, $violation->getMessage()),
+        );
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManager->method('flush')->willThrowException($violation);
+
+        $thrown = null;
+
+        try {
+            (new DoctrineBankAccountEvidenceRepository($entityManager))->add($this->evidence());
+        } catch (Throwable $throwable) {
+            $thrown = $throwable;
+        }
+
+        $this->assertInstanceOf(BankAccountEvidenceAlreadyAttached::class, $thrown);
+        $this->assertNotInstanceOf(Throwable::class, $thrown->getPrevious());
+        $this->assertSame(['documentId' => self::IMAGE_ID], $thrown->context());
+    }
+
+    #[Test]
+    public function aLongerConstraintNameIsNotTheEvidenceDocumentOne(): void
+    {
+        $violation = $this->driverViolation('document_id', self::IMAGE_ID);
+        (new ReflectionProperty(Exception::class, 'message'))->setValue(
+            $violation,
+            \str_replace(
+                'uniq_53a23e0afad56e62',
+                BankAccountEvidence::DOCUMENT_CONSTRAINT . '_kind',
+                $violation->getMessage(),
+            ),
+        );
+        $entityManager = $this->createStub(EntityManagerInterface::class);
+        $entityManager->method('flush')->willThrowException($violation);
+
+        $this->expectException(ConcurrentUniqueWrite::class);
+
+        (new DoctrineBankAccountEvidenceRepository($entityManager))->add($this->evidence());
+    }
+
+    private function evidence(): BankAccountEvidence
+    {
+        return BankAccountEvidence::attach(
+            self::IMAGE_ID,
+            BankAccountMother::DEFAULT_ID,
+            self::IMAGE_ID,
+            BankAccountEvidenceKind::OwnershipCertificate,
+        );
     }
 
     private function account(): BankAccount

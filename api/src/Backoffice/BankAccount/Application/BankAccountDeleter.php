@@ -13,12 +13,12 @@ use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
+use Erpify\Shared\Uuid\Domain\Uuid;
 
 final readonly class BankAccountDeleter
 {
     public function __construct(
         private BankAccountRepository $bankAccountRepository,
-        private BankAccountFinder $bankAccountFinder,
         private EventBus $eventBus,
         private TransactionManager $transactionManager,
         private ReleaseBankAccountEvidence $releaseEvidence,
@@ -26,13 +26,13 @@ final readonly class BankAccountDeleter
     }
 
     /**
-     * The deletion precondition (account must be CLOSED) is a state invariant owned by the aggregate:
-     * {@see BankAccount::delete()} throws before any event is recorded, so a rejected delete mutates nothing,
-     * dispatches nothing and opens no transaction.
+     * Everything happens under the account's row lock — the lock an attach and a detach take — and on the instance that
+     * lock loaded: the deletion precondition (`CLOSED`) is a state invariant owned by the aggregate
+     * ({@see BankAccount::delete()} throws before any event is recorded), so it is judged against the row as it stands
+     * once nobody else can change it. A refused delete mutates nothing and dispatches nothing.
      *
-     * The account's evidence links reference it through a foreign key, so they go in the same transaction, after the
-     * account's row is locked — the lock an attach takes — and only when every linked document is erased; otherwise
-     * the whole delete is refused and nothing changes.
+     * The account's evidence links reference it through a foreign key, so they go in the same transaction, and only
+     * when every linked document is erased; otherwise the whole delete is refused and nothing changes.
      *
      * @throws InvalidUuidException          when $id is not a well-formed UUID (400 invalid-input)
      * @throws BankAccountNotFoundException
@@ -41,19 +41,18 @@ final readonly class BankAccountDeleter
      */
     public function delete(string $id): void
     {
-        $account = $this->bankAccountFinder->find($id);
-
-        $account->delete();
-
-        // Pull events before removal so the aggregate is still intact when captured.
-        $domainEvents = $account->pullDomainEvents();
+        Uuid::ensure($id);
 
         // remove + publish in one transaction (closes the dual-write window).
         // See docs/adr/event-store-and-projections.md.
-        $this->transactionManager->transactional(function () use ($id, $account, $domainEvents): void {
-            if (!$this->bankAccountRepository->findByIdForUpdate($id) instanceof BankAccount) {
-                throw BankAccountNotFoundException::withId($id);
-            }
+        $this->transactionManager->transactional(function () use ($id): void {
+            $account = $this->bankAccountRepository->findByIdForUpdate($id)
+                ?? throw BankAccountNotFoundException::withId($id);
+
+            $account->delete();
+
+            // Pull events before removal so the aggregate is still intact when captured.
+            $domainEvents = $account->pullDomainEvents();
 
             $this->releaseEvidence->releaseAll($id);
             $this->bankAccountRepository->remove($account);
