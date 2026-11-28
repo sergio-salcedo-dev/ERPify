@@ -13,7 +13,6 @@ use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Mercure\LegacyProtocolAuthorization;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
-use Monolog\LogRecord;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -55,7 +54,6 @@ final class RevokeCurrentSessionControllerMercureClearFailureTest extends TestCa
         $this->assertTrue($log->hasWarningThatContains('Mercure subscriber cookie'));
 
         $record = \array_first($records);
-        $this->assertInstanceOf(LogRecord::class, $record);
         $this->assertInstanceOf(MercureRuntimeException::class, $record->context['exception'] ?? null);
     }
 
