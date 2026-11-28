@@ -23,9 +23,11 @@ use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryActiveAdministratorDirect
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryErasureResweepRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryTotpFactorRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\RecoverySecretMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\TotpFactorMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -36,6 +38,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnon
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
+use Erpify\Tests\Unit\Shared\Crypto\InMemoryKeystore;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -112,9 +115,10 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
     }
 
     /**
-     * Every figure is distinct, so a figure printed under the wrong label is a mismatch rather than two equal
-     * numbers agreeing by accident; and the labels are asserted in the map's
-     * order, which is the one order the report promises.
+     * Every figure is distinct but two — the subject holds one recovery secret and one second factor, each
+     * reported as 1, which no seed can make differ — so a figure printed under the wrong label is a mismatch
+     * rather than two equal numbers agreeing by accident; and the labels are asserted in the map's order, which
+     * is the one order the report promises.
      */
     public function testTheSuccessReportGivesOneFigurePerCategoryInTheMapsOrder(): void
     {
@@ -137,6 +141,7 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
             'membershipsDeleted' => (string) self::MEMBERSHIPS,
             'invitationsDeleted' => (string) self::INVITATIONS,
             'documentReferencesAnonymised' => (string) self::DOCUMENT_REFERENCES,
+            'totpFactorsDeleted' => '1',
         ];
         $previous = -1;
 
@@ -202,6 +207,7 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
             $memberships,
             new InMemoryInvitationRepository(...$invitations),
             self::DOCUMENT_REFERENCES,
+            new InMemoryTotpFactorRepository(TotpFactorMother::pendingFor()),
         );
     }
 
@@ -217,9 +223,17 @@ final class EraseIdentitySubjectCommandCategoriesTest extends TestCase
         InMemoryMembershipRepository $memberships = new InMemoryMembershipRepository(),
         InMemoryInvitationRepository $invitations = new InMemoryInvitationRepository(),
         int $documentReferences = 0,
+        InMemoryTotpFactorRepository $factors = new InMemoryTotpFactorRepository(),
     ): EraseIdentitySubjectCommand {
         return new EraseIdentitySubjectCommand(new FulfilIdentityErasure(
-            new EraseIdentitySubject($users, $tokens, $secrets, new InlineTransactionManager()),
+            new EraseIdentitySubject(
+                $users,
+                $tokens,
+                $secrets,
+                $factors,
+                new InMemoryKeystore(),
+                new InlineTransactionManager(),
+            ),
             new OrderedAuditSubjectTrailErasure(
                 new RecordingAuditSubjectRowLock(),
                 new RecordingAuditActorAnonymiser(matchCount: $anonymised[0]),

@@ -18,6 +18,7 @@ use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryActiveAdministratorDirect
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryErasureResweepRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryPasswordResetTokenRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryRecoverySecretRepository;
+use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryTotpFactorRepository;
 use Erpify\Tests\Unit\Iam\Identity\Application\InMemoryUserRepository;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
@@ -29,6 +30,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
 use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
+use Erpify\Tests\Unit\Shared\Crypto\InMemoryKeystore;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -183,6 +185,8 @@ final class EraseIdentitySubjectCommandConfirmationTest extends TestCase
                 $users,
                 new InMemoryPasswordResetTokenRepository(),
                 new InMemoryRecoverySecretRepository(),
+                new InMemoryTotpFactorRepository(),
+                new InMemoryKeystore(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(

@@ -25,6 +25,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnon
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
+use Erpify\Tests\Unit\Shared\Crypto\InMemoryKeystore;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -166,6 +167,8 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
                 $users,
                 new InMemoryPasswordResetTokenRepository(),
                 new InMemoryRecoverySecretRepository(),
+                new InMemoryTotpFactorRepository(),
+                new InMemoryKeystore(),
                 new InlineTransactionManager(),
             ),
             new OrderedAuditSubjectTrailErasure(

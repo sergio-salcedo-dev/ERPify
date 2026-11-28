@@ -233,6 +233,31 @@ not fire and these three tables are the manual NFR26 record. Exactly **one** new
 three surfaces, `recovery-secret-already-exists`; every other value here is an existing one reused,
 `invalid-token` deliberately so.
 
+### Two-step verification enrolment (`POST /api/v1/me/second-factor/totp`, `POST /api/v1/me/second-factor/totp/confirm`)
+
+Both routes are authenticated and grade per identity; the subject is always the caller. Starting an enrolment
+re-proves the current password and answers **201** with the secret (`secret`, base32, and `provisioningUri`, the
+`otpauth://` URI) — the one response that ever carries it. Confirming answers **200** with `enabledAt` and never
+the secret. Rationale: ADR [`two-step-verification.md`](adr/two-step-verification.md).
+
+| Outcome | Wire result | Why |
+|---------|-------------|-----|
+| Identity not `ACTIVE` (either route) | **403 `account-suspended`** / **`account-deactivated`** | `User::ensureActive()` after the identity's row lock and before the password proof, the position minting uses. |
+| The identity resolves to no row (either route) | **404 `user-not-found`** | The window in which the GDPR erasure hard-deletes the caller between admission and the locked read. |
+| Wrong current password (enrol) | **403 `invalid-current-password`** | The shared `ProveCurrentPassword`, fired **before** the factor is read: answering the 409 below to a caller who has not re-proved the password would tell a stolen session whether the account has a factor. |
+| Budget spent (enrol) | **429 `rate-limited`** | The shared per-identity password-proof budget (`CurrentPasswordProofThrottle`); the route is `credential-affecting`. |
+| Factor already enabled (either route) | **409 `second-factor-already-enabled`** | [`SecondFactorAlreadyEnabled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorAlreadyEnabled.php), a `Conflict` with a `type()` of its own: an enabled factor is never re-issued or replaced, so the secret cannot be read again and the owner's authenticator cannot be swapped without the code they hold. Disabling it first is the remedy. A pending enrolment is restarted instead (201, new secret, same scope). |
+| Two first enrolments raced past the locked read | **409 `concurrent-unique-write`** | The unique index on `user_id`, translated to the generic retryable conflict: the loser met a pending row a retry restarts. Unreachable in practice, since both lock the identity row first. |
+| No enrolment to confirm | **409 `second-factor-not-enrolled`** | [`SecondFactorNotEnrolled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorNotEnrolled.php), a `Conflict`: the account exists, the remedy is a state change. |
+| Wrong, expired, malformed or replayed code (confirm) | **403 `invalid-second-factor-code`** | [`InvalidSecondFactorCode`](../api/src/Iam/Identity/Domain/Exception/InvalidSecondFactorCode.php), a `Forbidden`: one answer for all four, nothing mutates. 403 and never 401 for the reason the password change gives. A malformed code is not a 422, so validation never grades how close a guess came. |
+| Code budget spent (confirm) | **429 `rate-limited`** | `SecondFactorCodeThrottle` (`second_factor_code_per_identity`, 10 per 15 minutes), the bucket every route verifying a code spends; refused out loud because the route is reachable only through a session. |
+| The sealed secret cannot be opened (confirm) | **500 `second-factor-integrity-failure`** | The marker-less [`SecondFactorIntegrityFailure`](../api/src/Iam/Identity/Domain/Exception/SecondFactorIntegrityFailure.php), Sentry-visible, carrying the crypto cause as `previous` and nothing in the body. |
+| Blank or oversized field, or a member the payload does not declare | **422 `validation-failed`** | `#[StrictRequestPayload]`, before the use case runs. |
+
+The second-factor vault is a registered reader of the crypto read boundary: `api/src/Iam/Identity/Application/TotpSecretVault.php` translates `dek-destroyed` and `decryption-failed` alike into the 500 `second-factor-integrity-failure`, because on this path a destroyed key is corruption, never an expected post-erasure outcome — the identity erasure deletes the factor row and destroys its key in one transaction.
+
+No new marker interface joins the contract — the refusals reuse `Conflict`, `Forbidden` and `NotFound`, the budgets `RateLimited` — and four `type`s are minted: `second-factor-already-enabled`, `second-factor-not-enrolled`, `invalid-second-factor-code` and `second-factor-integrity-failure`.
+
 ### Users administration — refusals aimed at oneself (`/api/v1/backoffice/users/{id}` and below)
 
 Three administrative writes refuse a target that is the acting administrator's own identity, and erasure a
@@ -452,6 +477,8 @@ The drift gate (`ErrorContractGateTest`) covers only markers under `api/src/Shar
 > **Translated at the read boundary, not at the exception (#418).** A read path gives `dek-destroyed` and `decryption-failed` a deliberate status of its own: `dek-destroyed` is an expected post-erasure outcome (**410 Gone**), while `decryption-failed` stays a **5xx** integrity fault, kept Sentry-visible. The read handler catches the crypto exception and throws a read-specific exception — `DocumentGone` (marker `Gone`) for the first, the marker-less `DocumentIntegrityFailure` for the second. `DekDestroyed` / `DecryptionFailed` themselves gain no marker: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry. The first such boundary is the Documents read (`api/src/Documents/Document/Application/Read/ReadDocument.php`: `dek-destroyed` answers 410 `gone` with an alarm unless the re-read row is `Erased`, `decryption-failed` answers 500 `document-integrity-failure`), graded in *Documents read* above.
 >
 > The listing is the second reader and translates differently, because it reads a PAGE: the Documents listing (`api/src/Documents/Document/Application/Listing/DocumentNameOpener.php`) turns `dek-destroyed` and `decryption-failed` into a `null` name on that document (see *Documents listing*), never a status.
+>
+> The second-factor vault reads a secret no erasure leaves behind its key, so it translates both into one marker-less 500 (see *Two-step verification enrolment*).
 >
 > `make php.lint.crypto-read-boundary` reds the build when a file under `api/src` outside `Shared/Crypto/` calls a read method of `EnvelopeEncryptor` / `StreamEnvelopeEncryptor` (every public method that is not `encrypt`, `seal` or `destroyScope`) until it is registered with a test (a `*Test.php` functional test or a Behat `.feature`) holding both types and a single line on this page that cites the file and names `dek-destroyed`. A green proves that registration exists, not that the status chosen is right nor that the test exercises it; that stays review's to judge.
 

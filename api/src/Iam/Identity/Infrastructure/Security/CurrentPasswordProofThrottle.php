@@ -13,9 +13,10 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
 
 /**
  * The per-identity budget on **re-proving the current password from a live session**, consumed at the
- * controller edge where the other per-target throttles live. Three routes demand that proof — `POST
- * /me/password`, `POST /me/recovery-secret` and `POST /me/recovery-secret/revoke` — and they share ONE
- * bucket. The membership is held by `api/.credential-proof-policy` (`make php.lint.credential-proof`).
+ * controller edge where the other per-target throttles live. Every route that demands that proof — `POST
+ * /me/password`, the recovery-secret mint and revoke, `POST /me/second-factor/totp`, and the administrative
+ * writes and erasures — shares ONE bucket. The membership is held by `api/.credential-proof-policy`
+ * (`make php.lint.credential-proof`).
  *
  * **Sharing it is a security decision, and the name says which question the budget answers rather than which
  * controller reached it first.** A wrong `currentPassword` on any of them deliberately does not feed the

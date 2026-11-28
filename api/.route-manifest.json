@@ -44,6 +44,8 @@
   "iam_invitation_accept": { "path": "/api/v1/backoffice/invitations/accept", "methods": ["POST"] },
   "iam_me": { "path": "/api/v1/me", "methods": ["GET"] },
   "iam_me_change_password": { "path": "/api/v1/me/password", "methods": ["POST"] },
+  "iam_me_confirm_totp": { "path": "/api/v1/me/second-factor/totp/confirm", "methods": ["POST"] },
+  "iam_me_enrol_totp": { "path": "/api/v1/me/second-factor/totp", "methods": ["POST"] },
   "iam_me_get_recovery_secret": { "path": "/api/v1/me/recovery-secret", "methods": ["GET"] },
   "iam_me_mint_recovery_secret": { "path": "/api/v1/me/recovery-secret", "methods": ["POST"] },
   "iam_me_revoke_recovery_secret": { "path": "/api/v1/me/recovery-secret/revoke", "methods": ["POST"] },

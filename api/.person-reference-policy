@@ -196,6 +196,8 @@ Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\TotpFactor::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\TotpFactor::$scopeId => non-person
 
 # The image aggregate's own primary key. It denotes a stored representation, never the person a picture may
 # happen to be of: this module holds no owner, no filename and no classification, and it is the CONSUMING
@@ -261,6 +263,7 @@ Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Applic
 # neither table has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
+Erpify\Iam\Identity\Domain\Entity\TotpFactor::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
 
 # The erasure's own instrument, written after the person is gone: it holds the erased id for one re-sweep
