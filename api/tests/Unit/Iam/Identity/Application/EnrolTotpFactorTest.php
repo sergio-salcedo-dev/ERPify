@@ -122,6 +122,7 @@ final class EnrolTotpFactorTest extends TestCase
         $user = UserMother::create();
         $user->deactivate();
         $user->pullDomainEvents();
+
         $factors = new InMemoryTotpFactorRepository();
         $audit = new RecordingAuditLogger();
 
@@ -199,9 +200,16 @@ final class EnrolTotpFactorTest extends TestCase
         $this->assertSame([$pending], $factors->saved, 'the one row is restarted, never duplicated');
         $this->assertSame(TotpFactorMother::DEFAULT_SCOPE_ID, $pending->scopeId());
         $this->assertNotSame(TotpFactorMother::PLACEHOLDER_CIPHERTEXT, $pending->sealedSecret());
-        $this->assertSame(0, $pending->failedConfirmAttempts());
-        $this->assertSame($now->format(DATE_ATOM), $pending->enrolmentStartedAt()->format(DATE_ATOM));
+        // Reopened both ways: the window restarts now, and the count is back to zero.
         $this->assertFalse($pending->pendingEnrolmentClosedAt($now));
+        $this->assertFalse($pending->pendingEnrolmentClosedAt($now->add(new DateInterval('PT9M59S'))));
+        $this->assertTrue($pending->pendingEnrolmentClosedAt($now->add(new DateInterval('PT10M'))));
+
+        for ($wrong = 1; $wrong < TotpFactor::MAX_FAILED_CONFIRMATIONS; ++$wrong) {
+            $pending->recordFailedConfirmation($now);
+        }
+
+        $this->assertFalse($pending->pendingEnrolmentClosedAt($now), 'the restart zeroed the count');
     }
 
     #[Test]

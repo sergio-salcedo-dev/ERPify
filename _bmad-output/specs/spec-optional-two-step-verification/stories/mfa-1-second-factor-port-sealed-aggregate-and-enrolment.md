@@ -121,8 +121,9 @@ it; factors enabled before mfa-3 get recovery codes from mfa-3's generation rout
   recovery secret), the CLI categories test, the metadata vocabulary test; every `EraseIdentitySubject` construction
   site gained the two collaborators.
 - Functional: `TotpEnrolmentFunctionalTest` (routes through the kernel: no-store, sessions revoked and mail, the
-  rotated session of a real login, the code budget before the use case, the five-code cap, the window, the 500
-  integrity path), `TotpSecretVaultFunctionalTest` (both crypto outcomes against the real keystore — the crypto-read
+  rotated session of a real login, the refusals), `TotpConfirmationLimitsFunctionalTest` (the code budget spent
+  before the use case and not by a refused body, the five-code cap, the window, the 500 integrity path), both over
+  the shared `DrivesTotpEnrolment` trait, `TotpSecretVaultFunctionalTest` (both crypto outcomes against the real keystore — the crypto-read
   registration), `TotpFactorErasureFunctionalTest` (real erasure, tombstone, evidence scope, no column holding the
   person, and the real audit logger with the real subject-erasure reconciler in a rolled-back transaction).
 - Behat: `features/backoffice/identity/two_step_verification_enrolment.feature` (refusals, the enrolment, the window

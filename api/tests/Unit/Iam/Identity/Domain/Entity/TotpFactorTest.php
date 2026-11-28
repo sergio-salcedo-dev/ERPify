@@ -91,7 +91,6 @@ final class TotpFactorTest extends TestCase
 
         $this->assertSame('another-ciphertext', $factor->sealedSecret());
         $this->assertSame(TotpFactorMother::DEFAULT_SCOPE_ID, $factor->scopeId(), 'the scope survives a restart');
-        $this->assertSame($restartedAt, $factor->enrolmentStartedAt());
         $this->assertFalse($factor->isEnabled());
         $this->assertFalse($factor->pendingEnrolmentClosedAt(new DateTimeImmutable('2041-03-07T10:39:59+00:00')));
     }
@@ -108,13 +107,17 @@ final class TotpFactorTest extends TestCase
         }
 
         $factor->recordFailedConfirmation($startedAt);
-        $this->assertSame(5, $factor->failedConfirmAttempts());
         $this->assertTrue($factor->pendingEnrolmentClosedAt($startedAt), 'closed at the fifth wrong code');
 
         $factor->restartEnrolment('another-ciphertext', $startedAt);
 
-        $this->assertSame(0, $factor->failedConfirmAttempts());
-        $this->assertFalse($factor->pendingEnrolmentClosedAt($startedAt));
+        $this->assertFalse($factor->pendingEnrolmentClosedAt($startedAt), 'a restart zeroes the count');
+
+        for ($wrong = 1; $wrong < TotpFactor::MAX_FAILED_CONFIRMATIONS; ++$wrong) {
+            $factor->recordFailedConfirmation($startedAt);
+        }
+
+        $this->assertFalse($factor->pendingEnrolmentClosedAt($startedAt), 'four wrong codes after it leave it open');
     }
 
     #[Test]

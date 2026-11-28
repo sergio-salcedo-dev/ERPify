@@ -55,7 +55,7 @@ final class SymfonySecondFactorEnabledEmailSenderTest extends TestCase
         // The other devices are signed out best effort, and that teardown swallows its failures, so the mail may
         // not report it.
         $email = $this->send();
-        $bodies = (string) $email->getTextBody() . (string) $email->getHtmlBody();
+        $bodies = $email->getTextBody() . $email->getHtmlBody();
 
         foreach (['signed out', 'signed you out', 'other devices', 'is now secure', 'is secure'] as $claim) {
             $this->assertStringNotContainsString($claim, $bodies);

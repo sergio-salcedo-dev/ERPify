@@ -194,15 +194,6 @@ final class TotpFactor extends AggregateRoot
         return $this->lastAcceptedStep;
     }
 
-    public function enrolmentStartedAt(): DateTimeImmutable
-    {
-        return $this->enrolmentStartedAt;
-    }
-
-    public function failedConfirmAttempts(): int
-    {
-        return $this->failedConfirmAttempts;
-    }
 
     private function ensureNotEnabled(): void
     {

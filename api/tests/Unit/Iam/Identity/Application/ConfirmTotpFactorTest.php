@@ -221,7 +221,7 @@ final class ConfirmTotpFactorTest extends TestCase
             $this->assertFalse($factor->isEnabled());
             // Saved and committed BEFORE the refusal is thrown: a throw inside the transaction would roll the
             // count back with it, and the cap would never be reached.
-            $this->assertSame(1, $factor->failedConfirmAttempts());
+            $this->assertFalse($factor->pendingEnrolmentClosedAt(SystemClock::now()), 'one wrong code leaves it open');
             $this->assertSame([$factor], $factors->saved);
             $this->assertTrue($this->transactions->committed, 'the counted failure must commit');
             $this->assertSame([], $audit->records);
@@ -241,7 +241,11 @@ final class ConfirmTotpFactorTest extends TestCase
                 $this->useCase($factors)->enableWithCode(UserMother::DEFAULT_ID, $wrong);
                 $this->fail('A wrong code must be refused.');
             } catch (InvalidSecondFactorCode) {
-                $this->assertSame($attempt, $factor->failedConfirmAttempts());
+                $this->assertSame(
+                    TotpFactor::MAX_FAILED_CONFIRMATIONS === $attempt,
+                    $factor->pendingEnrolmentClosedAt(SystemClock::now()),
+                    \sprintf('after %d wrong codes', $attempt),
+                );
             }
         }
 
@@ -250,7 +254,6 @@ final class ConfirmTotpFactorTest extends TestCase
             $this->fail('An enrolment out of codes must not be confirmed, even with the right one.');
         } catch (SecondFactorNotEnrolled) {
             $this->assertFalse($factor->isEnabled());
-            $this->assertSame(TotpFactor::MAX_FAILED_CONFIRMATIONS, $factor->failedConfirmAttempts());
             $this->assertNothingFollowedTheRefusal();
         }
     }
