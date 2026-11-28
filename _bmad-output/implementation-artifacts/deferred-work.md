@@ -610,7 +610,7 @@ origin: sesión de mantenimiento, petición del usuario, 2026-10-26
 location: pwa/package-lock.json, pwa/node_modules
 reason: el usuario vio 7 altas en `npm audit`; sobre `main` en 3e1a856 el lockfile de pwa/ da 0, y no se sabe dónde se ejecutó el audit que dio 7.
 status: done 2026-11-28
-resolution: no se reproduce. `npm ci` y después `npm audit --json` en `pwa/` sobre 0d3cbeb (2026-11-28): 0 vulnerabilidades de cualquier severidad en 789 dependencias, también con `--omit=dev`. Causa: ningún lockfile desde #1112 da altas (medido el 2026-10-26 y otra vez hoy, con el lock movido por última vez en f37a84c); el 7 salió de un árbol que no era este lock (hipótesis 1 o 2). Sin cambios en el lock. Las alertas de Dependabot del repositorio no se revisaron: la sesión no tiene herramienta para leerlas.
+resolution: (#1308) no se reproduce. `npm ci` y después `npm audit --json` en `pwa/` sobre 0d3cbeb (2026-11-28): 0 vulnerabilidades de cualquier severidad en 789 dependencias, también con `--omit=dev`. Causa: ningún lockfile desde #1112 da altas (medido el 2026-10-26 y otra vez hoy, con el lock movido por última vez en f37a84c); el 7 salió de un árbol que no era este lock (hipótesis 1 o 2). Sin cambios en el lock. Las alertas de Dependabot del repositorio no se revisaron: la sesión no tiene herramienta para leerlas.
 severity: medium
 
 **Medido el 2026-10-26:**
@@ -745,7 +745,7 @@ origin: auditoría de seguridad de #1091, 2026-10-23
 location: pwa/next.config.ts (`tunnelRoute: "/monitoring"`), pwa/src/proxy.ts
 reason: sin verificar. El túnel de `@sentry/nextjs` toma la organización y el proyecto de los parámetros `o`/`p` de la petición. Si no los contrasta con el DSN configurado, cualquiera puede usar el origen de ERPify como relay gratuito hacia sus propios proyectos de Sentry. Hoy solo lo acota el límite de 60 peticiones por minuto e IP.
 status: done 2026-11-28
-resolution: no reenvía. En la versión instalada (`@sentry/nextjs` 11.13.0, `@sentry/core` 11.13.0) el túnel ya no usa `o`/`p`: el destino sale de la cabecera del envelope y solo se acepta el DSN del propio cliente de servidor, que es el mismo `NEXT_PUBLIC_SENTRY_DSN` (`sentryInitOptions.ts`). Sin cambios en `proxy.ts`. Evidencia abajo; la prueba contra el stack no se hizo (sin Docker en la sesión).
+resolution: (#1308) no reenvía. En la versión instalada (`@sentry/nextjs` 11.13.0, `@sentry/core` 11.13.0) el túnel ya no usa `o`/`p`: el destino sale de la cabecera del envelope y solo se acepta el DSN del propio cliente de servidor, que es el mismo `NEXT_PUBLIC_SENTRY_DSN` (`sentryInitOptions.ts`). Sin cambios en `proxy.ts`. Evidencia abajo; la prueba contra el stack no se hizo (sin Docker en la sesión).
 severity: low
 
 **Para cerrarla:**
@@ -767,7 +767,7 @@ origin: CI de #1091, 2026-10-23
 location: api/frankenphp/docker-entrypoint.sh (composer install), .github/workflows/ci.yml, make/docker.mk (docker.up.wait.no-build)
 reason: dos jobs distintos (API Behat en 2d635b1 y PWA E2E shard 1 en 9de680f) murieron sin ejecutar ningún test porque `composer install` del entrypoint no terminó de descargar paquetes (`library::Connection refused`) y el contenedor nunca quedó sano. La sesión no podía relanzar jobs (403) y hubo que pedírselo al usuario.
 status: done 2026-11-28
-resolution: no se repite y la mitigación propuesta ya está en el árbol. Las 50 ejecuciones completadas más recientes de `ci.yml` en `main` (run 3443 del 2026-11-12 a run 3628 del 2026-11-27, sobre 0d3cbeb) dan 4 fallos y ninguno en el arranque del stack: los jobs fallidos que arrancan el stack tienen su paso "Start … stack" en `success`, y el cuarto fallo es el job estático, que no lo arranca. Los fallos fueron PHPUnit (3612 strict gate, 3582 y 3489 cobertura) y advisories de composer (3608). Todos los jobs que arrancan el stack restauran antes `api/vendor` con `.github/actions/api-vendor-cache` (cache por hash de `composer.lock`), así que el entrypoint no descarga nada en un acierto exacto. Sin reintento añadido en `docker-entrypoint.sh`.
+resolution: (#1308) no se repite y la mitigación propuesta ya está en el árbol. Las 50 ejecuciones completadas más recientes de `ci.yml` en `main` (run 3443 del 2026-11-12 a run 3628 del 2026-11-27, sobre 0d3cbeb) dan 4 fallos y ninguno en el arranque del stack: los jobs fallidos que arrancan el stack tienen su paso "Start … stack" en `success`, y el cuarto fallo es el job estático, que no lo arranca. Los fallos fueron PHPUnit (3612 strict gate, 3582 y 3489 cobertura) y advisories de composer (3608). Todos los jobs que arrancan el stack restauran antes `api/vendor` con `.github/actions/api-vendor-cache` (cache por hash de `composer.lock`), así que el entrypoint no descarga nada en un acierto exacto. Sin reintento añadido en `docker-entrypoint.sh`.
 severity: low
 
 **Para cerrarla:**

@@ -98,8 +98,8 @@ final class BankAccountDeleterTest extends TestCase
         $this->documents->file(self::ERASED_DOCUMENT, 'erased');
         $this->evidence->add($this->link(self::ERASED_DOCUMENT));
 
-        $this->makeDeleter($repository, new RecordingEventBus($transactions), $transactions)
-            ->delete(BankAccountMother::DEFAULT_ID);
+        $deleter = $this->makeDeleter($repository, new RecordingEventBus($transactions), $transactions);
+        $deleter->delete(BankAccountMother::DEFAULT_ID);
 
         $this->assertTrue($repository->removeCalled);
         $this->assertCount(1, $this->evidence->removed);
