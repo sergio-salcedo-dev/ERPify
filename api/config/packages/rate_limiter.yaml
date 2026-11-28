@@ -161,12 +161,16 @@ framework:
             lock_factory: null
 
         # `second_factor_code_per_identity` — per-identity budget on PRESENTING A SECOND-FACTOR CODE
-        # (SecondFactorCodeThrottle): today the confirmation of a TOTP enrolment, later every route that verifies
-        # a code, all spending this one bucket so a guess budget cannot be multiplied across routes. A wrong code
-        # feeds no persisted lockout, so this is the only ceiling on guessing one. Its own bucket, not the
+        # (SecondFactorCodeThrottle). Every route that verifies a code spends this one bucket, so a guess budget
+        # cannot be multiplied across routes. A wrong code feeds no persisted lockout. Its own bucket, not the
         # password-proof one: it bounds guesses at a six-digit code, a different question from guesses at a
-        # password. 10 / 15 minutes mirrors the persisted lockout like `password_change_per_identity` does; with a
-        # window of three accepted steps that is at most 30 chances in a million per window.
+        # password. 10 / 15 minutes mirrors the persisted lockout like `password_change_per_identity` does.
+        #
+        # It is an ATTENUATOR, never the wall: `lock_factory: null` lets a burst of concurrent requests overrun it,
+        # and the bucket lives in the `app` cache pool (filesystem in prod), reset on every deploy. The wall for
+        # the enrolment's confirmation is the per-enrolment cap counted on the factor row (five wrong codes, ten
+        # minutes); every other route that verifies a code needs a persisted counter of its own on the factor row,
+        # counted under its lock, before it may rely on this bucket.
         #
         # LITERALS rather than env-driven, like `login_local`: the bound is part of the second factor's security
         # argument, and an env file that widened it would change that argument with no diff to review.

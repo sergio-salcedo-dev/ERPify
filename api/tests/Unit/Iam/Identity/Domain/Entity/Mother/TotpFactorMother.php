@@ -6,10 +6,13 @@ namespace Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother;
 
 use DateTimeImmutable;
 use Erpify\Iam\Identity\Domain\Entity\TotpFactor;
+use Erpify\Shared\Clock\Domain\SystemClock;
 
 /**
  * A {@see TotpFactor} for tests that need one to exist rather than to exercise how it was sealed. The sealed
- * secret is a placeholder: nothing opens it unless a test seals a real one.
+ * secret is a placeholder: nothing opens it unless a test seals a real one. A pending factor is enrolled at the
+ * ambient clock's instant unless told otherwise, so it is inside its confirmation window for any test that does not
+ * move that clock.
  */
 final class TotpFactorMother
 {
@@ -23,8 +26,15 @@ final class TotpFactorMother
         string $userId = UserMother::DEFAULT_ID,
         string $scopeId = self::DEFAULT_SCOPE_ID,
         string $sealedSecret = self::PLACEHOLDER_CIPHERTEXT,
+        ?DateTimeImmutable $enrolmentStartedAt = null,
     ): TotpFactor {
-        return TotpFactor::enrol(self::DEFAULT_ID, $userId, $scopeId, $sealedSecret);
+        return TotpFactor::enrol(
+            self::DEFAULT_ID,
+            $userId,
+            $scopeId,
+            $sealedSecret,
+            $enrolmentStartedAt ?? SystemClock::now(),
+        );
     }
 
     public static function enabledFor(

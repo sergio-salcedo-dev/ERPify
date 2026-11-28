@@ -94,6 +94,7 @@ final class FulfilIdentityErasureReferencePurgeTest extends TestCase
             'memberships_deleted' => 1,
             'invitations_deleted' => 2,
             'document_references_anonymised' => 0,
+            'totp_factors_deleted' => 0,
         ], $audit->records[1]['metadata']);
     }
 

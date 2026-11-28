@@ -73,11 +73,11 @@ final class EraseIdentitySubjectTest extends TestCase
         $this->assertSame(DestroyReason::Erasure, $keystore->reasonFor($scope));
         // The scope travels to the compliance entry, which is what answers the tombstone. It is the factor's own
         // random scope, so it names nothing about the person.
-        $this->assertSame($scope->toString(), $result->destroyedTotpScope);
-        $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $result->destroyedTotpScope);
+        $this->assertSame($scope->toString(), $result->erasedTotpScope);
+        $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $result->erasedTotpScope);
     }
 
-    public function testASecondFactorWhoseKeyIsAlreadyTombstonedReportsNoScope(): void
+    public function testASecondFactorWhoseKeyIsAlreadyTombstonedStillReportsItsScope(): void
     {
         $keystore = new InMemoryKeystore();
         $keystore->destroy(TotpSecretVault::scopeOf(TotpFactorMother::DEFAULT_SCOPE_ID), DestroyReason::Erasure);
@@ -93,7 +93,12 @@ final class EraseIdentitySubjectTest extends TestCase
         // The orphan row still leaves, and still counts as an erasure: a partial erasure re-run must finish.
         $this->assertSame(1, $result->totpFactorsDeleted);
         $this->assertTrue($result->erasedAnything());
-        $this->assertNull($result->destroyedTotpScope, 'the tombstone was answered by the run that wrote it');
+        // The scope still travels to the evidence: nothing guarantees the earlier tombstone has an entry of its own,
+        // and an unanswered tombstone is reported by the reconciler for ever, while a second entry costs nothing.
+        $this->assertSame(
+            TotpSecretVault::scopeOf(TotpFactorMother::DEFAULT_SCOPE_ID)->toString(),
+            $result->erasedTotpScope,
+        );
     }
 
     public function testItHoldsNoAuditCollaboratorSoItCannotPersistAnIdentifierItCannotErase(): void

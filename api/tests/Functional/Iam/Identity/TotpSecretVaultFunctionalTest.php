@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Iam\Identity\Application\TotpSecretVault;
 use Erpify\Iam\Identity\Domain\Entity\TotpFactor;
 use Erpify\Iam\Identity\Domain\Exception\SecondFactorIntegrityFailure;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\Exception\DecryptionFailed;
@@ -94,7 +95,13 @@ final class TotpSecretVaultFunctionalTest extends KernelTestCase
     public function aCiphertextMovedToAnotherIdentityIsAnIntegrityFailure(): void
     {
         $original = $this->sealedFactor(Uuid::generate());
-        $moved = TotpFactor::enrol(Uuid::generate(), Uuid::generate(), $original->scopeId(), $original->sealedSecret());
+        $moved = TotpFactor::enrol(
+            Uuid::generate(),
+            Uuid::generate(),
+            $original->scopeId(),
+            $original->sealedSecret(),
+            SystemClock::now(),
+        );
 
         try {
             $this->service(TotpSecretVault::class)->open($moved);
@@ -114,6 +121,7 @@ final class TotpSecretVaultFunctionalTest extends KernelTestCase
             $userId,
             $scopeId,
             $this->service(TotpSecretVault::class)->seal($scopeId, $userId, self::SECRET),
+            SystemClock::now(),
         );
     }
 }

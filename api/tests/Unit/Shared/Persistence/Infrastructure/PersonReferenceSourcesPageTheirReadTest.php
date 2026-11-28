@@ -108,6 +108,40 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
                 ->retainedPersonIds(),
         ];
 
+        yield from self::identityCredentialCases();
+
+        yield 'document uploader' => [
+            DbalDocumentUploaderPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalDocumentUploaderPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'upload intent actor' => [
+            DbalUploadIntentActorPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalUploadIntentActorPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'document custody actor' => [
+            DbalDocumentCustodyActorPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalDocumentCustodyActorPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'audit resource' => [
+            DbalPersonResourceReferences::class,
+            static fn (Connection $connection): array => (new DbalPersonResourceReferences($connection, 1))
+                ->unerasedIdsOfType('User'),
+        ];
+    }
+
+    /**
+     * The identity context's credential and erasure tables, split out only to keep the provider readable.
+     *
+     * @return iterable<string, array{class-string, callable(Connection): list<string>}>
+     */
+    private static function identityCredentialCases(): iterable
+    {
         yield 'password reset token' => [
             DbalPasswordResetTokenPersonReferences::class,
             static fn (Connection $connection): array => (new DbalPasswordResetTokenPersonReferences($connection, 1))
@@ -133,30 +167,6 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
                 new FixedClock(SystemClock::now()),
                 1,
             ))->retainedPersonIds(),
-        ];
-
-        yield 'document uploader' => [
-            DbalDocumentUploaderPersonReferences::class,
-            static fn (Connection $connection): array => (new DbalDocumentUploaderPersonReferences($connection, 1))
-                ->retainedPersonIds(),
-        ];
-
-        yield 'upload intent actor' => [
-            DbalUploadIntentActorPersonReferences::class,
-            static fn (Connection $connection): array => (new DbalUploadIntentActorPersonReferences($connection, 1))
-                ->retainedPersonIds(),
-        ];
-
-        yield 'document custody actor' => [
-            DbalDocumentCustodyActorPersonReferences::class,
-            static fn (Connection $connection): array => (new DbalDocumentCustodyActorPersonReferences($connection, 1))
-                ->retainedPersonIds(),
-        ];
-
-        yield 'audit resource' => [
-            DbalPersonResourceReferences::class,
-            static fn (Connection $connection): array => (new DbalPersonResourceReferences($connection, 1))
-                ->unerasedIdsOfType('User'),
         ];
     }
 

@@ -17,11 +17,16 @@ use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
  * how many guesses at a six-digit code an identity gets, not how many at its password. A wrong code feeds no
  * persisted lockout, so this limiter is the only ceiling on guessing one.
  *
- * Today it guards the confirmation of an enrolment, reachable only from an established session; the routes that
- * present a code later (disabling the factor, the login's second step) spend the same bucket, so a stolen session
- * cannot multiply its guesses by spreading them across routes. On a route reachable only through a session it
- * REFUSES OUT LOUD, like the password-proof budget, because the caller already holds the identity it is keyed on;
- * a pre-session surface owes the caller the uniform refusal of the handshake instead and must not surface this 429.
+ * Every route that verifies a code spends this one bucket, so a stolen session cannot multiply its guesses by
+ * spreading them across routes. On a route reachable only through a session it REFUSES OUT LOUD, like the
+ * password-proof budget, because the caller already holds the identity it is keyed on; a pre-session surface owes
+ * the caller the uniform refusal of the handshake instead and must not surface this 429.
+ *
+ * It is an ATTENUATOR, never the wall: `lock_factory: null` lets a burst of concurrent requests overrun it, and the
+ * filesystem cache pool it lives in is reset on every deploy (`rate_limiter.yaml`). The wall for the enrolment's
+ * confirmation is the per-enrolment cap counted on the factor row ({@see
+ * \Erpify\Iam\Identity\Domain\Entity\TotpFactor::MAX_FAILED_CONFIRMATIONS}); every other route that verifies a
+ * code needs a persisted counter of its own on the factor row before it may rely on this bucket.
  *
  * The refusal reuses {@see RateLimitExceeded} (429 `rate-limited`), so no marker joins the error contract, and it
  * stamps its {@see RateLimitSnapshot} on the request so the 429 carries the headers of the budget that said no.

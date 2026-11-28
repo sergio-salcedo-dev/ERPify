@@ -14,13 +14,13 @@ use SensitiveParameter;
 
 /**
  * The one place a second-factor secret is sealed and opened, so the scope and the associated data have one
- * spelling for the enrolment that seals, the confirmation (and later the login step) that opens, and the
- * erasure that destroys the key.
+ * spelling for every path that seals, every path that opens, and the erasure that destroys the key.
  *
  * **The scope is the factor's own random id** ({@see TotpFactor::scopeId()}) under the `TotpFactor` type. It is
  * deliberately not derived from the person's id: a destroyed key leaves a `dek_keystore` tombstone for ever, and
  * the erasure evidence that answers it carries the scope in `audit_log.metadata`, the one column no erasure
- * rewrites — a scope named by the person would keep their id in both.
+ * rewrites — a scope named by the person would keep their id in both. It is lower-cased here as on the row,
+ * because keystore scopes compare exactly: an upper-case spelling would seal under one row and destroy another.
  *
  * **The associated data is bound to the identity**: the column it belongs to plus the identity's canonical id.
  * A sealed secret copied onto another identity's row fails authentication there, so a write to that one column
@@ -46,7 +46,7 @@ final readonly class TotpSecretVault
 
     public static function scopeOf(string $scopeId): EncryptionScopeId
     {
-        return EncryptionScopeId::of(self::SCOPE_TYPE, $scopeId);
+        return EncryptionScopeId::of(self::SCOPE_TYPE, \strtolower($scopeId));
     }
 
     /**

@@ -16,7 +16,10 @@ use Doctrine\Migrations\AbstractMigration;
  * row and destroys its scope's key, and that removal is owed by `EraseIdentitySubject` rather than by a constraint.
  *
  * `user_id` is UNIQUE: one factor per identity, and the index serves the locked lookup by owner and the
- * person-reference source's keyset pages. `enabled_at` NULL is a pending enrolment that gates nothing.
+ * person-reference source's keyset pages. `scope_id` is UNIQUE too: two factors sharing a key would be shredded
+ * together. `enabled_at` NULL is a pending enrolment that gates nothing; `enrolment_started_at` (when it was started
+ * or last restarted) and `failed_confirm_attempts` (wrong codes since then) bound how long and how often it can be
+ * confirmed. The count has no DEFAULT on purpose: the aggregate writes it on every insert.
  * `last_accepted_step` is a 30 second step count since the epoch, which fits an INT for some two thousand years.
  */
 final class Version20261128120000 extends AbstractMigration
@@ -34,6 +37,8 @@ final class Version20261128120000 extends AbstractMigration
             . 'user_id UUID NOT NULL, '
             . 'scope_id UUID NOT NULL, '
             . 'sealed_secret TEXT NOT NULL, '
+            . 'enrolment_started_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, '
+            . 'failed_confirm_attempts INT NOT NULL, '
             . 'enabled_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, '
             . 'last_accepted_step INT DEFAULT NULL, '
             . 'created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, '
@@ -42,6 +47,9 @@ final class Version20261128120000 extends AbstractMigration
         );
         $this->addSql(
             'CREATE UNIQUE INDEX IF NOT EXISTS uniq_identity_totp_factor_user_id ON identity_totp_factor (user_id)',
+        );
+        $this->addSql(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uniq_identity_totp_factor_scope_id ON identity_totp_factor (scope_id)',
         );
     }
 

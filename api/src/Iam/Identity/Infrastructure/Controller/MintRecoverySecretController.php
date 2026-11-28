@@ -40,7 +40,8 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * The plaintext stays inside this adapter on the way in — the use case receives a closure over the stored
  * {@see HashedPassword} and only ever learns "matches" — and leaves in the 201 body on the way out. That
  * response is the ONE place the minted secret is ever legible; nothing logs it and nothing can re-derive it.
- * Answers **201** with the secret, its minting instant and its expiry.
+ * Answers **201** with the secret, its minting instant and its expiry, marked `Cache-Control: no-store` so no
+ * browser or intermediary cache keeps a copy of the credential.
  */
 #[Route('/me/recovery-secret', name: self::ROUTE_NAME, methods: ['POST'])]
 final readonly class MintRecoverySecretController
@@ -73,7 +74,7 @@ final readonly class MintRecoverySecretController
             ),
         );
 
-        return $this->resourceResponder->respond(
+        $response = $this->resourceResponder->respond(
             new MintedRecoverySecretResource(
                 $generated->plaintext(),
                 $generated->secret->getCreatedAt()->format(DateTimeInterface::ATOM),
@@ -81,5 +82,8 @@ final readonly class MintRecoverySecretController
             ),
             Response::HTTP_CREATED,
         );
+        $response->headers->set('Cache-Control', 'no-store');
+
+        return $response;
     }
 }

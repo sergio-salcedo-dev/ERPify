@@ -27,11 +27,13 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * decade with nothing scheduled to notice.
  *
  * The second factor is erased the way {@see \Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject}
- * erases a sealed subject: the row is deleted and its scope's key destroyed in the same transaction, so the sealed
- * secret is unreadable even in a backup taken before the erasure. The destroyed scope is reported in the result,
- * because the `dek_keystore` tombstone it leaves must be answered by a `GDPR_SUBJECT_ERASED` entry carrying it, or
- * the subject-erasure reconciler reports a divergence for ever; {@see FulfilIdentityErasure} writes that entry. The
- * scope is the factor's own random id, so neither the tombstone nor that entry names the person.
+ * erases a sealed subject: the row is deleted and its scope's key destroyed in the same transaction, so from that
+ * commit on the sealed secret is unreadable in the live database. A backup taken before the erasure still holds the
+ * row and its live key, and a restore to it brings the factor back with the identity (ADR
+ * `two-step-verification.md` D4, `PRODUCTION_SECURITY_CHECKLIST.md` §7). The erased factor's scope is reported in
+ * the result, because the `dek_keystore` tombstone must be answered by a `GDPR_SUBJECT_ERASED` entry carrying it,
+ * or the subject-erasure reconciler reports a divergence for ever; {@see FulfilIdentityErasure} writes that entry.
+ * The scope is the factor's own random id, so neither the tombstone nor that entry names the person.
  *
  * It answers for this module's rows alone. A `user_id` held by another context carries no foreign key, so
  * nothing here cascades to it: each such reference is erased by the context that owns it, chained by
@@ -97,7 +99,7 @@ final readonly class EraseIdentitySubject
 
             $tokensDeleted = $this->resetTokens->deleteAllForUser($userId);
             $recoverySecretsDeleted = $this->recoverySecrets->deleteAllForUser($userId);
-            [$totpFactorsDeleted, $destroyedScope] = $this->eraseTotpFactor($userId);
+            [$totpFactorsDeleted, $erasedScope] = $this->eraseTotpFactor($userId);
 
             return new IdentityErasureResult(
                 $userId,
@@ -105,7 +107,7 @@ final readonly class EraseIdentitySubject
                 $tokensDeleted,
                 $recoverySecretsDeleted,
                 $totpFactorsDeleted,
-                $destroyedScope,
+                $erasedScope,
             );
         });
     }
@@ -115,10 +117,11 @@ final readonly class EraseIdentitySubject
      *
      * Load-bearing order, as in the bank-account erasure: the row is removed first (the remove flushes eagerly),
      * then the key is tombstoned in the same transaction, so the two commit or roll back together. The scope is
-     * reported only when this call wrote the tombstone: an existing tombstone was answered by the run that wrote
-     * it.
+     * reported whenever a row was deleted, whether or not this call wrote the tombstone: a key found already
+     * tombstoned has no evidence of its own guaranteed anywhere, and naming the scope twice costs nothing while
+     * naming it never leaves the reconciler reporting the tombstone for ever.
      *
-     * @return array{int, ?string} factors deleted, and the scope whose key this call destroyed
+     * @return array{int, ?string} factors deleted, and the scope of the deleted factor
      */
     private function eraseTotpFactor(string $userId): array
     {
@@ -130,8 +133,8 @@ final readonly class EraseIdentitySubject
 
         $scope = TotpSecretVault::scopeOf($factor->scopeId());
         $this->totpFactors->remove($factor);
-        $keyDestroyed = $this->keystore->destroy($scope, DestroyReason::Erasure);
+        $this->keystore->destroy($scope, DestroyReason::Erasure);
 
-        return [1, $keyDestroyed ? $scope->toString() : null];
+        return [1, $scope->toString()];
     }
 }

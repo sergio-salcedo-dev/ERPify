@@ -16,7 +16,9 @@ use Symfony\Component\DependencyInjection\Attribute\AsAlias;
  * `T = floor(unix time / 30)`. The RFC 6238 appendix B vectors are its unit test.
  *
  * Every candidate in the window is computed and compared with `hash_equals` before the answer is chosen, so the
- * time a refusal takes does not depend on which step, if any, came close.
+ * time a refusal takes does not depend on which step, if any, came close. When two steps of the window yield the
+ * same code (a one-in-a-million collision), the LATEST one is accepted, so the stored step moves as far forward as
+ * the code allows and an earlier step cannot be replayed afterwards.
  */
 #[AsAlias(TotpAlgorithm::class)]
 final readonly class Rfc6238TotpAlgorithm implements TotpAlgorithm
@@ -60,7 +62,7 @@ final readonly class Rfc6238TotpAlgorithm implements TotpAlgorithm
             $equal = \hash_equals($this->codeAt($secret, \max(0, $step)), $code);
             $fresh = $step >= 0 && (null === $lastAcceptedStep || $step > $lastAcceptedStep);
 
-            if ($wellFormed && $equal && $fresh && null === $matched) {
+            if ($wellFormed && $equal && $fresh) {
                 $matched = $step;
             }
         }

@@ -28,12 +28,13 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * {@see CurrentPasswordProofThrottle} runs first and spends the SAME per-identity bucket as the other password
  * re-proofs, then the use case re-proves the password before it consults the factor, so a stolen session without
  * the password cannot enrol an authenticator of its own and a refused re-proof writes nothing. Whether the account
- * HAS a factor is not hidden from its own session: the confirmation's answers say so, as the profile will.
+ * HAS a factor is not hidden from its own session: the confirmation's answers say so.
  *
  * No CSRF token, matching the other authenticated writes: the request carries the current password, which a
  * cross-site forgery does not know, and the endpoint is JSON-only ({@see StrictRequestPayload}).
  *
- * Answers **201** with the secret in base32 and the `otpauth://` URI — the ONE response that ever carries them.
+ * Answers **201** with the secret in base32 and the `otpauth://` URI — the ONE response that ever carries them —
+ * marked `Cache-Control: no-store`, so no browser or intermediary cache keeps a copy of a credential.
  */
 #[Route('/me/second-factor/totp', name: self::ROUTE_NAME, methods: ['POST'])]
 final readonly class EnrolTotpFactorController
@@ -66,9 +67,12 @@ final readonly class EnrolTotpFactorController
             ),
         );
 
-        return $this->resourceResponder->respond(
+        $response = $this->resourceResponder->respond(
             new TotpEnrolmentResource($enrolment->encodedSecret(), $enrolment->provisioningUri()),
             Response::HTTP_CREATED,
         );
+        $response->headers->set('Cache-Control', 'no-store');
+
+        return $response;
     }
 }

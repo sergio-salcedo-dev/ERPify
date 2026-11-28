@@ -18,6 +18,7 @@ use Erpify\Iam\Identity\Domain\TotpAlgorithm;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Domain\AuditLevel;
 use Erpify\Shared\Audit\Domain\AuditResource;
+use Erpify\Shared\Clock\Domain\Clock;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Uuid\Domain\Uuid;
 
@@ -27,16 +28,18 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * login — until {@see ConfirmTotpFactor} accepts a code computed from that secret.
  *
  * The ordering inside the transaction is the contract, the one {@see MintRecoverySecret} follows:
- *   1. Lock the identity row first: user, then factor, then the factor's keystore row is the order every path
- *      that takes them agrees on ({@see TotpFactorRepository}).
+ *   1. Lock the identity row first, then read the factor under `FOR UPDATE`: user, then factor is the order every
+ *      path that takes both agrees on ({@see TotpFactorRepository}). Sealing a new factor's secret then INSERTs its
+ *      keystore row (a scope no other transaction can know yet); restarting a pending one reads its live key and
+ *      locks nothing in the keystore.
  *   2. Wall a non-`ACTIVE` identity.
  *   3. Refuse a wrong current password BEFORE the factor is consulted or locked, the order minting follows: a
  *      refused re-proof takes no lock on the factor and writes nothing, and every answer about the factor goes to
  *      a caller who has proved the password. (The factor's existence is not a secret from the account's own
  *      session: the confirmation route answers it.)
  *   4. Only then read the factor under `FOR UPDATE`: an enabled one is refused (replacing it would remove the
- *      owner's authenticator without the code the owner holds); a pending one is restarted under its own scope;
- *      none is created with a fresh random scope.
+ *      owner's authenticator without the code the owner holds); a pending one is restarted under its own scope,
+ *      which also restarts the time it stays confirmable; none is created with a fresh random scope.
  *
  * The secret is drawn by the algorithm port, sealed by {@see TotpSecretVault} and never held by the aggregate in
  * clear. The audit row is written inside the transaction, after the locking read of the identity: it records
@@ -58,6 +61,7 @@ final readonly class EnrolTotpFactor
         private TotpSecretVault $vault,
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
+        private Clock $clock,
     ) {
     }
 
@@ -73,8 +77,10 @@ final readonly class EnrolTotpFactor
      */
     public function enrol(string $userId, Closure $verifyCurrent): TotpEnrolment
     {
+        $now = $this->clock->now();
+
         return $this->transactionManager->transactional(
-            function () use ($userId, $verifyCurrent): TotpEnrolment {
+            function () use ($userId, $verifyCurrent, $now): TotpEnrolment {
                 $user = $this->users->findByIdForUpdate($userId) ?? throw UserNotFound::withId($userId);
                 $user->ensureActive();
 
@@ -90,8 +96,8 @@ final readonly class EnrolTotpFactor
                 $scopeId = $factor instanceof TotpFactor ? $factor->scopeId() : Uuid::generate();
                 $sealed = $this->vault->seal($scopeId, $userId, $secret);
 
-                $factor?->restartEnrolment($sealed);
-                $factor ??= TotpFactor::enrol(Uuid::generate(), $userId, $scopeId, $sealed);
+                $factor?->restartEnrolment($sealed, $now);
+                $factor ??= TotpFactor::enrol(Uuid::generate(), $userId, $scopeId, $sealed, $now);
 
                 $this->factors->save($factor);
                 $this->auditEnrolmentStarted($userId);
