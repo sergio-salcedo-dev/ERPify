@@ -13,16 +13,25 @@ use Erpify\Iam\Session\Infrastructure\Controller\RevokeCurrentSessionController;
 use Erpify\Shared\Event\Domain\EventBus;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Tests\Double\Mercure\LegacyProtocolAuthorization;
+use Monolog\Handler\TestHandler;
+use Monolog\Level;
+use Monolog\Logger;
+use Monolog\LogRecord;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
+use Symfony\Component\Mercure\Exception\RuntimeException as MercureRuntimeException;
 
 /**
  * "Sign out this device" must be durable: a store outage on the revoke must not leave the cookie live and the
  * registry row ACTIVE (a session resumable once the store recovers). Even when the revoke throws, the controller
- * still invalidates the native session (dropping the cookie) and answers 204.
+ * still invalidates the native session (dropping the cookie) and answers 204. The Mercure cookie clear is
+ * best-effort on the same terms.
  *
  * @internal
  */
@@ -61,13 +70,7 @@ final class RevokeCurrentSessionControllerTest extends TestCase
 
         $response = ($this->controller($store))($request);
 
-        $cookies = [];
-
-        foreach ($response->headers->getCookies() as $cookie) {
-            if ('mercureAuthorization' === $cookie->getName()) {
-                $cookies[] = $cookie;
-            }
-        }
+        $cookies = $this->mercureCookiesOf($response);
 
         $this->assertCount(1, $cookies);
         $this->assertNull($cookies[0]->getValue());
@@ -75,8 +78,54 @@ final class RevokeCurrentSessionControllerTest extends TestCase
         $this->assertSame('/.well-known/mercure', $cookies[0]->getPath());
     }
 
-    private function controller(SessionRepository $store): RevokeCurrentSessionController
+    /**
+     * The hub answers on its own public host, and `Authorization::createClearCookie()` throws when the request
+     * arrives on a different second-level domain, because no cookie domain can reach both. That failure is the
+     * one the controller swallows: the logout still drops the native session and answers 204, sets no Mercure
+     * cookie at all, and leaves exactly one warning naming the cookie on the observability channel.
+     */
+    public function testSignOutStillSucceedsWhenTheMercureCookieCannotBeCleared(): void
     {
+        $store = $this->createStub(SessionRepository::class);
+        $store->method('findActiveById')->willThrowException(SessionStoreUnavailable::storeUnreachable());
+
+        $nativeSession = $this->createMock(SessionInterface::class);
+        $nativeSession->expects($this->once())->method('invalidate');
+
+        $request = Request::create('https://foreign.example/api/v1/sessions/revoke-current', Request::METHOD_POST);
+        $request->setSession($nativeSession);
+
+        $log = new TestHandler();
+        $response = ($this->controller($store, new Logger('observability', [$log])))($request);
+
+        $this->assertSame(self::HTTP_NO_CONTENT, $response->getStatusCode(), (string) $response->getContent());
+        $this->assertSame([], $this->mercureCookiesOf($response), 'a failed clear must not emit a half-built cookie');
+
+        $records = \array_values(\array_filter(
+            $log->getRecords(),
+            static fn (LogRecord $record): bool => \str_contains($record->message, 'Mercure subscriber cookie'),
+        ));
+
+        $this->assertCount(1, $records, 'the swallowed failure must still be reported once');
+        $this->assertSame(Level::Warning, $records[0]->level);
+        $this->assertInstanceOf(MercureRuntimeException::class, $records[0]->context['exception'] ?? null);
+    }
+
+    /**
+     * @return list<Cookie>
+     */
+    private function mercureCookiesOf(Response $response): array
+    {
+        return \array_values(\array_filter(
+            $response->headers->getCookies(),
+            static fn (Cookie $cookie): bool => 'mercureAuthorization' === $cookie->getName(),
+        ));
+    }
+
+    private function controller(
+        SessionRepository $store,
+        LoggerInterface $logger = new NullLogger(),
+    ): RevokeCurrentSessionController {
         $currentSession = $this->createStub(CurrentSessionReference::class);
         $currentSession->method('get')->willReturn(SessionId::fromString(self::CURRENT_SESSION_ID));
 
@@ -91,7 +140,7 @@ final class RevokeCurrentSessionControllerTest extends TestCase
             $currentSession,
             $revokeSession,
             LegacyProtocolAuthorization::create(),
-            new NullLogger(),
+            $logger,
         );
     }
 }
