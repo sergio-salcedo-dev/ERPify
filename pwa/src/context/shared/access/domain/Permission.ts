@@ -16,6 +16,12 @@ export const PERMISSION_WILDCARD = "*" as const;
  */
 export const Permission = {
   BANK_WRITE: "bank.write",
+  // Documents: file an original (the declare), list documents' metadata and opened names, and read
+  // an original. The last two are ADMIN-only verbs; the bank-account evidence routes require the
+  // custody one beside their bankAccount verb.
+  DOCUMENT_WRITE: "document.write",
+  DOCUMENT_CUSTODY: "document.custody",
+  DOCUMENT_DOWNLOAD: "document.download",
   USERS_READ: "users.read",
   USERS_INVITE: "users.invite",
   USERS_CHANGE_STATUS: "users.changeStatus",
