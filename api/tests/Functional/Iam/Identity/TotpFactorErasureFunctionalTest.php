@@ -22,7 +22,10 @@ use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
+use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
+use Erpify\Shared\Audit\Application\SubjectErasureReconciler;
+use Erpify\Shared\Clock\Domain\SystemClock;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
@@ -40,9 +43,12 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * reconciler anti-joins the tombstone against), and no column of the schema still holds the person's id — the
  * tombstone included, because the scope is the factor's own random id.
  *
- * The fixture is COMMITTED, because the erasure owns a real transaction, and removed by hand however the test
- * ends — the tombstone too, since its evidence is written to the recording logger rather than to `audit_log` and
- * a tombstone left behind would read as a divergence to the reconciler.
+ * The first case COMMITS its fixture, because the erasure owns a real transaction, and removes it by hand however
+ * the test ends — the tombstone too, since its evidence is written to the recording logger rather than to
+ * `audit_log` and a tombstone left behind would read as a divergence to the reconciler. The second case runs the
+ * real pipeline, the real audit logger included, inside an outer transaction it rolls back (the erasure's own
+ * transaction nests as a savepoint), and asks the real subject-erasure reconciler whether the tombstone is
+ * answered — which is the property the evidence scope exists for.
  *
  * @internal
  *
@@ -141,6 +147,39 @@ final class TotpFactorErasureFunctionalTest extends KernelTestCase
         );
     }
 
+    #[Test]
+    public function theRealPipelineLeavesTheTombstoneAnsweredForTheReconciler(): void
+    {
+        $connection = $this->connection();
+        $connection->beginTransaction();
+
+        try {
+            $this->seedCommittedSubjectWithAFactor();
+            $this->assertSame('live', $this->keyState(), 'the key was really there to destroy');
+
+            $result = $this->chain($this->service(AuditLogger::class))->execute($this->subjectId);
+
+            $this->assertSame(1, $result->totpFactorsDeleted);
+            $this->assertSame('erasure', $this->keyState());
+            $this->assertNotContains(
+                $this->scope(),
+                $this->service(SubjectErasureReconciler::class)->unreconciledScopes(),
+                'the tombstone of the erased factor has no GDPR_SUBJECT_ERASED entry naming its scope',
+            );
+            $evidence = $connection->fetchOne(
+                "SELECT COUNT(*) FROM audit_log WHERE action = 'GDPR_SUBJECT_ERASED' "
+                . "AND metadata->>'encryption_scope_id' = :scope",
+                ['scope' => $this->scope()],
+            );
+            $this->assertIsNumeric($evidence);
+            $this->assertSame(1, (int) $evidence);
+        } finally {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+        }
+    }
+
     private function seedCommittedSubjectWithAFactor(): void
     {
         $user = User::register(
@@ -157,11 +196,12 @@ final class TotpFactorErasureFunctionalTest extends KernelTestCase
             $this->subjectId,
             $this->scopeId,
             $this->service(TotpSecretVault::class)->seal($this->scopeId, $this->subjectId, \random_bytes(20)),
+            SystemClock::now(),
         ));
         $this->service(EntityManagerInterface::class)->clear();
     }
 
-    private function chain(RecordingAuditLogger $audit): FulfilIdentityErasure
+    private function chain(AuditLogger $audit): FulfilIdentityErasure
     {
         return new FulfilIdentityErasure(
             $this->service(EraseIdentitySubject::class),

@@ -245,6 +245,7 @@ tests/Functional/Shared/Monitoring/UploadSpoolConcurrencyGateTest.php :: functio
 tests/Unit/Behat/Context/OutboxUnqualifiedStepsTest.php :: mirrored :: tests/Behat/Context
 tests/Unit/Behat/Context/SupersededRunPhrasingsTest.php :: mirrored :: tests/Behat/Context
 tests/Unit/Iam/Identity/Domain/Exception/SelfTargetedRefusalMarkerGateTest.php :: mirrored :: src/Iam/Identity/Domain/Exception
+tests/Unit/Iam/Identity/Infrastructure/Security/SecondFactorCodeBudgetTest.php :: mirrored :: src/Iam/Identity/Infrastructure/Security
 tests/Unit/Shared/Images/ImageConsumerAuthorizationGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImageLifecycleListenerGateTest.php :: mirrored :: src/Shared/Images
 tests/Unit/Shared/Images/ImagePixelBudgetGateTest.php :: mirrored :: src/Shared/Images

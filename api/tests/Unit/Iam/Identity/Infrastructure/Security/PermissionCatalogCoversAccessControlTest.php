@@ -113,7 +113,7 @@ final class PermissionCatalogCoversAccessControlTest extends TestCase
     {
         $catalog = new PermissionCatalog();
 
-        foreach ([
+        $shapes = [
             'an unanchored suffix' => ['path' => '/v1/backoffice/users', 'roles' => 'ROLE_ADMIN'],
             'a character class' => ['path' => '^/[a-z]+/v1/health$', 'roles' => 'ROLE_ADMIN'],
             'an alternation' => ['path' => '^/(?:x|ap)i/', 'roles' => 'ROLE_ADMIN'],
@@ -122,7 +122,9 @@ final class PermissionCatalogCoversAccessControlTest extends TestCase
             'a non-string path' => ['path' => ['^/api'], 'roles' => 'PUBLIC_ACCESS'],
             'a pattern that does not compile' => ['path' => '^/api(', 'roles' => 'PUBLIC_ACCESS'],
             'a request matcher service' => ['request_matcher' => 'app.matcher', 'roles' => 'PUBLIC_ACCESS'],
-        ] as $shape => $rule) {
+        ];
+
+        foreach ($shapes as $shape => $rule) {
             $this->assertNotSame([], $this->accessControlProblems([$rule], $catalog, self::ENGINE_PROBES), \sprintf(
                 'An access_control rule with %s must be reported.',
                 $shape,

@@ -16,10 +16,14 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per rule of the aggregate
  */
 #[CoversClass(TotpFactor::class)]
 final class TotpFactorTest extends TestCase
 {
+    private const string ENROLMENT_STARTED_AT = '2041-03-07T10:00:00+00:00';
+
     #[Test]
     public function anEnrolmentIsPendingAndCarriesOnlyTheCiphertext(): void
     {
@@ -33,11 +37,16 @@ final class TotpFactorTest extends TestCase
     }
 
     #[Test]
-    public function theOwnerIsHeldInItsCanonicalSpelling(): void
+    public function theOwnerAndTheScopeAreHeldInTheirCanonicalSpelling(): void
     {
-        $factor = TotpFactorMother::pendingFor(userId: \strtoupper(UserMother::DEFAULT_ID));
+        // Keystore scopes compare exactly, so the spelling that seals has to be the spelling that destroys.
+        $factor = TotpFactorMother::pendingFor(
+            userId: \strtoupper(UserMother::DEFAULT_ID),
+            scopeId: \strtoupper(TotpFactorMother::DEFAULT_SCOPE_ID),
+        );
 
         $this->assertSame(UserMother::DEFAULT_ID, $factor->userId());
+        $this->assertSame(TotpFactorMother::DEFAULT_SCOPE_ID, $factor->scopeId());
     }
 
     #[Test]
@@ -64,15 +73,69 @@ final class TotpFactorTest extends TestCase
     }
 
     #[Test]
-    public function aPendingEnrolmentCanBeRestartedWithANewSecret(): void
+    public function aPendingEnrolmentLapsesTenMinutesAfterItStarted(): void
     {
-        $factor = TotpFactorMother::pendingFor();
+        $factor = TotpFactorMother::pendingFor(enrolmentStartedAt: new DateTimeImmutable(self::ENROLMENT_STARTED_AT));
 
-        $factor->restartEnrolment('another-ciphertext');
+        $this->assertFalse($factor->pendingEnrolmentClosedAt(new DateTimeImmutable('2041-03-07T10:09:59+00:00')));
+        $this->assertTrue($factor->pendingEnrolmentClosedAt(new DateTimeImmutable('2041-03-07T10:10:00+00:00')));
+    }
+
+    #[Test]
+    public function aRestartReplacesTheSecretKeepsTheScopeAndRestartsTheWindow(): void
+    {
+        $factor = TotpFactorMother::pendingFor(enrolmentStartedAt: new DateTimeImmutable(self::ENROLMENT_STARTED_AT));
+        $restartedAt = new DateTimeImmutable('2041-03-07T10:30:00+00:00');
+
+        $factor->restartEnrolment('another-ciphertext', $restartedAt);
 
         $this->assertSame('another-ciphertext', $factor->sealedSecret());
         $this->assertSame(TotpFactorMother::DEFAULT_SCOPE_ID, $factor->scopeId(), 'the scope survives a restart');
         $this->assertFalse($factor->isEnabled());
+        $this->assertFalse($factor->pendingEnrolmentClosedAt(new DateTimeImmutable('2041-03-07T10:39:59+00:00')));
+    }
+
+    #[Test]
+    public function aPendingEnrolmentClosesAtItsFifthWrongCodeAndARestartReopensIt(): void
+    {
+        $startedAt = new DateTimeImmutable(self::ENROLMENT_STARTED_AT);
+        $factor = TotpFactorMother::pendingFor(enrolmentStartedAt: $startedAt);
+
+        for ($wrong = 1; $wrong < TotpFactor::MAX_FAILED_CONFIRMATIONS; ++$wrong) {
+            $factor->recordFailedConfirmation($startedAt);
+            $this->assertFalse($factor->pendingEnrolmentClosedAt($startedAt), \sprintf('open after %d', $wrong));
+        }
+
+        $factor->recordFailedConfirmation($startedAt);
+        $this->assertTrue($factor->pendingEnrolmentClosedAt($startedAt), 'closed at the fifth wrong code');
+
+        $factor->restartEnrolment('another-ciphertext', $startedAt);
+
+        $this->assertFalse($factor->pendingEnrolmentClosedAt($startedAt), 'a restart zeroes the count');
+
+        for ($wrong = 1; $wrong < TotpFactor::MAX_FAILED_CONFIRMATIONS; ++$wrong) {
+            $factor->recordFailedConfirmation($startedAt);
+        }
+
+        $this->assertFalse($factor->pendingEnrolmentClosedAt($startedAt), 'four wrong codes after it leave it open');
+    }
+
+    #[Test]
+    public function anEnabledFactorRefusesToCountAConfirmationFailure(): void
+    {
+        $factor = TotpFactorMother::enabledFor();
+
+        $this->expectException(SecondFactorAlreadyEnabled::class);
+
+        $factor->recordFailedConfirmation(new DateTimeImmutable(self::ENROLMENT_STARTED_AT));
+    }
+
+    #[Test]
+    public function anEnabledFactorNeverLapses(): void
+    {
+        $factor = TotpFactorMother::enabledFor();
+
+        $this->assertFalse($factor->pendingEnrolmentClosedAt(new DateTimeImmutable('2099-01-01T00:00:00+00:00')));
     }
 
     #[Test]
@@ -82,7 +145,7 @@ final class TotpFactorTest extends TestCase
         $sealed = $factor->sealedSecret();
 
         try {
-            $factor->restartEnrolment('another-ciphertext');
+            $factor->restartEnrolment('another-ciphertext', new DateTimeImmutable(self::ENROLMENT_STARTED_AT));
             $this->fail('An enabled factor must not be replaced.');
         } catch (SecondFactorAlreadyEnabled) {
             $this->assertSame($sealed, $factor->sealedSecret());
@@ -94,6 +157,12 @@ final class TotpFactorTest extends TestCase
     {
         $this->expectException(InvalidUuidException::class);
 
-        TotpFactor::enrol(TotpFactorMother::DEFAULT_ID, UserMother::DEFAULT_ID, 'not-a-uuid', 'ciphertext');
+        TotpFactor::enrol(
+            TotpFactorMother::DEFAULT_ID,
+            UserMother::DEFAULT_ID,
+            'not-a-uuid',
+            'ciphertext',
+            new DateTimeImmutable(self::ENROLMENT_STARTED_AT),
+        );
     }
 }

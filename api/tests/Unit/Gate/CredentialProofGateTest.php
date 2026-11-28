@@ -45,14 +45,21 @@ final class CredentialProofGateTest extends TestCase
     }
 
     /**
-     * The three acts that motivated the rule stay under it: reclassifying one as `ordinary` would pass every
-     * other assertion here, which is the direction the registry cannot judge on its own.
+     * The three acts that motivated the rule stay under it, and so does the enrolment of a second factor, which
+     * creates a credential of the caller's own: reclassifying one as `ordinary` would pass every other assertion
+     * here, which is the direction the registry cannot judge on its own.
      */
     public function testTheKnownCredentialActsStayClassifiedAsCredentialAffecting(): void
     {
         $registry = $this->policy()->registry();
+        $routes = [
+            'iam_me_change_password',
+            'iam_me_mint_recovery_secret',
+            'iam_me_revoke_recovery_secret',
+            'iam_me_enrol_totp',
+        ];
 
-        foreach (['iam_me_change_password', 'iam_me_mint_recovery_secret', 'iam_me_revoke_recovery_secret'] as $route) {
+        foreach ($routes as $route) {
             $this->assertSame(CredentialProofRules::CREDENTIAL_AFFECTING, $registry[$route]['class'] ?? null, $route);
         }
     }
@@ -74,7 +81,7 @@ final class CredentialProofGateTest extends TestCase
     }
 
     /**
-     * The erasures are the seventh, eighth and ninth pinned routes — one document, every version of a series, and a
+     * The erasures are the eighth, ninth and tenth pinned routes — one document, every version of a series, and a
      * person's identity: none can be undone even from a backup, so a stolen session must not be enough.
      * Reclassifying one `ordinary` passes every other assertion here, so the classification itself is pinned.
      */

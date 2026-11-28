@@ -90,6 +90,7 @@ final class FulfilIdentityErasureCredentialArtefactTest extends TestCase
             'memberships_deleted' => 0,
             'invitations_deleted' => 0,
             'document_references_anonymised' => 0,
+            'totp_factors_deleted' => 0,
         ], $audit->records[1]['metadata']);
     }
 

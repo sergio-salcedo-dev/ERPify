@@ -3189,8 +3189,10 @@ mitigated state. Accepting one means recording who accepted it and against which
       accept, change-password and recovery redeem still mint a session on the password alone. Until the second step
       ships, an enabled factor protects nothing, and nothing in the product tells its owner so. Nothing disables or
       resets a factor either (mfa-3, mfa-4), so an owner who loses the device keeps a factor that is not yet
-      enforced and cannot remove it. **Open — owner: story mfa-2 (the second step on every minting path), which
-      closes it; the PWA panel (mfa-6) must not offer enrolment before mfa-2 and mfa-3 are merged.**
+      enforced and cannot remove it, and holds no recovery codes: a factor enabled now gets them through the
+      recovery-code generation route mfa-3 adds behind a password re-proof, which also serves factors enabled before
+      it (owner, 2026-11-28). **Open — owner: story mfa-2 (the second step on every minting path), which closes it;
+      the PWA panel (mfa-6) must not offer enrolment before mfa-2 and mfa-3 are merged.**
 - [ ] **A second-factor secret is crypto-shredded by its erasure, not by an older backup.** The identity erasure
       deletes the factor row and tombstones its `TotpFactor:<scope>` key in one transaction, and the
       `GDPR_SUBJECT_ERASED` entry carries that scope so the subject-erasure reconciler has the tombstone answered. A
@@ -3199,12 +3201,22 @@ mitigated state. Accepting one means recording who accepted it and against which
       restore to that dump brings the second factor back together with the identity row itself; the identity
       erasure has no ledger replay of the kind the Documents erasure has (`docs/runbooks/documents-erasure-ledger.md`).
       **Open — owner: the backup and restore policy; recorded in `docs/adr/two-step-verification.md` D4.**
-- [ ] **The enrolment confirmation is `ordinary` in the credential-proof gate.** `POST …/totp/confirm` needs no
-      password: a stolen session that reaches it can at most enable the OWNER's pending authenticator (the secret was
-      issued behind a password re-proof), bounded by the per-identity code budget (`second_factor_code_per_identity`,
-      10 per 15 minutes, literals). It never hands the account to the caller. **Accepted by design in
-      `docs/adr/two-step-verification.md` D3; reopen if a route ever lets a session start an enrolment without the
-      password.**
+- [x] **The enrolment confirmation re-proves no password — accepted by Sergio on 2026-11-28, against no customer
+      (ERPify has no deployment yet).** `POST …/totp/confirm` is `ordinary`: a stolen session that reaches it during
+      an owner's pending enrolment can at most enable the OWNER's authenticator (the secret was issued behind a
+      password re-proof). The bound is not the rate limiter — `second_factor_code_per_identity` has
+      `lock_factory: null` and lives in the filesystem pool reset on every deploy, so it is an attenuator — but the
+      enrolment itself: a pending factor expires after 10 minutes and admits at most 5 wrong codes, counted in
+      Postgres under the factor's row lock, and only a new enrolment (password re-proof, shared budget) restarts it —
+      at most 1.5×10⁻⁵ per enrolment. The worst outcome is an owner who abandoned an enrolment finding it enabled and
+      needing an administrator reset. **Reopen** if the confirmation ever returns recovery codes, or if any route lets
+      a session start or restart an enrolment without the password. ADR `two-step-verification.md` D3.
+- [ ] **No persisted wall bounds guessing an enabled factor's code yet.** The only budget a later code route would
+      spend is `second_factor_code_per_identity`, which a burst overruns and a deploy resets; nominally 960 guesses a
+      day (≈0.29 %/day, ≈8 %/month against six digits ±1 step). **Open — owner: story mfa-2**, which must add a
+      persisted per-factor consecutive-failure counter (row lock, reset only by an accepted code, never feeding the
+      email-keyed lockout) bounding a sustained 30-day attack to ≤10⁻³ before the login's second step spends the
+      bucket; mfa-3's disable route spends it too.
 
 ## 8. Deploy & verify
 

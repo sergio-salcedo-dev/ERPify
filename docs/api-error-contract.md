@@ -237,8 +237,11 @@ three surfaces, `recovery-secret-already-exists`; every other value here is an e
 
 Both routes are authenticated and grade per identity; the subject is always the caller. Starting an enrolment
 re-proves the current password and answers **201** with the secret (`secret`, base32, and `provisioningUri`, the
-`otpauth://` URI) — the one response that ever carries it. Confirming answers **200** with `enabledAt` and never
-the secret. Rationale: ADR [`two-step-verification.md`](adr/two-step-verification.md).
+`otpauth://` URI) — the one response that ever carries it, marked `Cache-Control: no-store` (as is the 201 of
+`POST /api/v1/me/recovery-secret`). Confirming answers **200** with `enabledAt` and never the secret; by then every
+session of the identity has been revoked and the asking device signed back in, and the owner is mailed, both after
+the commit and best effort, so neither can turn the 200 into an error. Rationale: ADR
+[`two-step-verification.md`](adr/two-step-verification.md).
 
 | Outcome | Wire result | Why |
 |---------|-------------|-----|
@@ -248,9 +251,9 @@ the secret. Rationale: ADR [`two-step-verification.md`](adr/two-step-verificatio
 | Budget spent (enrol) | **429 `rate-limited`** | The shared per-identity password-proof budget (`CurrentPasswordProofThrottle`); the route is `credential-affecting`. |
 | Factor already enabled (either route) | **409 `second-factor-already-enabled`** | [`SecondFactorAlreadyEnabled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorAlreadyEnabled.php), a `Conflict` with a `type()` of its own: an enabled factor is never re-issued or replaced, so the secret cannot be read again and the owner's authenticator cannot be swapped without the code they hold. Disabling it first is the remedy. A pending enrolment is restarted instead (201, new secret, same scope). |
 | Two first enrolments raced past the locked read | **409 `concurrent-unique-write`** | The unique index on `user_id`, translated to the generic retryable conflict: the loser met a pending row a retry restarts. Unreachable in practice, since both lock the identity row first. |
-| No enrolment to confirm | **409 `second-factor-not-enrolled`** | [`SecondFactorNotEnrolled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorNotEnrolled.php), a `Conflict`: the account exists, the remedy is a state change. |
-| Wrong, expired, malformed or replayed code (confirm) | **403 `invalid-second-factor-code`** | [`InvalidSecondFactorCode`](../api/src/Iam/Identity/Domain/Exception/InvalidSecondFactorCode.php), a `Forbidden`: one answer for all four, nothing mutates. 403 and never 401 for the reason the password change gives. A malformed code is not a 422, so validation never grades how close a guess came. |
-| Code budget spent (confirm) | **429 `rate-limited`** | `SecondFactorCodeThrottle` (`second_factor_code_per_identity`, 10 per 15 minutes), the bucket every route verifying a code spends; refused out loud because the route is reachable only through a session. |
+| No enrolment to confirm, or a pending one that is closed (confirm) | **409 `second-factor-not-enrolled`** | [`SecondFactorNotEnrolled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorNotEnrolled.php), a `Conflict`: the account exists, the remedy is a state change. A pending enrolment closes 10 minutes after it started or at its 5th wrong code (`TotpFactor::PENDING_TTL`, `MAX_FAILED_CONFIRMATIONS`), and answers exactly like none, with no type of its own, because the remedy is the same — enrol again, behind the password — and a distinct answer would only tell a guesser the cap was reached. Even the correct code is refused once it is closed. |
+| Wrong, out-of-window, malformed or replayed code (confirm) | **403 `invalid-second-factor-code`** | [`InvalidSecondFactorCode`](../api/src/Iam/Identity/Domain/Exception/InvalidSecondFactorCode.php), a `Forbidden`: one answer for all four. The failure is counted on the factor row and that count COMMITS although the request is refused (the transaction returns, the refusal is thrown after the commit); nothing else mutates. 403 and never 401 for the reason the password change gives. A malformed code is not a 422, so validation never grades how close a guess came. |
+| Code budget spent (confirm) | **429 `rate-limited`** | `SecondFactorCodeThrottle` (`second_factor_code_per_identity`, 10 per 15 minutes), spent before the use case, so even a correct code is refused; refused out loud because the route is reachable only through a session. An attenuator, not the wall (no lock factory, reset on deploy): the wall is the enrolment's cap above. |
 | The sealed secret cannot be opened (confirm) | **500 `second-factor-integrity-failure`** | The marker-less [`SecondFactorIntegrityFailure`](../api/src/Iam/Identity/Domain/Exception/SecondFactorIntegrityFailure.php), Sentry-visible, carrying the crypto cause as `previous` and nothing in the body. |
 | Blank or oversized field, or a member the payload does not declare | **422 `validation-failed`** | `#[StrictRequestPayload]`, before the use case runs. |
 

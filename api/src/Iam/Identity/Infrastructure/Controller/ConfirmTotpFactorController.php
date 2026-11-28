@@ -9,6 +9,7 @@ use DateTimeInterface;
 use Erpify\Iam\Identity\Application\ConfirmTotpFactor;
 use Erpify\Iam\Identity\Application\Resource\TotpFactorEnabledResource;
 use Erpify\Iam\Identity\Infrastructure\Http\ConfirmTotpFactorRequest;
+use Erpify\Iam\Identity\Infrastructure\Security\ReauthenticateDeviceBestEffort;
 use Erpify\Iam\Identity\Infrastructure\Security\SecondFactorCodeThrottle;
 use Erpify\Iam\Identity\Infrastructure\Security\SecurityUser;
 use Erpify\Shared\Http\Infrastructure\Responder\ResourceResponder;
@@ -22,12 +23,18 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  * `POST /me/second-factor/totp/confirm` — the signed-in identity enables its pending TOTP factor with a code
  * computed from the secret its enrolment showed, resolving to `/api/v1/me/second-factor/totp/confirm`.
  *
- * {@see SecondFactorCodeThrottle} runs first: a wrong code feeds no lockout, so that per-identity bucket is the
- * only ceiling on guessing one. It is `ordinary` in `api/.credential-proof-policy`, and the reason is the threat
- * rather than a convenience: the secret it confirms was created behind a password re-proof, so a session that
- * reaches this route without having enrolled can at best enable the OWNER's pending authenticator — tightening
- * the account, never handing it to the caller. The code-proof class of that gate, which binds the routes that
- * remove or bypass a factor with a code, arrives with the first such route.
+ * {@see SecondFactorCodeThrottle} runs first, as an attenuator: `lock_factory: null` lets a burst overrun it and
+ * the filesystem pool resets on deploy. The wall on guessing the code is the enrolment itself — a pending factor
+ * closes after ten minutes or five wrong codes, counted on its row and committed although each refused request
+ * fails, and only a new enrolment behind the password restarts it. It is `ordinary` in
+ * `api/.credential-proof-policy` (accepted by the owner, ADR `two-step-verification.md` D3), and the reason is the
+ * threat rather than a convenience: the secret it confirms was created behind a password re-proof, so a session
+ * that reaches this route without having enrolled can at best enable the OWNER's pending authenticator. A route
+ * that removes or bypasses a factor with a code is a different act and is not classified this way.
+ *
+ * Once the factor is enabled the use case has revoked every session of the identity; this action then signs the
+ * device that asked back in ({@see ReauthenticateDeviceBestEffort}), as `POST /me/password` does, so it is the one
+ * device left signed in.
  *
  * Answers **200** with the instant the factor took effect. The secret never appears in this response.
  */
@@ -39,6 +46,7 @@ final readonly class ConfirmTotpFactorController
     public function __construct(
         private ConfirmTotpFactor $confirmTotpFactor,
         private SecondFactorCodeThrottle $secondFactorCodeThrottle,
+        private ReauthenticateDeviceBestEffort $reauthenticateDevice,
         private ResourceResponder $resourceResponder,
     ) {
     }
@@ -55,6 +63,8 @@ final readonly class ConfirmTotpFactorController
 
         $factor = $this->confirmTotpFactor->enableWithCode($identityId, $request->code);
         $enabledAt = $factor->enabledAt() ?? throw new LogicException('A confirmed factor must carry its instant.');
+
+        $this->reauthenticateDevice->reauthenticate($user->getUserIdentifier());
 
         return $this->resourceResponder->respond(
             new TotpFactorEnabledResource($this->atom($enabledAt)),

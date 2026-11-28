@@ -13,10 +13,10 @@ namespace Erpify\Iam\Identity\Application;
  * a ten-year TTL and no sweep — and an operator reading a single figure could not tell which of them a
  * surprising number came from.
  *
- * `destroyedTotpScope` is the encryption scope whose key this run tombstoned with the second factor, or `null`.
- * It is carried so the compliance entry can name it: a destroyed key with no `GDPR_SUBJECT_ERASED` entry carrying
- * its scope is a divergence the subject-erasure reconciler reports for ever. The two trailing members default so
- * a result that erased no second factor reads as one.
+ * `erasedTotpScope` is the encryption scope of the second factor this run deleted, whose key it tombstoned or found
+ * tombstoned, or `null`. It is carried so the compliance entry can name it: a destroyed key with no
+ * `GDPR_SUBJECT_ERASED` entry carrying its scope is a divergence the subject-erasure reconciler reports for ever.
+ * The two trailing members default so a result that erased no second factor reads as one.
  */
 final readonly class IdentityErasureResult
 {
@@ -26,7 +26,7 @@ final readonly class IdentityErasureResult
         public int $resetTokensDeleted,
         public int $recoverySecretsDeleted,
         public int $totpFactorsDeleted = 0,
-        public ?string $destroyedTotpScope = null,
+        public ?string $erasedTotpScope = null,
     ) {
     }
 

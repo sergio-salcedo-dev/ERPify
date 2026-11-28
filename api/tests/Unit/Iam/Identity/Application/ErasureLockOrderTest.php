@@ -51,7 +51,8 @@ use PHPUnit\Framework\TestCase;
  * {@see \Erpify\Iam\Identity\Application\RevokeRecoverySecret} take `identity_user` before
  * `identity_recovery_secret` — the third because proving the current password reads the user row, which is
  * what made revocation a two-lock path; {@see \Erpify\Iam\Identity\Application\EnrolTotpFactor} and
- * {@see \Erpify\Iam\Identity\Application\ConfirmTotpFactor} take `identity_user` before `identity_totp_factor`. Two of them close a cycle with the chain's opposite order, and a
+ * {@see \Erpify\Iam\Identity\Application\ConfirmTotpFactor} take `identity_user` before `identity_totp_factor`.
+ * Two of them close a cycle with the chain's opposite order, and a
  * cycle in a wait-for graph is `40P01`.
  *
  * **The chain is the member that conforms, and the rule is not a probability estimate.** The order of a shared
@@ -130,8 +131,8 @@ final class ErasureLockOrderTest extends TestCase
             ],
             $journal->crossTableOrder(),
             'The erasure chain no longer acquires in the order the accept, revoke, reset, recovery-secret and '
-            . 'second-factor paths agree on. Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot '
-            . 'reorder itself, and the deadlock surfaces as a 503 with nothing in the code to explain it.',
+            . 'second-factor paths agree on. Swapping any adjacent pair re-opens an ABBA deadlock with a path that '
+            . 'cannot reorder itself, and the deadlock surfaces as a 503 with nothing in the code to explain it.',
         );
     }
 

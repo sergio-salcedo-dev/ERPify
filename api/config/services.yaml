@@ -234,6 +234,10 @@ services:
         arguments:
             $logger: '@monolog.logger.observability'
 
+    Erpify\Iam\Identity\Application\SendSecondFactorEnabledEmailBestEffort:
+        arguments:
+            $logger: '@monolog.logger.observability'
+
     Erpify\Iam\Invitation\Application\SendInvitationEmailBestEffort:
         arguments:
             $logger: '@monolog.logger.observability'

@@ -133,8 +133,7 @@ Feature: Erase an identity (GDPR right to erasure)
     # The Documents rewrite is +3, measured: one UPDATE over the subject's upload intents, one over their
     # documents and one over their custody rows, each a single statement however many rows it matches.
     # The second factor is +1: one `SELECT … FOR UPDATE` of the subject's `identity_totp_factor` row, which matches
-    # nothing here, so neither its delete nor its key's tombstone runs; a subject holding a factor adds both. That
-    # term was derived from the code rather than measured, so re-measure it before trusting it.
+    # nothing here, so neither its delete nor its key's tombstone runs; a subject holding a factor adds both.
     And 28 requests got executed for doctrine connection "default"
 
   Scenario: Erasure anonymises the subject's document references and never erases the document

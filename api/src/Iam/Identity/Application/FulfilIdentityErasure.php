@@ -291,8 +291,7 @@ final readonly class FulfilIdentityErasure
      * `encryption_scope_id` is what the subject-erasure reconciler anti-joins the `dek_keystore` tombstone
      * against, so a destroyed key without it is a divergence reported for ever. It is the factor's own random
      * scope, which names nothing about the person, so it may sit in `metadata`, the one column the anonymiser
-     * below never rewrites. A scope this run did not tombstone is not carried: its tombstone was answered when it
-     * was written.
+     * below never rewrites.
      *
      * @return array<string, int|string>
      */
@@ -304,8 +303,8 @@ final readonly class FulfilIdentityErasure
 
         $evidence = ['totp_factors_deleted' => $identity->totpFactorsDeleted];
 
-        if (null !== $identity->destroyedTotpScope) {
-            $evidence['encryption_scope_id'] = $identity->destroyedTotpScope;
+        if (null !== $identity->erasedTotpScope) {
+            $evidence['encryption_scope_id'] = $identity->erasedTotpScope;
         }
 
         return $evidence;
@@ -397,6 +396,7 @@ final readonly class FulfilIdentityErasure
             'memberships_deleted' => $result->membershipsDeleted,
             'invitations_deleted' => $result->invitationsDeleted,
             'document_references_anonymised' => $result->documentReferencesAnonymised,
+            'totp_factors_deleted' => $result->totpFactorsDeleted,
         ]);
     }
 

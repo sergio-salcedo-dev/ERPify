@@ -75,6 +75,22 @@ final class Rfc6238TotpAlgorithmTest extends TestCase
     }
 
     #[Test]
+    public function whenTwoStepsOfTheWindowShareACodeTheLatestIsAccepted(): void
+    {
+        // Steps 153567 and 153569 of the RFC secret both yield 468457 (found by search), so at step 153568 the
+        // window holds the code twice. Accepting the later one moves the stored step as far forward as the code
+        // allows, so the earlier step cannot be replayed afterwards.
+        $algorithm = new Rfc6238TotpAlgorithm();
+        $this->assertSame('468457', $algorithm->codeAt(self::RFC_SECRET, 153_567));
+        $this->assertSame('468457', $algorithm->codeAt(self::RFC_SECRET, 153_569));
+
+        $at = new DateTimeImmutable('@' . (153_568 * 30));
+
+        $this->assertSame(153_569, $algorithm->matchingStep(self::RFC_SECRET, '468457', $at, null));
+        $this->assertNull($algorithm->matchingStep(self::RFC_SECRET, '468457', $at, 153_569));
+    }
+
+    #[Test]
     #[DataProvider('provideAMalformedCodeIsRefusedCases')]
     public function aMalformedCodeIsRefused(string $code): void
     {
