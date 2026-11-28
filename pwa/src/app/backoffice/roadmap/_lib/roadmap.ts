@@ -554,7 +554,7 @@ export const roadmapPhases: RoadmapPhase[] = [
           },
           { name: "Shared upload control and display (PWA)", status: "done" },
           {
-            name: "Consumers: bank logo, user avatar, bank-account image",
+            name: "Consumers: bank logo, user avatar",
             status: "in-progress",
           },
         ],

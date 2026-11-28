@@ -174,8 +174,8 @@
 			vars_regexp {http.request.orig_uri.path} ^/api/v1/documents/uploads/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/content$
 			header_regexp Cookie (?:^|;\s*)PHPSESSID=[^;\s]+
 		}
-		# An image write is the one other body PHP is asked to take whole: the raw bytes of a logo, an avatar or a
-		# bank-account image, up to `erpify.images.max_input_bytes`. Matched like the evidence PUT — original path,
+		# An image write is the one other body PHP is asked to take whole: the raw bytes of a logo or an avatar, up
+		# to `erpify.images.max_input_bytes`. Matched like the evidence PUT — original path,
 		# anchored pattern on a canonical UUID, session cookie required — and bounded in bytes at that parameter's
 		# value. The bound is not what refuses a long body: Caddy cuts it and PHP sees a clean, shorter stream
 		# (measured on the evidence PUT), so the mandatory Content-Length equal to the bytes read is, and a body
@@ -183,7 +183,7 @@
 		@imageWrite {
 			path index.php
 			method PUT
-			vars_regexp {http.request.orig_uri.path} ^/api/v1/backoffice/(?:banks/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/logo|users/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/avatar|bank-accounts/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/image)$
+			vars_regexp {http.request.orig_uri.path} ^/api/v1/backoffice/(?:banks/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/logo|users/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/avatar)$
 			header_regexp Cookie (?:^|;\s*)PHPSESSID=[^;\s]+
 		}
 		# Every other request PHP serves is bounded here, after the rewrite, rather than by its spelling: Symfony
@@ -205,7 +205,7 @@
 			}
 			not {
 				method PUT
-				vars_regexp {http.request.orig_uri.path} ^/api/v1/backoffice/(?:banks/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/logo|users/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/avatar|bank-accounts/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/image)$
+				vars_regexp {http.request.orig_uri.path} ^/api/v1/backoffice/(?:banks/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/logo|users/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/avatar)$
 				header_regexp Cookie (?:^|;\s*)PHPSESSID=[^;\s]+
 			}
 		}

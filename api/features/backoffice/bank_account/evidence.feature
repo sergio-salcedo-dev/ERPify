@@ -7,8 +7,8 @@ Feature: Attach evidence documents to a bank account
   # Both routes are ADMIN-only (`bankAccount.attachEvidence`, `bankAccount.readEvidence`). The bytes travel through
   # the Documents upload first; these routes carry ids. The kind fixes the retention terms the document must have been
   # filed under (an ownership certificate: contract-execution under legitimate-interests, no review date), checked on
-  # the server through the seam Documents publishes. The 410 of the erasure-ledger override and the seam's query cost
-  # are held by the PHPUnit tests; this is the acceptance of what a caller sees.
+  # the server through the seam Documents publishes. The 410 of the erasure-ledger override is held by the PHPUnit
+  # tests; the listing's constant query cost is the last pair of scenarios below.
 
   # The Documents tables are not part of the per-feature fixture backup, so each scenario starts them empty.
   Background:
@@ -32,6 +32,8 @@ Feature: Attach evidence documents to a bank account
     And the JSON node "data.documentName" should be equal to "ownership-certificate.pdf"
     And the JSON node "data.documentSizeBytes" should be equal to the number 5
     And the JSON node "data.attachedBy" should not exist
+    And I execute the SQL query "SELECT action FROM audit_log WHERE resource_type = 'BankAccountEvidence' AND action = 'BANK_ACCOUNT_EVIDENCE_CREATED'"
+    And there should have 1 records in SQL result
     And I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence"
     And the response status code should be 200
     And the header "Cache-Control" should contain "no-store"
@@ -137,3 +139,31 @@ Feature: Attach evidence documents to a bank account
     And the response status code should be 204
     And the "Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount" entity found by "id=acc1de00-0000-7000-8000-0000000000e1" does not exist
     And there should have 0 "Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence" entities found by "bankAccountId=acc1de00-0000-7000-8000-0000000000e1"
+    And I execute the SQL query "SELECT action FROM audit_log WHERE resource_type = 'BankAccountEvidence' AND action = 'BANK_ACCOUNT_EVIDENCE_DELETED'"
+    And there should have 1 records in SQL result
+
+  # One keystore query for the whole list (DocumentNameOpener) and one statement for the documents' rows, whatever the
+  # account holds: each pair asserts ONE number, so a query issued per link makes the larger list cost more.
+  Scenario: The evidence list of one document
+    Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f01" named "one.pdf" in state "ready" created 100 seconds ago
+    And I execute the SQL query "INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) VALUES ('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e2f01', '33333333-3333-7000-8000-000000000002', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f01', 'ownership-certificate', NOW())" on connection "seed"
+    And I am logged in as an administrator
+    When I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence"
+    Then the response status code should be 200
+    And the JSON node "data" should have 1 element
+    And 6 requests got executed only for doctrine connection "default"
+
+  Scenario: The evidence list of four documents costs the same
+    Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f11" named "doc-1.pdf" in state "ready" created 400 seconds ago
+    And a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f12" named "doc-2.pdf" in state "ready" created 300 seconds ago
+    And a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f13" named "doc-3.pdf" in state "ready" created 200 seconds ago
+    And a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f14" named "doc-4.pdf" in state "ready" created 100 seconds ago
+    And I execute the SQL query "INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) VALUES ('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e2f11', '33333333-3333-7000-8000-000000000002', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f11', 'ownership-certificate', NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) VALUES ('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e2f12', '33333333-3333-7000-8000-000000000002', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f12', 'ownership-certificate', NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) VALUES ('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e2f13', '33333333-3333-7000-8000-000000000002', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f13', 'ownership-certificate', NOW())" on connection "seed"
+    And I execute the SQL query "INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) VALUES ('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e2f14', '33333333-3333-7000-8000-000000000002', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1f14', 'ownership-certificate', NOW())" on connection "seed"
+    And I am logged in as an administrator
+    When I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence"
+    Then the response status code should be 200
+    And the JSON node "data" should have 4 elements
+    And 6 requests got executed only for doctrine connection "default"

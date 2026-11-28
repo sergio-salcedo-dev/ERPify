@@ -32,6 +32,12 @@ use LogicException;
  * Refuses, in order: an unknown account (404), a document that does not exist, is erased or is quarantined (422), a
  * document filed under retention terms other than its kind's (422), and a second link of the same document (409).
  *
+ * Accepted on purpose: a document still `received` or `scanning` (the screen attaches right after the upload, before
+ * the scan), one whose scan failed (`scan_failed` can be scanned again and become readable; `quarantined` cannot), and
+ * a `CLOSED` account (evidence about an account can still need filing after it closes; it then holds the account's
+ * deletion until the document is erased, like any other live evidence). The list shows each document's state, and
+ * only a `ready` one can be read.
+ *
  * Each refusal is its own exception class and the document is read through the Documents seam, so the use case's
  * coupling sits above the default threshold by construction.
  *

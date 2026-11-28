@@ -59,6 +59,30 @@ final readonly class DescribeEvidenceDocuments
         return $described;
     }
 
+    /**
+     * The same metadata with no name opened: one statement, no keystore query, nothing unsealed. For a decision that
+     * reads only the state — whether an account's evidence is all erased — so a person-supplied name is not opened to
+     * be thrown away, and a keystore outage cannot fail a deletion or a subject's erasure the name has no part in.
+     *
+     * It does not answer the override's 410: a restore without the ledger can only bring an erased document back as a
+     * live one (an erasure never runs backwards), so a decision on these states errs toward refusing, never toward
+     * releasing evidence that is still live.
+     *
+     * @param list<string> $documentIds well-formed UUIDs
+     *
+     * @return array<string, EvidenceDocument> keyed by the lower-case document id; `name` is always NULL
+     */
+    public function statesOf(array $documentIds): array
+    {
+        $states = [];
+
+        foreach ($this->documents->findMany($documentIds) as $row) {
+            $states[\strtolower($row->id)] = $this->describeRow($row, OpenedName::absent());
+        }
+
+        return $states;
+    }
+
     private function describeRow(DocumentListRow $row, OpenedName $name): EvidenceDocument
     {
         return new EvidenceDocument(

@@ -18,7 +18,9 @@ use Erpify\Documents\Document\Application\Evidence\DescribeEvidenceDocuments;
  * Contract: call it inside the transaction that removes the account, after the account row is locked `FOR UPDATE`.
  * That lock is what keeps an attach (which takes the same lock) from adding a link between this read and the removal.
  * A document erased concurrently only turns a refusal into a success on the next call; nothing here can be made
- * wrong by it, since an erasure never brings a document back.
+ * wrong by it, since an erasure never brings a document back. Reads states only: no name is opened, so a keystore
+ * outage cannot fail the removal, and the erasure ledger's override does not refuse it (see
+ * {@see DescribeEvidenceDocuments::statesOf()}).
  */
 final readonly class LiveEvidenceGuard
 {
@@ -39,7 +41,7 @@ final readonly class LiveEvidenceGuard
             return;
         }
 
-        $described = $this->documents->describe(
+        $described = $this->documents->statesOf(
             \array_map(static fn (BankAccountEvidence $link): string => $link->documentId(), $links),
         );
 
