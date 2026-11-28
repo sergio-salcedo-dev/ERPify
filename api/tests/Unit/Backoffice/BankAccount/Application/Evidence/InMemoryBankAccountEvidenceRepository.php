@@ -36,13 +36,11 @@ final class InMemoryBankAccountEvidenceRepository implements BankAccountEvidence
     #[Override]
     public function holds(string $bankAccountId, string $documentId): bool
     {
-        foreach ($this->links as $link) {
-            if ($link->bankAccountId() === $bankAccountId && $link->documentId() === $documentId) {
-                return true;
-            }
-        }
-
-        return false;
+        return \array_any(
+            $this->links,
+            static fn (BankAccountEvidence $link): bool => $link->bankAccountId() === $bankAccountId
+                && $link->documentId() === $documentId,
+        );
     }
 
     #[Override]

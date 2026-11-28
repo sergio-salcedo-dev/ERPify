@@ -32,8 +32,10 @@ final readonly class DoctrineBankAccountEvidenceRepository implements BankAccoun
         try {
             $this->entityManager->persist($evidence);
             $this->entityManager->flush();
-        } catch (UniqueConstraintViolationException $violation) {
-            if (\str_contains($violation->getMessage(), BankAccountEvidence::ACCOUNT_DOCUMENT_CONSTRAINT)) {
+        } catch (UniqueConstraintViolationException $uniqueConstraintViolationException) {
+            $message = $uniqueConstraintViolationException->getMessage();
+
+            if (\str_contains($message, BankAccountEvidence::ACCOUNT_DOCUMENT_CONSTRAINT)) {
                 throw BankAccountEvidenceAlreadyAttached::of($evidence->bankAccountId(), $evidence->documentId());
             }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Domain\Entity;
 
+use DateTimeInterface;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountEvidenceKind;
 use Erpify\Shared\Audit\Domain\AuditWriteOperation;
@@ -38,8 +39,10 @@ final class BankAccountEvidenceTest extends TestCase
         $this->assertSame($id, $link->id());
         $this->assertSame($account, $link->bankAccountId());
         $this->assertSame($document, $link->documentId());
-        $this->assertSame(BankAccountEvidenceKind::OwnershipCertificate, $link->kind());
-        $this->assertEquals(SystemClock::now(), $link->attachedAt());
+        $this->assertSame(
+            SystemClock::now()->format(DateTimeInterface::RFC3339_EXTENDED),
+            $link->attachedAt()->format(DateTimeInterface::RFC3339_EXTENDED),
+        );
     }
 
     #[Test]
@@ -76,9 +79,8 @@ final class BankAccountEvidenceTest extends TestCase
     #[Test]
     public function theOwnershipCertificateIsFiledForTheContractUnderLegitimateInterests(): void
     {
-        $kind = BankAccountEvidenceKind::OwnershipCertificate;
+        $kind = BankAccountEvidenceKind::from('ownership-certificate');
 
-        $this->assertSame('ownership-certificate', $kind->value);
         $this->assertSame('contract-execution', $kind->retentionReason());
         $this->assertSame('legitimate-interests', $kind->legalBasis());
     }

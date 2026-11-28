@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
-use Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
-use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountEvidenceRepository;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
-use Erpify\Documents\Document\Application\Evidence\EvidenceDocuments;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\KeyState;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Application\Evidence\InertEvidenceRelease;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -140,10 +138,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
             $keystore,
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),
-            new ReleaseBankAccountEvidence(
-                $this->createStub(BankAccountEvidenceRepository::class),
-                $this->createStub(EvidenceDocuments::class),
-            ),
+            InertEvidenceRelease::create(),
         );
     }
 }

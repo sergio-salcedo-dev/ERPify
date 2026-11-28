@@ -14,12 +14,6 @@ namespace Erpify\Backoffice\BankAccount\Domain\Enum;
  */
 enum BankAccountEvidenceKind: string
 {
-    /**
-     * The bank's certificate that the holder owns the account. Kept for the execution of the contract it supports,
-     * processed under legitimate interests pending the adviser's retention matrix, with no review date.
-     */
-    case OwnershipCertificate = 'ownership-certificate';
-
     public function retentionReason(): string
     {
         return match ($this) {
@@ -33,4 +27,10 @@ enum BankAccountEvidenceKind: string
             self::OwnershipCertificate => 'legitimate-interests',
         };
     }
+
+    /**
+     * The bank's certificate that the holder owns the account. Kept for the execution of the contract it supports,
+     * processed under legitimate interests pending the adviser's retention matrix, with no review date.
+     */
+    case OwnershipCertificate = 'ownership-certificate';
 }

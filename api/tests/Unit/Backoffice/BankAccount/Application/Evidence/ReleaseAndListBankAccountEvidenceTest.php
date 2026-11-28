@@ -78,9 +78,12 @@ final class ReleaseAndListBankAccountEvidenceTest extends TestCase
         try {
             $this->release()->releaseAll(BankAccountMother::DEFAULT_ID);
             $this->fail('Expected the release to refuse.');
-        } catch (BankAccountHasLiveEvidence $refusal) {
-            $this->assertSame('bank-account-has-live-evidence', $refusal->type());
-            $this->assertSame(['bankAccountId' => BankAccountMother::DEFAULT_ID], $refusal->context());
+        } catch (BankAccountHasLiveEvidence $bankAccountHasLiveEvidence) {
+            $this->assertSame('bank-account-has-live-evidence', $bankAccountHasLiveEvidence->type());
+            $this->assertSame(
+                ['bankAccountId' => BankAccountMother::DEFAULT_ID],
+                $bankAccountHasLiveEvidence->context(),
+            );
         }
 
         $this->assertSame([], $this->evidence->removed);

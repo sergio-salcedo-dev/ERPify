@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Erpify\Backoffice\BankAccount\Application\Command\AttachBankAccountEvidenceCommand;
 use Erpify\Backoffice\BankAccount\Application\Evidence\AttachBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Application\Evidence\DescribeEvidence;
+use Erpify\Backoffice\BankAccount\Application\Evidence\ListedEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\BankAccountEvidenceKind;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceAlreadyAttached;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountEvidenceDocumentErased;
@@ -85,9 +86,11 @@ final class AttachBankAccountEvidenceTest extends TestCase
     {
         $this->documents->file(self::DOCUMENT_ID);
 
+        $attach = $this->attachToNoAccount();
+
         $this->assertRefusedWith(
             BankAccountNotFoundException::class,
-            fn () => $this->attach(withAccount: false)->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+            fn (): ListedEvidence => $attach->attach(BankAccountMother::DEFAULT_ID, $this->command()),
         );
     }
 
@@ -96,7 +99,7 @@ final class AttachBankAccountEvidenceTest extends TestCase
     {
         $this->assertRefusedWith(
             BankAccountEvidenceDocumentNotFound::class,
-            fn () => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+            fn (): ListedEvidence => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
         );
     }
 
@@ -107,7 +110,7 @@ final class AttachBankAccountEvidenceTest extends TestCase
 
         $this->assertRefusedWith(
             BankAccountEvidenceDocumentErased::class,
-            fn () => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+            fn (): ListedEvidence => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
         );
     }
 
@@ -122,7 +125,7 @@ final class AttachBankAccountEvidenceTest extends TestCase
 
         $this->assertRefusedWith(
             BankAccountEvidenceRetentionMismatch::class,
-            fn () => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+            fn (): ListedEvidence => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
         );
     }
 
@@ -158,14 +161,24 @@ final class AttachBankAccountEvidenceTest extends TestCase
 
         $this->assertRefusedWith(
             DocumentGone::class,
-            fn () => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
+            fn (): ListedEvidence => $this->attach()->attach(BankAccountMother::DEFAULT_ID, $this->command()),
         );
     }
 
-    private function attach(bool $withAccount = true): AttachBankAccountEvidence
+    private function attach(): AttachBankAccountEvidence
+    {
+        return $this->attachOver(new InMemoryBankAccountRepository(BankAccountMother::create()));
+    }
+
+    private function attachToNoAccount(): AttachBankAccountEvidence
+    {
+        return $this->attachOver(new InMemoryBankAccountRepository());
+    }
+
+    private function attachOver(InMemoryBankAccountRepository $accounts): AttachBankAccountEvidence
     {
         return new AttachBankAccountEvidence(
-            new InMemoryBankAccountRepository($withAccount ? BankAccountMother::create() : null),
+            $accounts,
             $this->evidence,
             $this->documents,
             new DescribeEvidence($this->documents),
