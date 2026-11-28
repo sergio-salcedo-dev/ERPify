@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import BankAccountsPage from "@/app/backoffice/banks/[id]/accounts/page";
 import { BankAccount } from "@/context/backoffice/bankaccount/domain/BankAccount";
 import type { BankAccountSearchPage } from "@/context/backoffice/bankaccount/domain/BankAccountRepository";
@@ -96,6 +96,14 @@ const NOT_CLOSED_PROBLEM: ProblemDetails = {
   "correlation-id": "01H-409",
 };
 
+const LIVE_EVIDENCE_PROBLEM: ProblemDetails = {
+  type: "bank-account-has-live-evidence",
+  title: "The bank account still holds evidence that is not erased.",
+  status: 409,
+  instance: "01H-409-evidence-instance",
+  "correlation-id": "01H-409-evidence",
+};
+
 async function openRowDelete(id: string): Promise<void> {
   fireEvent.click(await openRowDeleteItem("bank-accounts-table", id));
 }
@@ -169,6 +177,23 @@ describe("BankAccountsPage — mutations hub", () => {
     expect(screen.queryByTestId("bank-accounts__delete-error-refresh")).toBeNull();
     expect(screen.getByTestId(`bank-accounts-table__row-${CLOSED.id}`)).toBeInTheDocument();
     expect(toastNotifier.error).toHaveBeenCalledWith("Couldn't delete account — see error details");
+  });
+
+  it("a 409 for live evidence links to the account's detail, where its evidence is listed", async () => {
+    deleteRun.mockRejectedValue(new HttpError(LIVE_EVIDENCE_PROBLEM));
+    render(<BankAccountsPage />);
+    await screen.findByTestId(`bank-accounts-table__row-${CLOSED.id}`);
+
+    await openRowDelete(CLOSED.id);
+    fireEvent.click(await screen.findByTestId("bank-accounts-row__delete-confirm"));
+
+    const surface = await screen.findByTestId("bank-accounts__delete-error");
+    expect(surface).toHaveTextContent(LIVE_EVIDENCE_PROBLEM.title);
+    expect(within(surface).getByTestId("bank-accounts__delete-error-evidence")).toHaveAttribute(
+      "href",
+      `/backoffice/bank-accounts/${CLOSED.id}`,
+    );
+    expect(screen.queryByTestId("bank-accounts__delete-error-edit")).toBeNull();
   });
 
   it("refetches the list silently on a realtime delta", async () => {

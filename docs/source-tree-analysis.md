@@ -84,7 +84,7 @@ ERPify/
 │   │   │   ├── ui/                 # Base UI primitives (@base-ui/react) + shared UI
 │   │   │   └── erpify/             # Project-specific components
 │   │   └── context/                # Business logic by bounded context — each capability is a vertical slice carrying only the DDD layers it needs
-│   │       ├── backoffice/         # bank, bankaccount, health, user  — {application,domain,infrastructure}
+│   │       ├── backoffice/         # audit, bank, bankaccount, document, health, user  — {application,domain,infrastructure}
 │   │       ├── frontoffice/        # health  — {application,domain,infrastructure}
 │   │       └── shared/             # capability modules (the dissolved shared kernel): access · date-time-provider · debug-token ·
 │   │                               #   dependency-injection (Inversify) · dev-tools · environment · error (ProblemDetails) ·

@@ -132,7 +132,9 @@ Feature: Erase an identity (GDPR right to erasure)
     # connection so no flush adds a SAVEPOINT/RELEASE pair, whatever the subject held.
     # The Documents rewrite is +3, measured: one UPDATE over the subject's upload intents, one over their
     # documents and one over their custody rows, each a single statement however many rows it matches.
-    And 27 requests got executed for doctrine connection "default"
+    # The second factor is +1: one `SELECT … FOR UPDATE` of the subject's `identity_totp_factor` row, which matches
+    # nothing here, so neither its delete nor its key's tombstone runs; a subject holding a factor adds both.
+    And 28 requests got executed for doctrine connection "default"
 
   Scenario: Erasure anonymises the subject's document references and never erases the document
     # A document the subject uploaded in the `Erased` state (the one a purge keyed on state would skip), holding

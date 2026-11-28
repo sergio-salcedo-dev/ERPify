@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
+use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
@@ -192,10 +193,7 @@ final readonly class FulfilIdentityErasure
                 // Locks both axes as one set before rewriting either — see the port for why ordering the two
                 // statements individually cannot prevent the deadlock they can reach.
                 $anonymisation = $this->auditTrail->beginForSubject($subject);
-                $pseudonymisation = SubjectPseudonymisation::of(
-                    subjectId: $subjectId,
-                    pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
-                );
+                $pseudonymisation = $this->pseudonymisationOf($subjectId, $anonymisation);
 
                 $this->recordSubjectErasure($identity, $subject);
 
@@ -216,6 +214,7 @@ final readonly class FulfilIdentityErasure
                     $membershipsDeleted,
                     $invitationsDeleted,
                     $documentReferencesAnonymised,
+                    $identity->totpFactorsDeleted,
                 );
 
                 $this->recordCombinedErasure($result, $anonymisation->pseudonym);
@@ -223,6 +222,20 @@ final readonly class FulfilIdentityErasure
 
                 return $result;
             },
+        );
+    }
+
+    /**
+     * The pseudonym the actor pass minted, bound to the subject it replaces, for the business-log pass: the same
+     * pseudonym on every table, so one person never splits into two anonymous identities.
+     */
+    private function pseudonymisationOf(
+        string $subjectId,
+        ActorAnonymisationResult $anonymisation,
+    ): SubjectPseudonymisation {
+        return SubjectPseudonymisation::of(
+            subjectId: $subjectId,
+            pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
         );
     }
 
@@ -267,8 +280,34 @@ final readonly class FulfilIdentityErasure
             [
                 'reset_tokens_deleted' => $identity->resetTokensDeleted,
                 'recovery_secrets_deleted' => $identity->recoverySecretsDeleted,
+                ...$this->secondFactorEvidence($identity),
             ],
         );
+    }
+
+    /**
+     * The second factor's part of the compliance entry, present only when the erasure reached one.
+     *
+     * `encryption_scope_id` is what the subject-erasure reconciler anti-joins the `dek_keystore` tombstone
+     * against, so a destroyed key without it is a divergence reported for ever. It is the factor's own random
+     * scope, which names nothing about the person, so it may sit in `metadata`, the one column the anonymiser
+     * below never rewrites.
+     *
+     * @return array<string, int|string>
+     */
+    private function secondFactorEvidence(IdentityErasureResult $identity): array
+    {
+        if (0 === $identity->totpFactorsDeleted) {
+            return [];
+        }
+
+        $evidence = ['totp_factors_deleted' => $identity->totpFactorsDeleted];
+
+        if (null !== $identity->erasedTotpScope) {
+            $evidence['encryption_scope_id'] = $identity->erasedTotpScope;
+        }
+
+        return $evidence;
     }
 
     /**
@@ -357,6 +396,7 @@ final readonly class FulfilIdentityErasure
             'memberships_deleted' => $result->membershipsDeleted,
             'invitations_deleted' => $result->invitationsDeleted,
             'document_references_anonymised' => $result->documentReferencesAnonymised,
+            'totp_factors_deleted' => $result->totpFactorsDeleted,
         ]);
     }
 

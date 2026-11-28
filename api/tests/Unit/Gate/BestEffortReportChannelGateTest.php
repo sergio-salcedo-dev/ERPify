@@ -133,6 +133,7 @@ final class BestEffortReportChannelGateTest extends TestCase
         'SendInvitationEmailBestEffort.php',
         'SendPasswordChangedEmailBestEffort.php',
         'SendPasswordResetEmailBestEffort.php',
+        'SendSecondFactorEnabledEmailBestEffort.php',
         'SweepCappedDocuments.php',
         'SweepOrphanDerivatives.php',
         'SweepStagedOrphans.php',

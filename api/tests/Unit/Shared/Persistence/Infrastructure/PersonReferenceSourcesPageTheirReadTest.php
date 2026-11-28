@@ -11,6 +11,7 @@ use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalUploadInte
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalErasureResweepPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalRecoverySecretPersonReferences;
+use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalTotpFactorPersonReferences;
 use Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DbalInvitationPersonReferences;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DbalSessionPersonReferences;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DbalMembershipPersonReferences;
@@ -42,6 +43,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DbalInvitationPersonReferences::class)]
 #[CoversClass(DbalPasswordResetTokenPersonReferences::class)]
 #[CoversClass(DbalRecoverySecretPersonReferences::class)]
+#[CoversClass(DbalTotpFactorPersonReferences::class)]
 #[CoversClass(DbalErasureResweepPersonReferences::class)]
 #[CoversClass(DbalPersonResourceReferences::class)]
 #[CoversClass(DbalDocumentUploaderPersonReferences::class)]
@@ -106,26 +108,7 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
                 ->retainedPersonIds(),
         ];
 
-        yield 'password reset token' => [
-            DbalPasswordResetTokenPersonReferences::class,
-            static fn (Connection $connection): array => (new DbalPasswordResetTokenPersonReferences($connection, 1))
-                ->retainedPersonIds(),
-        ];
-
-        yield 'recovery secret' => [
-            DbalRecoverySecretPersonReferences::class,
-            static fn (Connection $connection): array => (new DbalRecoverySecretPersonReferences($connection, 1))
-                ->retainedPersonIds(),
-        ];
-
-        yield 'erasure resweep' => [
-            DbalErasureResweepPersonReferences::class,
-            static fn (Connection $connection): array => (new DbalErasureResweepPersonReferences(
-                $connection,
-                new FixedClock(SystemClock::now()),
-                1,
-            ))->retainedPersonIds(),
-        ];
+        yield from self::identityCredentialCases();
 
         yield 'document uploader' => [
             DbalDocumentUploaderPersonReferences::class,
@@ -149,6 +132,41 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
             DbalPersonResourceReferences::class,
             static fn (Connection $connection): array => (new DbalPersonResourceReferences($connection, 1))
                 ->unerasedIdsOfType('User'),
+        ];
+    }
+
+    /**
+     * The identity context's credential and erasure tables, split out only to keep the provider readable.
+     *
+     * @return iterable<string, array{class-string, callable(Connection): list<string>}>
+     */
+    private static function identityCredentialCases(): iterable
+    {
+        yield 'password reset token' => [
+            DbalPasswordResetTokenPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalPasswordResetTokenPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'recovery secret' => [
+            DbalRecoverySecretPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalRecoverySecretPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'second factor' => [
+            DbalTotpFactorPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalTotpFactorPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'erasure resweep' => [
+            DbalErasureResweepPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalErasureResweepPersonReferences(
+                $connection,
+                new FixedClock(SystemClock::now()),
+                1,
+            ))->retainedPersonIds(),
         ];
     }
 

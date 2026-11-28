@@ -47,6 +47,11 @@ vi.mock("@/context/shared/notification/infrastructure/Toast", async () => ({
   toastNotifier: toast,
 }));
 
+// The evidence panel reads the session and has its own suite; this one is about the account.
+vi.mock("@/app/backoffice/bank-accounts/_components/BankAccountEvidencePanel", () => ({
+  BankAccountEvidencePanel: () => null,
+}));
+
 vi.mock("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime", async () =>
   (await import("./_mocks")).bankAccountRealtimeMock(),
 );

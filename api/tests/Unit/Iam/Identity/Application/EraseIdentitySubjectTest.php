@@ -5,17 +5,26 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Iam\Identity\Application;
 
 use Erpify\Iam\Identity\Application\EraseIdentitySubject;
+use Erpify\Iam\Identity\Application\TotpSecretVault;
 use Erpify\Shared\Audit\Application\AuditLogger;
+use Erpify\Shared\Crypto\Application\WrappedDek;
+use Erpify\Shared\Crypto\Domain\DestroyReason;
+use Erpify\Shared\Crypto\Domain\KeyState;
 use Erpify\Shared\Uuid\Domain\InvalidUuidException;
 use Erpify\Tests\Support\ConstructorCollaboratorTypes;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\RecoverySecretMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\TotpFactorMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Shared\Crypto\InMemoryKeystore;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
 /**
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the arrange names one double per table the erasure reaches,
+ *                                                   plus the keystore whose tombstone it asserts
  */
 #[CoversClass(EraseIdentitySubject::class)]
 final class EraseIdentitySubjectTest extends TestCase
@@ -39,6 +48,57 @@ final class EraseIdentitySubjectTest extends TestCase
         $this->assertTrue($users->removeCalled);
         $this->assertSame([UserMother::DEFAULT_ID], $tokens->deleteAllForUserCalls);
         $this->assertSame([UserMother::DEFAULT_ID], $secrets->deleteAllForUserCalls);
+    }
+
+    public function testErasesTheSecondFactorAndDestroysTheKeyThatSealedIt(): void
+    {
+        $factors = new InMemoryTotpFactorRepository(TotpFactorMother::pendingFor());
+        $keystore = new InMemoryKeystore();
+        $scope = TotpSecretVault::scopeOf(TotpFactorMother::DEFAULT_SCOPE_ID);
+        $keystore->store($scope, new WrappedDek('wrapped-key-material', 1));
+
+        $this->assertSame(KeyState::Live, $keystore->lockState($scope), 'the seed must hold the key to destroy');
+
+        $result = $this->useCase(
+            new InMemoryUserRepository(UserMother::create()),
+            new InMemoryPasswordResetTokenRepository(),
+            new InMemoryRecoverySecretRepository(),
+            $factors,
+            $keystore,
+        )->execute(UserMother::DEFAULT_ID);
+
+        $this->assertSame(1, $result->totpFactorsDeleted);
+        $this->assertCount(1, $factors->removed);
+        $this->assertSame(KeyState::Tombstoned, $keystore->lockState($scope));
+        $this->assertSame(DestroyReason::Erasure, $keystore->reasonFor($scope));
+        // The scope travels to the compliance entry, which is what answers the tombstone. It is the factor's own
+        // random scope, so it names nothing about the person.
+        $this->assertSame($scope->toString(), $result->erasedTotpScope);
+        $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $result->erasedTotpScope);
+    }
+
+    public function testASecondFactorWhoseKeyIsAlreadyTombstonedStillReportsItsScope(): void
+    {
+        $keystore = new InMemoryKeystore();
+        $keystore->destroy(TotpSecretVault::scopeOf(TotpFactorMother::DEFAULT_SCOPE_ID), DestroyReason::Erasure);
+
+        $result = $this->useCase(
+            new InMemoryUserRepository(),
+            new InMemoryPasswordResetTokenRepository(),
+            new InMemoryRecoverySecretRepository(),
+            new InMemoryTotpFactorRepository(TotpFactorMother::pendingFor()),
+            $keystore,
+        )->execute(UserMother::DEFAULT_ID);
+
+        // The orphan row still leaves, and still counts as an erasure: a partial erasure re-run must finish.
+        $this->assertSame(1, $result->totpFactorsDeleted);
+        $this->assertTrue($result->erasedAnything());
+        // The scope still travels to the evidence: nothing guarantees the earlier tombstone has an entry of its own,
+        // and an unanswered tombstone is reported by the reconciler for ever, while a second entry costs nothing.
+        $this->assertSame(
+            TotpSecretVault::scopeOf(TotpFactorMother::DEFAULT_SCOPE_ID)->toString(),
+            $result->erasedTotpScope,
+        );
     }
 
     public function testItHoldsNoAuditCollaboratorSoItCannotPersistAnIdentifierItCannotErase(): void
@@ -86,7 +146,9 @@ final class EraseIdentitySubjectTest extends TestCase
         InMemoryUserRepository $users,
         InMemoryPasswordResetTokenRepository $tokens,
         InMemoryRecoverySecretRepository $secrets,
+        InMemoryTotpFactorRepository $factors = new InMemoryTotpFactorRepository(),
+        InMemoryKeystore $keystore = new InMemoryKeystore(),
     ): EraseIdentitySubject {
-        return new EraseIdentitySubject($users, $tokens, $secrets, new InlineTransactionManager());
+        return new EraseIdentitySubject($users, $tokens, $secrets, $factors, $keystore, new InlineTransactionManager());
     }
 }

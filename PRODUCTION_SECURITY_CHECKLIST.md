@@ -3110,8 +3110,67 @@ mitigated state. Accepting one means recording who accepted it and against which
       limiter buckets. History: the user chose documentation over a separate secret on 2026-11-08, and asked for the
       secret on 2026-11-27; the cost is one more required production secret to generate and custody.
 - [ ] **What a browser does with an early 422/410 while it is still sending the body was not measured.**
-      `curl` stops on h1.1 and h2; a browser `fetch` may keep sending until the server closes. **Open — owner: the
-      first UI story that uploads evidence.**
+      `curl` stops on h1.1 and h2; a browser may keep sending until the server closes. The first browser client now
+      exists (doc-12, `ApiDocumentUploader`): it PUTs with `XMLHttpRequest`, so the refusal surfaces when the browser
+      completes the response, and the user can cancel; whether the browser stops sending at that point, and whether the
+      progress bar keeps advancing until it does, were not measured — the session that wrote it had no running stack or
+      browser. **Open — owner: the doc-12 review, against the running stack (Chrome and Firefox, h1.1 and h2).**
+- [ ] **Bank-account evidence: what the first consumer leaves (doc-12).** An account holds documents by id in
+      `bank_account_evidence`, a document is evidence of one account at most (`UNIQUE (document_id)`, a 409 on a
+      second attach), and a link is removed by an audited detach under the account's row lock. Each residual below is
+      a decision, not a gap found later; each names what reopens it.
+      - **A bank-account subject's erasure waits on its documents.** `bank-account:gdpr:erase-subject` refuses (409
+        `bank-account-has-live-evidence`, exit 1) while a linked document is not `Erased`: a document is erased only by
+        its own operator action, which re-proves the password and writes the ledger, and an erasure never erases a
+        document as a side effect. The operator erases each document first (`--dry-run` lists every one still live);
+        until then the holder's account row, and its PII, stay. The business delete takes the same 409, and the two
+        account lists link it to the account's detail. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when a subject's erasure must complete within
+        a deadline the operator cannot meet document by document, or when the PWA's document erase action (doc-13)
+        is found insufficient.
+      - **Any ADMIN may attach any document id.** The attach checks existence, state, the retention terms and that no
+        account holds it already, never who filed the document: an ADMIN already reads every document, so a row-level
+        rule would refuse nothing that audience cannot reach, and the attach's audit row names the actor. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet).
+        **Reopens** when a role other than ADMIN is granted `document.custody` or `bankAccount.write` together with
+        `document.write`.
+      - **The evidence routes reuse `document.custody`** beside their `bankAccount` verb rather than minting
+        `bankAccount.attachEvidence`: one fewer catalog entry for the same ADMIN-only audience, at the price that
+        granting `document.custody` to a role later also grants it the evidence listing, attach and detach. The PWA
+        checks all three permissions (`document.write`, `document.custody`, `bankAccount.write`) before offering the
+        attach or the detach. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when `document.custody` is granted to any role but ADMIN.
+      - **The PUT and the download bypass `HttpClient`.** The raw-body PUT is an `XMLHttpRequest` (the only browser
+        transport with upload progress and an exact `Content-Length`) and the download a `fetch` read as bytes; neither
+        runs the transport's 401 session-expiry bounce, so an expired session mid-upload surfaces as a refused upload
+        and the next JSON call bounces. Neither has a timeout: the API owns the upload deadline. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens**
+        when a browser transport offers upload progress with an exact length through `fetch`, or when a user reports a
+        stalled upload the API's deadline did not end.
+      - **The download holds the whole original in the tab** (one `Blob`, up to 100 MiB) before the browser saves it,
+        because the read route's refusals must be read before anything is saved. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when the cap rises
+        above 100 MiB or a supported device fails to save an original at the cap.
+      - **The upload sends no idempotency key**, which needs the digest of the whole file read in the tab; a retry after
+        an unknown outcome files the original again, and a refused attach leaves a filed document attached to nothing,
+        listed under `GET /api/v1/documents` and attachable later. A retry after a PUT refused before the claim reuses
+        the same upload instead of declaring again. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when duplicate originals are found in a
+        listing, or when the PWA can hash the file without holding it whole.
+      - **The cross-context foreign key `bank_account_evidence.document_id → document.id`** is a justified Level 2
+        (`docs/rules/database.md`): Documents never deletes a document, so it costs no write; a future path that does
+        must remove or refuse over the links first. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** with the first path that deletes a `document`
+        row.
+      - **What the attach admits is a director's decision, recorded in the story (doc-12) and ADR
+        `documents-custody-log.md` D13.** A `Quarantined` document is refused (409
+        `bank-account-evidence-document-not-admissible`); `Received`, `Scanning`, `Ready` and `ScanFailed` are
+        admitted, so evidence can be linked before its scan finishes and a scan that could not decide does not block
+        it — only a `Ready` document can be read. A `CLOSED` account refuses an attach (409
+        `bank-account-evidence-account-closed`) but keeps its links and still allows a detach, which is what clears it
+        for deletion. A superseded version stays attachable: it is still the original it was. **Reopens** when an
+        auditor requires evidence to be scanned clean before it is linked.
+      - **A client that does not know a kind or a state shows it as `Unknown`** and keeps the other items, rather than
+        failing the whole list; the item is never downloadable then, since only `ready` is. Decided by the director
+        with doc-12. **Reopens** if a new state ever makes an original readable.
+      - **The link's `documentId` in the audit trail is sealed under the account's scope** (`BankAccount:<id>`,
+        `SealedUnderOwnerScope`): the account's erasure shreds which document proved it. The link's own id, the
+        account id, the kind and the attach time stay in clear, as for any non-person row. Decided by the owner with
+        doc-12; nothing reopens it short of the trail needing to answer, after an account's erasure, which document
+        it held.
 
 - [ ] **Console failures print a masked summary, and the mask is a floor.** Every command under an
       `Infrastructure/Cli/` directory prints `ThrowableSummary::of($throwable)` and never the throwable's own
@@ -3123,6 +3182,41 @@ mitigated state. Accepting one means recording who accepted it and against which
       and dropping everything after `DETAIL:`, at the price of an operator-facing message that no longer says
       which value collided. **Open — owner: the operator-experience decision; revisit the first time a failing
       row is seen carrying a name or an IBAN in a log.**
+
+- [ ] **Two-step verification can be enabled but is not yet asked for at sign-in.** `POST /api/v1/me/second-factor/totp`
+      and `…/confirm` (mfa-1) enrol and enable an optional TOTP factor, sealed under its own random scope and erased
+      with the identity, but no session-minting path consults it yet: login, reset-password completion, invitation
+      accept, change-password and recovery redeem still mint a session on the password alone. Until the second step
+      ships, an enabled factor protects nothing, and nothing in the product tells its owner so. Nothing disables or
+      resets a factor either (mfa-3, mfa-4), so an owner who loses the device keeps a factor that is not yet
+      enforced and cannot remove it, and holds no recovery codes: a factor enabled now gets them through the
+      recovery-code generation route mfa-3 adds behind a password re-proof, which also serves factors enabled before
+      it (owner, 2026-11-28). **Open — owner: story mfa-2 (the second step on every minting path), which closes it;
+      the PWA panel (mfa-6) must not offer enrolment before mfa-2 and mfa-3 are merged.**
+- [ ] **A second-factor secret is crypto-shredded by its erasure, not by an older backup.** The identity erasure
+      deletes the factor row and tombstones its `TotpFactor:<scope>` key in one transaction, and the
+      `GDPR_SUBJECT_ERASED` entry carries that scope so the subject-erasure reconciler has the tombstone answered. A
+      database dump taken before the erasure still holds the sealed secret and its live key wrapped by
+      `AUDIT_KEK` — the only key-encryption key the module has, shared with the audit and Documents keys — so a
+      restore to that dump brings the second factor back together with the identity row itself; the identity
+      erasure has no ledger replay of the kind the Documents erasure has (`docs/runbooks/documents-erasure-ledger.md`).
+      **Open — owner: the backup and restore policy; recorded in `docs/adr/two-step-verification.md` D4.**
+- [x] **The enrolment confirmation re-proves no password — accepted by Sergio on 2026-11-28, against no customer
+      (ERPify has no deployment yet).** `POST …/totp/confirm` is `ordinary`: a stolen session that reaches it during
+      an owner's pending enrolment can at most enable the OWNER's authenticator (the secret was issued behind a
+      password re-proof). The bound is not the rate limiter — `second_factor_code_per_identity` has
+      `lock_factory: null` and lives in the filesystem pool reset on every deploy, so it is an attenuator — but the
+      enrolment itself: a pending factor expires after 10 minutes and admits at most 5 wrong codes, counted in
+      Postgres under the factor's row lock, and only a new enrolment (password re-proof, shared budget) restarts it —
+      at most 1.5×10⁻⁵ per enrolment. The worst outcome is an owner who abandoned an enrolment finding it enabled and
+      needing an administrator reset. **Reopen** if the confirmation ever returns recovery codes, or if any route lets
+      a session start or restart an enrolment without the password. ADR `two-step-verification.md` D3.
+- [ ] **No persisted wall bounds guessing an enabled factor's code yet.** The only budget a later code route would
+      spend is `second_factor_code_per_identity`, which a burst overruns and a deploy resets; nominally 960 guesses a
+      day (≈0.29 %/day, ≈8 %/month against six digits ±1 step). **Open — owner: story mfa-2**, which must add a
+      persisted per-factor consecutive-failure counter (row lock, reset only by an accepted code, never feeding the
+      email-keyed lockout) bounding a sustained 30-day attack to ≤10⁻³ before the login's second step spends the
+      bucket; mfa-3's disable route spends it too.
 
 ## 8. Deploy & verify
 

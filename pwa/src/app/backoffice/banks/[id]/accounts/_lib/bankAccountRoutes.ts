@@ -24,4 +24,7 @@ export const bankAccountRoutes = {
   /** Edit-account form for a given account under a given bank. */
   edit: (bankId: string, accountId: string): string =>
     `${accountsBase(bankId)}/${encodeURIComponent(accountId)}/edit`,
+  /** The account's detail page, which lives on the standalone hub (it holds the evidence panel). */
+  detail: (accountId: string): string =>
+    `${Routes.BACKOFFICE}/bank-accounts/${encodeURIComponent(accountId)}`,
 } as const;

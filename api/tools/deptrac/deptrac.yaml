@@ -612,6 +612,12 @@ deptrac:
             - Erpify\Backoffice\Bank\Domain\Entity\Bank
         Erpify\Backoffice\BankAccount\Infrastructure\Persistence\Doctrine\DoctrineBankAccountIbanLookupRepository:
             - Erpify\Backoffice\Bank\Domain\Entity\Bank
+        Erpify\Backoffice\BankAccount\Application\Evidence\DescribeEvidence:
+            - Erpify\Documents\Document\Application\Evidence\EvidenceDocuments
+        Erpify\Backoffice\BankAccount\Application\Evidence\AttachBankAccountEvidence:
+            - Erpify\Documents\Document\Application\Evidence\EvidenceDocuments
+        Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence:
+            - Erpify\Documents\Document\Application\Evidence\EvidenceDocuments
         Erpify\Organization\Membership\Application\GrantMembership:
             - Erpify\Organization\Organization\Domain\Repository\OrganizationRepository
         Erpify\Iam\Identity\Infrastructure\Cli\CreateInitialAdministratorCommand:

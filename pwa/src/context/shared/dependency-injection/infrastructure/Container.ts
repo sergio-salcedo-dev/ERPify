@@ -33,6 +33,25 @@ import { CreateBankAccount } from "../../../backoffice/bankaccount/application/C
 import { UpdateBankAccount } from "../../../backoffice/bankaccount/application/UpdateBankAccount";
 import { ChangeBankAccountStatus } from "../../../backoffice/bankaccount/application/ChangeBankAccountStatus";
 import { DeleteBankAccount } from "../../../backoffice/bankaccount/application/DeleteBankAccount";
+import { AttachBankAccountEvidence } from "../../../backoffice/bankaccount/application/AttachBankAccountEvidence";
+import { ListBankAccountEvidence } from "../../../backoffice/bankaccount/application/ListBankAccountEvidence";
+import { DownloadBankAccountEvidence } from "../../../backoffice/bankaccount/application/DownloadBankAccountEvidence";
+import { DetachBankAccountEvidence } from "../../../backoffice/bankaccount/application/DetachBankAccountEvidence";
+import {
+  BANK_ACCOUNT_EVIDENCE_REPOSITORY_KEY,
+  type BankAccountEvidenceRepository,
+} from "../../../backoffice/bankaccount/domain/BankAccountEvidenceRepository";
+import { ApiBankAccountEvidenceRepository } from "../../../backoffice/bankaccount/infrastructure/ApiBankAccountEvidenceRepository";
+import {
+  DOCUMENT_UPLOADER_KEY,
+  type DocumentUploader,
+} from "../../../backoffice/document/domain/DocumentUploader";
+import {
+  DOCUMENT_DOWNLOADER_KEY,
+  type DocumentDownloader,
+} from "../../../backoffice/document/domain/DocumentDownloader";
+import { ApiDocumentUploader } from "../../../backoffice/document/infrastructure/ApiDocumentUploader";
+import { ApiDocumentDownloader } from "../../../backoffice/document/infrastructure/ApiDocumentDownloader";
 import { ApiUserRepository } from "../../../backoffice/user/infrastructure/ApiUserRepository";
 import { ApiUserSearchNavigator } from "../../../backoffice/user/infrastructure/ApiUserSearchNavigator";
 import { ApiLoginRepository } from "../../../backoffice/user/infrastructure/ApiLoginRepository";
@@ -200,6 +219,31 @@ container
   .bind<ChangeBankAccountStatus>("BackOfficeChangeBankAccountStatus")
   .to(ChangeBankAccountStatus);
 container.bind<DeleteBankAccount>("BackOfficeDeleteBankAccount").to(DeleteBankAccount);
+
+// Bank-account evidence: the account's links to documents the Documents two-step upload filed, and
+// the two Documents transfers that cannot go through `HttpClient` (the raw-body PUT with progress,
+// and the byte read of an original).
+container
+  .bind<BankAccountEvidenceRepository>(BANK_ACCOUNT_EVIDENCE_REPOSITORY_KEY)
+  .to(ApiBankAccountEvidenceRepository)
+  .inSingletonScope();
+container.bind<DocumentUploader>(DOCUMENT_UPLOADER_KEY).to(ApiDocumentUploader).inSingletonScope();
+container
+  .bind<DocumentDownloader>(DOCUMENT_DOWNLOADER_KEY)
+  .to(ApiDocumentDownloader)
+  .inSingletonScope();
+container
+  .bind<AttachBankAccountEvidence>("BackOfficeAttachBankAccountEvidence")
+  .to(AttachBankAccountEvidence);
+container
+  .bind<ListBankAccountEvidence>("BackOfficeListBankAccountEvidence")
+  .to(ListBankAccountEvidence);
+container
+  .bind<DownloadBankAccountEvidence>("BackOfficeDownloadBankAccountEvidence")
+  .to(DownloadBankAccountEvidence);
+container
+  .bind<DetachBankAccountEvidence>("BackOfficeDetachBankAccountEvidence")
+  .to(DetachBankAccountEvidence);
 
 // Audit investigation read context (epic 4): read-only ports over the 4.1 timeline read model —
 // no write use case is bound, so a consumer can inject only the read capability (Backoffice

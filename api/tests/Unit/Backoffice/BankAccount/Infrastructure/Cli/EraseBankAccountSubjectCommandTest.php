@@ -11,6 +11,7 @@ use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectComm
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\KeyState;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Application\Evidence\InertEvidenceRelease;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -99,7 +100,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
 
     private function tester(EraseBankAccountSubject $eraser): CommandTester
     {
-        return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
+        return new CommandTester(new EraseBankAccountSubjectCommand($eraser, InertEvidenceRelease::create()));
     }
 
     private function inertEraser(): EraseBankAccountSubject
@@ -137,6 +138,7 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
             $keystore,
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),
+            InertEvidenceRelease::create(),
         );
     }
 }

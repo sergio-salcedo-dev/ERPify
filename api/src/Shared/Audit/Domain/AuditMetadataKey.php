@@ -35,6 +35,7 @@ enum AuditMetadataKey: string
             self::SessionsDeleted,
             self::ResetTokensDeleted,
             self::RecoverySecretsDeleted,
+            self::TotpFactorsDeleted,
             self::MembershipsDeleted,
             self::InvitationsDeleted,
             self::DocumentReferencesAnonymised,
@@ -71,6 +72,7 @@ enum AuditMetadataKey: string
     case SessionsDeleted = 'sessions_deleted';
     case ResetTokensDeleted = 'reset_tokens_deleted';
     case RecoverySecretsDeleted = 'recovery_secrets_deleted';
+    case TotpFactorsDeleted = 'totp_factors_deleted';
     case MembershipsDeleted = 'memberships_deleted';
     case InvitationsDeleted = 'invitations_deleted';
     case DocumentReferencesAnonymised = 'document_references_anonymised';

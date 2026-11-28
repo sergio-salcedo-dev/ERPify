@@ -14,6 +14,22 @@ export const BankAccountProblemType = {
    * `in-use` deep-link.
    */
   NOT_CLOSED: "bank-account-not-closed",
+  /** The account still holds evidence whose document is not erased, so it cannot be removed (409). */
+  HAS_LIVE_EVIDENCE: "bank-account-has-live-evidence",
+  /** The document to attach does not exist (422). */
+  EVIDENCE_DOCUMENT_NOT_FOUND: "bank-account-evidence-document-not-found",
+  /** The document to attach was filed under other retention terms than its kind fixes (422). */
+  EVIDENCE_RETENTION_MISMATCH: "bank-account-evidence-retention-mismatch",
+  /** The document to attach has been erased (409). */
+  EVIDENCE_DOCUMENT_ERASED: "bank-account-evidence-document-erased",
+  /** A bank account already holds that document — a document is evidence of one account (409). */
+  EVIDENCE_ALREADY_ATTACHED: "bank-account-evidence-already-attached",
+  /** The document to attach is quarantined (409). */
+  EVIDENCE_DOCUMENT_NOT_ADMISSIBLE: "bank-account-evidence-document-not-admissible",
+  /** The account is closed, so it takes no new evidence (409). */
+  EVIDENCE_ACCOUNT_CLOSED: "bank-account-evidence-account-closed",
+  /** The account holds no such evidence link (404). */
+  EVIDENCE_NOT_FOUND: "bank-account-evidence-not-found",
 } as const;
 
 export type BankAccountProblemType =

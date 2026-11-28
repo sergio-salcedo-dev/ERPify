@@ -22,6 +22,11 @@ final class InMemoryBankAccountRepository implements BankAccountRepository
     /** @var list<BankAccount> */
     public array $saved = [];
 
+    /** How many reads took no lock, and how many took the row lock. */
+    public int $plainReads = 0;
+
+    public int $lockedReads = 0;
+
     public function __construct(
         private readonly ?BankAccount $account = null,
         private readonly int $count = 0,
@@ -43,12 +48,16 @@ final class InMemoryBankAccountRepository implements BankAccountRepository
     #[Override]
     public function findById(string $id): ?BankAccount
     {
+        ++$this->plainReads;
+
         return $this->account;
     }
 
     #[Override]
     public function findByIdForUpdate(string $id): ?BankAccount
     {
+        ++$this->lockedReads;
+
         return $this->account;
     }
 

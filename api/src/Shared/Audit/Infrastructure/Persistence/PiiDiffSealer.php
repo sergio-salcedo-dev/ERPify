@@ -9,6 +9,7 @@ use Erpify\Shared\Audit\Application\AuditPiiAad;
 use Erpify\Shared\Audit\Application\PiiFieldPosition;
 use Erpify\Shared\Audit\Domain\AuditedEntity;
 use Erpify\Shared\Audit\Domain\AuditMetadataShape;
+use Erpify\Shared\Audit\Domain\SealedUnderOwnerScope;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
 use Erpify\Shared\Privacy\Application\PersonalDataClassifier;
@@ -16,7 +17,8 @@ use Erpify\Shared\Privacy\Application\PersonalDataClassifier;
 /**
  * Crypto-shreds the personal-data fields of a change diff before it is persisted. The owning module
  * classifies its fields with `#[PersonalData]`; this reads that classification and encrypts only those
- * columns under the aggregate's encryption scope (`<ResourceType>:<id>`, derived from its audit resource),
+ * columns under the aggregate's encryption scope (`<ResourceType>:<id>`, derived from its audit resource, or
+ * from its owner's when it declares {@see SealedUnderOwnerScope}),
  * leaving non-personal fields in clear. An encrypted value is wrapped in a `{"__enc__": "<ciphertext>"}`
  * marker so a reader can show it as sealed without ever holding the plaintext. A null keeps null — the
  * absence of a value is not personal and must stay visible so added/removed still reads.
@@ -56,8 +58,8 @@ final readonly class PiiDiffSealer
             return new SealedDiff($diff, null);
         }
 
-        $resource = $entity->auditResource();
-        $scope = EncryptionScopeId::of($resource->type, $resource->id);
+        $owner = $entity instanceof SealedUnderOwnerScope ? $entity->auditSealingOwner() : $entity->auditResource();
+        $scope = EncryptionScopeId::of($owner->type, $owner->id);
 
         $sealedChanges = [];
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Erpify\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence;
 use Erpify\Shared\Console\Infrastructure\ConfirmedErasureCommand;
 use Erpify\Shared\Console\Infrastructure\ThrowableSummary;
 use Erpify\Shared\Uuid\Domain\Uuid;
@@ -51,6 +52,7 @@ final class EraseBankAccountSubjectCommand extends ConfirmedErasureCommand
 {
     public function __construct(
         private readonly EraseBankAccountSubject $eraser,
+        private readonly ReleaseBankAccountEvidence $evidence,
     ) {
         parent::__construct();
     }
@@ -97,6 +99,10 @@ final class EraseBankAccountSubjectCommand extends ConfirmedErasureCommand
 
         $io->writeln(\sprintf('Bank account: %s', $bankAccountId));
 
+        if (true === $input->getOption('dry-run')) {
+            $this->reportLiveEvidence($io, $bankAccountId);
+        }
+
         $preflight = $this->preflight($io, $input);
 
         if (null !== $preflight) {
@@ -110,6 +116,31 @@ final class EraseBankAccountSubjectCommand extends ConfirmedErasureCommand
     protected function confirmationQuestion(): string
     {
         return 'Irreversibly erase this subject (removes the account, shreds its audit PII)?';
+    }
+
+    /**
+     * What would refuse the erasure today: each document attached to the account that is not erased. A dry run reads
+     * it so the operator erases those documents first, each through its own re-proven erasure. Reads only.
+     */
+    private function reportLiveEvidence(SymfonyStyle $io, string $bankAccountId): void
+    {
+        try {
+            $live = $this->evidence->liveDocumentsOf($bankAccountId);
+        } catch (Throwable $throwable) {
+            $io->warning(\sprintf(
+                'Could not read the evidence attached to the account: %s',
+                ThrowableSummary::of($throwable),
+            ));
+
+            return;
+        }
+
+        foreach ($live as $documentId) {
+            $io->warning(\sprintf(
+                'Attached document %s is not erased: the erasure will refuse until it is.',
+                $documentId,
+            ));
+        }
     }
 
     private function eraseAndReport(SymfonyStyle $io, string $bankAccountId): int

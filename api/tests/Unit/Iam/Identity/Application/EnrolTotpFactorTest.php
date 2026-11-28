@@ -1,0 +1,307 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Erpify\Tests\Unit\Iam\Identity\Application;
+
+use Closure;
+use DateInterval;
+use Erpify\Iam\Identity\Application\EnrolTotpFactor;
+use Erpify\Iam\Identity\Application\ProveCurrentPassword;
+use Erpify\Iam\Identity\Application\TotpSecretVault;
+use Erpify\Iam\Identity\Domain\Entity\TotpFactor;
+use Erpify\Iam\Identity\Domain\Exception\AccountDeactivated;
+use Erpify\Iam\Identity\Domain\Exception\InvalidCurrentPassword;
+use Erpify\Iam\Identity\Domain\Exception\SecondFactorAlreadyEnabled;
+use Erpify\Iam\Identity\Domain\Exception\UserNotFound;
+use Erpify\Iam\Identity\Domain\HashedPassword;
+use Erpify\Iam\Identity\Infrastructure\Security\Rfc6238TotpAlgorithm;
+use Erpify\Shared\Audit\Domain\AuditLevel;
+use Erpify\Shared\Clock\Domain\SystemClock;
+use Erpify\Shared\Crypto\Infrastructure\ScopeKeyring;
+use Erpify\Shared\Crypto\Infrastructure\SodiumEnvelopeEncryptor;
+use Erpify\Tests\Double\Clock\FixedClock;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\TotpFactorMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
+use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
+use Erpify\Tests\Unit\Shared\Crypto\InMemoryKeystore;
+use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Starting an enrolment: what it refuses, in what order, what it seals and what it hands back.
+ *
+ * The encryptor is the real libsodium one over an in-memory keystore, so "the secret shown is the secret sealed"
+ * is checked by opening the row rather than by trusting a double.
+ *
+ * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the arrange names the two repositories, the credential proof,
+ *                                                   the real algorithm and envelope, the audit double and the
+ *                                                   refusals the cases are stated in terms of
+ * @SuppressWarnings("PHPMD.TooManyPublicMethods") one test per outcome of the enrolment
+ */
+#[CoversClass(EnrolTotpFactor::class)]
+#[CoversClass(TotpSecretVault::class)]
+final class EnrolTotpFactorTest extends TestCase
+{
+    private const string KEK = '0123456789abcdef0123456789abcdef';
+
+    #[Test]
+    public function itPersistsAPendingFactorSealingTheSecretItShowsOnce(): void
+    {
+        $factors = new InMemoryTotpFactorRepository();
+        $vault = $this->vault();
+
+        $enrolment = $this->useCase(new InMemoryUserRepository(UserMother::create()), $factors, $vault)
+            ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+        ;
+
+        $this->assertCount(1, $factors->saved);
+        $factor = $factors->saved[0];
+        $this->assertFalse($factor->isEnabled(), 'an enrolment gates nothing until a code confirms it');
+        $this->assertNull($factor->lastAcceptedStep());
+        $this->assertSame(UserMother::DEFAULT_ID, $factor->userId());
+        // The row holds ciphertext only; opening it yields the very secret the response carries.
+        $this->assertStringNotContainsString($enrolment->encodedSecret(), $factor->sealedSecret());
+        $this->assertSame(
+            $enrolment->encodedSecret(),
+            (new Rfc6238TotpAlgorithm())->encodedSecret($vault->open($factor)),
+        );
+        $this->assertStringStartsWith('otpauth://totp/ERPify%3A', $enrolment->provisioningUri());
+        $this->assertStringContainsString('secret=' . $enrolment->encodedSecret(), $enrolment->provisioningUri());
+    }
+
+    #[Test]
+    public function theScopeIsRandomAndNamesNothingAboutThePerson(): void
+    {
+        $factors = new InMemoryTotpFactorRepository();
+
+        $this->useCase(new InMemoryUserRepository(UserMother::create()), $factors)
+            ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+        ;
+
+        $this->assertCount(1, $factors->saved);
+        $factor = $factors->saved[0];
+        $this->assertNotSame(UserMother::DEFAULT_ID, $factor->scopeId());
+        $this->assertNotSame($factor->getId(), $factor->scopeId());
+    }
+
+    #[Test]
+    public function twoIdentitiesGetTwoFreshVersionSevenScopes(): void
+    {
+        $otherId = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a77';
+        $other = UserMother::create(id: $otherId, email: 'bob@erpify.test');
+        $factors = new InMemoryTotpFactorRepository();
+
+        $this->useCase(new InMemoryUserRepository(UserMother::create()), $factors)
+            ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+        ;
+        $this->useCase(new InMemoryUserRepository($other), $factors)
+            ->enrol($otherId, $this->acceptsTheCurrentPassword())
+        ;
+
+        $this->assertCount(2, $factors->saved);
+        [$first, $second] = $factors->saved;
+        $this->assertNotSame($first->scopeId(), $second->scopeId(), 'no two identities share a key');
+
+        foreach ([$first->scopeId(), $second->scopeId()] as $scopeId) {
+            $this->assertMatchesRegularExpression(
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D',
+                $scopeId,
+                'a scope is a fresh UUID v7, never derived from anything the person is',
+            );
+        }
+    }
+
+    #[Test]
+    public function aNonActiveIdentityIsWalledBeforeItsCredentialIsReadAndNothingIsWritten(): void
+    {
+        $user = UserMother::create();
+        $user->deactivate();
+        $user->pullDomainEvents();
+
+        $factors = new InMemoryTotpFactorRepository();
+        $audit = new RecordingAuditLogger();
+
+        $this->expectException(AccountDeactivated::class);
+
+        try {
+            $this->useCase(new InMemoryUserRepository($user), $factors, audit: $audit)
+                ->enrol(UserMother::DEFAULT_ID, $this->refusesTheCurrentPassword())
+            ;
+        } finally {
+            $this->assertSame([], $factors->saved);
+            $this->assertSame([], $audit->records);
+        }
+    }
+
+    #[Test]
+    public function aWrongCurrentPasswordIsRefusedBeforeTheFactorIsConsulted(): void
+    {
+        // The ORDER is the property: the proof runs before the factor row is read or locked, so a refused re-proof
+        // touches nothing, and the 409 an enabled factor earns is only ever given to a caller who proved the password.
+        $journal = new LockOrderJournal();
+        $factors = new InMemoryTotpFactorRepository(TotpFactorMother::enabledFor());
+        $factors->lockOrderJournal = $journal;
+
+        $this->expectException(InvalidCurrentPassword::class);
+
+        try {
+            $this->useCase(new InMemoryUserRepository(UserMother::create()), $factors)
+                ->enrol(UserMother::DEFAULT_ID, $this->refusesTheCurrentPassword())
+            ;
+        } finally {
+            $this->assertSame([], $factors->saved);
+            $this->assertSame([], $journal->tablesLockedInOrder, 'the factor was read before the proof');
+        }
+    }
+
+    #[Test]
+    public function anEnabledFactorIsNeverReplaced(): void
+    {
+        $enabled = TotpFactorMother::enabledFor();
+        $sealedBefore = $enabled->sealedSecret();
+        $factors = new InMemoryTotpFactorRepository($enabled);
+
+        $this->expectException(SecondFactorAlreadyEnabled::class);
+
+        try {
+            $this->useCase(new InMemoryUserRepository(UserMother::create()), $factors)
+                ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+            ;
+        } finally {
+            $this->assertSame([], $factors->saved);
+            $this->assertSame($sealedBefore, $enabled->sealedSecret());
+        }
+    }
+
+    #[Test]
+    public function aPendingEnrolmentIsRestartedUnderItsOwnScope(): void
+    {
+        // Closed both ways — out of codes and long expired — so the restart is shown to reopen it, which only a new
+        // enrolment behind the password may do.
+        $now = SystemClock::now();
+        $pending = TotpFactorMother::pendingFor(enrolmentStartedAt: $now->sub(new DateInterval('P1D')));
+
+        for ($wrong = 0; $wrong < TotpFactor::MAX_FAILED_CONFIRMATIONS; ++$wrong) {
+            $pending->recordFailedConfirmation($now);
+        }
+
+        $this->assertTrue($pending->pendingEnrolmentClosedAt($now), 'the seed must be a closed enrolment');
+        $factors = new InMemoryTotpFactorRepository($pending);
+
+        $this->useCase(new InMemoryUserRepository(UserMother::create()), $factors)
+            ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+        ;
+
+        $this->assertSame([$pending], $factors->saved, 'the one row is restarted, never duplicated');
+        $this->assertSame(TotpFactorMother::DEFAULT_SCOPE_ID, $pending->scopeId());
+        $this->assertNotSame(TotpFactorMother::PLACEHOLDER_CIPHERTEXT, $pending->sealedSecret());
+        // Reopened both ways: the window restarts now, and the count is back to zero.
+        $this->assertFalse($pending->pendingEnrolmentClosedAt($now));
+        $this->assertFalse($pending->pendingEnrolmentClosedAt($now->add(new DateInterval('PT9M59S'))));
+        $this->assertTrue($pending->pendingEnrolmentClosedAt($now->add(new DateInterval('PT10M'))));
+
+        for ($wrong = 1; $wrong < TotpFactor::MAX_FAILED_CONFIRMATIONS; ++$wrong) {
+            $pending->recordFailedConfirmation($now);
+        }
+
+        $this->assertFalse($pending->pendingEnrolmentClosedAt($now), 'the restart zeroed the count');
+    }
+
+    #[Test]
+    public function anIdentityThatResolvedToNoRowIsRefused(): void
+    {
+        $factors = new InMemoryTotpFactorRepository();
+
+        $this->expectException(UserNotFound::class);
+
+        try {
+            $this->useCase(new InMemoryUserRepository(), $factors)
+                ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+            ;
+        } finally {
+            $this->assertSame([], $factors->saved);
+        }
+    }
+
+    #[Test]
+    public function theUserRowIsLockedBeforeTheFactorRow(): void
+    {
+        $journal = new LockOrderJournal();
+        $users = new InMemoryUserRepository(UserMother::create());
+        $users->lockOrderJournal = $journal;
+
+        $factors = new InMemoryTotpFactorRepository();
+        $factors->lockOrderJournal = $journal;
+
+        $this->useCase($users, $factors)->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword());
+
+        $this->assertSame(
+            [LockOrderJournal::IDENTITY_USER, LockOrderJournal::TOTP_FACTOR],
+            $journal->crossTableOrder(),
+        );
+    }
+
+    #[Test]
+    public function theAuditRowNamesTheSubjectAndCarriesNothingAboutTheSecret(): void
+    {
+        $audit = new RecordingAuditLogger();
+
+        $enrolment = $this->useCase(new InMemoryUserRepository(UserMother::create()), audit: $audit)
+            ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
+        ;
+
+        $this->assertCount(1, $audit->records);
+        $this->assertSame('SECOND_FACTOR_ENROLMENT_STARTED', $audit->records[0]['action']);
+        $this->assertSame(AuditLevel::SECURITY, $audit->records[0]['level']);
+        $this->assertSame(UserMother::DEFAULT_ID, $audit->records[0]['resource']?->id);
+        $this->assertSame([], $audit->records[0]['metadata']);
+        $this->assertStringNotContainsString(
+            $enrolment->encodedSecret(),
+            \json_encode($audit->records[0], JSON_THROW_ON_ERROR),
+        );
+    }
+
+    /**
+     * @return Closure(HashedPassword): bool
+     */
+    private function acceptsTheCurrentPassword(): Closure
+    {
+        return static fn (HashedPassword $stored): bool => '' !== $stored->toString();
+    }
+
+    /**
+     * @return Closure(HashedPassword): bool
+     */
+    private function refusesTheCurrentPassword(): Closure
+    {
+        return static fn (HashedPassword $stored): bool => '' === $stored->toString();
+    }
+
+    private function vault(): TotpSecretVault
+    {
+        return new TotpSecretVault(new SodiumEnvelopeEncryptor(new ScopeKeyring(new InMemoryKeystore(), self::KEK)));
+    }
+
+    private function useCase(
+        InMemoryUserRepository $users,
+        InMemoryTotpFactorRepository $factors = new InMemoryTotpFactorRepository(),
+        ?TotpSecretVault $vault = null,
+        RecordingAuditLogger $audit = new RecordingAuditLogger(),
+    ): EnrolTotpFactor {
+        return new EnrolTotpFactor(
+            $users,
+            $factors,
+            new ProveCurrentPassword(),
+            new Rfc6238TotpAlgorithm(),
+            $vault ?? $this->vault(),
+            $audit,
+            new InlineTransactionManager(),
+            new FixedClock(SystemClock::now()),
+        );
+    }
+}

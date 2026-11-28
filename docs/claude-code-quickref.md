@@ -249,6 +249,8 @@ scripts/        Utility scripts
 | Bounded contexts (DDD)                                                       | `api/src/{Backoffice,Frontoffice,Iam,Organization,Shared}/<Module>/`     |
 | Documents listing and custody trail (`Application/Listing`, `Application/Query`, `Domain/Projection`) | `api/src/Documents/Document/`   |
 | Documents version series (`Domain/Versioning`, `Application/Versioning`, `Application/Listing/ReadDocumentSeries`, ADR D12) | `api/src/Documents/Document/`   |
+| Documents evidence seam a consumer reads (`Application/Evidence`: `EvidenceDocuments`, `EvidenceFiling`) | `api/src/Documents/Document/`   |
+| Bank-account evidence (`Application/Evidence`: attach, detach, list, release; link entity `Domain/Entity/BankAccountEvidence`) | `api/src/Backoffice/BankAccount/` |
 | Domain layer (entities, VOs, ports)                                          | `<Module>/Domain/`                                                       |
 | Application layer (use cases, DTOs)                                          | `<Module>/Application/`                                                  |
 | Infrastructure (Doctrine, controllers, Messenger handlers, mailers, clients) | `<Module>/Infrastructure/`                                               |

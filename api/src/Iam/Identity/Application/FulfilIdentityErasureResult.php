@@ -58,6 +58,7 @@ final readonly class FulfilIdentityErasureResult
         'membershipsDeleted' => 'its organization membership',
         'invitationsDeleted' => 'every invitation addressed to it',
         'documentReferencesAnonymised' => 'its uploader and custody-actor references on documents',
+        'totpFactorsDeleted' => 'its two-step verification factor and the key that sealed its secret',
     ];
 
     public function __construct(
@@ -71,6 +72,7 @@ final readonly class FulfilIdentityErasureResult
         public int $membershipsDeleted,
         public int $invitationsDeleted,
         public int $documentReferencesAnonymised,
+        public int $totpFactorsDeleted = 0,
     ) {
     }
 
@@ -93,6 +95,7 @@ final readonly class FulfilIdentityErasureResult
             + $this->sessionsDeleted
             + $this->membershipsDeleted
             + $this->invitationsDeleted
-            + $this->documentReferencesAnonymised;
+            + $this->documentReferencesAnonymised
+            + $this->totpFactorsDeleted;
     }
 }

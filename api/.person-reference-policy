@@ -196,6 +196,8 @@ Erpify\Iam\Session\Domain\Entity\Session::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$id => non-person
 Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\TotpFactor::$id => non-person
+Erpify\Iam\Identity\Domain\Entity\TotpFactor::$scopeId => non-person
 
 # The image aggregate's own primary key. It denotes a stored representation, never the person a picture may
 # happen to be of: this module holds no owner, no filename and no classification, and it is the CONSUMING
@@ -246,6 +248,12 @@ Erpify\Documents\Document\Domain\Entity\UploadIntent::$predecessorId => non-pers
 # The id of a bank's logo: an `Image` row, never a person; its release is a queued request, not an erasure.
 Erpify\Backoffice\Bank\Domain\Entity\Bank::$logoImageId => non-person
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
+# A bank account's evidence link: its own id, the account it belongs to (which denotes the account, for the reason
+# `BankAccount::$id` above gives) and the document it holds (evidence of something, never a person). Who attached it
+# is the audit row's actor; the link stores no person at all.
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence::$id => non-person
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence::$bankAccountId => non-person
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence::$documentId => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$organizationId => non-person
 Erpify\Iam\Session\Domain\Entity\Session::$organizationId => non-person
@@ -261,6 +269,7 @@ Erpify\Iam\Identity\Domain\Entity\User::$id => person :: src/Iam/Identity/Applic
 # neither table has a business meaning that survives the person it is about.
 Erpify\Iam\Identity\Domain\Entity\PasswordResetToken::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Identity\Domain\Entity\RecoverySecret::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
+Erpify\Iam\Identity\Domain\Entity\TotpFactor::$userId => person :: src/Iam/Identity/Application/EraseIdentitySubject.php
 Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/Application/PurgeUserSessions.php
 
 # The erasure's own instrument, written after the person is gone: it holds the erased id for one re-sweep
@@ -268,9 +277,8 @@ Erpify\Iam\Session\Domain\Entity\Session::$userId => person :: src/Iam/Session/A
 # row that outlived two windows (ADR `docs/adr/audit-activity-log.md` D4.2).
 Erpify\Iam\Identity\Domain\Entity\ErasureResweep::$subjectId => person :: src/Iam/Identity/Application/ResweepErasedSubjects.php
 
-# The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — the
-# database holds exactly three foreign keys, `bank_account.bank_id`, `membership.organization_id` and
-# `document_custody.document_id` — so
+# The two that cross a bounded context. NO column anywhere in the schema references `identity_user` — every
+# foreign key is re-injected by an `InjectedForeignKeySchemaListener` subclass, and none of them names that table — so
 # deleting an identity cascades to nothing at all, and every line above owes its erasure to a use case rather
 # than to a constraint. What distinguishes these two is not the absence of a key but that, until now, they
 # had no owner. Each is erased by its owning context's published use case, chained into the erasure

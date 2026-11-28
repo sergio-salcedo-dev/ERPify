@@ -37,6 +37,7 @@ import { bankRoutes } from "../../banks/_lib/bankRoutes";
 import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 import { BANK_ACCOUNT_STATUS_LABEL, BANK_ACCOUNT_STATUS_VARIANT } from "../_lib/bankAccountStatus";
 import { IbanCell } from "../../banks/[id]/accounts/_components/IbanCell";
+import { BankAccountEvidencePanel } from "../_components/BankAccountEvidencePanel";
 
 type State = ViewStatus;
 
@@ -459,6 +460,8 @@ function BankAccountDetailReady({
           </dd>
         </div>
       </dl>
+
+      <BankAccountEvidencePanel bankAccountId={account.id} />
     </>
   );
 }

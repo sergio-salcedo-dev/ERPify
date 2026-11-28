@@ -121,3 +121,5 @@ Erpify\Shared\Mailer\Infrastructure\PlainTextNotificationMailer::__construct($ma
 Erpify\Shared\Mailer\Infrastructure\SecuritySenderAddress::__construct($address) => excluded :: env-derived operational mailbox (%env(MAILER_SECURITY_FROM)%), not a person's address — same shape as PlainTextNotificationMailer::$mailFrom above
 Erpify\Shared\ErrorContract\Application\EmailAddressRedaction::apply($value) => sensitive
 Erpify\Shared\ErrorContract\Application\EmailAddressRedaction::blankEveryTokenHoldingAnAt($value) => sensitive
+Erpify\Iam\Identity\Domain\TotpAlgorithm::provisioningUri($accountName) => sensitive
+Erpify\Iam\Identity\Infrastructure\Security\Rfc6238TotpAlgorithm::provisioningUri($accountName) => sensitive

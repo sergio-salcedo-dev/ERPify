@@ -30,6 +30,8 @@ final class LockOrderJournal
 
     public const string RECOVERY_SECRET = 'identity_recovery_secret';
 
+    public const string TOTP_FACTOR = 'identity_totp_factor';
+
     public const string IAM_SESSION = 'iam_session';
 
     public const string AUDIT_LOG = 'audit_log';

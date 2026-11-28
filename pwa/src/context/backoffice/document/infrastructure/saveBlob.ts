@@ -1,0 +1,23 @@
+/** How long the object URL outlives the click: the browser reads it asynchronously after it. */
+const REVOKE_AFTER_MS = 60_000;
+
+/**
+ * Hands the browser a blob to save under `filename`: an anchor carrying a same-document `blob:`
+ * URL and the `download` attribute, attached to the document for the click (some browsers ignore a
+ * click on a detached anchor), removed at once, and its URL revoked a minute later — revoking on
+ * the next task can cancel a download the browser has not started reading. The URL is minted here
+ * from bytes already read, never taken from a payload, so no scheme check applies; the name is the
+ * caller's sanitised one, and the browser sanitises a `download` name again.
+ */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  anchor.hidden = true;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_AFTER_MS);
+}

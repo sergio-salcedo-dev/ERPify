@@ -233,6 +233,34 @@ not fire and these three tables are the manual NFR26 record. Exactly **one** new
 three surfaces, `recovery-secret-already-exists`; every other value here is an existing one reused,
 `invalid-token` deliberately so.
 
+### Two-step verification enrolment (`POST /api/v1/me/second-factor/totp`, `POST /api/v1/me/second-factor/totp/confirm`)
+
+Both routes are authenticated and grade per identity; the subject is always the caller. Starting an enrolment
+re-proves the current password and answers **201** with the secret (`secret`, base32, and `provisioningUri`, the
+`otpauth://` URI) — the one response that ever carries it, marked `Cache-Control: no-store` (as is the 201 of
+`POST /api/v1/me/recovery-secret`). Confirming answers **200** with `enabledAt` and never the secret; by then every
+session of the identity has been revoked and the asking device signed back in, and the owner is mailed, both after
+the commit and best effort, so neither can turn the 200 into an error. Rationale: ADR
+[`two-step-verification.md`](adr/two-step-verification.md).
+
+| Outcome | Wire result | Why |
+|---------|-------------|-----|
+| Identity not `ACTIVE` (either route) | **403 `account-suspended`** / **`account-deactivated`** | `User::ensureActive()` after the identity's row lock and before the password proof, the position minting uses. |
+| The identity resolves to no row (either route) | **404 `user-not-found`** | The window in which the GDPR erasure hard-deletes the caller between admission and the locked read. |
+| Wrong current password (enrol) | **403 `invalid-current-password`** | The shared `ProveCurrentPassword`, fired **before** the factor is read or locked, the order minting follows: a refused re-proof writes nothing, and the 409 below is only ever given to a caller who proved the password. |
+| Budget spent (enrol) | **429 `rate-limited`** | The shared per-identity password-proof budget (`CurrentPasswordProofThrottle`); the route is `credential-affecting`. |
+| Factor already enabled (either route) | **409 `second-factor-already-enabled`** | [`SecondFactorAlreadyEnabled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorAlreadyEnabled.php), a `Conflict` with a `type()` of its own: an enabled factor is never re-issued or replaced, so the secret cannot be read again and the owner's authenticator cannot be swapped without the code they hold. Disabling it first is the remedy. A pending enrolment is restarted instead (201, new secret, same scope). |
+| Two first enrolments raced past the locked read | **409 `concurrent-unique-write`** | The unique index on `user_id`, translated to the generic retryable conflict: the loser met a pending row a retry restarts. Unreachable in practice, since both lock the identity row first. |
+| No enrolment to confirm, or a pending one that is closed (confirm) | **409 `second-factor-not-enrolled`** | [`SecondFactorNotEnrolled`](../api/src/Iam/Identity/Domain/Exception/SecondFactorNotEnrolled.php), a `Conflict`: the account exists, the remedy is a state change. A pending enrolment closes 10 minutes after it started or at its 5th wrong code (`TotpFactor::PENDING_TTL`, `MAX_FAILED_CONFIRMATIONS`), and answers exactly like none, with no type of its own, because the remedy is the same — enrol again, behind the password — and a distinct answer would only tell a guesser the cap was reached. Even the correct code is refused once it is closed. |
+| Wrong, out-of-window, malformed or replayed code (confirm) | **403 `invalid-second-factor-code`** | [`InvalidSecondFactorCode`](../api/src/Iam/Identity/Domain/Exception/InvalidSecondFactorCode.php), a `Forbidden`: one answer for all four. The failure is counted on the factor row and that count COMMITS although the request is refused (the transaction returns, the refusal is thrown after the commit); nothing else mutates. 403 and never 401 for the reason the password change gives. A malformed code is not a 422, so validation never grades how close a guess came. |
+| Code budget spent (confirm) | **429 `rate-limited`** | `SecondFactorCodeThrottle` (`second_factor_code_per_identity`, 10 per 15 minutes), spent before the use case, so even a correct code is refused; refused out loud because the route is reachable only through a session. An attenuator, not the wall (no lock factory, reset on deploy): the wall is the enrolment's cap above. |
+| The sealed secret cannot be opened (confirm) | **500 `second-factor-integrity-failure`** | The marker-less [`SecondFactorIntegrityFailure`](../api/src/Iam/Identity/Domain/Exception/SecondFactorIntegrityFailure.php), Sentry-visible, carrying the crypto cause as `previous` and nothing in the body. |
+| Blank or oversized field, or a member the payload does not declare | **422 `validation-failed`** | `#[StrictRequestPayload]`, before the use case runs. |
+
+The second-factor vault is a registered reader of the crypto read boundary: `api/src/Iam/Identity/Application/TotpSecretVault.php` translates `dek-destroyed` and `decryption-failed` alike into the 500 `second-factor-integrity-failure`, because on this path a destroyed key is corruption, never an expected post-erasure outcome — the identity erasure deletes the factor row and destroys its key in one transaction.
+
+No new marker interface joins the contract — the refusals reuse `Conflict`, `Forbidden` and `NotFound`, the budgets `RateLimited` — and four `type`s are minted: `second-factor-already-enabled`, `second-factor-not-enrolled`, `invalid-second-factor-code` and `second-factor-integrity-failure`.
+
 ### Users administration — refusals aimed at oneself (`/api/v1/backoffice/users/{id}` and below)
 
 Three administrative writes refuse a target that is the acting administrator's own identity, and erasure a
@@ -427,6 +455,30 @@ A new version is the declare and PUT above with a predecessor named in the path;
 
 A series page carries no name and opens no key; its `uploaderId` is `null` for an `Erased` version and the nil UUID for an uploader since erased. Every response carries `Cache-Control: no-store`. A series erasure answers **200** with `erased` (this call, newest first) and `remaining` (still not `Erased` when it finished); a repeat over an erased series answers both empty.
 
+### Bank-account evidence (`POST`/`GET /api/v1/backoffice/bank-accounts/{id}/evidence`, `DELETE …/evidence/{evidenceId}`, and the removal of an account)
+
+A bank account holds documents a two-step upload filed, by id, and **a document is evidence of one account at most** (a unique constraint on `bank_account_evidence.document_id`, named and classified by name). The three routes are ADMIN-only: each requires its `bankAccount` verb **and** `document.custody`; the detach takes the attach's pair (`bankAccount.write`). **Eight problem types, on the existing `Conflict`, `NotFound` and `InvariantViolation` markers**, so no marker is added and the drift gate does not fire; this table is the manual NFR26 record. Their context carries ids and the kind only, never a name, a digest or retention terms.
+
+| Situation | Answer | Source |
+|---|---|---|
+| `{id}` or `{evidenceId}` not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in every controller |
+| Caller lacks `bankAccount.read`/`bankAccount.write` or `document.custody` (every role but ADMIN), or no session | **403 `forbidden`** / **401**, nothing read or written | `#[IsGranted]` ×2 on every controller |
+| Unknown account | **404 `bank-account-not-found`** (`NotFound`) | `BankAccountNotFoundException` |
+| Detach of a link that is not on that account (another account's link, or none) | **404 `bank-account-evidence-not-found`** (`NotFound`), context `evidenceId`; nothing removed | `BankAccountEvidenceNotFound`, from `DetachBankAccountEvidence` under the account's row lock |
+| Attach to a `CLOSED` account | **409 `bank-account-evidence-account-closed`** (`Conflict`), context `bankAccountId`; read under the account's row lock, so a close that commits first is seen | `BankAccountEvidenceAccountClosed` |
+| Attach body: `documentId` missing or not a UUID, `kind` missing or outside the vocabulary, or a member the body does not declare | **422 `validation-failed`** at mapping | `AttachBankAccountEvidenceCommand`, `#[StrictRequestPayload]` |
+| Attach of a document no row holds | **422 `bank-account-evidence-document-not-found`** (`InvariantViolation`), context `documentId` | `BankAccountEvidenceDocumentNotFound` |
+| Attach of a document filed under other retention terms than its kind fixes (the ownership certificate: `contract-execution`, `legitimate-interests`, no review date) | **422 `bank-account-evidence-retention-mismatch`** (`InvariantViolation`), context `documentId`, `kind`; nothing written | `BankAccountEvidenceRetentionMismatch` |
+| Attach of an `Erased` document | **409 `bank-account-evidence-document-erased`** (`Conflict`), context `documentId` | `BankAccountEvidenceDocumentErased` |
+| Attach of a `Quarantined` document (the scan found it infected). `Received`, `Scanning`, `Ready` and `ScanFailed` are admitted, a superseded version included | **409 `bank-account-evidence-document-not-admissible`** (`Conflict`), context `documentId` | `BankAccountEvidenceDocumentNotAdmissible` |
+| Attach of a document any account already holds, this one or another, a concurrent attach included | **409 `bank-account-evidence-already-attached`** (`Conflict`), context `documentId` only, so the answer does not name the holding account | `BankAccountEvidenceAlreadyAttached` (checked under the lock, and the unique constraint `uniq_bank_account_evidence_document` by name for the race) |
+| Deleting the account (`DELETE /bank-accounts/{id}`), or erasing it as a subject (`bank-account:gdpr:erase-subject`), while a linked document is not `Erased` | **409 `bank-account-has-live-evidence`** (`Conflict`), context `bankAccountId`; nothing removed, no key destroyed. With every linked document `Erased`, the links go with the account in one transaction | `BankAccountHasLiveEvidence`, from `ReleaseBankAccountEvidence` |
+| HEAD on the listing | **405**, before anything is opened | `BankAccountEvidenceListController` |
+| Listing or attach while the erasure ledger's override is set | **410 `gone`**, before a link is written, an account holding no link included (the listing always asks the seam) | `EvidenceDocuments::describe()`, `DocumentGone` |
+| A name that does not open | **200**/**201**, that item's `name` is `null` | `DocumentNameOpener` |
+
+The attach answers **201** with the link and the document as the listing shows it; the listing answers **200** with `data` most recently attached first, an `Erased` document kept as its tombstone (`state: "erased"`, `name: null`). Both carry `Cache-Control: no-store`. The detach answers **204** and writes one `BANK_ACCOUNT_EVIDENCE_DELETED` audit row; the document stays filed and can be attached again, to this account or another. Every audit diff of a link seals its `documentId` under the account's scope (`BankAccount:<id>`), so the account's erasure shreds it. The bytes are never served here: a `ready` document is downloaded through `GET /api/v1/documents/{id}/content` by its `documentId`, with that route's own permission and audit row.
+
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 
 Not every `DomainException` carries a marker. Two of them guard the session-minting stage of the login and are graded in its table above — `SessionAdmissionUnresolvable` (`session-admission-unresolvable`) and `MembershipCardinalityViolated` (`membership-cardinality-violated`); both are HTTP-reachable on every flow that signs a device in, map to **500** by the mechanism below, and carry no context. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:
@@ -452,6 +504,8 @@ The drift gate (`ErrorContractGateTest`) covers only markers under `api/src/Shar
 > **Translated at the read boundary, not at the exception (#418).** A read path gives `dek-destroyed` and `decryption-failed` a deliberate status of its own: `dek-destroyed` is an expected post-erasure outcome (**410 Gone**), while `decryption-failed` stays a **5xx** integrity fault, kept Sentry-visible. The read handler catches the crypto exception and throws a read-specific exception — `DocumentGone` (marker `Gone`) for the first, the marker-less `DocumentIntegrityFailure` for the second. `DekDestroyed` / `DecryptionFailed` themselves gain no marker: they are shared with the write/seal path where 500 is correct, and a 4xx marker (`extends ClientError`) would silence a real integrity fault there in Sentry. The first such boundary is the Documents read (`api/src/Documents/Document/Application/Read/ReadDocument.php`: `dek-destroyed` answers 410 `gone` with an alarm unless the re-read row is `Erased`, `decryption-failed` answers 500 `document-integrity-failure`), graded in *Documents read* above.
 >
 > The listing is the second reader and translates differently, because it reads a PAGE: the Documents listing (`api/src/Documents/Document/Application/Listing/DocumentNameOpener.php`) turns `dek-destroyed` and `decryption-failed` into a `null` name on that document (see *Documents listing*), never a status.
+>
+> The second-factor vault reads a secret no erasure leaves behind its key, so it translates both into one marker-less 500 (see *Two-step verification enrolment*).
 >
 > `make php.lint.crypto-read-boundary` reds the build when a file under `api/src` outside `Shared/Crypto/` calls a read method of `EnvelopeEncryptor` / `StreamEnvelopeEncryptor` (every public method that is not `encrypt`, `seal` or `destroyScope`) until it is registered with a test (a `*Test.php` functional test or a Behat `.feature`) holding both types and a single line on this page that cites the file and names `dek-destroyed`. A green proves that registration exists, not that the status chosen is right nor that the test exercises it; that stays review's to judge.
 

@@ -2,7 +2,7 @@
 title: 'doc-7: Erasure by key destruction'
 type: 'feature'
 created: '2026-11-17'
-status: 'in-review'
+status: 'done'
 baseline_commit: '801caedb4160b4c9e9f2b6d57d8e65b5b38378b0'
 route: 'dispatch'
 review_loop_iteration: 0

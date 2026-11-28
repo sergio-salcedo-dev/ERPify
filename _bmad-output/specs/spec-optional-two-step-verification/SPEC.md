@@ -4,6 +4,7 @@ companions:
   - integration-points.md
   - ../../../docs/adr/administrative-recovery-channel.md
   - ../../../docs/adr/identity-invitation-lifecycle.md
+  - ../../../docs/adr/two-step-verification.md
 sources: []
 ---
 
@@ -51,10 +52,14 @@ A pain and a mandate, bounded by an owner decision. Anyone holding an administra
 - **The second step exists only after a correct password and must not be an oracle.** The failure collapses into the uniform 401, pays `PreIdentityTimingFloor`, and is proven by a structural test, never a wall-clock assertion (D10, `docs/rules/security.md`).
 - **Every session-minting path is covered** (see `integration-points.md`). A withheld mint must clear the firewall token (`setToken(null)` plus `invalidate()`): the token is serialised into the native session even after `invalidate()`, so dropping the session alone leaves it authenticated.
 - **The recovery secret and the reset-password link never bypass an enabled second factor.** They may still be used to reach the second step.
-- **Second-step attempts spend their own per-identity budget and never feed the persisted email-keyed lockout**; that limiter is the only ceiling on guessing a code.
+- **Second-step attempts spend their own per-identity budget and never feed the persisted email-keyed lockout.** That budget (`second_factor_code_per_identity`) is an attenuator, not a wall: it has no lock factory and its pool resets on deploy. The wall on guessing the enrolment's confirmation is the pending factor itself — it closes after 10 minutes or 5 wrong codes, counted on its row under its lock and committed although each refused request fails, and only a new enrolment behind the password restarts it (owner, option 1b, 2026-11-28). The wall on guessing an ENABLED factor's code is a persisted per-factor consecutive-failure counter mfa-2 builds: on the factor row, under its lock, committed on failure, reset only by an accepted code, never by a correct password, a deploy or time, never touching the email-keyed lockout, and bounding a sustained 30-day attack to ≤10⁻³ (owner, 2026-11-28).
 - **A code is accepted once.** RFC 6238: HMAC-SHA1, 6 digits, 30 s step, plus or minus one step; the last accepted step is stored and a code at or before it is refused. Changing algorithm, digits or period invalidates every enrolled user.
-- **The secret is a state-oriented aggregate sealed with the Shared/Crypto envelope** under a per-identity scope and an identity-bound AAD; it is never logged, returned after activation, or placed in an event. Recovery codes are stored as digests only and consumed atomically.
-- **Disable requires a code, enable requires the password, admin reset re-proves the caller's password and refuses self-targeting before the transaction.** The disable route authenticates with a code, so how it fits the credential-proof gate is an open question.
+- **The secret is a state-oriented aggregate sealed with the Shared/Crypto envelope** under a per-identity scope and an identity-bound AAD; it is never logged, returned after activation, or placed in an event. The scope id is random, lower-cased and unique, held on the identity's factor row and never derived from the person's id, because a destroyed key's tombstone and the erasure evidence that answers it outlive the person (confirmed by the owner, 2026-11-28; ADR `two-step-verification.md` D4). Every path that deletes a factor row destroys its key in the same transaction; a deletion that is not an erasure (disable, reset) either writes evidence the subject-erasure reconciler accepts or the reconciler excludes such tombstones. Recovery codes are stored as digests only and consumed atomically.
+- **Disable requires a code, enable requires the password, admin reset re-proves the caller's password and refuses self-targeting before the transaction.** The code-authenticated disable route is classified by a new proof class of the credential-proof gate (`code-proof` in `api/.credential-proof-policy`): the gate requires the action to spend its own per-identity second-factor code budget and to verify the code before the use case runs. It is a mechanism, not a pinned exception, and a WebAuthn assertion verified through the same port fits it (owner, 2026-11-28). The enrolment's confirmation stays `ordinary` until that class exists, then moves into it; it becomes `credential-affecting` (or `code-proof`) at once if it ever returns recovery codes (owner, 2026-11-28).
+- **Enabling a factor is treated like a password change.** After the commit every session of the identity is revoked, the asking device is signed back in, and the owner is mailed a notice with nothing exercisable in it, all best effort and outside the request's transaction (owner, 2026-11-28).
+- **Factors enabled before recovery codes exist get them later.** mfa-3 adds a recovery-code generation and regeneration route behind a password re-proof, which also serves factors enabled before it (owner, 2026-11-28).
+- **Signing in with a recovery code mails the identity's owner** (detective, nothing exercisable: no token, link or code), sent post-commit and outside the login request's timing, never inside it (owner, 2026-11-28).
+- **The decisions live in a new ADR, `docs/adr/two-step-verification.md`** (step-up placement, recovery interaction, sealing and shredding), listed in `docs/index.md`; the recovery-channel ADR is not amended for them (owner, 2026-11-28).
 - **The factor sits behind a port** so a WebAuthn adapter can be added without touching login.
 - **The privileged-lockout alert runs from the maintenance schedule only**, carries nothing exercisable, and never filters `locked_until` in the active-administrator directory (closed and rejected). Privileged means the ADMIN role.
 - **Identity erasure stays hard-delete plus crypto-shred, in the existing lock order** (`ErasureLockOrderTest`); the new table joins the person-reference policy and gets a `PersonReferenceSource`.
@@ -81,6 +86,4 @@ An administrator enables TOTP from their profile, signs out, and signs back in o
 
 ## Open Questions
 
-- The disable route authenticates with a code, but the credential-proof gate requires spend-then-verify of the password for `credential-affecting` routes: extend the gate with a code-proof class, or pin a documented exception?
-- Should signing in with a recovery code notify the owner by mail (detective, nothing exercisable)?
-- Where do the decisions live: one new ADR covering step-up placement, recovery interaction, and sealing and shredding, or an addendum to the recovery-channel ADR?
+None open: the three questions of 2026-11-22 were answered by the owner on 2026-11-28 and live in Constraints.

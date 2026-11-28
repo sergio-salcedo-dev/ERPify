@@ -578,7 +578,7 @@
     in the query (encodeURIComponent, mirrored redaction) and progress against the real Caddy bounds. The
     BankAccount aggregate references the document by id only (no object graph crosses a module boundary).
     Persistence is decided (memlog): a separate BankAccountEvidence link table in the BankAccount module (id,
-    bank_account_id, document_id, kind, attached_at; UNIQUE (bank_account_id, document_id); both foreign keys
+    bank_account_id, document_id, kind, attached_at; UNIQUE (document_id), one account per document, with an audited detach; both foreign keys
     without cascade and NOT DEFERRABLE, the one to document a justified Level 2), no attached_by, three
     non-person policy lines, an AuditedEntity with a new non-person audit resource type, no event. Retention is
     fixed per kind by the consumer and verified on the server through a seam Documents publishes (422 on a
@@ -589,3 +589,20 @@
     takes the same 409 or erases the documents first. ADMIN only. Names and states come through a read port
     Documents publishes (DocumentNameOpener), with its line in api/.bounded-context-allowlist and its mirror in
     deptrac skip_violations. Owes a recorded adversarial pass.
+- id: "doc-13"
+  title: Evidence follow-ups — erase a document from the evidence panel, free a refused upload's slot
+  description: >-
+    Two follow-ups the doc-12 review produced, owned by this epic. (1) A PWA action that erases a document from
+    the bank-account evidence panel through the existing documents_erase route, re-proving the password, so an
+    operator can clear the live evidence that blocks an account's delete or subject erasure without leaving the
+    screen. (2) The API expires or aborts an upload intent whose claim was refused before any byte streamed
+    (content-length mismatch, invalid filename, capacity, 401), so a refused PUT stops holding one of the ten
+    per-actor declared slots for 24 hours. Depends on doc-12.
+  invoke_dev_with: >-
+    The erase action reuses the erasure's own contract: ADMIN only (document.erase), password re-proof through
+    the credential-proof budget, a reason from the closed ErasureReason list, the 503 erasure-ledger-unavailable
+    and erasure-outcome-unknown answers surfaced as their own copy, and the panel reloads its list afterwards.
+    The intent change follows ADR documents-custody-log.md D6: the intent row stays the lock the commit, the
+    reaper and the person purge share, and a refusal before the claim moves Declared to Expired (key hash NULL,
+    nothing staged) in one compare-and-set, so a retry declares afresh; the PWA's same-upload retry then stops
+    applying to those refusals. Owes a recorded adversarial pass.
