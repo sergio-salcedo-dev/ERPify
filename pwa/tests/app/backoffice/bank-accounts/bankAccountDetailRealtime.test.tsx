@@ -44,6 +44,10 @@ const realtime = vi.hoisted(() => ({
   onDeleted: undefined as ((event: BankAccountRealtimeEvent) => void) | undefined,
   onReconnect: undefined as (() => void) | undefined,
 }));
+vi.mock("@/context/shared/access/application/useCan", async () =>
+  (await import("./_mocks")).useCanMock(),
+);
+
 vi.mock("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime", async () =>
   (await import("./_mocks")).bankAccountRealtimeMock((handlers) => {
     realtime.onUpdated = handlers.onUpdated;

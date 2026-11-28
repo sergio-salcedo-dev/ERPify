@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Erpify\Backoffice\BankAccount\Application;
 
+use Erpify\Backoffice\BankAccount\Application\Evidence\LiveEvidenceGuard;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
@@ -32,6 +33,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * id names nothing this installation ever held, so a mistyped but well-formed id writes no tombstone and no
  * evidence. Idempotent: a re-run finds nothing live and an already-destroyed key, erases nothing and skips
  * the self-audit.
+ *
+ * A subject whose account still holds evidence that is not erased is refused with the deletion's own 409
+ * (`bank-account-has-live-evidence`) before anything changes: the documents are erased one by one through their own
+ * route first, never by this command.
  */
 final readonly class EraseBankAccountSubject
 {
@@ -39,6 +44,7 @@ final readonly class EraseBankAccountSubject
 
     public function __construct(
         private BankAccountRepository $bankAccountRepository,
+        private LiveEvidenceGuard $liveEvidence,
         private Keystore $keystore,
         private AuditLogger $auditLogger,
         private TransactionManager $transactionManager,
@@ -69,6 +75,11 @@ final readonly class EraseBankAccountSubject
             }
 
             if ($liveRecordErased) {
+                // Evidence first, under the account's lock: a linked document that is not erased refuses the whole
+                // erasure (409) before anything is removed or destroyed. The documents are never erased from here
+                // (see LiveEvidenceGuard); an operator erases each through its own route, then runs this again.
+                $this->liveEvidence->releaseAll($canonicalId);
+
                 // Load-bearing: remove() flushes eagerly, so the final BANK_ACCOUNT_DELETED change row is
                 // captured and sealed under the still-live key here, before destroy() below tombstones
                 // it. A future lazy flush would move that capture past the destroy and break erasure.

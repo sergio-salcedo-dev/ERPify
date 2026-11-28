@@ -6,7 +6,7 @@ Feature: The custody trail and a series cost the same number of queries whatever
   # Each pair of scenarios asserts ONE number, so a query issued per row makes the larger read cost more than the
   # smaller one. The number includes the audit row the read writes about itself.
   Background:
-    Given I execute the SQL query "TRUNCATE upload_intent, document_custody, document, document_series"
+    Given I execute the SQL query "TRUNCATE bank_account_evidence, upload_intent, document_custody, document, document_series"
     And I add "Accept" header equal to "application/json"
 
   Scenario: A trail of two rows

@@ -5,6 +5,8 @@
   "backoffice_bank_account_collection_search": { "path": "/api/v1/backoffice/bank-accounts", "methods": ["GET"] },
   "backoffice_bank_account_create": { "path": "/api/v1/backoffice/bank-accounts", "methods": ["POST"] },
   "backoffice_bank_account_delete": { "path": "/api/v1/backoffice/bank-accounts/{id}", "methods": ["DELETE"] },
+  "backoffice_bank_account_evidence_attach": { "path": "/api/v1/backoffice/bank-accounts/{id}/evidence", "methods": ["POST"] },
+  "backoffice_bank_account_evidence_list": { "path": "/api/v1/backoffice/bank-accounts/{id}/evidence", "methods": ["GET"] },
   "backoffice_bank_account_get": { "path": "/api/v1/backoffice/bank-accounts/{id}", "methods": ["GET"] },
   "backoffice_bank_account_iban_lookup": { "path": "/api/v1/backoffice/bank-accounts/iban-lookup", "methods": ["POST"] },
   "backoffice_bank_account_realtime_authorize": { "path": "/api/v1/backoffice/bank-accounts/realtime/authorize", "methods": ["GET"] },

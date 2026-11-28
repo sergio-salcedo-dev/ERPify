@@ -8,7 +8,6 @@ What `ic-1` implements and `ic-2` codes against. Exact public paths come from `m
 |---|---|---|
 | Bank logo | `PUT`/`DELETE …/banks/{id}/logo` | existing bank update permission |
 | User avatar | `PUT`/`DELETE …/users/{id}/avatar` | **open** (self, admin, both) |
-| Bank-account image | `PUT`/`DELETE …/bank-accounts/{id}/image` | existing bank-account update permission |
 
 The suffix never collides with the owner's own update route. Authentication, permission, UUID syntax and owner existence are checked **before** the body is read, so a 404 or 403 stores nothing.
 
@@ -43,8 +42,8 @@ A decodable polyglot is not an error: it is re-encoded and stored, and what is g
 
 ## Reads and the Resource DTO
 
-- Logo and bank-account image are read through the existing shared route (`GET /api/v1/images/{imageId}`), unchanged.
+- The logo is read through the existing shared route (`GET /api/v1/images/{imageId}`), unchanged.
 - The avatar is read through an owner-scoped route, `GET …/users/{id}/avatar`, that resolves the image only through the user's current `avatarImageId`. Its audience, audit type and cache window are **open** (SPEC Open Questions).
-- The bank and bank-account Resource DTOs gain one nullable string, `logoImageId` and `accountImageId`: a presence flag and a cache key, never a URL; the PWA composes the read URL itself through `safeHref`.
+- The bank Resource DTO gains one nullable string, `logoImageId`: a presence flag and a cache key, never a URL; the PWA composes the read URL itself through `safeHref`.
 - The user Resource DTO gains the boolean `hasAvatar` and never the id: the shared route serves any id to any session, so exposing it would bypass the owner route.
 - The PWA shows a placeholder on **any** failure to load the image: an `<img>` does not expose the status, and a fetch-to-blob read would conflict with `safeHref` and the CSP.

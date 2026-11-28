@@ -531,9 +531,14 @@
     the predecessor after the new bytes are sealed (never across the stream), rechecks Ready; the
     loser of a successor race maps to a conflict and its bytes fall into the aborted-upload class.
     The size bounds of doc-3 (zero-length refusal, MAX_ORIGINAL_BYTES, the body bounds) apply to
-    this path too, since it also seals. The successor-exclusion mechanism is decided: a series row whose head pointer
-    moves by one UPDATE under the series row lock; record it in the Documents ADR with its lock placement (see
-    the memlog) and state that it removes the locked writing walk, not the walk. A version_no with UNIQUE
+    this path too, since it also seals. The successor-exclusion mechanism is decided (option C, memlog): a document_series row per series used only as the
+    mutex of the two transitions that take a slot (new version: intent, new scope keystore, series, predecessor; reopen:
+    series, predecessor, self), no stored head pointer, and under that lock a lock-free recursive read of whether the
+    predecessor has a live descendant; record it in the Documents ADR with its safety argument and the discarded
+    alternatives. Erasure, the scan compare-and-sets, the cap sweep and ReplayErasure take no series lock, and
+    ErasureLimits::TRANSACTION_LOCKS stays 3. A series erasure closes the series first (closed_at) so no version is
+    filed or reopened in it afterwards (opened again only when its first ledger entry was certainly not durable and
+    nothing was erased), and the new-version declare asks document.write and document.download. A version_no with UNIQUE
     (series_id, version_no) alone does not refuse two concurrent successors. The mechanism keeps the SPEC
     properties (including the cascade that frees a contiguous run of Erased nodes when its last live
     descendant goes, series_id copied from the locked predecessor row, one winner among concurrent
@@ -545,7 +550,8 @@
     the first, expect success; erase its last descendant and expect the slot free; quarantine the
     only child of an Erased node and expect the slot free; erase the predecessor of a ScanFailed
     child and expect the reopen refused; reopen a ScanFailed child whose slot a sibling holds end to
-    end. Add series erasure to doc-7's use case as a repeatable operator action (each non-Erased
+    end; and the pairs new version against new version (one winner), new version against erasure, new version
+    against reopen and reopen against reopen. Add series erasure to doc-7's use case as a repeatable operator action (each non-Erased
     version in its own transaction, newest first, reporting what remains); a person's erasure
     touches no document and anonymises references only. The new-version route regenerates
     api/.route-manifest.json, is classified in api/.credential-proof-policy and names its voter and
@@ -584,8 +590,19 @@
     fixed per kind by the consumer and verified on the server through a seam Documents publishes (422 on a
     mismatch); the bank ownership certificate is contract-execution under legitimate-interests with no
     review_at. The D3 guard: distinct English labels and help, and on the image control of that screen a notice
-    that the image is re-encoded, pointing to Attach evidence; ic-5 inherits it. Erasing an account with a
-    linked document that is not Erased answers 409; decide at the checkpoint whether EraseBankAccountSubject
-    takes the same 409 or erases the documents first. ADMIN only. Names and states come through a read port
-    Documents publishes (DocumentNameOpener), with its line in api/.bounded-context-allowlist and its mirror in
-    deptrac skip_violations. Owes a recorded adversarial pass.
+    that the image is re-encoded, pointing to Attach evidence (ic-5 was dropped, so no screen offers both yet: the
+    notice is owed by the first that does). Erasing an account with a linked document that is not Erased answers
+    409, and EraseBankAccountSubject takes the same 409, never erasing the documents itself (memlog, 2026-11-28). ADMIN only. Names and states come through a read port
+    Documents publishes (DescribeEvidenceDocuments around DocumentNameOpener, memlog 2026-11-28), with its lines in
+    api/.bounded-context-allowlist and their mirror in deptrac skip_violations. Owes a recorded adversarial pass.
+- id: "doc-13"
+  title: Through-Caddy proof of the browser evidence upload
+  description: >-
+    A Playwright spec against the running stack that drives the bank-account Evidence section end to end and proves
+    what doc-12 could only argue: the PUT streams the File, the wire Content-Length equals the declared size, progress
+    events arrive on a real multi-MiB body, the 100 MiB bound is lifted only for a session-cookie request and a body
+    over it is refused, and the attach then lists the document. Depends on doc-12.
+  invoke_dev_with: >-
+    Use the live stack (make app.dev); read Content-Length off the request Playwright records, not off the client
+    code. Assert the access log carries no filename (the whole-query strip). Run before Documents opens in production,
+    beside the owner's restore drill. No API or PWA change unless a proof fails; a failure is fixed in this story.

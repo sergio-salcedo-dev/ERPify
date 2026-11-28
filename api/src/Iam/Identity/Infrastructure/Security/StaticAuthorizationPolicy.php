@@ -73,13 +73,17 @@ final readonly class StaticAuthorizationPolicy implements AuthorizationPolicy
      *
      * `document.download` and `document.custody` are declared for the same reason as the `users.*` rows, although
      * `document` tiers: the verbs are no tier's, so the ADMIN wildcard is what reaches them today, and these rows
-     * record the grantee (ADMIN only) for the day a non-ADMIN role earns one.
+     * record the grantee (ADMIN only) for the day a non-ADMIN role earns one. `bankAccount.attachEvidence` and
+     * `bankAccount.readEvidence` are declared on the same terms: the evidence they reach is filed and read through
+     * those ADMIN-only Documents verbs.
      *
      * @var array<string, list<string>>
      */
     private const array EXPLICIT_GRANTS = [
         'auditTrail.read' => [Role::AUDIT_READER->value, Role::ADMIN->value],
         'bankAccount.changeStatus' => [Role::MANAGER->value],
+        'bankAccount.attachEvidence' => [Role::ADMIN->value],
+        'bankAccount.readEvidence' => [Role::ADMIN->value],
         'document.custody' => [Role::ADMIN->value],
         'document.download' => [Role::ADMIN->value],
         'users.read' => [Role::ADMIN->value],

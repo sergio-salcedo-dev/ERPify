@@ -74,3 +74,15 @@ export async function bankAccountRealtimeMock(
       : vi.fn(),
   };
 }
+
+/**
+ * `useCan` mock for the detail page, which gates its evidence section on the session's permissions.
+ * The default grants nothing, so a spec about the account itself renders no evidence section and
+ * needs no `AuthProvider`; pass the permissions a spec wants held.
+ */
+export function useCanMock(held: readonly string[] = []) {
+  return {
+    useCan: (permission: string): boolean => held.includes(permission),
+    useCanRole: (): boolean => false,
+  };
+}

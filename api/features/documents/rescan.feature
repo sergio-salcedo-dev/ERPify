@@ -8,7 +8,7 @@ Feature: Reopen a document whose scan failed
   # may not reopen it. The scan itself is not run here; the operator decision is.
 
   Background:
-    Given I execute the SQL query "TRUNCATE upload_intent, document_custody, document, document_series"
+    Given I execute the SQL query "TRUNCATE bank_account_evidence, upload_intent, document_custody, document, document_series"
     And I add "Accept" header equal to "application/json"
     And I add "Content-Type" header equal to "application/json"
 

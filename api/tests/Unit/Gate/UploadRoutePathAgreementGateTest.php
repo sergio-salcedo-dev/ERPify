@@ -21,8 +21,8 @@ use Symfony\Component\Yaml\Yaml;
  * regenerated from the prod router and gated against it) and every pattern must accept it and refuse a near miss.
  * Both Caddyfile matchers also lift the bound only for a request carrying the application's session cookie.
  *
- * The image write routes (logo, avatar, bank-account image) have their own matcher in the same file, bounded at
- * `erpify.images.max_input_bytes` and cookie-gated the same way. The matcher is proved on the three public shapes
+ * The image write routes (logo, avatar) have their own matcher in the same file, bounded at
+ * `erpify.images.max_input_bytes` and cookie-gated the same way. The matcher is proved on the two public shapes
  * written below, which hold independently of any router, and on any manifest route that looks like one: a consumer's
  * route either matches or reds this gate. The other direction — a route that carries `RawBodyRoute::ATTRIBUTE` or
  * reaches `ImageAttachment` while the matcher misses it — is `ImageWriteRouteAgreementGateTest`'s. What a text gate
@@ -174,16 +174,15 @@ final class UploadRoutePathAgreementGateTest extends TestCase
     }
 
     /**
-     * The image matcher accepts exactly the three public shapes and no near miss: a trailing slash, a suffix, the
+     * The image matcher accepts exactly the two public shapes and no near miss: a trailing slash, a suffix, the
      * owner's own update route, the front-controller or a prefixed spelling, another owner's suffix.
      */
     #[Test]
-    public function theImageMatcherAcceptsTheThreePlannedShapesAndNothingNear(): void
+    public function theImageMatcherAcceptsTheTwoPlannedShapesAndNothingNear(): void
     {
         $shapes = [
             '/api/v1/backoffice/banks/{id}/logo',
             '/api/v1/backoffice/users/{id}/avatar',
-            '/api/v1/backoffice/bank-accounts/{id}/image',
         ];
 
         foreach ($this->caddyPatterns('imageWrite') as $site => $pattern) {

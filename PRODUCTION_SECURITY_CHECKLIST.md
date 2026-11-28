@@ -2908,6 +2908,25 @@ mitigated state. Accepting one means recording who accepted it and against which
       finish, writes a `warning` line with `complete: false` even if no name failed, so a store too large for one run
       is only covered where it reaches and says so. **Accepted — the user,
       2026-11-17 (ADMIN only; no listing audit row).**
+      **The bank-account evidence routes inherit this acceptance unchanged:** `GET`/`POST
+      /api/v1/backoffice/bank-accounts/{id}/evidence` (ADMIN only, `bankAccount.readEvidence` /
+      `bankAccount.attachEvidence`) open the names of an account's linked documents through the same
+      `DocumentNameOpener`, behind the same override (410 through `DescribeEvidenceDocuments`), and write only the
+      generic access-log row naming the account; the attach is itself captured as a `BankAccountEvidence` change row
+      (non-person, no name). Extending the acceptance rather than reopening it: the names reach the same audience
+      (ADMIN) through a narrower door (one account's evidence instead of every document).
+- [ ] **An attach that never lands leaves the uploaded certificate filed and linked to nothing.** Attaching evidence
+      to a bank account is two requests from the browser: the Documents upload files the original (holder name and
+      IBAN in a certificate), then `POST …/bank-accounts/{id}/evidence` links it. Between the upload's commit and the
+      link's commit the document belongs to no account: a lost response, a closed tab, a 410 under the erasure
+      ledger's override or a 5xx on the attach leaves it there. The screen retries the attach against the same
+      document rather than uploading again, and says when an upload's outcome is unknown instead of offering a blind
+      re-upload, which narrows the window and stops the screen from multiplying copies. It does not close it:
+      nothing lists unattached evidence, no sweep finds it, and `EraseBankAccountSubject` refuses only over
+      linked documents (it erases none itself), so a subject's erasure can report complete while an orphaned copy of their certificate lives on,
+      visible only in the generic Documents listing (ADMIN) and erasable there. Closing it needs either an attach
+      that carries the bytes in one request (a different, cross-context use case) or a sweep of unattached evidence
+      by retention and age, which needs counsel's retention matrix first. **Open, recorded 2026-11-28.**
 - [x] **The identity erasure route did not re-prove the caller's password, though the Documents erasure did — closed 2026-11-25.**
       `POST /api/v1/documents/{id}/erase` already spent the shared `CurrentPasswordProofThrottle` budget and re-proved the
       caller's current password before any ledger write, because a stolen session could otherwise erase documents for good

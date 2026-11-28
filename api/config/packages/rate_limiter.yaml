@@ -216,8 +216,8 @@ framework:
             interval: '%env(RATE_LIMIT_DOCUMENT_UPLOAD_DECLARE_PER_ACTOR_INTERVAL)%'
             lock_factory: null
 
-        # `image_write_per_identity_route` — budget of one identity on one image write route (the logo, avatar and
-        # bank-account image `PUT`/`DELETE`s), keyed by an HMAC of the acting identity and the route name. A write
+        # `image_write_per_identity_route` — budget of one identity on one image write route (the logo and avatar
+        # `PUT`/`DELETE`s), keyed by an HMAC of the acting identity and the route name. A write
         # decodes and re-encodes an image of up to 20 MP on a worker thread (about 10 B/px: roughly 200 MB against the
         # 256M `memory_limit`), so the budget bounds how much of that one session can ask for. 30 per 10 minutes
         # leaves an operator a corrected upload and a retry many times over. Exhaustion is a visible 429 with

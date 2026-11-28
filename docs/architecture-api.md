@@ -46,7 +46,7 @@ api/src/
 ├── Backoffice/
 │   ├── Audit/         { Application, Domain, Infrastructure }   # regulatory audit trail (read + write capture)
 │   ├── Bank/          { Application, Domain, Infrastructure }
-│   ├── BankAccount/   { Application, Domain, Infrastructure }   # references Bank by id only — adr/bank-bankaccount-modeling.md
+│   ├── BankAccount/   { Application, Domain, Infrastructure }   # references Bank by id only — adr/bank-bankaccount-modeling.md; evidence = BankAccountEvidence link to a Documents document by id (POST/GET /api/v1/backoffice/bank-accounts/{id}/evidence, ADMIN only), checked and named through Documents' DescribeEvidenceDocuments seam; an account whose linked documents are not erased is neither deleted nor subject-erased (409)
 │   └── Health/        { Application, Domain, Infrastructure }
 ├── Frontoffice/
 │   ├── Dev/        { Infrastructure/Controller }

@@ -47,6 +47,10 @@ vi.mock("@/context/shared/notification/infrastructure/Toast", async () => ({
   toastNotifier: toast,
 }));
 
+vi.mock("@/context/shared/access/application/useCan", async () =>
+  (await import("./_mocks")).useCanMock(),
+);
+
 vi.mock("@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime", async () =>
   (await import("./_mocks")).bankAccountRealtimeMock(),
 );
@@ -93,6 +97,32 @@ describe("BankAccountDetailPage", () => {
       "/backoffice/bank-accounts/aaaaaaaa-aaaa-4aaa-8aaa-000000000001/edit",
     );
     expect(deleteRun).not.toHaveBeenCalled();
+  });
+
+  it("offers no evidence link on a live-evidence refusal to a caller who cannot read evidence", async () => {
+    run.mockResolvedValue(CLOSED_ACCOUNT);
+    deleteRun.mockRejectedValue(
+      new HttpError({
+        type: "bank-account-has-live-evidence",
+        title: "Server title",
+        status: HttpStatus.CONFLICT,
+        instance: "i",
+        "correlation-id": "c",
+        liveDocuments: 1,
+      }),
+    );
+    render(<BankAccountDetailPage />);
+
+    fireEvent.click(await screen.findByTestId("bank-accounts-detail__delete-button"));
+    fireEvent.click(await screen.findByTestId("bank-accounts-detail__delete-confirm"));
+
+    expect(await screen.findByTestId("bank-accounts-detail__delete-error")).toHaveTextContent(
+      "This account still holds 1 evidence document that is not erased.",
+    );
+    expect(
+      screen.queryByTestId("bank-accounts-detail__delete-error-evidence"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("bank-accounts-detail__evidence")).not.toBeInTheDocument();
   });
 
   it("deletes a CLOSED account, then toasts and redirects to the list", async () => {

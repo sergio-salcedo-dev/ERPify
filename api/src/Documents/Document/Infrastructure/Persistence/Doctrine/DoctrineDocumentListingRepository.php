@@ -79,6 +79,29 @@ final readonly class DoctrineDocumentListingRepository implements DocumentListin
         return $row instanceof DocumentListRow ? $row : null;
     }
 
+    #[Override]
+    public function findMany(array $ids): array
+    {
+        if ([] === $ids) {
+            return [];
+        }
+
+        foreach ($ids as $id) {
+            Uuid::ensure($id);
+        }
+
+        $result = $this->baseQuery()
+            ->where('d.id IN (:ids)')
+            ->setParameter('ids', \array_values(\array_unique(\array_map(\strtolower(...), $ids))))
+            ->getQuery()
+            ->getResult()
+        ;
+
+        return \is_array($result)
+            ? \array_values(\array_filter($result, static fn (mixed $row): bool => $row instanceof DocumentListRow))
+            : [];
+    }
+
     private function baseQuery(): QueryBuilder
     {
         return $this->entityManager->createQueryBuilder()

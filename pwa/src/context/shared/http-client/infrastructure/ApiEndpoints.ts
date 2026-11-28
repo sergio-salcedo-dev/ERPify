@@ -95,6 +95,10 @@ export const API_ENDPOINTS = {
       // Exact-match lookup by IBAN — POST body, never a query-string parameter, so the
       // value (financial PII) is never written to an access log. See issue #426.
       IBAN_LOOKUP: `${BACKOFFICE_PREFIX}/bank-accounts/iban-lookup`,
+      // The account's evidence: one path, two operations, two keys. The attach carries ids only (the
+      // bytes travel through `DOCUMENTS.UPLOAD_*` first); both answer `Cache-Control: no-store`.
+      EVIDENCE_LIST: (id: string): string => `${bankAccountPath(id)}/evidence`,
+      EVIDENCE_ATTACH: (id: string): string => `${bankAccountPath(id)}/evidence`,
     },
     USERS: {
       LIST: `${BACKOFFICE_PREFIX}/users`,
@@ -126,11 +130,21 @@ export const API_ENDPOINTS = {
       FRANKENPHP_HOT_RELOAD: `${FRONTOFFICE_PREFIX}/dev/frankenphp-hot-reload`,
     },
   },
-  // Stored images, read through one route for every consumer (bank logo, bank-account image).
+  // Stored images, read through one route for every consumer (bank logo, user avatar).
   // The write routes belong to each consumer's own resource and are passed in by the consumer;
   // none is declared here.
   IMAGES: {
     GET: (imageId: string): string => `${API_PREFIX_V1}/images/${encodeURIComponent(imageId)}`,
+  },
+  // Documents: the two-step evidence upload (declare, then the raw body) and the audited read of a
+  // `ready` original. Mounted at the v1 root. The PUT carries the original filename in its query,
+  // appended by the caller: the path here is what the redaction patterns match.
+  DOCUMENTS: {
+    UPLOAD_DECLARE: `${API_PREFIX_V1}/documents/uploads`,
+    UPLOAD_CONTENT: (uploadId: string): string =>
+      `${API_PREFIX_V1}/documents/uploads/${encodeURIComponent(uploadId)}/content`,
+    CONTENT: (documentId: string): string =>
+      `${API_PREFIX_V1}/documents/${encodeURIComponent(documentId)}/content`,
   },
   // Identity / session subsystem — mounted at the v1 root (not under a portal
   // prefix): the signed-in user reads their own identity and session registry.

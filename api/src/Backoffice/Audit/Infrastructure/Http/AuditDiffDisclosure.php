@@ -35,6 +35,7 @@ final readonly class AuditDiffDisclosure
     public const array CLEAR_FIELDS = [
         'Bank' => ['id', 'name', 'nameNormalized', 'shortName', 'logoImageId', 'createdAt', 'updatedAt'],
         'BankAccount' => ['id', 'bankId', 'bic', 'currency', 'status', 'createdAt', 'updatedAt'],
+        'BankAccountEvidence' => ['id', 'bankAccountId', 'documentId', 'kind', 'attachedAt'],
     ];
 
     /**

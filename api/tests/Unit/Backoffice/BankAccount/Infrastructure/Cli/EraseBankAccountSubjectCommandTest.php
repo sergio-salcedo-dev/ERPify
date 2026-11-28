@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Backoffice\BankAccount\Application\Evidence\LiveEvidenceGuard;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
+use Erpify\Backoffice\BankAccount\Domain\Enum\EvidenceKind;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
+use Erpify\Documents\Document\Domain\DocumentState;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Crypto\Domain\KeyState;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Application\EvidenceDocumentsDouble;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Application\InMemoryBankAccountEvidenceRepository;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Test;
@@ -24,6 +30,8 @@ use Symfony\Component\Console\Tester\CommandTester;
  * {@see EraseBankAccountSubjectCommandConfirmationTest}.
  *
  * @internal
+ *
+ * @SuppressWarnings("PHPMD.CouplingBetweenObjects") the command, its use case and the doubles of every collaborator
  */
 #[CoversClass(EraseBankAccountSubjectCommand::class)]
 final class EraseBankAccountSubjectCommandTest extends TestCase
@@ -31,6 +39,10 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
     private const string ACCOUNT_ID = '0197f2b4-0000-7000-8000-000000000000';
 
     private const string BANK_ID = '0197f2b4-1111-7000-8000-000000000001';
+
+    private const string LINK_ID = '0197f2b4-2222-7000-8000-000000000002';
+
+    private const string DOCUMENT_ID = '0197f2b4-3333-7000-8000-000000000003';
 
     #[Test]
     public function itRejectsANonUuidArgument(): void
@@ -97,6 +109,33 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
         $this->assertStringContainsString('Erasure failed', $tester->getDisplay());
     }
 
+    #[Test]
+    public function itRefusesWhileTheAccountHoldsLiveEvidenceAndDestroysNothing(): void
+    {
+        $repository = $this->createMock(BankAccountRepository::class);
+        $repository->method('findByIdForUpdate')->willReturn(
+            BankAccount::create(self::ACCOUNT_ID, self::BANK_ID, 'Juan Pérez', 'ES9121000418450200051332'),
+        );
+        $repository->expects($this->never())->method('remove');
+        $keystore = $this->createMock(Keystore::class);
+        $keystore->method('lockState')->willReturn(KeyState::Live);
+        $keystore->expects($this->never())->method('destroy');
+        $evidence = new InMemoryBankAccountEvidenceRepository(BankAccountEvidence::attach(
+            self::LINK_ID,
+            self::ACCOUNT_ID,
+            self::DOCUMENT_ID,
+            EvidenceKind::OwnershipCertificate,
+        ));
+        $documents = (new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT_ID, DocumentState::Ready);
+
+        $tester = $this->tester($this->eraser($repository, $keystore, $evidence, $documents));
+        $tester->execute(['bank-account-id' => self::ACCOUNT_ID, '--force' => true]);
+
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+        $this->assertStringContainsString('Erasure failed', $tester->getDisplay());
+        $this->assertStringContainsString('not erased', $tester->getDisplay());
+    }
+
     private function tester(EraseBankAccountSubject $eraser): CommandTester
     {
         return new CommandTester(new EraseBankAccountSubjectCommand($eraser));
@@ -130,10 +169,15 @@ final class EraseBankAccountSubjectCommandTest extends TestCase
         return $this->eraser($repository, $keystore);
     }
 
-    private function eraser(BankAccountRepository $repository, Keystore $keystore): EraseBankAccountSubject
-    {
+    private function eraser(
+        BankAccountRepository $repository,
+        Keystore $keystore,
+        InMemoryBankAccountEvidenceRepository $evidence = new InMemoryBankAccountEvidenceRepository(),
+        EvidenceDocumentsDouble $documents = new EvidenceDocumentsDouble(),
+    ): EraseBankAccountSubject {
         return new EraseBankAccountSubject(
             $repository,
+            new LiveEvidenceGuard($evidence, $documents->seam()),
             $keystore,
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),

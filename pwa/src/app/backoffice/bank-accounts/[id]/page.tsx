@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, Clock, Landmark, Pencil, RefreshCw, Trash2 } from "lucide-react";
@@ -12,6 +12,10 @@ import {
   bankAccountTopics,
   useBankAccountRealtime,
 } from "@/context/backoffice/bankaccount/infrastructure/bankAccountRealtime";
+import { BankAccountProblemType } from "@/context/backoffice/bankaccount/domain/BankAccountProblemType";
+import { liveDocumentsOf } from "@/context/backoffice/bankaccount/domain/evidenceProblemMessage";
+import { useCan } from "@/context/shared/access/application/useCan";
+import { Permission } from "@/context/shared/access/domain/Permission";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
@@ -37,11 +41,35 @@ import { bankRoutes } from "../../banks/_lib/bankRoutes";
 import { bankAccountRoutes } from "../_lib/bankAccountRoutes";
 import { BANK_ACCOUNT_STATUS_LABEL, BANK_ACCOUNT_STATUS_VARIANT } from "../_lib/bankAccountStatus";
 import { IbanCell } from "../../banks/[id]/accounts/_components/IbanCell";
+import {
+  BankAccountEvidenceSection,
+  EVIDENCE_SECTION_ID,
+} from "./_components/BankAccountEvidenceSection";
 
 type State = ViewStatus;
 
 /** Single source — the stale-delete Refresh focuses this CTA once the not-found state lands. */
 const BACK_TO_LIST_TESTID = "bank-accounts-detail__back-to-list";
+
+/**
+ * A delete refused because the account still holds live evidence speaks the remedy in English — the
+ * count the server reports, and that each document has to be erased first, which is an
+ * administrator action this screen does not offer. Every other refusal is rendered as the server
+ * sent it.
+ */
+function describeDeleteProblem(problem: ProblemDetails): ProblemDetails {
+  if (problem.type !== BankAccountProblemType.HAS_LIVE_EVIDENCE) return problem;
+  const count = liveDocumentsOf(problem);
+  const held =
+    count === null
+      ? "This account still holds evidence documents that are not erased."
+      : `This account still holds ${count} evidence ${count === 1 ? "document" : "documents"} that ${count === 1 ? "is" : "are"} not erased.`;
+  return {
+    ...problem,
+    title: `${held} Each document must be erased before the account can be deleted.`,
+    detail: "Erasing a document is an administrator action that is not available on this screen.",
+  };
+}
 
 function genericProblem(detail: string): ProblemDetails {
   return {
@@ -264,6 +292,17 @@ function BankAccountDetailReady({
   const bankId = account.bankId;
   const [deleteProblem, setDeleteProblem] = useState<ProblemDetails | null>(null);
   const isClosed = account.status === "CLOSED";
+  const canReadEvidence = useCan(Permission.BANK_ACCOUNT_READ_EVIDENCE);
+  // Attaching files the original through Documents first, so it needs both permissions.
+  const mayAttachEvidence = useCan(Permission.BANK_ACCOUNT_ATTACH_EVIDENCE);
+  const mayFileDocuments = useCan(Permission.DOCUMENT_WRITE);
+  const canAttachEvidence = mayAttachEvidence && mayFileDocuments;
+  const canDownloadEvidence = useCan(Permission.DOCUMENT_DOWNLOAD);
+  // Stable per problem: MutationError refocuses whenever its problem changes identity.
+  const shownDeleteProblem = useMemo(
+    () => (deleteProblem === null ? null : describeDeleteProblem(deleteProblem)),
+    [deleteProblem],
+  );
 
   return (
     <>
@@ -352,10 +391,24 @@ function BankAccountDetailReady({
         </div>
       </header>
 
-      {deleteProblem ? (
+      {shownDeleteProblem ? (
         <MutationError
-          problem={deleteProblem}
+          problem={shownDeleteProblem}
           onDismiss={() => setDeleteProblem(null)}
+          action={
+            shownDeleteProblem.type === BankAccountProblemType.HAS_LIVE_EVIDENCE &&
+            canReadEvidence ? (
+              <a
+                href={`#${EVIDENCE_SECTION_ID}`}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                aria-label="View evidence"
+                title="Go to this account's evidence"
+                data-testid="bank-accounts-detail__delete-error-evidence"
+              >
+                View evidence
+              </a>
+            ) : undefined
+          }
           testId="bank-accounts-detail__delete-error"
         />
       ) : null}
@@ -459,6 +512,17 @@ function BankAccountDetailReady({
           </dd>
         </div>
       </dl>
+
+      {canReadEvidence ? (
+        <BankAccountEvidenceSection
+          // Keyed by account: moving from one account to another remounts the section, so no list,
+          // failure or in-flight upload of the previous account survives into the next.
+          key={account.id}
+          accountId={account.id}
+          canAttach={canAttachEvidence}
+          canDownload={canDownloadEvidence}
+        />
+      ) : null}
     </>
   );
 }

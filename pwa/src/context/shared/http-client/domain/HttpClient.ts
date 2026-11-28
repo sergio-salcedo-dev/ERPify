@@ -28,6 +28,24 @@ export interface RequestOptions {
    * Give up after this many milliseconds. Overrides the client's default for this call only.
    */
   timeoutMs?: number;
+  /**
+   * Reports how much of a `putRaw` body has been sent. Honoured by `putRaw` only: it is the one
+   * verb whose body can be large enough for the wait to need a figure. Every other outcome — the
+   * timeout, the expiry bounce, the minted network and timeout errors, Problem Details parsing —
+   * is the same transport with or without it.
+   */
+  onUploadProgress?: (progress: UploadProgress) => void;
+  /**
+   * Called once the last byte of a `putRaw` body has left the browser, while the response is still
+   * pending. Honoured only together with {@link onUploadProgress}, on the same terms.
+   */
+  onUploadSent?: () => void;
+}
+
+/** Bytes of a request body sent so far, out of its total. */
+export interface UploadProgress {
+  readonly loaded: number;
+  readonly total: number;
 }
 
 export interface HttpClient {

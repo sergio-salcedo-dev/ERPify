@@ -16,6 +16,10 @@ export const PERMISSION_WILDCARD = "*" as const;
  */
 export const Permission = {
   BANK_WRITE: "bank.write",
+  BANK_ACCOUNT_READ_EVIDENCE: "bankAccount.readEvidence",
+  BANK_ACCOUNT_ATTACH_EVIDENCE: "bankAccount.attachEvidence",
+  DOCUMENT_WRITE: "document.write",
+  DOCUMENT_DOWNLOAD: "document.download",
   USERS_READ: "users.read",
   USERS_INVITE: "users.invite",
   USERS_CHANGE_STATUS: "users.changeStatus",
