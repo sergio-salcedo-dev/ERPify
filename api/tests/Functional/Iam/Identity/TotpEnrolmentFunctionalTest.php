@@ -94,7 +94,11 @@ final class TotpEnrolmentFunctionalTest extends WebTestCase
         // Once enabled, no route shows the secret again: a second enrolment is refused rather than re-issued.
         $this->post($client, self::ENROL_ENDPOINT, ['currentPassword' => self::CURRENT_PASSWORD]);
 
-        $this->assertSame(Response::HTTP_CONFLICT, $client->getResponse()->getStatusCode());
+        $this->assertSame(
+            Response::HTTP_CONFLICT,
+            $client->getResponse()->getStatusCode(),
+            (string) $client->getResponse()->getContent(),
+        );
         $this->assertStringContainsString(
             'second-factor-already-enabled',
             (string) $client->getResponse()->getContent(),
@@ -151,7 +155,11 @@ final class TotpEnrolmentFunctionalTest extends WebTestCase
 
         $this->post($client, self::CONFIRM_ENDPOINT, ['code' => '123456']);
 
-        $this->assertSame(Response::HTTP_CONFLICT, $client->getResponse()->getStatusCode());
+        $this->assertSame(
+            Response::HTTP_CONFLICT,
+            $client->getResponse()->getStatusCode(),
+            (string) $client->getResponse()->getContent(),
+        );
         $this->assertStringContainsString('second-factor-not-enrolled', (string) $client->getResponse()->getContent());
     }
 
@@ -169,11 +177,19 @@ final class TotpEnrolmentFunctionalTest extends WebTestCase
             'currentPassword' => self::CURRENT_PASSWORD,
             'secret' => 'MY-OWN-SECRET',
         ]);
-        $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $client->getResponse()->getStatusCode());
+        $this->assertSame(
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            $client->getResponse()->getStatusCode(),
+            (string) $client->getResponse()->getContent(),
+        );
         $this->assertSame([], $this->storedFactorStates());
 
         $this->post($client, self::CONFIRM_ENDPOINT, ['code' => '123456', 'force' => 'yes']);
-        $this->assertSame(Response::HTTP_UNPROCESSABLE_ENTITY, $client->getResponse()->getStatusCode());
+        $this->assertSame(
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            $client->getResponse()->getStatusCode(),
+            (string) $client->getResponse()->getContent(),
+        );
     }
 
     /**
@@ -190,14 +206,18 @@ final class TotpEnrolmentFunctionalTest extends WebTestCase
     }
 
     /**
+     * The resource under the response's `data` envelope, the shape every single-resource response takes.
+     *
      * @return array<array-key, mixed>
      */
     private function jsonBody(KernelBrowser $client): array
     {
         $decoded = \json_decode((string) $client->getResponse()->getContent(), true, 512, JSON_THROW_ON_ERROR);
         $this->assertIsArray($decoded);
+        $resource = $decoded['data'] ?? null;
+        $this->assertIsArray($resource, 'a single-resource response is enveloped under `data`');
 
-        return $decoded;
+        return $resource;
     }
 
     /**
@@ -205,7 +225,7 @@ final class TotpEnrolmentFunctionalTest extends WebTestCase
      */
     private function currentCode(string $encodedSecret): string
     {
-        $clock = static::getContainer()->get(Clock::class);
+        $clock = self::getContainer()->get(Clock::class);
         $this->assertInstanceOf(Clock::class, $clock);
         $now = $clock->now();
 
@@ -228,7 +248,7 @@ final class TotpEnrolmentFunctionalTest extends WebTestCase
         $bytes = '';
 
         foreach (\str_split(\substr($bits, 0, \intdiv(\strlen($bits), 8) * 8), 8) as $octet) {
-            $bytes .= \chr((int) \bindec($octet));
+            $bytes .= \chr((int) \bindec($octet) & 0xFF);
         }
 
         return $bytes;

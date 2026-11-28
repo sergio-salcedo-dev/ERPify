@@ -77,8 +77,10 @@ final class EnrolTotpFactorTest extends TestCase
             ->enrol(UserMother::DEFAULT_ID, $this->acceptsTheCurrentPassword())
         ;
 
-        $this->assertNotSame(UserMother::DEFAULT_ID, $factors->saved[0]->scopeId());
-        $this->assertNotSame($factors->saved[0]->getId(), $factors->saved[0]->scopeId());
+        $this->assertCount(1, $factors->saved);
+        $factor = $factors->saved[0];
+        $this->assertNotSame(UserMother::DEFAULT_ID, $factor->scopeId());
+        $this->assertNotSame($factor->getId(), $factor->scopeId());
     }
 
     #[Test]
@@ -158,6 +160,7 @@ final class EnrolTotpFactorTest extends TestCase
         $journal = new LockOrderJournal();
         $users = new InMemoryUserRepository(UserMother::create());
         $users->lockOrderJournal = $journal;
+
         $factors = new InMemoryTotpFactorRepository();
         $factors->lockOrderJournal = $journal;
 

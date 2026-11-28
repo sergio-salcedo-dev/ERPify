@@ -62,7 +62,7 @@ final readonly class ConfirmTotpFactor
      * @throws SecondFactorIntegrityFailure when the sealed secret cannot be opened (500)
      * @throws UserNotFound                 when the id resolves to no identity (404)
      */
-    public function confirm(string $userId, #[SensitiveParameter] string $code): TotpFactor
+    public function enableWithCode(string $userId, #[SensitiveParameter] string $code): TotpFactor
     {
         $now = $this->clock->now();
 

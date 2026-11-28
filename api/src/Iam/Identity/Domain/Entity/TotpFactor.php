@@ -49,17 +49,19 @@ final class TotpFactor extends AggregateRoot
     #[ORM\Column(name: 'scope_id', type: Types::GUID)]
     private string $scopeId;
 
-    #[ORM\Column(name: 'sealed_secret', type: Types::TEXT)]
-    private string $sealedSecret;
-
     #[ORM\Column(name: 'enabled_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?DateTimeImmutable $enabledAt = null;
 
     #[ORM\Column(name: 'last_accepted_step', type: Types::INTEGER, nullable: true)]
     private ?int $lastAcceptedStep = null;
 
-    private function __construct(string $id, string $userId, string $scopeId, string $sealedSecret)
-    {
+    private function __construct(
+        string $id,
+        string $userId,
+        string $scopeId,
+        #[ORM\Column(name: 'sealed_secret', type: Types::TEXT)]
+        private string $sealedSecret,
+    ) {
         parent::__construct();
 
         Uuid::ensure($id);
@@ -69,7 +71,6 @@ final class TotpFactor extends AggregateRoot
         $this->id = $id;
         $this->userId = \strtolower($userId);
         $this->scopeId = $scopeId;
-        $this->sealedSecret = $sealedSecret;
     }
 
     /**

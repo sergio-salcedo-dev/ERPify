@@ -54,7 +54,7 @@ final readonly class TotpSecretVault
      */
     public function seal(string $scopeId, string $userId, #[SensitiveParameter] string $secret): string
     {
-        return $this->encryptor->encrypt(self::scopeOf($scopeId), $secret, self::associatedData($userId));
+        return $this->encryptor->encrypt(self::scopeOf($scopeId), $secret, $this->associatedData($userId));
     }
 
     /**
@@ -68,14 +68,14 @@ final readonly class TotpSecretVault
             return $this->encryptor->decrypt(
                 self::scopeOf($factor->scopeId()),
                 $factor->sealedSecret(),
-                self::associatedData($factor->userId()),
+                $this->associatedData($factor->userId()),
             );
-        } catch (DekDestroyed|DecryptionFailed $failure) {
+        } catch (DecryptionFailed|DekDestroyed $failure) {
             throw SecondFactorIntegrityFailure::create($failure);
         }
     }
 
-    private static function associatedData(string $userId): string
+    private function associatedData(string $userId): string
     {
         return self::ASSOCIATED_DATA_PREFIX . \strtolower($userId);
     }
