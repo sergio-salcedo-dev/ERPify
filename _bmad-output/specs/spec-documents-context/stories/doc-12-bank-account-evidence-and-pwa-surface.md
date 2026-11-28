@@ -67,6 +67,18 @@ context:
 | PWA: streaming, exact Content-Length, filename in the query (NFC, encodeURIComponent), progress, cancel | `ApiDocumentUploader.test.ts` (11 cases) |
 | PWA: list, upload, download on the account page, refusals in the persistent surface | `bankAccountEvidencePanel.test.tsx` (11 cases), `ApiBankAccountEvidenceRepository.test.ts`, `BankAccountEvidenceUseCases.test.ts`, `ApiDocumentDownloader.test.ts`, `checkDocumentFile.test.ts` |
 | D3 guard: distinct label and help | `bankAccountEvidencePanel.test.tsx::says the file is kept as sent, as opposed to a re-encoded image`; ADR D3 |
+| **Review (O1):** one document is evidence of one account; the detach frees it, audited, under the account lock | `…FunctionalTest::aDocumentIsEvidenceOfOneAccountAndADetachFreesIt`; `DetachBankAccountEvidenceTest` (four cases); `AttachBankAccountEvidenceTest::aDocumentAnotherAccountHoldsIsAConflict`; `…SubjectErasureFunctionalTest::aConcurrentAttachOfAHeldDocumentMeetsTheNamedConstraint`; `RepositoryUniqueViolationTest::aLostRaceOnTheEvidenceDocumentConstraintIsAnAttachConflictNamingNoValue`, `aLongerConstraintNameIsNotTheEvidenceDocumentOne` |
+| **Review (O2):** the link's `documentId` is sealed under the account's scope | `PiiDiffSealerTest::aDependentRowIsSealedUnderItsOwnersScopeSoTheOwnersErasureShredsIt`; `…FunctionalTest::theLinkWritesOneNonPersonAuditRowNamingTheLinkAndNoName` (scope `BankAccount:<id>`, no document id in clear); `…SubjectErasureFunctionalTest::withEveryLinkedDocumentErasedTheLinksGoWithTheAccountAndTheKeyIsDestroyed` |
+| **Review (director):** `Quarantined` and a `CLOSED` account refused, `ScanFailed` admitted | `…FunctionalTest::aQuarantinedDocumentAndAClosedAccountAreRefusedWhileAFailedScanIsAttached`; `AttachBankAccountEvidenceTest::aClosedAccountTakesNoNewEvidence`, `aQuarantinedDocumentIsNotAdmissibleWhileAFailedScanStaysAttachable` |
+| **Review (P3):** the subject erasure refuses over a live document and removes the links with the account once all are erased | `BankAccountEvidenceSubjectErasureFunctionalTest` (three cases); `EraseBankAccountSubjectEvidenceTest` (two cases) |
+| **Review (P1):** the deleter locks before it judges | `BankAccountDeleterTest::testThrowsNotClosedAndMutatesNothingWhenTheAccountIsNotClosed`, `testDeletesAccountAndDispatchesDeletedEventWhenClosed` (no plain read, one locked read) |
+| **Review (P5):** every kind's terms are in the Documents vocabulary | `DocumentEvidenceReaderTest::everyEvidenceKindNamesTermsTheDocumentsVocabularyHolds` (`RetentionReason::from`, `LegalBasis::from` over `cases()`) |
+| **Review (P15):** the listing answers 410 under the override with no link; a malformed id is 400 | `…FunctionalTest::theLedgerOverrideAnswersGoneOnTheListingWithNoLinkAndOnTheAttach`, `aMalformedAccountIdIsABadRequestAndAnUnknownOneIsNotFound`; `ReleaseAndListBankAccountEvidenceTest::anEmptyListingStillAsksTheSeamSoTheLedgerOverrideAnswersTheSame` |
+| **Review (P16):** the dry run names every attached document that is not erased | `EraseBankAccountSubjectCommandDryRunTest` |
+| **Review (PWA):** gating on three permissions, cancel only while sending, reload after a failure, unknown labels, status outside the busy subtree, detach | `bankAccountEvidencePanel.test.tsx` (18 cases); `ApiBankAccountEvidenceRepository.test.ts` (5); `BankAccountEvidenceUseCases.test.ts` (6) |
+| **Review (P13):** the name is built before the declare; a refusal before the claim retries the same upload; refused characters | `ApiDocumentUploader.test.ts` (18 cases); `checkDocumentFile.test.ts` (6) |
+| **Review (P10, P20, P21):** `saveBlob` order and revoke delay; mirrors equal the PHP declarations; the live-evidence delete links to the detail | `saveBlob.test.ts`; `bank-account-evidence-parity.test.ts`; `bankAccountsListDeleteRecovery.test.tsx`, `bankAccountsListMutations.test.tsx` |
+| **Review (P17):** end to end through the real stack | `pwa/tests/e2e/backoffice/bank-account-evidence-real-api.spec.ts` (not run: no stack in the authoring session) |
 
 ## Verification
 
@@ -74,8 +86,39 @@ context:
 
 **Owed to CI (not runnable here):** `make php.quality.dry-run` (PHPStan, cs-fixer, rector, deptrac, every `php.lint.*` including route-manifest, person-reference, audit-resource, bounded-context, credential-proof, orm-sort-direction), `make php.unit`, `make php.behat` (the eight Documents backgrounds), `make db.validate` for the hand-written migration.
 
-**Owed to review:** the three review layers (none ran yet); the browser measurement of an early refusal during the PUT (§7) against the running stack.
+**Owed to review:** the browser measurement of an early refusal during the PUT (§7) against the running stack. The three review layers ran (log below).
+
+**Review fixes, run in the fixing session (host node 22, no PHP 8.5, no stack):** `npx tsc --noEmit` 0, `npx eslint .` 0, `npx depcruise src` 0, `npx prettier --check .` 0, `npx vitest run` 316 files / 2655 tests green (1 skipped). The Playwright e2e and every PHP lane are owed to CI.
 
 ## Review Triage Log
 
-(empty — the three layers are owed)
+The three layers ran on 2026-11-28 in the coordinating session, as read-only subagents in parallel: Blind Hunter (BH), Edge Case Hunter (ECH) and Acceptance Auditor (AA). Their findings were deduplicated and relayed as one batch; the batch did not attribute each finding to a layer, so the layer column says so rather than guessing. The owner renegotiated the frozen intent on two points (O1: `UNIQUE (document_id)` and a detach instead of `UNIQUE (bank_account_id, document_id)`; O2: owner-scope sealing), recorded in the memlog; the frozen block above is left as approved.
+
+| # | Finding | Layers | Verdict | Route |
+|---|---|---|---|---|
+| O1 | A document could prove several accounts, and no route removed a link | BH/ECH/AA (unattributed) | decision-needed → owner: one account per document, audited detach | patch: `UNIQUE (document_id)` (named, classified by name), `DELETE …/evidence/{evidenceId}`, PWA detach dialog, manifest, policy, docs |
+| O2 | The link's `documentId` was in clear in audit diffs and survived the account's erasure | (unattributed) | decision-needed → owner: seal under the account's scope | patch: `SealedUnderOwnerScope` seam in `PiiDiffSealer`, `#[PersonalData]`, `CLEAR_FIELDS` narrowed, SPEC re-derived |
+| O3 | Eight residuals (subject erasure 409, name port, permission reuse, any-ADMIN attach, XHR PUT, 100 MiB Blob, no idempotency key, Level 2 FK) | (unattributed) | accepted by the owner (no customer) | §7 rewritten with reopen conditions; memlog |
+| O4 | No PWA way to erase a blocking document; a PUT refused before the claim holds a declared slot for 24 h | (unattributed) | decided by the owner: new story | `doc-13` appended last; meanwhile P21 |
+| D1 | `Quarantined` documents were attachable; a `CLOSED` account took evidence | (unattributed) | decided by the director | patch: two 409 types, admitted states documented (ADR D13, §7) |
+| D2 | An unknown kind or state failed the whole PWA list | (unattributed) | decided by the director | patch: `toBankAccountEvidence()` maps to `unknown`, neutral label |
+| P1 | The deleter read the account, then locked it | (unattributed) | patch | lock first, `delete()` and events on the locked instance |
+| P3 | No test of the subject erasure with evidence | (unattributed) | patch | functional (rolled back) and unit tests |
+| P4 | No concurrent-attach test; constraint name matched by substring | (unattributed) | patch | functional race test, two `RepositoryUniqueViolationTest` cases, word-bounded match |
+| P5 | The kind's docblock claimed a test that did not exist | (unattributed) | patch | `cases()` over `RetentionReason::from` / `LegalBasis::from`; docblock points at it |
+| P6 | The PWA offered the attach without `bankAccount.write` | (unattributed) | patch | `BANK_ACCOUNT_WRITE`, three-permission gate |
+| P7 | Cancel stayed offered after the original was filed | (unattributed) | patch | `onFiled`, phase `sending`/`attaching` |
+| P8 | Retention-mismatch copy told the user to attach again | (unattributed) | patch | copy says client and server disagree, contact an administrator |
+| P10 | `saveBlob` clicked a detached anchor and revoked at once | (unattributed) | patch | append, click, remove, revoke after 60 s |
+| P11 | Long names overflowed | (unattributed) | patch | `<TruncatedText>` |
+| P12 | The polite status sat inside the `aria-busy` subtree | (unattributed) | patch | moved outside |
+| P13 | A name the query could not carry cost a declared upload; refused characters reached the server; a pre-claim refusal declared again | (unattributed) | patch | name built before the declare, `isWellFormed` + refused-character class, same-upload retry |
+| P14 | A failed attach left the list stale; network and timeout copy claimed failure | (unattributed) | patch | reload on any non-abort failure, "outcome unknown" copy |
+| P15 | The listing skipped the seam with no links (inconsistent 410); no 400 test on GET | (unattributed) | patch | always describe; functional 410 and 400 tests |
+| P16 | `--dry-run` did not warn about live documents | (unattributed) | patch | one warning per non-erased document |
+| P17 | No end-to-end proof through the real stack | (unattributed) | patch | Playwright spec (owed to CI) |
+| P18 | ic-5 did not carry the D3 notice in its dispatch text | (unattributed) | patch | `spec-images-consumers` stories.yaml + memlog |
+| P19 | Docs missed the `document/` context, the seams and the detach | (unattributed) | patch | architecture-pwa, quickref, architecture-api, error contract |
+| P20 | PWA mirrors of the cap and the retention terms were unguarded | (unattributed) | patch | parity test reading the PHP source |
+| P21 | `bank-account-has-live-evidence` offered no recovery in the account lists | (unattributed) | patch | "View evidence" link to the account's detail in both lists |
+| P22 | This log and the matrix were empty | (unattributed) | patch | this section and the rows above |

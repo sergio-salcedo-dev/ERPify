@@ -452,26 +452,29 @@ A new version is the declare and PUT above with a predecessor named in the path;
 
 A series page carries no name and opens no key; its `uploaderId` is `null` for an `Erased` version and the nil UUID for an uploader since erased. Every response carries `Cache-Control: no-store`. A series erasure answers **200** with `erased` (this call, newest first) and `remaining` (still not `Erased` when it finished); a repeat over an erased series answers both empty.
 
-### Bank-account evidence (`POST`/`GET /api/v1/backoffice/bank-accounts/{id}/evidence`, and the removal of an account)
+### Bank-account evidence (`POST`/`GET /api/v1/backoffice/bank-accounts/{id}/evidence`, `DELETE …/evidence/{evidenceId}`, and the removal of an account)
 
-A bank account holds documents a two-step upload filed, by id. Both routes are ADMIN-only: each requires its `bankAccount` verb **and** `document.custody`. **Five problem types, on the existing `Conflict` and `InvariantViolation` markers**, so no marker is added and the drift gate does not fire; this table is the manual NFR26 record. Their context carries ids and the kind only, never a name, a digest or retention terms.
+A bank account holds documents a two-step upload filed, by id, and **a document is evidence of one account at most** (a unique constraint on `bank_account_evidence.document_id`, named and classified by name). The three routes are ADMIN-only: each requires its `bankAccount` verb **and** `document.custody`; the detach takes the attach's pair (`bankAccount.write`). **Eight problem types, on the existing `Conflict`, `NotFound` and `InvariantViolation` markers**, so no marker is added and the drift gate does not fire; this table is the manual NFR26 record. Their context carries ids and the kind only, never a name, a digest or retention terms.
 
 | Situation | Answer | Source |
 |---|---|---|
-| `{id}` not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in both controllers |
-| Caller lacks `bankAccount.read`/`bankAccount.write` or `document.custody` (every role but ADMIN), or no session | **403 `forbidden`** / **401**, nothing read or written | `#[IsGranted]` ×2 on both controllers |
+| `{id}` or `{evidenceId}` not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in every controller |
+| Caller lacks `bankAccount.read`/`bankAccount.write` or `document.custody` (every role but ADMIN), or no session | **403 `forbidden`** / **401**, nothing read or written | `#[IsGranted]` ×2 on every controller |
 | Unknown account | **404 `bank-account-not-found`** (`NotFound`) | `BankAccountNotFoundException` |
+| Detach of a link that is not on that account (another account's link, or none) | **404 `bank-account-evidence-not-found`** (`NotFound`), context `evidenceId`; nothing removed | `BankAccountEvidenceNotFound`, from `DetachBankAccountEvidence` under the account's row lock |
+| Attach to a `CLOSED` account | **409 `bank-account-evidence-account-closed`** (`Conflict`), context `bankAccountId`; read under the account's row lock, so a close that commits first is seen | `BankAccountEvidenceAccountClosed` |
 | Attach body: `documentId` missing or not a UUID, `kind` missing or outside the vocabulary, or a member the body does not declare | **422 `validation-failed`** at mapping | `AttachBankAccountEvidenceCommand`, `#[StrictRequestPayload]` |
 | Attach of a document no row holds | **422 `bank-account-evidence-document-not-found`** (`InvariantViolation`), context `documentId` | `BankAccountEvidenceDocumentNotFound` |
 | Attach of a document filed under other retention terms than its kind fixes (the ownership certificate: `contract-execution`, `legitimate-interests`, no review date) | **422 `bank-account-evidence-retention-mismatch`** (`InvariantViolation`), context `documentId`, `kind`; nothing written | `BankAccountEvidenceRetentionMismatch` |
 | Attach of an `Erased` document | **409 `bank-account-evidence-document-erased`** (`Conflict`), context `documentId` | `BankAccountEvidenceDocumentErased` |
-| Attach of a document the account already holds, a concurrent attach included | **409 `bank-account-evidence-already-attached`** (`Conflict`), context `bankAccountId`, `documentId` | `BankAccountEvidenceAlreadyAttached` (the unique constraint by name) |
+| Attach of a `Quarantined` document (the scan found it infected). `Received`, `Scanning`, `Ready` and `ScanFailed` are admitted, a superseded version included | **409 `bank-account-evidence-document-not-admissible`** (`Conflict`), context `documentId` | `BankAccountEvidenceDocumentNotAdmissible` |
+| Attach of a document any account already holds, this one or another, a concurrent attach included | **409 `bank-account-evidence-already-attached`** (`Conflict`), context `documentId` only, so the answer does not name the holding account | `BankAccountEvidenceAlreadyAttached` (checked under the lock, and the unique constraint `uniq_bank_account_evidence_document` by name for the race) |
 | Deleting the account (`DELETE /bank-accounts/{id}`), or erasing it as a subject (`bank-account:gdpr:erase-subject`), while a linked document is not `Erased` | **409 `bank-account-has-live-evidence`** (`Conflict`), context `bankAccountId`; nothing removed, no key destroyed. With every linked document `Erased`, the links go with the account in one transaction | `BankAccountHasLiveEvidence`, from `ReleaseBankAccountEvidence` |
 | HEAD on the listing | **405**, before anything is opened | `BankAccountEvidenceListController` |
-| Listing or attach while the erasure ledger's override is set | **410 `gone`**, before a link is written | `EvidenceDocuments::describe()`, `DocumentGone` |
+| Listing or attach while the erasure ledger's override is set | **410 `gone`**, before a link is written, an account holding no link included (the listing always asks the seam) | `EvidenceDocuments::describe()`, `DocumentGone` |
 | A name that does not open | **200**/**201**, that item's `name` is `null` | `DocumentNameOpener` |
 
-The attach answers **201** with the link and the document as the listing shows it; the listing answers **200** with `data` most recently attached first, an `Erased` document kept as its tombstone (`state: "erased"`, `name: null`). Both carry `Cache-Control: no-store`. The bytes are never served here: a `ready` document is downloaded through `GET /api/v1/documents/{id}/content` by its `documentId`, with that route's own permission and audit row.
+The attach answers **201** with the link and the document as the listing shows it; the listing answers **200** with `data` most recently attached first, an `Erased` document kept as its tombstone (`state: "erased"`, `name: null`). Both carry `Cache-Control: no-store`. The detach answers **204** and writes one `BANK_ACCOUNT_EVIDENCE_DELETED` audit row; the document stays filed and can be attached again, to this account or another. Every audit diff of a link seals its `documentId` under the account's scope (`BankAccount:<id>`), so the account's erasure shreds it. The bytes are never served here: a `ready` document is downloaded through `GET /api/v1/documents/{id}/content` by its `documentId`, with that route's own permission and audit row.
 
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 

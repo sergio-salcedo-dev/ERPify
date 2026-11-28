@@ -3116,30 +3116,61 @@ mitigated state. Accepting one means recording who accepted it and against which
       progress bar keeps advancing until it does, were not measured — the session that wrote it had no running stack or
       browser. **Open — owner: the doc-12 review, against the running stack (Chrome and Firefox, h1.1 and h2).**
 - [ ] **Bank-account evidence: what the first consumer leaves (doc-12).** An account holds documents by id in
-      `bank_account_evidence`; every residual below is a decision, not a gap found later.
+      `bank_account_evidence`, a document is evidence of one account at most (`UNIQUE (document_id)`, a 409 on a
+      second attach), and a link is removed by an audited detach under the account's row lock. Each residual below is
+      a decision, not a gap found later; each names what reopens it.
       - **A bank-account subject's erasure waits on its documents.** `bank-account:gdpr:erase-subject` refuses (409
-        `bank-account-has-live-evidence`, exit 1) while a linked document is not `Erased`, by decision: a document is
-        erased only by its own operator action, which re-proves the password and writes the ledger, and an erasure never
-        erases a document as a side effect. The operator erases each document first; until then the holder's account
-        row, and its PII, stay. The business delete takes the same 409.
-      - **Any ADMIN may attach any document id.** The attach checks existence, state and the retention terms, never who
-        filed the document: an ADMIN already reads every document, so a row-level rule would refuse nothing that
-        audience cannot reach, and the attach's audit row names the actor.
+        `bank-account-has-live-evidence`, exit 1) while a linked document is not `Erased`: a document is erased only by
+        its own operator action, which re-proves the password and writes the ledger, and an erasure never erases a
+        document as a side effect. The operator erases each document first (`--dry-run` lists every one still live);
+        until then the holder's account row, and its PII, stay. The business delete takes the same 409, and the two
+        account lists link it to the account's detail. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when a subject's erasure must complete within
+        a deadline the operator cannot meet document by document, or when the PWA's document erase action (doc-13)
+        is found insufficient.
+      - **Any ADMIN may attach any document id.** The attach checks existence, state, the retention terms and that no
+        account holds it already, never who filed the document: an ADMIN already reads every document, so a row-level
+        rule would refuse nothing that audience cannot reach, and the attach's audit row names the actor. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet).
+        **Reopens** when a role other than ADMIN is granted `document.custody` or `bankAccount.write` together with
+        `document.write`.
       - **The evidence routes reuse `document.custody`** beside their `bankAccount` verb rather than minting
         `bankAccount.attachEvidence`: one fewer catalog entry for the same ADMIN-only audience, at the price that
-        granting `document.custody` to a role later also grants it the evidence listing and attach.
+        granting `document.custody` to a role later also grants it the evidence listing, attach and detach. The PWA
+        checks all three permissions (`document.write`, `document.custody`, `bankAccount.write`) before offering the
+        attach or the detach. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when `document.custody` is granted to any role but ADMIN.
       - **The PUT and the download bypass `HttpClient`.** The raw-body PUT is an `XMLHttpRequest` (the only browser
         transport with upload progress and an exact `Content-Length`) and the download a `fetch` read as bytes; neither
         runs the transport's 401 session-expiry bounce, so an expired session mid-upload surfaces as a refused upload
-        and the next JSON call bounces. Neither has a timeout: the API owns the upload deadline.
+        and the next JSON call bounces. Neither has a timeout: the API owns the upload deadline. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens**
+        when a browser transport offers upload progress with an exact length through `fetch`, or when a user reports a
+        stalled upload the API's deadline did not end.
       - **The download holds the whole original in the tab** (one `Blob`, up to 100 MiB) before the browser saves it,
-        because the read route's refusals must be read before anything is saved.
+        because the read route's refusals must be read before anything is saved. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when the cap rises
+        above 100 MiB or a supported device fails to save an original at the cap.
       - **The upload sends no idempotency key**, which needs the digest of the whole file read in the tab; a retry after
         an unknown outcome files the original again, and a refused attach leaves a filed document attached to nothing,
-        listed under `GET /api/v1/documents`.
+        listed under `GET /api/v1/documents` and attachable later. A retry after a PUT refused before the claim reuses
+        the same upload instead of declaring again. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** when duplicate originals are found in a
+        listing, or when the PWA can hash the file without holding it whole.
       - **The cross-context foreign key `bank_account_evidence.document_id → document.id`** is a justified Level 2
         (`docs/rules/database.md`): Documents never deletes a document, so it costs no write; a future path that does
-        must remove or refuse over the links first.
+        must remove or refuse over the links first. Accepted by Sergio on 2026-11-28, against no customer (ERPify has no deployment yet). **Reopens** with the first path that deletes a `document`
+        row.
+      - **What the attach admits is a director's decision, recorded in the story (doc-12) and ADR
+        `documents-custody-log.md` D13.** A `Quarantined` document is refused (409
+        `bank-account-evidence-document-not-admissible`); `Received`, `Scanning`, `Ready` and `ScanFailed` are
+        admitted, so evidence can be linked before its scan finishes and a scan that could not decide does not block
+        it — only a `Ready` document can be read. A `CLOSED` account refuses an attach (409
+        `bank-account-evidence-account-closed`) but keeps its links and still allows a detach, which is what clears it
+        for deletion. A superseded version stays attachable: it is still the original it was. **Reopens** when an
+        auditor requires evidence to be scanned clean before it is linked.
+      - **A client that does not know a kind or a state shows it as `Unknown`** and keeps the other items, rather than
+        failing the whole list; the item is never downloadable then, since only `ready` is. Decided by the director
+        with doc-12. **Reopens** if a new state ever makes an original readable.
+      - **The link's `documentId` in the audit trail is sealed under the account's scope** (`BankAccount:<id>`,
+        `SealedUnderOwnerScope`): the account's erasure shreds which document proved it. The link's own id, the
+        account id, the kind and the attach time stay in clear, as for any non-person row. Decided by the owner with
+        doc-12; nothing reopens it short of the trail needing to answer, after an account's erasure, which document
+        it held.
 
 - [ ] **Console failures print a masked summary, and the mask is a floor.** Every command under an
       `Infrastructure/Cli/` directory prints `ThrowableSummary::of($throwable)` and never the throwable's own

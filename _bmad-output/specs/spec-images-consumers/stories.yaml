@@ -67,6 +67,9 @@
     once the open question about what the image depicts is answered.
   spec_checkpoint: false
   invoke_dev_with: >-
+    The image control of the bank-account screen states that an image is re-encoded and loses its metadata,
+    and points to Attach evidence for a file that has to prove something (ADR
+    images-vs-documents-conservation-contract.md D3, decided by doc-12 on 2026-11-28).
     If the image denotes a natural person, apply the avatar constraints (audit type, owner-scoped read); the
     release in EraseBankAccountSubject is unconditional either way. Otherwise follow the logo story, including
     its proof of the seam wiring (route attribute, throttle before reader, ImageAttachment, matcher path).
