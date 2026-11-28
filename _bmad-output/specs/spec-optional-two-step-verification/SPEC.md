@@ -4,6 +4,7 @@ companions:
   - integration-points.md
   - ../../../docs/adr/administrative-recovery-channel.md
   - ../../../docs/adr/identity-invitation-lifecycle.md
+  - ../../../docs/adr/two-step-verification.md
 sources: []
 ---
 
@@ -53,8 +54,10 @@ A pain and a mandate, bounded by an owner decision. Anyone holding an administra
 - **The recovery secret and the reset-password link never bypass an enabled second factor.** They may still be used to reach the second step.
 - **Second-step attempts spend their own per-identity budget and never feed the persisted email-keyed lockout**; that limiter is the only ceiling on guessing a code.
 - **A code is accepted once.** RFC 6238: HMAC-SHA1, 6 digits, 30 s step, plus or minus one step; the last accepted step is stored and a code at or before it is refused. Changing algorithm, digits or period invalidates every enrolled user.
-- **The secret is a state-oriented aggregate sealed with the Shared/Crypto envelope** under a per-identity scope and an identity-bound AAD; it is never logged, returned after activation, or placed in an event. Recovery codes are stored as digests only and consumed atomically.
-- **Disable requires a code, enable requires the password, admin reset re-proves the caller's password and refuses self-targeting before the transaction.** The disable route authenticates with a code, so how it fits the credential-proof gate is an open question.
+- **The secret is a state-oriented aggregate sealed with the Shared/Crypto envelope** under a per-identity scope and an identity-bound AAD; it is never logged, returned after activation, or placed in an event. The scope id is random and held on the identity's factor row, never derived from the person's id, because a destroyed key's tombstone and the erasure evidence that answers it outlive the person (ADR `two-step-verification.md`). Recovery codes are stored as digests only and consumed atomically.
+- **Disable requires a code, enable requires the password, admin reset re-proves the caller's password and refuses self-targeting before the transaction.** The code-authenticated disable route is classified by a new proof class of the credential-proof gate (`code-proof` in `api/.credential-proof-policy`): the gate requires the action to spend its own per-identity second-factor code budget and to verify the code before the use case runs. It is a mechanism, not a pinned exception, and a WebAuthn assertion verified through the same port fits it (owner, 2026-11-28).
+- **Signing in with a recovery code mails the identity's owner** (detective, nothing exercisable: no token, link or code), sent post-commit and outside the login request's timing, never inside it (owner, 2026-11-28).
+- **The decisions live in a new ADR, `docs/adr/two-step-verification.md`** (step-up placement, recovery interaction, sealing and shredding), listed in `docs/index.md`; the recovery-channel ADR is not amended for them (owner, 2026-11-28).
 - **The factor sits behind a port** so a WebAuthn adapter can be added without touching login.
 - **The privileged-lockout alert runs from the maintenance schedule only**, carries nothing exercisable, and never filters `locked_until` in the active-administrator directory (closed and rejected). Privileged means the ADMIN role.
 - **Identity erasure stays hard-delete plus crypto-shred, in the existing lock order** (`ErasureLockOrderTest`); the new table joins the person-reference policy and gets a `PersonReferenceSource`.
@@ -81,6 +84,6 @@ An administrator enables TOTP from their profile, signs out, and signs back in o
 
 ## Open Questions
 
-- The disable route authenticates with a code, but the credential-proof gate requires spend-then-verify of the password for `credential-affecting` routes: extend the gate with a code-proof class, or pin a documented exception?
-- Should signing in with a recovery code notify the owner by mail (detective, nothing exercisable)?
-- Where do the decisions live: one new ADR covering step-up placement, recovery interaction, and sealing and shredding, or an addendum to the recovery-channel ADR?
+- **Disable route and the credential-proof gate.** Decided by the owner (2026-11-28): a `code-proof` class of the gate (see Constraints), built by mfa-3.
+- **Mail on a recovery-code sign-in.** Decided by the owner (2026-11-28): yes, post-commit (see Constraints), built by mfa-3.
+- **Where the decisions live.** Decided by the owner (2026-11-28): the new ADR `docs/adr/two-step-verification.md`, created by mfa-1.
