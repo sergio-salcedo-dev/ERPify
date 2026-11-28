@@ -160,6 +160,22 @@ framework:
             interval: '%env(RATE_LIMIT_PASSWORD_CHANGE_PER_IDENTITY_INTERVAL)%'
             lock_factory: null
 
+        # `second_factor_code_per_identity` — per-identity budget on PRESENTING A SECOND-FACTOR CODE
+        # (SecondFactorCodeThrottle): today the confirmation of a TOTP enrolment, later every route that verifies
+        # a code, all spending this one bucket so a guess budget cannot be multiplied across routes. A wrong code
+        # feeds no persisted lockout, so this is the only ceiling on guessing one. Its own bucket, not the
+        # password-proof one: it bounds guesses at a six-digit code, a different question from guesses at a
+        # password. 10 / 15 minutes mirrors the persisted lockout like `password_change_per_identity` does; with a
+        # window of three accepted steps that is at most 30 chances in a million per window.
+        #
+        # LITERALS rather than env-driven, like `login_local`: the bound is part of the second factor's security
+        # argument, and an env file that widened it would change that argument with no diff to review.
+        second_factor_code_per_identity:
+            policy: 'sliding_window'
+            limit: 10
+            interval: '15 minutes'
+            lock_factory: null
+
         # `invitation_resend_per_invitee` — per-TARGET budget on POST /backoffice/users/{userId}/invitation/resend,
         # keyed by an HMAC of the invited person's case-folded id (the column is a Postgres `uuid`, so every
         # spelling of one id is one person and must be one bucket; and the limiter serialises its key into the

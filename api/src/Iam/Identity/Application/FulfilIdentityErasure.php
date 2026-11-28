@@ -216,6 +216,7 @@ final readonly class FulfilIdentityErasure
                     $membershipsDeleted,
                     $invitationsDeleted,
                     $documentReferencesAnonymised,
+                    $identity->totpFactorsDeleted,
                 );
 
                 $this->recordCombinedErasure($result, $anonymisation->pseudonym);
@@ -267,8 +268,35 @@ final readonly class FulfilIdentityErasure
             [
                 'reset_tokens_deleted' => $identity->resetTokensDeleted,
                 'recovery_secrets_deleted' => $identity->recoverySecretsDeleted,
+                ...self::secondFactorEvidence($identity),
             ],
         );
+    }
+
+    /**
+     * The second factor's part of the compliance entry, present only when the erasure reached one.
+     *
+     * `encryption_scope_id` is what the subject-erasure reconciler anti-joins the `dek_keystore` tombstone
+     * against, so a destroyed key without it is a divergence reported for ever. It is the factor's own random
+     * scope, which names nothing about the person, so it may sit in `metadata`, the one column the anonymiser
+     * below never rewrites. A scope this run did not tombstone is not carried: its tombstone was answered when it
+     * was written.
+     *
+     * @return array<string, int|string>
+     */
+    private static function secondFactorEvidence(IdentityErasureResult $identity): array
+    {
+        if (0 === $identity->totpFactorsDeleted) {
+            return [];
+        }
+
+        $evidence = ['totp_factors_deleted' => $identity->totpFactorsDeleted];
+
+        if (null !== $identity->destroyedTotpScope) {
+            $evidence['encryption_scope_id'] = $identity->destroyedTotpScope;
+        }
+
+        return $evidence;
     }
 
     /**

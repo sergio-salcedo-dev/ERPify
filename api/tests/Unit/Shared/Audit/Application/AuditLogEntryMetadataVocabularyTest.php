@@ -49,6 +49,7 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
             'sessions_deleted' => 1,
             'reset_tokens_deleted' => 0,
             'recovery_secrets_deleted' => 1,
+            'totp_factors_deleted' => 1,
             'memberships_deleted' => 1,
             'invitations_deleted' => 0,
             'document_references_anonymised' => 2,
@@ -98,6 +99,10 @@ final class AuditLogEntryMetadataVocabularyTest extends TestCase
             yield $key => [$key, $value];
         }
 
+        yield 'the random scope of a second factor' => [
+            'encryption_scope_id',
+            'TotpFactor:0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5e',
+        ];
         yield 'a route that is absent' => ['route', null];
         yield 'an audit event id that is absent' => ['auditEventId', null];
         yield 'an upper-case audit event id, as a client may spell it' => [

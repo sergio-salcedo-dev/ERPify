@@ -17,6 +17,7 @@ use Erpify\Iam\Identity\Domain\Repository\ActiveAdministratorDirectory;
 use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Identity\Domain\Repository\PasswordResetTokenRepository;
 use Erpify\Iam\Identity\Domain\Repository\RecoverySecretRepository;
+use Erpify\Iam\Identity\Domain\Repository\TotpFactorRepository;
 use Erpify\Iam\Identity\Domain\Repository\UserRepository;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
@@ -24,6 +25,7 @@ use Erpify\Organization\Membership\Application\PurgeUserMembership;
 use Erpify\Shared\Access\Domain\Role;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
+use Erpify\Shared\Crypto\Application\Keystore;
 use Erpify\Shared\Event\Application\EventStoreSubjectAnonymiser;
 use Erpify\Shared\Persistence\Application\TransactionManager;
 use Erpify\Shared\Privacy\Application\PersonReferenceErasure;
@@ -157,6 +159,8 @@ final class AdministratorErasureRaceFunctionalTest extends KernelTestCase
                 $this->service(UserRepository::class),
                 $this->service(PasswordResetTokenRepository::class),
                 $this->service(RecoverySecretRepository::class),
+                $this->service(TotpFactorRepository::class),
+                $this->service(Keystore::class),
                 $this->service(TransactionManager::class),
             ),
             $this->service(AuditSubjectTrailErasure::class),

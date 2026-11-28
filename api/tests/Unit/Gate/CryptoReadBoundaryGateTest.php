@@ -34,7 +34,8 @@ use ReflectionMethod;
  * relative to `api/src`, the test relative to `api/` (a `*Test.php` under `tests/Functional`, or a `.feature`
  * under `features`, the two lanes in which this repository proves a route). It holds the Documents scan, a reader
  * that is not a route, the Documents read, the route #418 waited for, and the Documents listing's name opener, which
- * reads a PAGE and so degrades a failure to a value instead of translating it to a status. Its checks are also
+ * reads a PAGE and so degrades a failure to a value instead of translating it to a status, and the second-factor
+ * vault, for which both outcomes are corruption and translate to one integrity failure. Its checks are also
  * driven with planted repositories by `CryptoReadBoundaryRulesGateTest`, so they are exercised whatever the real map
  * holds; the engine is `Tests\Support\CryptoReadBoundaryRules` and `CryptoReadRegistration`.
  *
@@ -87,6 +88,9 @@ final class CryptoReadBoundaryGateTest extends TestCase
         ],
         'Documents/Document/Application/Read/ReadDocument.php' => [
             'test' => 'tests/Functional/Documents/Document/ReadDocumentFunctionalTest.php',
+        ],
+        'Iam/Identity/Application/TotpSecretVault.php' => [
+            'test' => 'tests/Functional/Iam/Identity/TotpSecretVaultFunctionalTest.php',
         ],
     ];
 

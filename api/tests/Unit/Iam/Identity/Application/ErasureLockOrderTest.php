@@ -18,6 +18,7 @@ use Erpify\Shared\Token\Domain\SingleUseToken;
 use Erpify\Shared\Uuid\Domain\Uuid;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\PasswordResetTokenMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\RecoverySecretMother;
+use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\TotpFactorMother;
 use Erpify\Tests\Unit\Iam\Identity\Domain\Entity\Mother\UserMother;
 use Erpify\Tests\Unit\Iam\Invitation\Application\InMemoryInvitationRepository;
 use Erpify\Tests\Unit\Iam\Session\Application\InMemorySessionRepository;
@@ -27,6 +28,7 @@ use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditActorAnon
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditLogger;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditResourceAnonymiser;
 use Erpify\Tests\Unit\Shared\Audit\Infrastructure\Double\RecordingAuditSubjectRowLock;
+use Erpify\Tests\Unit\Shared\Crypto\InMemoryKeystore;
 use Erpify\Tests\Unit\Shared\Event\Infrastructure\Double\RecordingEventStoreSubjectAnonymiser;
 use Erpify\Tests\Unit\Shared\Persistence\Double\LockOrderJournal;
 use Erpify\Tests\Unit\Shared\Privacy\Application\Double\RecordingPersonReferenceErasure;
@@ -48,7 +50,8 @@ use PHPUnit\Framework\TestCase;
  * {@see \Erpify\Iam\Identity\Application\RedeemRecoverySecret} and
  * {@see \Erpify\Iam\Identity\Application\RevokeRecoverySecret} take `identity_user` before
  * `identity_recovery_secret` — the third because proving the current password reads the user row, which is
- * what made revocation a two-lock path. Two of them close a cycle with the chain's opposite order, and a
+ * what made revocation a two-lock path; {@see \Erpify\Iam\Identity\Application\EnrolTotpFactor} and
+ * {@see \Erpify\Iam\Identity\Application\ConfirmTotpFactor} take `identity_user` before `identity_totp_factor`. Two of them close a cycle with the chain's opposite order, and a
  * cycle in a wait-for graph is `40P01`.
  *
  * **The chain is the member that conforms, and the rule is not a probability estimate.** The order of a shared
@@ -115,6 +118,7 @@ final class ErasureLockOrderTest extends TestCase
         $this->assertSame(1, $result->invitationsDeleted);
         $this->assertSame(1, $result->resetTokensDeleted);
         $this->assertSame(1, $result->recoverySecretsDeleted);
+        $this->assertSame(1, $result->totpFactorsDeleted);
 
         $this->assertSame(
             [
@@ -122,10 +126,11 @@ final class ErasureLockOrderTest extends TestCase
                 LockOrderJournal::IDENTITY_USER,
                 LockOrderJournal::PASSWORD_RESET_TOKEN,
                 LockOrderJournal::RECOVERY_SECRET,
+                LockOrderJournal::TOTP_FACTOR,
             ],
             $journal->crossTableOrder(),
-            'The erasure chain no longer acquires in the order the accept, revoke, reset and recovery-secret '
-            . 'paths agree on. Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot '
+            'The erasure chain no longer acquires in the order the accept, revoke, reset, recovery-secret and '
+            . 'second-factor paths agree on. Swapping any adjacent pair re-opens an ABBA deadlock with a path that cannot '
             . 'reorder itself, and the deadlock surfaces as a 503 with nothing in the code to explain it.',
         );
     }
@@ -335,11 +340,20 @@ final class ErasureLockOrderTest extends TestCase
         $tokens->lockOrderJournal = $journal;
         $secrets->lockOrderJournal = $journal;
         $invitations->lockOrderJournal = $journal;
+        $factors = new InMemoryTotpFactorRepository(TotpFactorMother::pendingFor());
+        $factors->lockOrderJournal = $journal;
         $administratorDirectory = new InMemoryActiveAdministratorDirectory($administrators);
         $administratorDirectory->lockOrderJournal = $journal;
 
         return new FulfilIdentityErasure(
-            new EraseIdentitySubject($users, $tokens, $secrets, new InlineTransactionManager()),
+            new EraseIdentitySubject(
+                $users,
+                $tokens,
+                $secrets,
+                $factors,
+                new InMemoryKeystore(),
+                new InlineTransactionManager(),
+            ),
             new OrderedAuditSubjectTrailErasure(
                 $trailLock ?? new RecordingAuditSubjectRowLock(),
                 new RecordingAuditActorAnonymiser(matchCount: 0),

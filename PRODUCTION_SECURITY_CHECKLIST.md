@@ -3124,6 +3124,29 @@ mitigated state. Accepting one means recording who accepted it and against which
       which value collided. **Open — owner: the operator-experience decision; revisit the first time a failing
       row is seen carrying a name or an IBAN in a log.**
 
+- [ ] **Two-step verification can be enabled but is not yet asked for at sign-in.** `POST /api/v1/me/second-factor/totp`
+      and `…/confirm` (mfa-1) enrol and enable an optional TOTP factor, sealed under its own random scope and erased
+      with the identity, but no session-minting path consults it yet: login, reset-password completion, invitation
+      accept, change-password and recovery redeem still mint a session on the password alone. Until the second step
+      ships, an enabled factor protects nothing, and nothing in the product tells its owner so. Nothing disables or
+      resets a factor either (mfa-3, mfa-4), so an owner who loses the device keeps a factor that is not yet
+      enforced and cannot remove it. **Open — owner: story mfa-2 (the second step on every minting path), which
+      closes it; the PWA panel (mfa-6) must not offer enrolment before mfa-2 and mfa-3 are merged.**
+- [ ] **A second-factor secret is crypto-shredded by its erasure, not by an older backup.** The identity erasure
+      deletes the factor row and tombstones its `TotpFactor:<scope>` key in one transaction, and the
+      `GDPR_SUBJECT_ERASED` entry carries that scope so the subject-erasure reconciler has the tombstone answered. A
+      database dump taken before the erasure still holds the sealed secret and its live key wrapped by
+      `AUDIT_KEK` — the only key-encryption key the module has, shared with the audit and Documents keys — so a
+      restore to that dump brings the second factor back together with the identity row itself; the identity
+      erasure has no ledger replay of the kind the Documents erasure has (`docs/runbooks/documents-erasure-ledger.md`).
+      **Open — owner: the backup and restore policy; recorded in `docs/adr/two-step-verification.md` D4.**
+- [ ] **The enrolment confirmation is `ordinary` in the credential-proof gate.** `POST …/totp/confirm` needs no
+      password: a stolen session that reaches it can at most enable the OWNER's pending authenticator (the secret was
+      issued behind a password re-proof), bounded by the per-identity code budget (`second_factor_code_per_identity`,
+      10 per 15 minutes, literals). It never hands the account to the caller. **Accepted by design in
+      `docs/adr/two-step-verification.md` D3; reopen if a route ever lets a session start an enrolment without the
+      password.**
+
 ## 8. Deploy & verify
 
 - [ ] `make deploy.local` (or `scripts/deploy/deploy-local.sh`) reaches a 200 on
