@@ -11,6 +11,7 @@ use Erpify\Documents\Document\Infrastructure\Persistence\Doctrine\DbalUploadInte
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalErasureResweepPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalPasswordResetTokenPersonReferences;
 use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalRecoverySecretPersonReferences;
+use Erpify\Iam\Identity\Infrastructure\Persistence\Doctrine\DbalTotpFactorPersonReferences;
 use Erpify\Iam\Invitation\Infrastructure\Persistence\Doctrine\DbalInvitationPersonReferences;
 use Erpify\Iam\Session\Infrastructure\Persistence\Doctrine\DbalSessionPersonReferences;
 use Erpify\Organization\Membership\Infrastructure\Persistence\Doctrine\DbalMembershipPersonReferences;
@@ -42,6 +43,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DbalInvitationPersonReferences::class)]
 #[CoversClass(DbalPasswordResetTokenPersonReferences::class)]
 #[CoversClass(DbalRecoverySecretPersonReferences::class)]
+#[CoversClass(DbalTotpFactorPersonReferences::class)]
 #[CoversClass(DbalErasureResweepPersonReferences::class)]
 #[CoversClass(DbalPersonResourceReferences::class)]
 #[CoversClass(DbalDocumentUploaderPersonReferences::class)]
@@ -115,6 +117,12 @@ final class PersonReferenceSourcesPageTheirReadTest extends TestCase
         yield 'recovery secret' => [
             DbalRecoverySecretPersonReferences::class,
             static fn (Connection $connection): array => (new DbalRecoverySecretPersonReferences($connection, 1))
+                ->retainedPersonIds(),
+        ];
+
+        yield 'second factor' => [
+            DbalTotpFactorPersonReferences::class,
+            static fn (Connection $connection): array => (new DbalTotpFactorPersonReferences($connection, 1))
                 ->retainedPersonIds(),
         ];
 

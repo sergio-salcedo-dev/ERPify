@@ -53,16 +53,16 @@ final readonly class ConfirmTotpFactorController
 
         $this->secondFactorCodeThrottle->ensureWithinBudget($identityId);
 
-        $factor = $this->confirmTotpFactor->confirm($identityId, $request->code);
+        $factor = $this->confirmTotpFactor->enableWithCode($identityId, $request->code);
         $enabledAt = $factor->enabledAt() ?? throw new LogicException('A confirmed factor must carry its instant.');
 
         return $this->resourceResponder->respond(
-            new TotpFactorEnabledResource(self::atom($enabledAt)),
+            new TotpFactorEnabledResource($this->atom($enabledAt)),
             Response::HTTP_OK,
         );
     }
 
-    private static function atom(DateTimeImmutable $instant): string
+    private function atom(DateTimeImmutable $instant): string
     {
         return $instant->format(DateTimeInterface::ATOM);
     }

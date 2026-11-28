@@ -12,6 +12,7 @@ use Erpify\Iam\Identity\Domain\Repository\ErasureResweepRepository;
 use Erpify\Iam\Invitation\Application\PurgeUserInvitations;
 use Erpify\Iam\Session\Application\PurgeUserSessions;
 use Erpify\Organization\Membership\Application\PurgeUserMembership;
+use Erpify\Shared\Audit\Application\ActorAnonymisationResult;
 use Erpify\Shared\Audit\Application\ActorContextFactory;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Audit\Application\AuditSubjectTrailErasure;
@@ -192,10 +193,7 @@ final readonly class FulfilIdentityErasure
                 // Locks both axes as one set before rewriting either — see the port for why ordering the two
                 // statements individually cannot prevent the deadlock they can reach.
                 $anonymisation = $this->auditTrail->beginForSubject($subject);
-                $pseudonymisation = SubjectPseudonymisation::of(
-                    subjectId: $subjectId,
-                    pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
-                );
+                $pseudonymisation = $this->pseudonymisationOf($subjectId, $anonymisation);
 
                 $this->recordSubjectErasure($identity, $subject);
 
@@ -224,6 +222,20 @@ final readonly class FulfilIdentityErasure
 
                 return $result;
             },
+        );
+    }
+
+    /**
+     * The pseudonym the actor pass minted, bound to the subject it replaces, for the business-log pass: the same
+     * pseudonym on every table, so one person never splits into two anonymous identities.
+     */
+    private function pseudonymisationOf(
+        string $subjectId,
+        ActorAnonymisationResult $anonymisation,
+    ): SubjectPseudonymisation {
+        return SubjectPseudonymisation::of(
+            subjectId: $subjectId,
+            pseudonym: SubjectPseudonym::fromString($anonymisation->pseudonym),
         );
     }
 
@@ -268,7 +280,7 @@ final readonly class FulfilIdentityErasure
             [
                 'reset_tokens_deleted' => $identity->resetTokensDeleted,
                 'recovery_secrets_deleted' => $identity->recoverySecretsDeleted,
-                ...self::secondFactorEvidence($identity),
+                ...$this->secondFactorEvidence($identity),
             ],
         );
     }
@@ -284,7 +296,7 @@ final readonly class FulfilIdentityErasure
      *
      * @return array<string, int|string>
      */
-    private static function secondFactorEvidence(IdentityErasureResult $identity): array
+    private function secondFactorEvidence(IdentityErasureResult $identity): array
     {
         if (0 === $identity->totpFactorsDeleted) {
             return [];

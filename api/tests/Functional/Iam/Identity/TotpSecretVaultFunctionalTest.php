@@ -53,7 +53,6 @@ final class TotpSecretVaultFunctionalTest extends KernelTestCase
         $this->connection->beginTransaction();
     }
 
-    #[Override]
     protected function tearDown(): void
     {
         if ($this->connection->isTransactionActive()) {
@@ -84,9 +83,9 @@ final class TotpSecretVaultFunctionalTest extends KernelTestCase
         try {
             $this->service(TotpSecretVault::class)->open($factor);
             $this->fail('A factor whose key is destroyed must not open.');
-        } catch (SecondFactorIntegrityFailure $failure) {
-            $this->assertSame(SecondFactorIntegrityFailure::TYPE, $failure->type());
-            $this->assertInstanceOf(DekDestroyed::class, $failure->getPrevious());
+        } catch (SecondFactorIntegrityFailure $secondFactorIntegrityFailure) {
+            $this->assertSame(SecondFactorIntegrityFailure::TYPE, $secondFactorIntegrityFailure->type());
+            $this->assertInstanceOf(DekDestroyed::class, $secondFactorIntegrityFailure->getPrevious());
         }
     }
 
@@ -100,9 +99,9 @@ final class TotpSecretVaultFunctionalTest extends KernelTestCase
         try {
             $this->service(TotpSecretVault::class)->open($moved);
             $this->fail('A ciphertext sealed for one identity must not open for another.');
-        } catch (SecondFactorIntegrityFailure $failure) {
-            $this->assertSame(SecondFactorIntegrityFailure::TYPE, $failure->type());
-            $this->assertInstanceOf(DecryptionFailed::class, $failure->getPrevious());
+        } catch (SecondFactorIntegrityFailure $secondFactorIntegrityFailure) {
+            $this->assertSame(SecondFactorIntegrityFailure::TYPE, $secondFactorIntegrityFailure->type());
+            $this->assertInstanceOf(DecryptionFailed::class, $secondFactorIntegrityFailure->getPrevious());
         }
     }
 

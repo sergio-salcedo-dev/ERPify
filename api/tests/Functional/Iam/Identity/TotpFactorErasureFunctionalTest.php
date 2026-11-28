@@ -67,7 +67,6 @@ final class TotpFactorErasureFunctionalTest extends KernelTestCase
         $this->scopeId = Uuid::generate();
     }
 
-    #[Override]
     protected function tearDown(): void
     {
         $connection = $this->connection();
@@ -137,7 +136,7 @@ final class TotpFactorErasureFunctionalTest extends KernelTestCase
         $this->assertSame(
             [],
             $this->columnsHoldingTheSubject(),
-            'A column still holds the subject. The re-sweep schedule is excluded by name: it is the erasure\'s own '
+            "A column still holds the subject. The re-sweep schedule is excluded by name: it is the erasure's own "
             . 'instrument.',
         );
     }
@@ -199,11 +198,11 @@ final class TotpFactorErasureFunctionalTest extends KernelTestCase
             return 'absent';
         }
 
-        if (null === $row['destroyed_at']) {
+        if (null === ($row['destroyed_at'] ?? null)) {
             return 'live';
         }
 
-        $reason = $row['destroy_reason'];
+        $reason = $row['destroy_reason'] ?? null;
         $this->assertIsString($reason);
 
         return $reason;

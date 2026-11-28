@@ -74,7 +74,7 @@ final class EraseIdentitySubjectTest extends TestCase
         // The scope travels to the compliance entry, which is what answers the tombstone. It is the factor's own
         // random scope, so it names nothing about the person.
         $this->assertSame($scope->toString(), $result->destroyedTotpScope);
-        $this->assertStringNotContainsString(UserMother::DEFAULT_ID, (string) $result->destroyedTotpScope);
+        $this->assertStringNotContainsString(UserMother::DEFAULT_ID, $result->destroyedTotpScope);
     }
 
     public function testASecondFactorWhoseKeyIsAlreadyTombstonedReportsNoScope(): void

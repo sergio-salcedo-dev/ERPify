@@ -342,6 +342,7 @@ final class ErasureLockOrderTest extends TestCase
         $invitations->lockOrderJournal = $journal;
         $factors = new InMemoryTotpFactorRepository(TotpFactorMother::pendingFor());
         $factors->lockOrderJournal = $journal;
+
         $administratorDirectory = new InMemoryActiveAdministratorDirectory($administrators);
         $administratorDirectory->lockOrderJournal = $journal;
 

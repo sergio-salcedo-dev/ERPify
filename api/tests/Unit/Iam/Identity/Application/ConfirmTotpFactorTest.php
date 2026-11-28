@@ -67,7 +67,9 @@ final class ConfirmTotpFactorTest extends TestCase
         $factors = new InMemoryTotpFactorRepository($factor);
         $audit = new RecordingAuditLogger();
 
-        $confirmed = $this->useCase($factors, $audit)->confirm(UserMother::DEFAULT_ID, $this->codeAt($this->step()));
+        $confirmed = $this->useCase($factors, $audit)
+            ->enableWithCode(UserMother::DEFAULT_ID, $this->codeAt($this->step()))
+        ;
 
         $this->assertSame($factor, $confirmed);
         $this->assertTrue($factor->isEnabled());
@@ -85,7 +87,7 @@ final class ConfirmTotpFactorTest extends TestCase
         $factor = $this->sealedPendingFactor();
 
         $this->useCase(new InMemoryTotpFactorRepository($factor))
-            ->confirm(UserMother::DEFAULT_ID, $this->codeAt($this->step() + 1))
+            ->enableWithCode(UserMother::DEFAULT_ID, $this->codeAt($this->step() + 1))
         ;
 
         $this->assertSame($this->step() + 1, $factor->lastAcceptedStep());
@@ -102,7 +104,7 @@ final class ConfirmTotpFactorTest extends TestCase
         $this->expectException(InvalidSecondFactorCode::class);
 
         try {
-            $this->useCase($factors, $audit)->confirm(UserMother::DEFAULT_ID, $wrong);
+            $this->useCase($factors, $audit)->enableWithCode(UserMother::DEFAULT_ID, $wrong);
         } finally {
             $this->assertFalse($factor->isEnabled());
             $this->assertSame([], $factors->saved);
@@ -119,7 +121,7 @@ final class ConfirmTotpFactorTest extends TestCase
 
         try {
             $this->useCase(new InMemoryTotpFactorRepository($factor))
-                ->confirm(UserMother::DEFAULT_ID, $this->codeAt($this->step() - 2))
+                ->enableWithCode(UserMother::DEFAULT_ID, $this->codeAt($this->step() - 2))
             ;
         } finally {
             $this->assertFalse($factor->isEnabled());
@@ -131,7 +133,7 @@ final class ConfirmTotpFactorTest extends TestCase
     {
         $this->expectException(SecondFactorNotEnrolled::class);
 
-        $this->useCase(new InMemoryTotpFactorRepository())->confirm(UserMother::DEFAULT_ID, '123456');
+        $this->useCase(new InMemoryTotpFactorRepository())->enableWithCode(UserMother::DEFAULT_ID, '123456');
     }
 
     #[Test]
@@ -140,7 +142,7 @@ final class ConfirmTotpFactorTest extends TestCase
         $this->expectException(SecondFactorAlreadyEnabled::class);
 
         $this->useCase(new InMemoryTotpFactorRepository(TotpFactorMother::enabledFor()))
-            ->confirm(UserMother::DEFAULT_ID, '123456')
+            ->enableWithCode(UserMother::DEFAULT_ID, '123456')
         ;
     }
 
@@ -152,11 +154,11 @@ final class ConfirmTotpFactorTest extends TestCase
 
         try {
             $this->useCase(new InMemoryTotpFactorRepository($factor))
-                ->confirm(UserMother::DEFAULT_ID, $this->codeAt($this->step()))
+                ->enableWithCode(UserMother::DEFAULT_ID, $this->codeAt($this->step()))
             ;
             $this->fail('A factor whose key is destroyed must not be confirmed.');
-        } catch (SecondFactorIntegrityFailure $failure) {
-            $this->assertInstanceOf(DekDestroyed::class, $failure->getPrevious());
+        } catch (SecondFactorIntegrityFailure $secondFactorIntegrityFailure) {
+            $this->assertInstanceOf(DekDestroyed::class, $secondFactorIntegrityFailure->getPrevious());
             $this->assertFalse($factor->isEnabled());
         }
     }
@@ -175,11 +177,11 @@ final class ConfirmTotpFactorTest extends TestCase
 
         try {
             $this->useCase(new InMemoryTotpFactorRepository($factor))
-                ->confirm(UserMother::DEFAULT_ID, $this->codeAt($this->step()))
+                ->enableWithCode(UserMother::DEFAULT_ID, $this->codeAt($this->step()))
             ;
             $this->fail('A secret sealed for another identity must not open.');
-        } catch (SecondFactorIntegrityFailure $failure) {
-            $this->assertInstanceOf(DecryptionFailed::class, $failure->getPrevious());
+        } catch (SecondFactorIntegrityFailure $secondFactorIntegrityFailure) {
+            $this->assertInstanceOf(DecryptionFailed::class, $secondFactorIntegrityFailure->getPrevious());
             $this->assertFalse($factor->isEnabled());
         }
     }
