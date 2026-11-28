@@ -10,6 +10,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\EvidenceKind;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotFoundException;
 use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceAlreadyAttached;
+use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceAttachedElsewhere;
 use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceDocumentUnavailable;
 use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceRetentionMismatch;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountEvidenceRepository;
@@ -27,10 +28,13 @@ use LogicException;
  * before they release the account's links, so an attach and a removal are serialised on it and a link can never land
  * on an account that is being removed — then the document is checked and the link written. The document is checked
  * inside that transaction but not locked: an erasure that lands after the check leaves an attached, erased document,
- * which is a state the listing shows and the account's removal accepts, not a broken one.
+ * which is a state the listing shows and the account's removal accepts, not a broken one. The check reads states only
+ * ({@see DescribeEvidenceDocuments::statesOf()}), so no name is opened while the account's row is locked and a slow
+ * keystore cannot hold the account's deletion; the answer therefore carries no name, which the listing gives.
  *
  * Refuses, in order: an unknown account (404), a document that does not exist, is erased or is quarantined (422), a
- * document filed under retention terms other than its kind's (422), and a second link of the same document (409).
+ * document filed under retention terms other than its kind's (422), a document already attached to this account (409)
+ * and a document already attached to another one (409: a document is the evidence of one account).
  *
  * Accepted on purpose: a document still `received` or `scanning` (the screen attaches right after the upload, before
  * the scan), one whose scan failed (`scan_failed` can be scanned again and become readable; `quarantined` cannot), and
@@ -68,10 +72,15 @@ final readonly class AttachBankAccountEvidence
                     throw BankAccountNotFoundException::withId($bankAccountId);
                 }
 
+                $this->documents->ensureTrustworthy();
                 $document = $this->usableDocument($documentId, $kind);
 
-                if ($this->evidence->isAttached($bankAccountId, $documentId)) {
-                    throw EvidenceAlreadyAttached::create();
+                $existing = $this->evidence->findByDocumentId($documentId);
+
+                if ($existing instanceof BankAccountEvidence) {
+                    throw $existing->bankAccountId() === \strtolower($bankAccountId)
+                        ? EvidenceAlreadyAttached::create()
+                        : EvidenceAttachedElsewhere::create();
                 }
 
                 $link = BankAccountEvidence::attach(Uuid::generate(), $bankAccountId, $documentId, $kind);
@@ -84,7 +93,7 @@ final readonly class AttachBankAccountEvidence
 
     private function usableDocument(string $documentId, EvidenceKind $kind): EvidenceDocument
     {
-        $document = $this->documents->describe([$documentId])[$documentId] ?? null;
+        $document = $this->documents->statesOf([$documentId])[$documentId] ?? null;
 
         if (!$document instanceof EvidenceDocument || $document->erased || self::QUARANTINED === $document->state) {
             throw EvidenceDocumentUnavailable::create();

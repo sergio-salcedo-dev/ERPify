@@ -17,7 +17,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 /**
  * Attaches an already-filed document to a bank account as evidence (`bankAccount.attachEvidence`, ADMIN only). The
  * bytes travel through the Documents upload first; this route carries ids only, so it is an ordinary JSON route with
- * the default body bound. The response holds the document's name, so it is `no-store`.
+ * the default body bound. The answer carries the link and the document's state, never its name (the attach opens
+ * none while it holds the account's lock; the listing gives names), and is `no-store` like the listing.
  */
 #[Route(
     '/bank-accounts/{id}/evidence',

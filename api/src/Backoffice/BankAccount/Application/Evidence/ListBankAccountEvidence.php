@@ -37,10 +37,8 @@ final readonly class ListBankAccountEvidence
 
         $links = $this->evidence->findByBankAccountId($bankAccountId);
 
-        if ([] === $links) {
-            return [];
-        }
-
+        // Through the seam even when there is no link: it is what answers the override's 410, so the listing refuses
+        // alike whatever the account holds. An empty set costs no row statement and no keystore query.
         $described = $this->documents->describe(
             \array_map(static fn (BankAccountEvidence $link): string => $link->documentId(), $links),
         );

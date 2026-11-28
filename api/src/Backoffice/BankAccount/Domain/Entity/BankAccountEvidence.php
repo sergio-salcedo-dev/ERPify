@@ -20,20 +20,20 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  * by schema listeners, without cascade and not deferrable) are what keep a link from outliving either end.
  *
  * Outside the `BankAccount` aggregate on purpose: the account enforces no invariant over its set of evidence (no
- * count, no uniqueness of kind), so a collection on the aggregate would buy nothing but loading it. The one rule that
- * spans the set — a document is attached to an account at most once — is the table's `UNIQUE`. A real set invariant
- * would reopen this as a child entity of the aggregate.
+ * count, no uniqueness of kind), so a collection on the aggregate would buy nothing but loading it. The one rule over
+ * links — a document is the evidence of at most one account — is the table's `UNIQUE (document_id)`: a certificate
+ * proves one account, and a document shared by two would be erased for both by an erasure decided for one. A real set
+ * invariant on the account would reopen this as a child entity of the aggregate.
+ *
+ * A link pins the exact document attached, never its series: evidence is the original that was supplied, so a newer
+ * version is attached on its own.
  *
  * Holds no person's id: who attached it is the audit row's actor, not a column (an `attached_by` would be a person
  * reference with an erasure owner to name). No domain event: nothing consumes one yet.
  */
 #[ORM\Entity]
 #[ORM\Table(name: 'bank_account_evidence')]
-#[ORM\UniqueConstraint(
-    name: 'uniq_bank_account_evidence_account_document',
-    columns: ['bank_account_id', 'document_id'],
-)]
-#[ORM\Index(name: 'idx_bank_account_evidence_document_id', columns: ['document_id'])]
+#[ORM\UniqueConstraint(name: 'uniq_bank_account_evidence_document', columns: ['document_id'])]
 final class BankAccountEvidence implements AuditedEntity
 {
     #[ORM\Id]

@@ -10,8 +10,8 @@ use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountEvidenceRepositor
 use Override;
 
 /**
- * In-memory {@see BankAccountEvidenceRepository} that refuses a duplicate (account, document) pair the way the table's
- * UNIQUE does, and records what was removed.
+ * In-memory {@see BankAccountEvidenceRepository} that refuses a second link of one document the way the table's UNIQUE
+ * does, and records what was removed.
  *
  * @internal
  */
@@ -31,7 +31,7 @@ final class InMemoryBankAccountEvidenceRepository implements BankAccountEvidence
     #[Override]
     public function save(BankAccountEvidence $evidence): void
     {
-        if ($this->isAttached($evidence->bankAccountId(), $evidence->documentId())) {
+        if ($this->findByDocumentId($evidence->documentId()) instanceof BankAccountEvidence) {
             throw EvidenceAlreadyAttached::create();
         }
 
@@ -48,12 +48,15 @@ final class InMemoryBankAccountEvidenceRepository implements BankAccountEvidence
     }
 
     #[Override]
-    public function isAttached(string $bankAccountId, string $documentId): bool
+    public function findByDocumentId(string $documentId): ?BankAccountEvidence
     {
-        return \array_any(
-            $this->findByBankAccountId($bankAccountId),
-            static fn (BankAccountEvidence $link): bool => $link->documentId() === \strtolower($documentId),
-        );
+        foreach ($this->links as $link) {
+            if ($link->documentId() === \strtolower($documentId)) {
+                return $link;
+            }
+        }
+
+        return null;
     }
 
     #[Override]

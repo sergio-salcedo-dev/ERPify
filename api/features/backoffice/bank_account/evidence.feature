@@ -7,8 +7,7 @@ Feature: Attach evidence documents to a bank account
   # Both routes are ADMIN-only (`bankAccount.attachEvidence`, `bankAccount.readEvidence`). The bytes travel through
   # the Documents upload first; these routes carry ids. The kind fixes the retention terms the document must have been
   # filed under (an ownership certificate: contract-execution under legitimate-interests, no review date), checked on
-  # the server through the seam Documents publishes. The 410 of the erasure-ledger override is held by the PHPUnit
-  # tests; the listing's constant query cost is the last pair of scenarios below.
+  # the server through the seam Documents publishes. The listing's constant query cost is the last pair of scenarios.
 
   # The Documents tables are not part of the per-feature fixture backup, so each scenario starts them empty.
   Background:
@@ -29,7 +28,7 @@ Feature: Attach evidence documents to a bank account
     And the JSON node "data.documentId" should be equal to "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e01"
     And the JSON node "data.kind" should be equal to "ownership-certificate"
     And the JSON node "data.documentState" should be equal to "ready"
-    And the JSON node "data.documentName" should be equal to "ownership-certificate.pdf"
+    And the JSON node "data.documentName" should be null
     And the JSON node "data.documentSizeBytes" should be equal to the number 5
     And the JSON node "data.attachedBy" should not exist
     And I execute the SQL query "SELECT action FROM audit_log WHERE resource_type = 'BankAccountEvidence' AND action = 'BANK_ACCOUNT_EVIDENCE_CREATED'"
@@ -87,6 +86,22 @@ Feature: Attach evidence documents to a bank account
     """
     Then the response status code should be 409
     And the JSON node "type" should be equal to "bank-account-evidence-already-attached"
+
+  Scenario: A document that is already the evidence of one account cannot be attached to another
+    Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e09" named "shared-certificate.pdf" in state "ready" created 100 seconds ago
+    And I am logged in as an administrator
+    And I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence" with body:
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e09", "kind": "ownership-certificate"}
+    """
+    And the response status code should be 201
+    When I send a "POST" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001/evidence" with body:
+    """
+    {"documentId": "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e09", "kind": "ownership-certificate"}
+    """
+    Then the response status code should be 409
+    And the JSON node "type" should be equal to "bank-account-evidence-attached-elsewhere"
+    And the response should not contain "33333333-3333-7000-8000-000000000002"
 
   Scenario Outline: A malformed or incomplete attach is refused before any document is read
     Given I am logged in as an administrator
@@ -167,3 +182,20 @@ Feature: Attach evidence documents to a bank account
     Then the response status code should be 200
     And the JSON node "data" should have 4 elements
     And 6 requests got executed only for doctrine connection "default"
+
+  Scenario: While the erasure ledger override is set the listing answers 410 and opens no name, empty or not
+    Given a document with id "0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e08" named "restored-certificate.pdf" in state "ready" created 100 seconds ago
+    And I execute the SQL query "INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) VALUES ('0190e9c2-7b5a-7d40-9c8f-2f9b5d3e2e08', '33333333-3333-7000-8000-000000000002', '0190e9c2-7b5a-7d40-9c8f-2f9b5d3e1e08', 'ownership-certificate', NOW())" on connection "seed"
+    And the erasure ledger override is set
+    And I am logged in as an administrator
+    When I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence"
+    Then the response status code should be 410
+    And the JSON node "type" should be equal to "gone"
+    And the response should not contain "restored-certificate.pdf"
+    And I send a "GET" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000001/evidence"
+    And the response status code should be 410
+
+  Scenario: The listing refuses HEAD before anything is opened
+    Given I am logged in as an administrator
+    When I send a "HEAD" request to "/backoffice/bank-accounts/33333333-3333-7000-8000-000000000002/evidence"
+    Then the response status code should be 405

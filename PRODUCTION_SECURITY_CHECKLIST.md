@@ -2922,8 +2922,8 @@ mitigated state. Accepting one means recording who accepted it and against which
       ledger's override or a 5xx on the attach leaves it there. The screen retries the attach against the same
       document rather than uploading again, and says when an upload's outcome is unknown instead of offering a blind
       re-upload, which narrows the window and stops the screen from multiplying copies. It does not close it:
-      nothing lists unattached evidence, no sweep finds it, and `EraseBankAccountSubject` erases only what is
-      linked, so a subject's erasure can report complete while an orphaned copy of their certificate lives on,
+      nothing lists unattached evidence, no sweep finds it, and `EraseBankAccountSubject` refuses only over
+      linked documents (it erases none itself), so a subject's erasure can report complete while an orphaned copy of their certificate lives on,
       visible only in the generic Documents listing (ADMIN) and erasable there. Closing it needs either an attach
       that carries the bytes in one request (a different, cross-context use case) or a sweep of unattached evidence
       by retention and age, which needs counsel's retention matrix first. **Open, recorded 2026-11-28.**

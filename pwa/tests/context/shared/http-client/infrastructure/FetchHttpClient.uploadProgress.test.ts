@@ -114,6 +114,33 @@ describe("FetchHttpClient.putRaw with upload progress", () => {
     await pending;
   });
 
+  it("detaches its abort listener from the signal once the request settles", async () => {
+    const added = vi.spyOn(AbortSignal.prototype, "addEventListener");
+    const removed = vi.spyOn(AbortSignal.prototype, "removeEventListener");
+    try {
+      const pending = new FetchHttpClient().putRaw(URL, file, guard, { onUploadProgress: vi.fn() });
+      const xhr = FakeXhr.last!;
+      const registration = added.mock.calls.find(([type]) => type === "abort");
+      expect(registration).toBeDefined();
+      const signal = added.mock.contexts[added.mock.calls.indexOf(registration!)] as AbortSignal;
+      const listener = registration![1];
+
+      xhr.respond(201, { data: { id: "document-1" } });
+      await pending;
+
+      const detached = removed.mock.calls.some(
+        ([type, handler], index) =>
+          type === "abort" && handler === listener && removed.mock.contexts[index] === signal,
+      );
+      // Detached from the very signal it joined, so a later abort of it reaches no request.
+      expect(detached).toBe(true);
+      expect(xhr.aborted).toBe(false);
+    } finally {
+      added.mockRestore();
+      removed.mockRestore();
+    }
+  });
+
   it("parses a problem+json refusal into the same HttpError the fetch path throws", async () => {
     const pending = new FetchHttpClient().putRaw(URL, file, guard, { onUploadProgress: vi.fn() });
     FakeXhr.last!.respond(

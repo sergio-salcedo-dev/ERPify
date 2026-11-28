@@ -37,6 +37,17 @@ describe("isEvidenceOutcomeUnknown", () => {
     expect(isEvidenceOutcomeUnknown(problem("about:blank", 500), UPLOAD_SENT)).toBe(false);
   });
 
+  it("reads a 2xx whose body failed the guard as unknown: the write committed", () => {
+    const unreadable = problem("malformed-response-envelope", 201);
+    expect(isEvidenceOutcomeUnknown(unreadable, UPLOAD_SENT)).toBe(true);
+    expect(isEvidenceOutcomeUnknown(unreadable, ATTACH)).toBe(true);
+    // A declare answered unreadably filed nothing: the body never started.
+    expect(isEvidenceOutcomeUnknown(unreadable, UPLOAD_DECLARE)).toBe(false);
+    // Never a blind re-upload over a filed document; the attach may be repeated.
+    expect(isEvidenceRetryable(unreadable, UPLOAD_SENT)).toBe(false);
+    expect(isEvidenceRetryable(unreadable, ATTACH)).toBe(true);
+  });
+
   it("is unknown at the attach on any 5xx", () => {
     expect(isEvidenceOutcomeUnknown(problem("about:blank", 500), ATTACH)).toBe(true);
     expect(
@@ -101,6 +112,15 @@ describe("evidenceAttachProblemMessage", () => {
         "attach",
       ),
     ).toBe("This document is already attached to the account.");
+    expect(
+      evidenceAttachProblemMessage(
+        problem("bank-account-evidence-attached-elsewhere", 409),
+        "attach",
+      ),
+    ).toMatch(/evidence of another bank account/);
+    expect(
+      isEvidenceRetryable(problem("bank-account-evidence-attached-elsewhere", 409), ATTACH),
+    ).toBe(false);
   });
 
   it("reads `gone` on the attach as frozen documents and on the upload as an expired upload", () => {

@@ -12,9 +12,10 @@ use Erpify\Documents\Document\Domain\Projection\DocumentListRow;
 
 /**
  * The Documents seam as the BankAccount use cases meet it in a unit test: the real {@see DescribeEvidenceDocuments}
- * over an in-memory listing whose rows carry no sealed name (so the keystore is never asked), and a ledger override
- * the test chooses. Building the real seam rather than a stub keeps the use cases tested against what Documents
- * actually answers, erased state included.
+ * over an in-memory listing, and a ledger override the test chooses. A row carries no sealed name unless the test
+ * gives one, and the encryptor refuses every call, so a row with a sealed name proves its name is never opened.
+ * Building the real seam rather than a stub keeps the use cases tested against what Documents actually answers,
+ * erased state included.
  *
  * @internal
  */
@@ -33,6 +34,7 @@ final class EvidenceDocumentsDouble
         ?string $retentionReason = 'contract-execution',
         ?string $legalBasis = 'legitimate-interests',
         ?DateTimeImmutable $reviewAt = null,
+        ?string $filenameCiphertext = null,
     ): self {
         $this->rows[\strtolower($id)] = new DocumentListRow(
             $id,
@@ -42,7 +44,7 @@ final class EvidenceDocumentsDouble
             \str_repeat('a', 64),
             1024,
             $id,
-            null,
+            $filenameCiphertext,
             $retentionReason,
             $legalBasis,
             $reviewAt,

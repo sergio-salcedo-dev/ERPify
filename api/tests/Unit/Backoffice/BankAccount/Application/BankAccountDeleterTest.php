@@ -128,6 +128,45 @@ final class BankAccountDeleterTest extends TestCase
         $this->assertTrue($repository->removeCalled);
     }
 
+    public function testTheErasureLedgerOverrideDoesNotRefuseADeletion(): void
+    {
+        $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
+        $repository = new InMemoryBankAccountRepository($account);
+        $evidence = new InMemoryBankAccountEvidenceRepository(self::link(self::LINK_A, self::DOCUMENT_A));
+        $documents = (new EvidenceDocumentsDouble())
+            ->withDocument(self::DOCUMENT_A, DocumentState::Erased)
+            ->withOverrideActive()
+        ;
+        $transactions = new ImmediateTransactionManager();
+
+        $this->makeDeleter($repository, new RecordingEventBus($transactions), $transactions, $evidence, $documents)
+            ->delete(BankAccountMother::DEFAULT_ID)
+        ;
+
+        $this->assertTrue($repository->removeCalled);
+    }
+
+    public function testTheGuardNeverOpensAName(): void
+    {
+        $account = BankAccountMother::drained(status: BankAccountStatus::CLOSED);
+        $repository = new InMemoryBankAccountRepository($account);
+        $evidence = new InMemoryBankAccountEvidenceRepository(self::link(self::LINK_A, self::DOCUMENT_A));
+        // A sealed name the refusing encryptor would throw on if anything tried to open it.
+        $documents = (new EvidenceDocumentsDouble())->withDocument(
+            self::DOCUMENT_A,
+            DocumentState::Ready,
+            filenameCiphertext: 'sealed-name',
+        );
+
+        $this->expectException(BankAccountHasLiveEvidence::class);
+
+        $transactions = new ImmediateTransactionManager();
+
+        $this->makeDeleter($repository, new RecordingEventBus(), $transactions, $evidence, $documents)
+            ->delete(BankAccountMother::DEFAULT_ID)
+        ;
+    }
+
     public function testAnswersNotFoundForAnAccountThatDoesNotExist(): void
     {
         $this->expectException(BankAccountNotFoundException::class);

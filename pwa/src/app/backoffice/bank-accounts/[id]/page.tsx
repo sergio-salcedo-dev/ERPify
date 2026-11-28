@@ -515,6 +515,9 @@ function BankAccountDetailReady({
 
       {canReadEvidence ? (
         <BankAccountEvidenceSection
+          // Keyed by account: moving from one account to another remounts the section, so no list,
+          // failure or in-flight upload of the previous account survives into the next.
+          key={account.id}
           accountId={account.id}
           canAttach={canAttachEvidence}
           canDownload={canDownloadEvidence}

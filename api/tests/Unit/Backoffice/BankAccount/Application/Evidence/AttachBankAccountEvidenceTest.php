@@ -12,6 +12,7 @@ use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Enum\EvidenceKind;
 use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountNotFoundException;
 use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceAlreadyAttached;
+use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceAttachedElsewhere;
 use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceDocumentUnavailable;
 use Erpify\Backoffice\BankAccount\Domain\Exception\EvidenceRetentionMismatch;
 use Erpify\Documents\Document\Application\Evidence\DescribeEvidenceDocuments;
@@ -43,6 +44,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(DescribeEvidenceDocuments::class)]
 #[CoversClass(EvidenceDocument::class)]
 #[CoversClass(EvidenceAlreadyAttached::class)]
+#[CoversClass(EvidenceAttachedElsewhere::class)]
 #[CoversClass(EvidenceDocumentUnavailable::class)]
 #[CoversClass(EvidenceRetentionMismatch::class)]
 final class AttachBankAccountEvidenceTest extends TestCase
@@ -165,6 +167,26 @@ final class AttachBankAccountEvidenceTest extends TestCase
         $this->expectException(EvidenceAlreadyAttached::class);
 
         $this->attach($documents, \strtoupper(self::DOCUMENT));
+    }
+
+    public function testRefusesADocumentAlreadyTheEvidenceOfAnotherAccount(): void
+    {
+        $this->evidence->links[] = BankAccountEvidence::attach(
+            '0196f0a0-0000-7000-8000-00000000a0ff',
+            '0196f0a0-0000-7000-8000-0000000000bb',
+            self::DOCUMENT,
+            EvidenceKind::OwnershipCertificate,
+        );
+
+        try {
+            $this->attach((new EvidenceDocumentsDouble())->withDocument(self::DOCUMENT));
+            $this->fail('Expected EvidenceAttachedElsewhere.');
+        } catch (EvidenceAttachedElsewhere $evidenceAttachedElsewhere) {
+            $this->assertSame('bank-account-evidence-attached-elsewhere', $evidenceAttachedElsewhere->type());
+            $this->assertSame([], $evidenceAttachedElsewhere->context(), 'The refusal names no account.');
+        }
+
+        $this->assertCount(1, $this->evidence->links);
     }
 
     public function testAnswersNotFoundForAnUnknownAccountBeforeLookingAtTheDocument(): void

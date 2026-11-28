@@ -593,5 +593,16 @@
     that the image is re-encoded, pointing to Attach evidence (ic-5 was dropped, so no screen offers both yet: the
     notice is owed by the first that does). Erasing an account with a linked document that is not Erased answers
     409, and EraseBankAccountSubject takes the same 409, never erasing the documents itself (memlog, 2026-11-28). ADMIN only. Names and states come through a read port
-    Documents publishes (DocumentNameOpener), with its line in api/.bounded-context-allowlist and its mirror in
-    deptrac skip_violations. Owes a recorded adversarial pass.
+    Documents publishes (DescribeEvidenceDocuments around DocumentNameOpener, memlog 2026-11-28), with its lines in
+    api/.bounded-context-allowlist and their mirror in deptrac skip_violations. Owes a recorded adversarial pass.
+- id: "doc-13"
+  title: Through-Caddy proof of the browser evidence upload
+  description: >-
+    A Playwright spec against the running stack that drives the bank-account Evidence section end to end and proves
+    what doc-12 could only argue: the PUT streams the File, the wire Content-Length equals the declared size, progress
+    events arrive on a real multi-MiB body, the 100 MiB bound is lifted only for a session-cookie request and a body
+    over it is refused, and the attach then lists the document. Depends on doc-12.
+  invoke_dev_with: >-
+    Use the live stack (make app.dev); read Content-Length off the request Playwright records, not off the client
+    code. Assert the access log carries no filename (the whole-query strip). Run before Documents opens in production,
+    beside the owner's restore drill. No API or PWA change unless a proof fails; a failure is fixed in this story.

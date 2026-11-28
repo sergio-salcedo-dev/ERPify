@@ -27,8 +27,8 @@ final readonly class DoctrineBankAccountEvidenceRepository implements BankAccoun
             $this->entityManager->persist($evidence);
             $this->entityManager->flush();
         } catch (UniqueConstraintViolationException) {
-            // The attach checks first under the account's row lock, so only a link committed by a transaction that
-            // did not take that lock reaches here; the answer is the same.
+            // The attach checks first, but the document is not locked: a link of the same document committed by an
+            // attach to ANOTHER account (another row lock) in between reaches here. Same answer, no account named.
             throw EvidenceAlreadyAttached::create();
         }
     }
@@ -52,19 +52,18 @@ final readonly class DoctrineBankAccountEvidenceRepository implements BankAccoun
     }
 
     #[Override]
-    public function isAttached(string $bankAccountId, string $documentId): bool
+    public function findByDocumentId(string $documentId): ?BankAccountEvidence
     {
-        return null !== $this->entityManager->createQueryBuilder()
-            ->select('e.id')
+        $link = $this->entityManager->createQueryBuilder()
+            ->select('e')
             ->from(BankAccountEvidence::class, 'e')
-            ->where('e.bankAccountId = :bankAccountId')
-            ->andWhere('e.documentId = :documentId')
-            ->setParameter('bankAccountId', \strtolower($bankAccountId))
+            ->where('e.documentId = :documentId')
             ->setParameter('documentId', \strtolower($documentId))
-            ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult()
         ;
+
+        return $link instanceof BankAccountEvidence ? $link : null;
     }
 
     #[Override]

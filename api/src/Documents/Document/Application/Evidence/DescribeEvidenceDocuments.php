@@ -43,8 +43,10 @@ final readonly class DescribeEvidenceDocuments
      */
     public function describe(array $documentIds): array
     {
-        if ($this->ledgerOverride->isActive()) {
-            throw DocumentGone::create();
+        $this->ensureTrustworthy();
+
+        if ([] === $documentIds) {
+            return [];
         }
 
         $rows = $this->documents->findMany($documentIds);
@@ -57,6 +59,20 @@ final readonly class DescribeEvidenceDocuments
         }
 
         return $described;
+    }
+
+    /**
+     * Refuses with the 410 the Documents listing answers while the erasure ledger's override is set, for a caller that
+     * decides on {@see statesOf()} and must still not act on states a restore without the ledger may have brought back
+     * (an attach must not link a document that may already be erased).
+     *
+     * @throws DocumentGone when the override is set (410)
+     */
+    public function ensureTrustworthy(): void
+    {
+        if ($this->ledgerOverride->isActive()) {
+            throw DocumentGone::create();
+        }
     }
 
     /**

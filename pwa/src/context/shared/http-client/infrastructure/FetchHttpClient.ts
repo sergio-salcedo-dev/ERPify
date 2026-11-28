@@ -249,7 +249,12 @@ function sendWithProgress(
       });
     };
     xhr.upload.onload = () => onUploadSent?.();
+    // Detached once the request settles: the signal belongs to the caller's budget and outlives this
+    // request, so a listener left on it would keep the XHR reachable and abort a finished request.
+    const onAbortSignal = (): void => xhr.abort();
+    const settle = (): void => signal.removeEventListener("abort", onAbortSignal);
     xhr.onload = () => {
+      settle();
       try {
         resolve(
           new Response(NULL_BODY_STATUSES.has(xhr.status) ? null : xhr.responseText, {
@@ -261,9 +266,15 @@ function sendWithProgress(
         reject(new TypeError("The response could not be read."));
       }
     };
-    xhr.onerror = () => reject(new TypeError("Network request failed"));
-    xhr.onabort = () => reject(abortError());
-    signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.onerror = () => {
+      settle();
+      reject(new TypeError("Network request failed"));
+    };
+    xhr.onabort = () => {
+      settle();
+      reject(abortError());
+    };
+    signal.addEventListener("abort", onAbortSignal, { once: true });
     xhr.send(body);
   });
 }

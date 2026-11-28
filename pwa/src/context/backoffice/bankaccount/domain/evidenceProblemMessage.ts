@@ -1,5 +1,9 @@
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
-import { NETWORK_ERROR, REQUEST_TIMEOUT } from "@/context/shared/http-client/domain/HttpClient";
+import {
+  MALFORMED_RESPONSE_ENVELOPE,
+  NETWORK_ERROR,
+  REQUEST_TIMEOUT,
+} from "@/context/shared/http-client/domain/HttpClient";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { DocumentProblemType } from "@/context/shared/documents/domain/DocumentProblemType";
 import { documentUploadProblemMessage } from "@/context/shared/documents/domain/documentUploadProblemMessage";
@@ -24,7 +28,8 @@ type EvidenceProblemType =
   | typeof BankAccountProblemType.NOT_FOUND
   | typeof BankAccountProblemType.EVIDENCE_UNAVAILABLE
   | typeof BankAccountProblemType.EVIDENCE_RETENTION_MISMATCH
-  | typeof BankAccountProblemType.EVIDENCE_ALREADY_ATTACHED;
+  | typeof BankAccountProblemType.EVIDENCE_ALREADY_ATTACHED
+  | typeof BankAccountProblemType.EVIDENCE_ATTACHED_ELSEWHERE;
 
 const EVIDENCE_TYPE_MESSAGE: Record<EvidenceProblemType, string> = {
   [BankAccountProblemType.NOT_FOUND]: "This account no longer exists. Reload the page.",
@@ -34,6 +39,8 @@ const EVIDENCE_TYPE_MESSAGE: Record<EvidenceProblemType, string> = {
     "The document was filed under different retention terms than an ownership certificate needs, so it was not attached.",
   [BankAccountProblemType.EVIDENCE_ALREADY_ATTACHED]:
     "This document is already attached to the account.",
+  [BankAccountProblemType.EVIDENCE_ATTACHED_ELSEWHERE]:
+    "This document is already the evidence of another bank account. A document can prove one account only.",
 };
 
 const isEvidenceProblemType = (type: string): type is EvidenceProblemType =>
@@ -67,6 +74,16 @@ function isTransportUnknown(problem: ProblemDetails): boolean {
   return problem.type === NETWORK_ERROR || problem.type === REQUEST_TIMEOUT;
 }
 
+/**
+ * The server answered success and only its body failed the client's guard: the write it reports
+ * committed, so the client must not say it did not happen.
+ */
+function isUnreadableSuccess(problem: ProblemDetails): boolean {
+  return (
+    problem.type === MALFORMED_RESPONSE_ENVELOPE && problem.status >= 200 && problem.status < 300
+  );
+}
+
 function isServerError(problem: ProblemDetails): boolean {
   return problem.status >= HttpStatus.INTERNAL_SERVER_ERROR;
 }
@@ -75,7 +92,9 @@ function isServerError(problem: ProblemDetails): boolean {
  * True when the client cannot know whether the step took effect. An upload is unknown only once its
  * body had started — a declare that never answered filed nothing — and only for a lost connection,
  * a timeout or a gateway answer; a 500 from the application itself expired the upload. An attach is
- * unknown on a lost connection, a timeout or any 5xx: its transaction may have committed.
+ * unknown on a lost connection, a timeout or any 5xx: its transaction may have committed. At both
+ * stages a 2xx whose body failed the guard is unknown too — the write committed, and only the
+ * answer could not be read (at the upload, once the body had started).
  */
 export function isEvidenceOutcomeUnknown(
   problem: ProblemDetails,
@@ -83,10 +102,13 @@ export function isEvidenceOutcomeUnknown(
 ): boolean {
   if (context.stage === EvidenceAttachStage.UPLOAD) {
     return (
-      context.contentSent && (isTransportUnknown(problem) || GATEWAY_STATUSES.has(problem.status))
+      context.contentSent &&
+      (isTransportUnknown(problem) ||
+        GATEWAY_STATUSES.has(problem.status) ||
+        isUnreadableSuccess(problem))
     );
   }
-  return isTransportUnknown(problem) || isServerError(problem);
+  return isTransportUnknown(problem) || isServerError(problem) || isUnreadableSuccess(problem);
 }
 
 /**

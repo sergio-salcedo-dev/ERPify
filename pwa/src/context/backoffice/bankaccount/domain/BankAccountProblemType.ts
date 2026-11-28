@@ -26,6 +26,8 @@ export const BankAccountProblemType = {
   EVIDENCE_RETENTION_MISMATCH: "bank-account-evidence-retention-mismatch",
   /** The document is already attached to this account (409). */
   EVIDENCE_ALREADY_ATTACHED: "bank-account-evidence-already-attached",
+  /** The document is already the evidence of another account: a document proves one account (409). */
+  EVIDENCE_ATTACHED_ELSEWHERE: "bank-account-evidence-attached-elsewhere",
 } as const;
 
 export type BankAccountProblemType =

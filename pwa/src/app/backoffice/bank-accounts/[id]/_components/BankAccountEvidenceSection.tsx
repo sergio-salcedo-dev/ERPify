@@ -24,6 +24,7 @@ import { checkDocumentFile } from "@/context/shared/documents/domain/checkDocume
 import { MAX_DOCUMENT_MEBIBYTES } from "@/context/shared/documents/domain/documentLimits";
 import type { DocumentUploadProgress } from "@/context/shared/documents/domain/DocumentUploader";
 import { documentReadUrl } from "@/context/shared/documents/infrastructure/documentReadUrl";
+import { safeDownloadName } from "@/context/shared/documents/domain/safeDownloadName";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
@@ -169,34 +170,39 @@ export function BankAccountEvidenceSection({
     [failure],
   );
 
-  const load = useCallback(
-    async (isCancelled: () => boolean = () => false): Promise<void> => {
-      try {
-        const items = await container
-          .get<ListBankAccountEvidence>("BackOfficeListBankAccountEvidence")
-          .run(accountId);
-        if (!isCancelled()) setList({ status: "ready", items });
-      } catch (error) {
-        if (isCancelled()) return;
-        const problem = asProblem(error);
-        setList(
-          problem.status === HttpStatus.FORBIDDEN
-            ? { status: "forbidden" }
-            : { status: "error", problem },
-        );
-      }
-    },
-    [accountId],
-  );
+  // Every load takes the next number, and only the latest may write: a refresh, a retry and the
+  // reload after an attach can overlap, and an older answer arriving last would otherwise show a
+  // list that is no longer true. Unmounting bumps it too, so nothing writes after the section left.
+  const loadSequence = useRef(0);
+
+  const load = useCallback(async (): Promise<void> => {
+    loadSequence.current += 1;
+    const sequence = loadSequence.current;
+    const isStale = (): boolean => sequence !== loadSequence.current;
+    try {
+      const items = await container
+        .get<ListBankAccountEvidence>("BackOfficeListBankAccountEvidence")
+        .run(accountId);
+      if (!isStale()) setList({ status: "ready", items });
+    } catch (error) {
+      if (isStale()) return;
+      const problem = asProblem(error);
+      setList(
+        problem.status === HttpStatus.FORBIDDEN
+          ? { status: "forbidden" }
+          : { status: "error", problem },
+      );
+    }
+  }, [accountId]);
 
   useEffect(() => {
-    let cancelled = false;
+    const sequence = loadSequence;
     // Fire-and-forget: load resolves every failure into state, and sets it only after its request
     // settles, never synchronously in this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load(() => cancelled);
+    void load();
     return () => {
-      cancelled = true;
+      sequence.current += 1;
     };
   }, [load]);
 
@@ -566,9 +572,10 @@ function EvidenceRow({
       {href === null ? null : (
         <a
           href={href}
-          // The read route sends `Content-Disposition: attachment` with no filename (the name is sealed server-side),
-          // so the saved file is named here from the opened name; the browser strips path separators from it.
-          download={item.documentName ?? true}
+          // The read route sends `Content-Disposition: attachment` with no filename (the name is sealed
+          // server-side). The opened name names the saved file only when it passes the allowlist;
+          // anything else downloads unnamed rather than handing a person-supplied string to the attribute.
+          download={safeDownloadName(item.documentName) ?? true}
           className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
           aria-label="Download"
           title={`Download ${name}`}

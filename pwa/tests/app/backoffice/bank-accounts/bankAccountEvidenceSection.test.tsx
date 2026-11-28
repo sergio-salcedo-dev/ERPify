@@ -374,6 +374,93 @@ describe("BankAccountEvidenceSection", () => {
     ).toBeVisible();
   });
 
+  it("drops an older list answer that resolves after a newer one", async () => {
+    let resolveSlow: ((items: BankAccountEvidence[]) => void) | undefined;
+    listRun
+      .mockResolvedValueOnce([]) // the mount's load
+      .mockImplementationOnce(
+        () =>
+          new Promise<BankAccountEvidence[]>((resolve) => {
+            resolveSlow = resolve;
+          }),
+      ) // the older refresh: still pending
+      .mockResolvedValueOnce([READY]); // the newer refresh: answers at once
+    renderSection();
+    const refresh = await screen.findByTestId("bank-accounts-detail__evidence-refresh");
+
+    fireEvent.click(refresh);
+    fireEvent.click(refresh);
+    expect(
+      await screen.findByTestId(`bank-accounts-detail__evidence-name-${READY.id}`),
+    ).toBeVisible();
+
+    await act(async () => resolveSlow?.([UNNAMED]));
+    expect(listRun).toHaveBeenCalledTimes(3);
+    expect(screen.getByTestId(`bank-accounts-detail__evidence-name-${READY.id}`)).toBeVisible();
+    expect(
+      screen.queryByTestId(`bank-accounts-detail__evidence-name-${UNNAMED.id}`),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not claim an attach failed when the server answered success unreadably", async () => {
+    listRun.mockResolvedValue([]);
+    attachRun.mockRejectedValue(
+      new EvidenceAttachFailure(
+        "attach",
+        httpError("malformed-response-envelope", 201),
+        true,
+        DOCUMENT_ID,
+      ),
+    );
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(pdf);
+    const surface = await screen.findByTestId("bank-accounts-detail__evidence-attach-error");
+    expect(surface).toHaveTextContent(/it is not known whether it was attached/);
+    expect(surface).not.toHaveTextContent(/is not attached/);
+  });
+
+  it("does not claim an upload kept nothing when the server answered success unreadably", async () => {
+    listRun.mockResolvedValue([]);
+    attachRun.mockRejectedValue(
+      new EvidenceAttachFailure(
+        "upload",
+        httpError("malformed-response-envelope", 201),
+        true,
+        null,
+      ),
+    );
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(pdf);
+    const surface = await screen.findByTestId("bank-accounts-detail__evidence-attach-error");
+    expect(surface).toHaveTextContent(/may have been filed without being attached/);
+    expect(surface).not.toHaveTextContent(/was not kept/);
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-retry-upload"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("names the download only from an allowlisted file name", async () => {
+    const odd = {
+      ...READY,
+      id: "0192cccc-cccc-7ccc-8ccc-000000000003",
+      documentName: "../evil.pdf",
+    };
+    listRun.mockResolvedValue([READY, odd]);
+    renderSection();
+
+    expect(
+      await screen.findByTestId(`bank-accounts-detail__evidence-download-${READY.id}`),
+    ).toHaveAttribute("download", "certificate.pdf");
+    expect(screen.getByTestId(`bank-accounts-detail__evidence-download-${odd.id}`)).toHaveAttribute(
+      "download",
+      "",
+    );
+  });
+
   it("renders a kind and a state this client does not know as unknown", async () => {
     listRun.mockResolvedValue([{ ...READY, kind: null, documentState: null }]);
     renderSection();
