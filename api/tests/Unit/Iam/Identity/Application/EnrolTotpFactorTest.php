@@ -84,8 +84,8 @@ final class EnrolTotpFactorTest extends TestCase
     #[Test]
     public function aWrongCurrentPasswordIsRefusedBeforeTheFactorIsConsulted(): void
     {
-        // The ORDER is the property: an enabled factor would answer 409, so refusing it to a caller who has not
-        // re-proved the password would tell a stolen session whether the account has a second factor.
+        // The ORDER is the property: the proof runs before the factor row is read or locked, so a refused re-proof
+        // touches nothing, and the 409 an enabled factor earns is only ever given to a caller who proved the password.
         $journal = new LockOrderJournal();
         $factors = new InMemoryTotpFactorRepository(TotpFactorMother::enabledFor());
         $factors->lockOrderJournal = $journal;

@@ -44,8 +44,10 @@ the snapshot is the business).
 **D3 — Enabling re-proves the password; confirming spends a code budget; removing with a code is a proof class
 of its own.** `POST /me/second-factor/totp` creates a credential of the caller's own, so it is
 `credential-affecting`: it spends the shared `CurrentPasswordProofThrottle` bucket and re-proves the password
-**before** the factor is consulted, so a stolen session without the password neither enrols an authenticator
-nor learns whether one exists. `POST …/totp/confirm` needs no password and is `ordinary`: the secret it confirms
+**before** the factor is read or locked, so a stolen session without the password cannot enrol an authenticator
+of its own and a refused re-proof writes nothing. The factor's existence is not a secret from the account's own
+session — the confirmation's answers state it, as the profile will — so the order is about writes, not about an
+oracle. `POST …/totp/confirm` needs no password and is `ordinary`: the secret it confirms
 was issued behind that re-proof, so a session reaching it can at most enable the **owner's** pending
 authenticator, never hand the account to the caller. It spends `SecondFactorCodeThrottle`
 (`second_factor_code_per_identity`, 10 per 15 minutes, written as literals so an env file cannot widen the guess

@@ -30,8 +30,10 @@ use Erpify\Shared\Uuid\Domain\Uuid;
  *   1. Lock the identity row first: user, then factor, then the factor's keystore row is the order every path
  *      that takes them agrees on ({@see TotpFactorRepository}).
  *   2. Wall a non-`ACTIVE` identity.
- *   3. Refuse a wrong current password BEFORE the factor is consulted, so a stolen session without the password
- *      learns nothing about whether the account has a factor.
+ *   3. Refuse a wrong current password BEFORE the factor is consulted or locked, the order minting follows: a
+ *      refused re-proof takes no lock on the factor and writes nothing, and every answer about the factor goes to
+ *      a caller who has proved the password. (The factor's existence is not a secret from the account's own
+ *      session: the confirmation route answers it.)
  *   4. Only then read the factor under `FOR UPDATE`: an enabled one is refused (replacing it would remove the
  *      owner's authenticator without the code the owner holds); a pending one is restarted under its own scope;
  *      none is created with a fresh random scope.

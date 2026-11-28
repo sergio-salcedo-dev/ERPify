@@ -26,8 +26,9 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
  *
  * It creates a credential of the caller's own, so it is `credential-affecting` in `api/.credential-proof-policy`:
  * {@see CurrentPasswordProofThrottle} runs first and spends the SAME per-identity bucket as the other password
- * re-proofs, then the use case re-proves the password before it consults the factor. A stolen session without the
- * password can neither enrol an authenticator of its own nor learn whether the account has one.
+ * re-proofs, then the use case re-proves the password before it consults the factor, so a stolen session without
+ * the password cannot enrol an authenticator of its own and a refused re-proof writes nothing. Whether the account
+ * HAS a factor is not hidden from its own session: the confirmation's answers say so, as the profile will.
  *
  * No CSRF token, matching the other authenticated writes: the request carries the current password, which a
  * cross-site forgery does not know, and the endpoint is JSON-only ({@see StrictRequestPayload}).
