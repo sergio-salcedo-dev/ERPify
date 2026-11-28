@@ -44,7 +44,7 @@ final class BankAccountEvidenceSubjectErasureFunctionalTest extends KernelTestCa
             $accountId = $this->plantAccount($connection);
             $scope = 'BankAccount:' . $accountId;
             $this->link($connection, $accountId, $this->plantDocument($connection, 'ready'));
-            $keysBefore = $this->count(
+            $keysBefore = $this->countRows(
                 $connection,
                 'SELECT COUNT(*) FROM dek_keystore WHERE encryption_scope_id = :s AND destroyed_at IS NULL',
                 ['s' => $scope],
@@ -59,16 +59,16 @@ final class BankAccountEvidenceSubjectErasureFunctionalTest extends KernelTestCa
             }
 
             $this->assertInstanceOf(BankAccountHasLiveEvidence::class, $thrown);
-            $this->assertSame(1, $this->count($connection, 'SELECT COUNT(*) FROM bank_account WHERE id = :id', [
+            $this->assertSame(1, $this->countRows($connection, 'SELECT COUNT(*) FROM bank_account WHERE id = :id', [
                 'id' => $accountId,
             ]));
-            $this->assertSame(1, $this->count($connection, 'SELECT COUNT(*) FROM bank_account_evidence', []));
-            $this->assertSame($keysBefore, $this->count(
+            $this->assertSame(1, $this->countRows($connection, 'SELECT COUNT(*) FROM bank_account_evidence', []));
+            $this->assertSame($keysBefore, $this->countRows(
                 $connection,
                 'SELECT COUNT(*) FROM dek_keystore WHERE encryption_scope_id = :s AND destroyed_at IS NULL',
                 ['s' => $scope],
             ));
-            $this->assertSame(0, $this->count(
+            $this->assertSame(0, $this->countRows(
                 $connection,
                 "SELECT COUNT(*) FROM audit_log WHERE action = 'GDPR_SUBJECT_ERASED' "
                 . "AND metadata->>'encryption_scope_id' = :s",
@@ -89,17 +89,17 @@ final class BankAccountEvidenceSubjectErasureFunctionalTest extends KernelTestCa
             $result = $this->service(EraseBankAccountSubject::class)->execute($accountId);
 
             $this->assertTrue($result->liveRecordErased);
-            $this->assertSame(0, $this->count($connection, 'SELECT COUNT(*) FROM bank_account_evidence', []));
-            $this->assertSame(0, $this->count($connection, 'SELECT COUNT(*) FROM bank_account WHERE id = :id', [
+            $this->assertSame(0, $this->countRows($connection, 'SELECT COUNT(*) FROM bank_account_evidence', []));
+            $this->assertSame(0, $this->countRows($connection, 'SELECT COUNT(*) FROM bank_account WHERE id = :id', [
                 'id' => $accountId,
             ]));
-            $this->assertSame(2, $this->count(
+            $this->assertSame(2, $this->countRows(
                 $connection,
                 "SELECT COUNT(*) FROM audit_log WHERE action = 'BANK_ACCOUNT_EVIDENCE_DELETED' "
                 . 'AND encryption_scope_id = :s',
                 ['s' => $scope],
             ), 'one deletion row per link, its document id sealed under the account scope');
-            $this->assertSame(0, $this->count(
+            $this->assertSame(0, $this->countRows(
                 $connection,
                 'SELECT COUNT(*) FROM dek_keystore WHERE encryption_scope_id = :s AND destroyed_at IS NULL',
                 ['s' => $scope],
@@ -206,7 +206,7 @@ final class BankAccountEvidenceSubjectErasureFunctionalTest extends KernelTestCa
     /**
      * @param array<string, string> $params
      */
-    private function count(Connection $connection, string $sql, array $params): int
+    private function countRows(Connection $connection, string $sql, array $params): int
     {
         $count = $connection->fetchOne($sql, $params);
         $this->assertIsNumeric($count);
