@@ -194,7 +194,6 @@ final class TotpFactor extends AggregateRoot
         return $this->lastAcceptedStep;
     }
 
-
     private function ensureNotEnabled(): void
     {
         if ($this->isEnabled()) {
