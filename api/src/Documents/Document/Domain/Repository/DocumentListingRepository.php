@@ -23,4 +23,14 @@ interface DocumentListingRepository
     public function search(SearchCriteria $criteria): Page;
 
     public function find(string $id): ?DocumentListRow;
+
+    /**
+     * The rows of the given documents, in no particular order; an id with no row is simply absent. Ids must be
+     * well-formed UUIDs (the caller has validated them). One statement whatever the count.
+     *
+     * @param list<string> $ids
+     *
+     * @return list<DocumentListRow>
+     */
+    public function findMany(array $ids): array;
 }

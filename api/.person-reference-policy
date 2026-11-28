@@ -189,6 +189,7 @@
 # name and IBAN, which is the treatment axis (`#[PersonalData]` + crypto-shredding), not this one.
 Erpify\Backoffice\Bank\Domain\Entity\Bank::$id => non-person
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$id => non-person
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence::$id => non-person
 Erpify\Organization\Organization\Domain\Entity\Organization::$id => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$id => non-person
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$id => non-person
@@ -246,6 +247,8 @@ Erpify\Documents\Document\Domain\Entity\UploadIntent::$predecessorId => non-pers
 # The id of a bank's logo: an `Image` row, never a person; its release is a queued request, not an erasure.
 Erpify\Backoffice\Bank\Domain\Entity\Bank::$logoImageId => non-person
 Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount::$bankId => non-person
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence::$bankAccountId => non-person
+Erpify\Backoffice\BankAccount\Domain\Entity\BankAccountEvidence::$documentId => non-person
 Erpify\Organization\Membership\Domain\Entity\Membership::$organizationId => non-person
 Erpify\Iam\Invitation\Domain\Entity\Invitation::$organizationId => non-person
 Erpify\Iam\Session\Domain\Entity\Session::$organizationId => non-person

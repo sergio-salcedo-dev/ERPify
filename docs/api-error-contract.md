@@ -427,6 +427,25 @@ A new version is the declare and PUT above with a predecessor named in the path;
 
 A series page carries no name and opens no key; its `uploaderId` is `null` for an `Erased` version and the nil UUID for an uploader since erased. Every response carries `Cache-Control: no-store`. A series erasure answers **200** with `erased` (this call, newest first) and `remaining` (still not `Erased` when it finished); a repeat over an erased series answers both empty.
 
+### Bank-account evidence (`POST`/`GET /api/v1/backoffice/bank-accounts/{id}/evidence`, `DELETE /api/v1/backoffice/bank-accounts/{id}`)
+
+Attaching a document already filed through the Documents upload to a bank account, listing an account's evidence (`bankAccount.attachEvidence` / `bankAccount.readEvidence`, ADMIN only), and the refusal the account's deletion and its subject's erasure share. **No marker is minted**: four `type`s ride the existing `Conflict` and `InvariantViolation` markers. The kind of evidence fixes the retention terms (an ownership certificate: `contract-execution` under `legitimate-interests`, no review date), and the server checks the document against them through `DescribeEvidenceDocuments`, the seam Documents publishes.
+
+| Situation | Answer | Source |
+|---|---|---|
+| `{id}` not a UUID, or a `documentId` not a UUID on the use case | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in `AttachBankAccountEvidence` / `BankAccountFinder` |
+| Body without `documentId` or `kind`, `documentId` malformed in the body, or an unknown `kind` | **422 `validation-failed`** | `AttachBankAccountEvidenceCommand` |
+| Caller lacks the permission (every role but ADMIN), or no session | **403 `forbidden`** / **401**, nothing read | `#[IsGranted(BankAccountPermission::…)]` |
+| Unknown account | **404 `bank-account-not-found`** (`NotFound`), before the document is looked at | `BankAccountNotFoundException` |
+| The document does not exist, is `erased` or is `quarantined` | **422 `bank-account-evidence-unavailable`** (`InvariantViolation`), one answer for the three | `EvidenceDocumentUnavailable` |
+| The document was filed under other retention terms | **422 `bank-account-evidence-retention-mismatch`** (`InvariantViolation`); `kind`, `retentionReason` and `legalBasis` carry the terms the kind requires, never the document's own | `EvidenceRetentionMismatch` |
+| The document is already attached to the account (in any spelling of its id) | **409 `bank-account-evidence-already-attached`** (`Conflict`), from the check under the account's row lock or from the table's `UNIQUE` | `EvidenceAlreadyAttached` |
+| The erasure ledger's override is set | **410 `gone`** on the attach, on a non-empty listing, and on a deletion or subject erasure of an account that holds evidence | `DescribeEvidenceDocuments`, `DocumentGone` |
+| Deleting an account (or erasing its subject) while a linked document is not `erased` | **409 `bank-account-has-live-evidence`** (`Conflict`); `liveDocuments` counts them and nothing names them; nothing is removed or destroyed. Each document is erased through its own route first | `BankAccountHasLiveEvidence`, `LiveEvidenceGuard` |
+| HEAD on the listing | **405**, before anything is opened | `BankAccountEvidenceListController` |
+
+Every response of the two evidence routes carries `Cache-Control: no-store` (they hold names). A name that does not open lists `documentName: null` and never fails the list (`DocumentNameOpener`). `EraseBankAccountSubjectCommand` reports the 409's refusal through its masked console summary, like any other failure of the use case.
+
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 
 Not every `DomainException` carries a marker. Two of them guard the session-minting stage of the login and are graded in its table above — `SessionAdmissionUnresolvable` (`session-admission-unresolvable`) and `MembershipCardinalityViolated` (`membership-cardinality-violated`); both are HTTP-reachable on every flow that signs a device in, map to **500** by the mechanism below, and carry no context. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:

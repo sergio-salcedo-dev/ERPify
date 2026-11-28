@@ -15,8 +15,9 @@ namespace Erpify\Backoffice\BankAccount\Infrastructure\Security;
  * eight controllers — makes each call site compiler-checked: a case-sensitive permission string typo'd
  * inline fails only at request time as a silent over-restriction, never at build time.
  *
- * `read`/`write`/`delete` are auto-granted by the role tiers; `changeStatus` is a domain operation, not
- * a CRUD verb, so it is never tiered — it is reachable only through an explicit policy grant.
+ * `read`/`write`/`delete` are auto-granted by the role tiers; `changeStatus`, `attachEvidence` and
+ * `readEvidence` are not CRUD verbs, so they are never tiered — each is reachable only through an explicit
+ * policy grant or the ADMIN wildcard.
  *
  * A constants class, not a backed enum: the value type is already the `Permission` VO, and this string
  * is consumed verbatim by `#[IsGranted]`, `PermissionVoter::supports()`, and `Permission::fromString()`
@@ -32,4 +33,16 @@ final class BankAccountPermission
     public const string DELETE = 'bankAccount.delete';
 
     public const string CHANGE_STATUS = 'bankAccount.changeStatus';
+
+    /**
+     * Attaches a document to an account as evidence. A verb no tier carries, so only the ADMIN wildcard reaches it,
+     * as with the Documents verbs the attach depends on (`document.write` to file the document first).
+     */
+    public const string ATTACH_EVIDENCE = 'bankAccount.attachEvidence';
+
+    /**
+     * Lists an account's evidence with the documents' names. ADMIN only for the reason the Documents listing is: the
+     * names are opened sealed values.
+     */
+    public const string READ_EVIDENCE = 'bankAccount.readEvidence';
 }

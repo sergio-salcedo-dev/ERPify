@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
+use Erpify\Backoffice\BankAccount\Domain\Exception\BankAccountHasLiveEvidence;
 use Erpify\Shared\Crypto\Application\EnvelopeEncryptor;
 use Erpify\Shared\Crypto\Domain\DestroyReason;
 use Erpify\Shared\Crypto\Domain\EncryptionScopeId;
@@ -204,6 +205,84 @@ final class EraseBankAccountSubjectFunctionalTest extends KernelTestCase
                 'reconciliation detects a destroyed key with no GDPR_SUBJECT_ERASED evidence',
             );
         });
+    }
+
+    public function testASubjectWhoseAccountHoldsLiveEvidenceIsRefusedAndNothingChanges(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $accountId = $this->accountWithEvidenceIn($em, $connection, 'ready');
+            $scope = 'BankAccount:' . $accountId;
+
+            try {
+                $this->eraser()->execute($accountId);
+                $this->fail('Expected BankAccountHasLiveEvidence.');
+            } catch (BankAccountHasLiveEvidence $bankAccountHasLiveEvidence) {
+                $this->assertSame(['liveDocuments' => 1], $bankAccountHasLiveEvidence->context());
+            }
+
+            $this->assertSame(1, $this->bankAccountRows($connection, $accountId), 'nothing is removed on a refusal');
+            $this->assertSame(1, $this->liveKeys($connection, $scope), 'and the key is not destroyed');
+            $this->assertSame(0, $this->subjectErasedRows($connection, $scope), 'and no erasure is recorded');
+        });
+    }
+
+    public function testASubjectWhoseEvidenceIsAllErasedIsErasedWithItsLinks(): void
+    {
+        $this->inRolledBackTransaction(function (EntityManagerInterface $em, Connection $connection): void {
+            $accountId = $this->accountWithEvidenceIn($em, $connection, 'erased');
+
+            $result = $this->eraser()->execute($accountId);
+
+            $this->assertTrue($result->liveRecordErased);
+            $this->assertTrue($result->keyDestroyed);
+            $this->assertSame(
+                0,
+                $connection->executeQuery(
+                    'SELECT id FROM bank_account_evidence WHERE bank_account_id = :id',
+                    ['id' => $accountId],
+                )->rowCount(),
+                'the links go with the account once every document is erased',
+            );
+        });
+    }
+
+    /**
+     * A bank account holding one piece of evidence whose document is in `$documentState`. Rows are planted with SQL:
+     * the subject under test is the erasure, not the attach.
+     */
+    private function accountWithEvidenceIn(EntityManagerInterface $em, Connection $connection, string $documentState): string
+    {
+        $bankId = Uuid::generate();
+        $token = \strtoupper(\substr(\str_replace('-', '', $bankId), 0, 8));
+        $em->persist(Bank::create($bankId, 'Bank ' . $bankId, 'BNK' . $token));
+        $em->flush();
+
+        $accountId = Uuid::generate();
+        $em->persist(BankAccount::create($accountId, $bankId, 'Juan Pérez', 'ES9121000418450200051332'));
+        $em->flush();
+
+        $documentId = Uuid::generate();
+        $connection->executeStatement('INSERT INTO document_series (id, created_at) VALUES (:id, NOW())', ['id' => $documentId]);
+        $connection->executeStatement(
+            'INSERT INTO document (id, scope_id, series_id, uploader_id, state, digest, size_bytes, '
+            . 'retention_reason, legal_basis, next_scan_at, created_at, updated_at) '
+            . "VALUES (:id, :scope, :id, :uploader, :state, :digest, 5, 'contract-execution', "
+            . "'legitimate-interests', NOW(), NOW(), NOW())",
+            [
+                'id' => $documentId,
+                'scope' => Uuid::generate(),
+                'uploader' => Uuid::generate(),
+                'state' => $documentState,
+                'digest' => \str_repeat('b', 64),
+            ],
+        );
+        $connection->executeStatement(
+            'INSERT INTO bank_account_evidence (id, bank_account_id, document_id, kind, attached_at) '
+            . "VALUES (:id, :account, :document, 'ownership-certificate', NOW())",
+            ['id' => Uuid::generate(), 'account' => $accountId, 'document' => $documentId],
+        );
+
+        return $accountId;
     }
 
     private function eraser(): EraseBankAccountSubject

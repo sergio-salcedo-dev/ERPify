@@ -44,6 +44,32 @@ final class DocumentsCustodyContext extends AbstractContext implements Context
         string $state,
         int $ageSeconds,
     ): void {
+        $this->fileDocument($id, $name, $state, $ageSeconds, 'contract-execution', 'legitimate-interests');
+    }
+
+    /**
+     * Files a ready-made document like the step above, under the retention terms the scenario names: what a consumer
+     * that fixes the terms per kind of evidence is checked against.
+     */
+    #[Given('/^a document with id "([^"]*)" named "([^"]*)" in state "([^"]*)" kept for "([^"]*)" under "([^"]*)"$/')]
+    public function aDocumentKeptForUnder(
+        string $id,
+        string $name,
+        string $state,
+        string $retentionReason,
+        string $legalBasis,
+    ): void {
+        $this->fileDocument($id, $name, $state, 0, $retentionReason, $legalBasis);
+    }
+
+    private function fileDocument(
+        string $id,
+        string $name,
+        string $state,
+        int $ageSeconds,
+        string $retentionReason,
+        string $legalBasis,
+    ): void {
         $scope = RandomUuid::v4()->toRfc4122();
         $this->scopes[$id] = $scope;
 
@@ -67,8 +93,8 @@ final class DocumentsCustodyContext extends AbstractContext implements Context
                     $name,
                     CommitUpload::filenameAssociatedData($scope),
                 ),
-                'retention' => 'contract-execution',
-                'basis' => 'legitimate-interests',
+                'retention' => $retentionReason,
+                'basis' => $legalBasis,
                 'age' => $ageSeconds,
             ],
         );

@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Erpify\Tests\Unit\Backoffice\BankAccount\Infrastructure\Cli;
 
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Backoffice\BankAccount\Application\Evidence\LiveEvidenceGuard;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Backoffice\BankAccount\Infrastructure\Cli\EraseBankAccountSubjectCommand;
 use Erpify\Shared\Audit\Application\AuditLogger;
 use Erpify\Shared\Crypto\Application\Keystore;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Application\EvidenceDocumentsDouble;
+use Erpify\Tests\Unit\Backoffice\BankAccount\Application\InMemoryBankAccountEvidenceRepository;
 use Erpify\Tests\Unit\Shared\Console\Double\DrainedInputStream;
 use Erpify\Tests\Unit\Shared\Persistence\Double\ImmediateTransactionManager;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -171,6 +174,7 @@ final class EraseBankAccountSubjectCommandConfirmationTest extends TestCase
 
         return new EraseBankAccountSubject(
             $repository,
+            new LiveEvidenceGuard(new InMemoryBankAccountEvidenceRepository(), (new EvidenceDocumentsDouble())->seam()),
             $keystore,
             $this->createStub(AuditLogger::class),
             new ImmediateTransactionManager(),

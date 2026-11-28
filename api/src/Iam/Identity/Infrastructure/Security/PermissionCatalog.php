@@ -53,6 +53,8 @@ final readonly class PermissionCatalog implements PublishedPermissions
         'bankAccount.write',
         'bankAccount.delete',
         'bankAccount.changeStatus',
+        'bankAccount.attachEvidence',
+        'bankAccount.readEvidence',
         'document.write',
         'document.rescan',
         'document.erase',

@@ -96,6 +96,7 @@
 /^(?:the|The) entity "([^"]*)" found by "([^"]*)" should have "([^"]*)" not existing as part of the property "([^"]*)"$/ => idle
 /^a document in state "([^"]*)" with id "([^"]*)"$/ => used
 /^a document with id "([^"]*)" named "([^"]*)" in state "([^"]*)" created (\d+) seconds ago$/ => used
+/^a document with id "([^"]*)" named "([^"]*)" in state "([^"]*)" kept for "([^"]*)" under "([^"]*)"$/ => used
 /^the document "([^"]*)" has (\d+) custody rows$/ => used
 /^the key of document "([^"]*)" is destroyed$/ => used
 /^the people named by the custody rows of document "([^"]*)" have been erased$/ => used

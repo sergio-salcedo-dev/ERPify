@@ -2908,6 +2908,13 @@ mitigated state. Accepting one means recording who accepted it and against which
       finish, writes a `warning` line with `complete: false` even if no name failed, so a store too large for one run
       is only covered where it reaches and says so. **Accepted — the user,
       2026-11-17 (ADMIN only; no listing audit row).**
+      **The bank-account evidence routes (doc-12) inherit this acceptance unchanged:** `GET`/`POST
+      /api/v1/backoffice/bank-accounts/{id}/evidence` (ADMIN only, `bankAccount.readEvidence` /
+      `bankAccount.attachEvidence`) open the names of an account's linked documents through the same
+      `DocumentNameOpener`, behind the same override (410 through `DescribeEvidenceDocuments`), and write only the
+      generic access-log row naming the account; the attach is itself captured as a `BankAccountEvidence` change row
+      (non-person, no name). Extending the acceptance rather than reopening it: the names reach the same audience
+      (ADMIN) through a narrower door (one account's evidence instead of every document).
 - [x] **The identity erasure route did not re-prove the caller's password, though the Documents erasure did — closed 2026-11-25.**
       `POST /api/v1/documents/{id}/erase` already spent the shared `CurrentPasswordProofThrottle` budget and re-proved the
       caller's current password before any ledger write, because a stolen session could otherwise erase documents for good

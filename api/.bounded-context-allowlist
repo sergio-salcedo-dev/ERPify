@@ -213,3 +213,16 @@ src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.p
 src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Domain\HashedPassword
 src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Infrastructure\Security\CurrentPasswordProofThrottle
 src/Documents/Document/Infrastructure/Controller/EraseDocumentSeriesController.php => Erpify\Iam\Identity\Infrastructure\Security\PasswordHasher
+# BankAccount → Documents evidence seam (doc-12). Documents publishes
+# DescribeEvidenceDocuments, an Application service that returns the state,
+# retention and opened name of a set of documents at a constant cost, and its
+# read-only carrier EvidenceDocument. BankAccount consumes them to check a
+# document before attaching it (retention per kind, never erased or quarantined),
+# to list an account's evidence with names, and to refuse removing an account
+# whose linked documents are not erased. Decided in
+# _bmad-output/specs/spec-documents-context (memlog, doc-12).
+src/Backoffice/BankAccount/Application/Evidence/AttachBankAccountEvidence.php => Erpify\Documents\Document\Application\Evidence\DescribeEvidenceDocuments
+src/Backoffice/BankAccount/Application/Evidence/AttachBankAccountEvidence.php => Erpify\Documents\Document\Application\Evidence\EvidenceDocument
+src/Backoffice/BankAccount/Application/Evidence/AttachedEvidence.php => Erpify\Documents\Document\Application\Evidence\EvidenceDocument
+src/Backoffice/BankAccount/Application/Evidence/ListBankAccountEvidence.php => Erpify\Documents\Document\Application\Evidence\DescribeEvidenceDocuments
+src/Backoffice/BankAccount/Application/Evidence/LiveEvidenceGuard.php => Erpify\Documents\Document\Application\Evidence\DescribeEvidenceDocuments
