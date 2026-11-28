@@ -55,6 +55,7 @@ final class BankAccountEvidenceAttachLockFunctionalTest extends KernelTestCase
         if ($outside->isTransactionActive()) {
             $outside->rollBack();
         }
+
         $outside->executeStatement('DELETE FROM bank_account WHERE id = :id', ['id' => $this->accountId]);
         $outside->executeStatement('DELETE FROM bank WHERE id = :id', ['id' => $this->bankId]);
         $outside->close();
