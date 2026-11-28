@@ -452,6 +452,27 @@ A new version is the declare and PUT above with a predecessor named in the path;
 
 A series page carries no name and opens no key; its `uploaderId` is `null` for an `Erased` version and the nil UUID for an uploader since erased. Every response carries `Cache-Control: no-store`. A series erasure answers **200** with `erased` (this call, newest first) and `remaining` (still not `Erased` when it finished); a repeat over an erased series answers both empty.
 
+### Bank-account evidence (`POST`/`GET /api/v1/backoffice/bank-accounts/{id}/evidence`, and the removal of an account)
+
+A bank account holds documents a two-step upload filed, by id. Both routes are ADMIN-only: each requires its `bankAccount` verb **and** `document.custody`. **Five problem types, on the existing `Conflict` and `InvariantViolation` markers**, so no marker is added and the drift gate does not fire; this table is the manual NFR26 record. Their context carries ids and the kind only, never a name, a digest or retention terms.
+
+| Situation | Answer | Source |
+|---|---|---|
+| `{id}` not a UUID | **400 `invalid-uuid`** (`InvalidInput`), before any lookup | `Uuid::ensure()` in both controllers |
+| Caller lacks `bankAccount.read`/`bankAccount.write` or `document.custody` (every role but ADMIN), or no session | **403 `forbidden`** / **401**, nothing read or written | `#[IsGranted]` ×2 on both controllers |
+| Unknown account | **404 `bank-account-not-found`** (`NotFound`) | `BankAccountNotFoundException` |
+| Attach body: `documentId` missing or not a UUID, `kind` missing or outside the vocabulary, or a member the body does not declare | **422 `validation-failed`** at mapping | `AttachBankAccountEvidenceCommand`, `#[StrictRequestPayload]` |
+| Attach of a document no row holds | **422 `bank-account-evidence-document-not-found`** (`InvariantViolation`), context `documentId` | `BankAccountEvidenceDocumentNotFound` |
+| Attach of a document filed under other retention terms than its kind fixes (the ownership certificate: `contract-execution`, `legitimate-interests`, no review date) | **422 `bank-account-evidence-retention-mismatch`** (`InvariantViolation`), context `documentId`, `kind`; nothing written | `BankAccountEvidenceRetentionMismatch` |
+| Attach of an `Erased` document | **409 `bank-account-evidence-document-erased`** (`Conflict`), context `documentId` | `BankAccountEvidenceDocumentErased` |
+| Attach of a document the account already holds, a concurrent attach included | **409 `bank-account-evidence-already-attached`** (`Conflict`), context `bankAccountId`, `documentId` | `BankAccountEvidenceAlreadyAttached` (the unique constraint by name) |
+| Deleting the account (`DELETE /bank-accounts/{id}`), or erasing it as a subject (`bank-account:gdpr:erase-subject`), while a linked document is not `Erased` | **409 `bank-account-has-live-evidence`** (`Conflict`), context `bankAccountId`; nothing removed, no key destroyed. With every linked document `Erased`, the links go with the account in one transaction | `BankAccountHasLiveEvidence`, from `ReleaseBankAccountEvidence` |
+| HEAD on the listing | **405**, before anything is opened | `BankAccountEvidenceListController` |
+| Listing or attach while the erasure ledger's override is set | **410 `gone`**, before a link is written | `EvidenceDocuments::describe()`, `DocumentGone` |
+| A name that does not open | **200**/**201**, that item's `name` is `null` | `DocumentNameOpener` |
+
+The attach answers **201** with the link and the document as the listing shows it; the listing answers **200** with `data` most recently attached first, an `Erased` document kept as its tombstone (`state: "erased"`, `name: null`). Both carry `Cache-Control: no-store`. The bytes are never served here: a `ready` document is downloaded through `GET /api/v1/documents/{id}/content` by its `documentId`, with that route's own permission and audit row.
+
 ### Marker-less domain exceptions (crypto-shredding & integrity guards)
 
 Not every `DomainException` carries a marker. Two of them guard the session-minting stage of the login and are graded in its table above — `SessionAdmissionUnresolvable` (`session-admission-unresolvable`) and `MembershipCardinalityViolated` (`membership-cardinality-violated`); both are HTTP-reachable on every flow that signs a device in, map to **500** by the mechanism below, and carry no context. The crypto-shredding capability (`api/src/Shared/Crypto/Domain/Exception/`) throws four deliberately **marker-less** exceptions:

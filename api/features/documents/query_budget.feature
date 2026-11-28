@@ -6,7 +6,7 @@ Feature: The document listings cost the same number of queries whatever the page
   # ADR D10 promises one keystore query per page. Each pair of scenarios asserts ONE number, so a query issued per row
   # makes the larger page cost more than the single document.
   Background:
-    Given I execute the SQL query "TRUNCATE upload_intent, document_custody, document, document_series"
+    Given I execute the SQL query "TRUNCATE bank_account_evidence, upload_intent, document_custody, document, document_series"
     And I add "Accept" header equal to "application/json"
 
   Scenario: The listing of one document

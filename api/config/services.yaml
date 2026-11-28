@@ -87,6 +87,10 @@ services:
     Erpify\Shared\Privacy\Application\PersonReferenceErasure:
         alias: Erpify\Documents\Document\Application\PurgeUserDocumentReferences
 
+    # The read seam Documents publishes to the contexts that attach evidence (`api/.bounded-context-allowlist`).
+    Erpify\Documents\Document\Application\Evidence\EvidenceDocuments:
+        alias: Erpify\Documents\Document\Application\Evidence\DocumentEvidenceReader
+
     Erpify\Shared\Event\Application\ProjectionRunner:
         arguments:
             $projectors: !tagged_iterator erpify.projector

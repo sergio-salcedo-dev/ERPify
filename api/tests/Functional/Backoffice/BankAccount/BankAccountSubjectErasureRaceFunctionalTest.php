@@ -10,6 +10,7 @@ use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
 use Erpify\Backoffice\Bank\Domain\Entity\Bank;
 use Erpify\Backoffice\BankAccount\Application\EraseBankAccountSubject;
+use Erpify\Backoffice\BankAccount\Application\Evidence\ReleaseBankAccountEvidence;
 use Erpify\Backoffice\BankAccount\Domain\Entity\BankAccount;
 use Erpify\Backoffice\BankAccount\Domain\Repository\BankAccountRepository;
 use Erpify\Shared\Audit\Application\AuditLogger;
@@ -149,6 +150,7 @@ final class BankAccountSubjectErasureRaceFunctionalTest extends KernelTestCase
             $this->service(Keystore::class),
             $this->service(AuditLogger::class),
             $this->service(TransactionManager::class),
+            $this->service(ReleaseBankAccountEvidence::class),
         );
     }
 

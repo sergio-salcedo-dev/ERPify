@@ -38,6 +38,18 @@ function bankAccountPath(id: string): string {
   return `${BACKOFFICE_PREFIX}/bank-accounts/${encodeURIComponent(id)}`;
 }
 
+function bankAccountEvidencePath(id: string): string {
+  return `${bankAccountPath(id)}/evidence`;
+}
+
+function documentUploadContentPath(uploadId: string): string {
+  return `${API_PREFIX_V1}/documents/uploads/${encodeURIComponent(uploadId)}/content`;
+}
+
+function documentContentPath(documentId: string): string {
+  return `${API_PREFIX_V1}/documents/${encodeURIComponent(documentId)}/content`;
+}
+
 function userPath(id: string): string {
   return `${BACKOFFICE_PREFIX}/users/${encodeURIComponent(id)}`;
 }
@@ -95,6 +107,11 @@ export const API_ENDPOINTS = {
       // Exact-match lookup by IBAN — POST body, never a query-string parameter, so the
       // value (financial PII) is never written to an access log. See issue #426.
       IBAN_LOOKUP: `${BACKOFFICE_PREFIX}/bank-accounts/iban-lookup`,
+      // The documents an account holds as evidence: one path, two keys, one verb each. ADMIN-only
+      // (`document.custody` beside the bankAccount verb). The attach names a document an earlier
+      // two-step upload filed, by id; the bytes never travel through this path.
+      EVIDENCE_LIST: bankAccountEvidencePath,
+      EVIDENCE_ATTACH: bankAccountEvidencePath,
     },
     USERS: {
       LIST: `${BACKOFFICE_PREFIX}/users`,
@@ -131,6 +148,16 @@ export const API_ENDPOINTS = {
   // none is declared here.
   IMAGES: {
     GET: (imageId: string): string => `${API_PREFIX_V1}/images/${encodeURIComponent(imageId)}`,
+  },
+  // Evidence-class originals (the Documents context), mounted at the v1 root. The upload is two
+  // steps: the declare (JSON, `HttpClient`) answers an upload id, then the raw body is PUT to that
+  // id's content path with the original filename in its query — through `XMLHttpRequest`, the one
+  // browser transport that reports upload progress, so not through an `HttpClient` verb. The audited
+  // read answers the original of a `ready` document as an attachment, read through `fetch` as bytes.
+  DOCUMENTS: {
+    UPLOAD_DECLARE: `${API_PREFIX_V1}/documents/uploads`,
+    UPLOAD_CONTENT: documentUploadContentPath,
+    CONTENT: documentContentPath,
   },
   // Identity / session subsystem — mounted at the v1 root (not under a portal
   // prefix): the signed-in user reads their own identity and session registry.
