@@ -333,6 +333,8 @@ resolution: sweep now covers IsGranted subclasses, non-literal (Expression) argu
 
 **AC5: el barrido de completitud de permisos tiene puntos ciegos latentes.** `PermissionCatalogCoversEveryGatedRouteTest` solo refleja atributos `#[IsGranted]` string-literal/constante. No ve: `#[IsGranted(new Expression(...))]` (Symfony expression-language está instalado), reglas `access_control` de `security.yaml`, ni subclases de `IsGranted` (usa match exacto, e `IsGranted` no es `final`). Todos latentes hoy (0 en el árbol). Reforzar el barrido cuando aterrice el primer gate por Expression o por `access_control`.
 
+**Follow-up 2026-11-28 (review leftover of #1294's handoff, item 5):** the `access_control` half had two blind spots of its own — it skipped any rule whose path lacked a literal `/api`, and it read only the top-level block. It now reads the `access_control` list of the top level and of every `when@<env>` block, and scopes a rule by what its regex REACHES: matched as `PathRequestMatcher` matches it (`{<path>}`) against every route of `api/.route-manifest.json`, placeholders filled with a UUID. No path reaches everything; a pattern that does not compile, a non-string path and a `request_matcher` fail closed. Still kernel-free; falsification cases cover an unanchored suffix, a character class, an alternation, no path, an empty path, an uncompilable pattern, a request matcher and a `when@prod` block. A rule reaching only a route prod does not serve (`^/api/test/`, the dev hot-reload route) is out of scope by construction. Not run here (no PHP 8.5 / vendor in the session); the reach logic was checked with host PHP against the real manifest and the real rule paths.
+
 ### DW-41: Behat exact query budget 27 couples the invitation feature to cross-cutting internals
 
 origin: migrated from legacy ledger ("Deferred from: code review of u-2-invitar-alta-invitacion (2026-07-18)"), 2026-09-24
@@ -607,7 +609,8 @@ En ese momento, un cursor de un ámbito se podría reproducir sobre otro: es la 
 origin: sesión de mantenimiento, petición del usuario, 2026-10-26
 location: pwa/package-lock.json, pwa/node_modules
 reason: el usuario vio 7 altas en `npm audit`; sobre `main` en 3e1a856 el lockfile de pwa/ da 0, y no se sabe dónde se ejecutó el audit que dio 7.
-status: open
+status: done 2026-11-28
+resolution: no se reproduce. `npm ci` y después `npm audit --json` en `pwa/` sobre 0d3cbeb (2026-11-28): 0 vulnerabilidades de cualquier severidad en 789 dependencias, también con `--omit=dev`. Causa: ningún lockfile desde #1112 da altas (medido el 2026-10-26 y otra vez hoy, con el lock movido por última vez en f37a84c); el 7 salió de un árbol que no era este lock (hipótesis 1 o 2). Sin cambios en el lock. Las alertas de Dependabot del repositorio no se revisaron: la sesión no tiene herramienta para leerlas.
 severity: medium
 
 **Medido el 2026-10-26:**
@@ -646,6 +649,8 @@ severity: medium
 **Para cerrarla:**
 - Decidir si el tamaño táctil va en las variantes (`button-variants.ts`, `input.tsx`) o control a control. En las variantes llega a todo con un solo cambio, pero cambia la densidad de cada formulario en dispositivos con pantalla táctil.
 - Medir en Playwright con un perfil de dispositivo táctil, no solo por clase: jsdom no evalúa media queries.
+
+**Follow-up 2026-11-28 (review leftover of #1294's handoff, item 5):** the h-9 half of `pwa/tests/components/ui/touchTargets.test.tsx` no longer lists nine files by hand. It reads every class string under `src/` from the TypeScript AST, treats one as a control when it carries an interaction-state variant or is the `className` of an intrinsic interactive element, and asserts its own universe (file floor, sentinel, a floor of 9 control strings against the 11 found); a bare `h-9` planted in `UsersFilters.tsx` reds it. The touch-profile measurement is still not done.
 
 ### DW-73: El bloqueo de cuenta confirma la contraseña correcta mientras está en vigor
 
@@ -732,12 +737,15 @@ severity: low
 
 **Review 2026-11-22 (bmad-code-review, 4 layers):** the 900 s value bounds NEW connections only (an open stream keeps delivering until it closes), is pinned by no test, and the `catch (Throwable)` branch of the sign-out clear has no test. Deferred, not patched: a functional test over the container-built `Authorization` needs a running stack (not available in the session). Revoke-others, suspension and deactivation still do not clear anything.
 
+**Follow-up 2026-11-28 (review leftover of #1294's handoff, item 5):** the `catch (Throwable)` branch of the sign-out clear now has a unit test in `RevokeCurrentSessionControllerTest`: a request on a different second-level domain from the hub's public URL makes the real `Authorization::createClearCookie()` throw, and the controller still invalidates the native session, answers 204, sets no `mercureAuthorization` cookie and logs exactly one warning carrying the Mercure `RuntimeException`. Not run here (no PHP 8.5 / vendor in the session). The 900 s pin and the other residuals above are unchanged.
+
 ### DW-77: Comprobar si el túnel de Sentry reenvía a proyectos de terceros
 
 origin: auditoría de seguridad de #1091, 2026-10-23
 location: pwa/next.config.ts (`tunnelRoute: "/monitoring"`), pwa/src/proxy.ts
 reason: sin verificar. El túnel de `@sentry/nextjs` toma la organización y el proyecto de los parámetros `o`/`p` de la petición. Si no los contrasta con el DSN configurado, cualquiera puede usar el origen de ERPify como relay gratuito hacia sus propios proyectos de Sentry. Hoy solo lo acota el límite de 60 peticiones por minuto e IP.
-status: open
+status: done 2026-11-28
+resolution: no reenvía. En la versión instalada (`@sentry/nextjs` 11.13.0, `@sentry/core` 11.13.0) el túnel ya no usa `o`/`p`: el destino sale de la cabecera del envelope y solo se acepta el DSN del propio cliente de servidor, que es el mismo `NEXT_PUBLIC_SENTRY_DSN` (`sentryInitOptions.ts`). Sin cambios en `proxy.ts`. Evidencia abajo; la prueba contra el stack no se hizo (sin Docker en la sesión).
 severity: low
 
 **Para cerrarla:**
@@ -745,12 +753,21 @@ severity: low
 - **Si reenvía:** rechazar en `proxy.ts` cualquier `/monitoring` cuyos `o`/`p` no coincidan con `NEXT_PUBLIC_SENTRY_DSN`, con un test en `pwa/tests/`.
 - **Si no reenvía:** cerrar con `status: done` y la evidencia.
 
+**Evidencia, leída el 2026-11-28 en `pwa/node_modules` instalado con `npm ci` sobre 0d3cbeb:**
+- `@sentry/nextjs/build/cjs/server/index.js:95-101`: con `tunnelRoute` el SDK de servidor registra un túnel gestionado (`_INTERNAL_setTunnelDefaults` con `tunnel: { path: "/monitoring" }`) e instala los hooks de Node que lo atienden antes que la app. El rewrite de `config/withSentryConfig/tunnel.js:53-82` solo se aplica en builds de Vercel y apunta a `/sentry-tunnel`, no a la ingesta.
+- `@sentry/core/build/cjs/chunks/trace-info.js:1745-1756` (`setServedTunnel`) y `:1906-1910` (`resolveAllowedDsns`): la lista permitida es `tunnelOptions.allowedDsns` más el DSN del cliente; ERPify no pasa `allowedDsns`, así que es solo su propio DSN.
+- `trace-info.js:2062`: sin DSN permitido responde 500 `Tunnel not configured`. `:2088-2105` (`resolveIngestUrl`): lee `dsn` de la primera línea del envelope y, si no es exactamente uno permitido, responde 403 `DSN not allowed` sin hacer el `fetch`; la URL de ingesta se construye a partir de ese DSN, no de la petición.
+- Ningún fichero de `@sentry/nextjs` ni de `@sentry/core` lee `o` o `p` de la query.
+
+**Reabrir si** `@sentry/nextjs` baja de 11, si `sentryInitOptions` pasa `allowedDsns` o un DSN de servidor distinto del del navegador, o si una subida cambia `resolveIngestUrl`.
+
 ### DW-78: El arranque del contenedor `php` en CI falla de forma intermitente al descargar dependencias
 
 origin: CI de #1091, 2026-10-23
 location: api/frankenphp/docker-entrypoint.sh (composer install), .github/workflows/ci.yml, make/docker.mk (docker.up.wait.no-build)
 reason: dos jobs distintos (API Behat en 2d635b1 y PWA E2E shard 1 en 9de680f) murieron sin ejecutar ningún test porque `composer install` del entrypoint no terminó de descargar paquetes (`library::Connection refused`) y el contenedor nunca quedó sano. La sesión no podía relanzar jobs (403) y hubo que pedírselo al usuario.
-status: open
+status: done 2026-11-28
+resolution: no se repite y la mitigación propuesta ya está en el árbol. Las 50 ejecuciones completadas más recientes de `ci.yml` en `main` (run 3443 del 2026-11-12 a run 3628 del 2026-11-27, sobre 0d3cbeb) dan 4 fallos y ninguno en el arranque del stack: los jobs fallidos que arrancan el stack tienen su paso "Start … stack" en `success`, y el cuarto fallo es el job estático, que no lo arranca. Los fallos fueron PHPUnit (3612 strict gate, 3582 y 3489 cobertura) y advisories de composer (3608). Todos los jobs que arrancan el stack restauran antes `api/vendor` con `.github/actions/api-vendor-cache` (cache por hash de `composer.lock`), así que el entrypoint no descarga nada en un acierto exacto. Sin reintento añadido en `docker-entrypoint.sh`.
 severity: low
 
 **Para cerrarla:**
