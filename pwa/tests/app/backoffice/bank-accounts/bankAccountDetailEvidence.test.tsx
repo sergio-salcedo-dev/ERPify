@@ -79,7 +79,10 @@ describe("BankAccountDetailPage — evidence", () => {
 
     const surface = await screen.findByTestId("bank-accounts-detail__delete-error");
     expect(surface).toHaveTextContent(
-      "This account still holds 2 evidence documents that are not erased. Erase each document first, then delete the account.",
+      "This account still holds 2 evidence documents that are not erased. Each document must be erased before the account can be deleted.",
+    );
+    expect(surface).toHaveTextContent(
+      "Erasing a document is an administrator action that is not available on this screen.",
     );
     await waitFor(() => expect(deleteRun).toHaveBeenCalledWith(ACCOUNT_ID));
     expect(screen.getByTestId("bank-accounts-detail__delete-error-evidence")).toHaveAttribute(

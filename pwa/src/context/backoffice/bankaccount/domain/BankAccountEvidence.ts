@@ -45,13 +45,15 @@ export type EvidenceDocumentState = (typeof EVIDENCE_DOCUMENT_STATES)[number];
 /**
  * One piece of evidence of a bank account: the link (id, document id, kind, when attached) and what
  * Documents says about the document. `documentState`, `documentName` and `documentSizeBytes` are
- * `null` when Documents has nothing to give (a name that does not open, an erased document). The
+ * `null` when Documents has nothing to give (a name that does not open, an erased document);
+ * `kind` and `documentState` are also `null` when the server sends a value this client does not
+ * know yet, so one new value never blanks the whole list. The
  * name is a person-supplied filename: rendered as text, never logged or persisted client-side.
  */
 export interface BankAccountEvidence {
   readonly id: string;
   readonly documentId: string;
-  readonly kind: EvidenceKind;
+  readonly kind: EvidenceKind | null;
   readonly attachedAt: string;
   readonly documentState: EvidenceDocumentState | null;
   readonly documentName: string | null;

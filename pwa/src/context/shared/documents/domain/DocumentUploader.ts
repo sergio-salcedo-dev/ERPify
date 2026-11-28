@@ -21,6 +21,17 @@ export interface DocumentUploadProgress {
 }
 
 /**
+ * What an upload reports while it runs. `onSending` fires once the declare is answered and the body
+ * starts — from then on a failure may leave a filed document behind, which is why a caller needs to
+ * know it. `onSent` fires once the last byte has left the browser, while the server is still filing.
+ */
+export interface DocumentUploadObserver {
+  readonly onSending?: () => void;
+  readonly onProgress?: (progress: DocumentUploadProgress) => void;
+  readonly onSent?: () => void;
+}
+
+/**
  * Port for filing an original as evidence, kept byte for byte (never re-encoded, unlike an image).
  * One call covers the API's two steps — declare the size and retention terms, then send the body
  * with the original filename — because neither is meaningful alone to a caller.
@@ -32,6 +43,6 @@ export interface DocumentUploader {
   upload(
     file: File,
     terms: RetentionTerms,
-    onProgress?: (progress: DocumentUploadProgress) => void,
+    observer?: DocumentUploadObserver,
   ): Promise<FiledDocument>;
 }

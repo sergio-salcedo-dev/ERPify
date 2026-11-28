@@ -72,14 +72,32 @@ describe("ApiDocumentUploader", () => {
     });
   });
 
-  it("forwards the progress callback to the transport", async () => {
-    const client = httpClient();
-    const onProgress = vi.fn();
-    await new ApiDocumentUploader(client).upload(file, TERMS, onProgress);
+  it("tells the observer when the body starts, how far it got and when the last byte left", async () => {
+    const events: string[] = [];
+    const client = httpClient({
+      putRaw: vi.fn().mockImplementation(async (_u, _b, _g, options) => {
+        events.push("put");
+        options.onUploadProgress({ loaded: 1, total: 3 });
+        options.onUploadSent();
+        return { data: { id: DOCUMENT_ID, state: "received", digest: "d", sizeBytes: 3 } };
+      }),
+    });
+    await new ApiDocumentUploader(client).upload(file, TERMS, {
+      onSending: () => events.push("sending"),
+      onProgress: (p) => events.push(`progress ${p.loaded}/${p.total}`),
+      onSent: () => events.push("sent"),
+    });
 
-    const options = vi.mocked(client.putRaw).mock.calls[0][3];
-    options?.onUploadProgress?.({ loaded: 1, total: 3 });
-    expect(onProgress).toHaveBeenCalledWith({ loaded: 1, total: 3 });
+    expect(events).toEqual(["sending", "put", "progress 1/3", "sent"]);
+  });
+
+  it("never reports the body as started when the declare fails", async () => {
+    const onSending = vi.fn();
+    const client = httpClient({ post: vi.fn().mockRejectedValue(new Error("offline")) });
+    await expect(
+      new ApiDocumentUploader(client).upload(file, TERMS, { onSending }),
+    ).rejects.toThrow();
+    expect(onSending).not.toHaveBeenCalled();
   });
 
   it("guards both 2xx bodies", async () => {

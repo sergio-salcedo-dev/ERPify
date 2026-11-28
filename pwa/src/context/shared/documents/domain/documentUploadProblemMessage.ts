@@ -19,16 +19,12 @@ const DOCUMENT_TYPE_MESSAGE: Record<DocumentProblemType, string> = {
     "The upload was interrupted, so nothing was kept. Try again.",
   [DocumentProblemType.UPLOAD_IN_PROGRESS]:
     "This file is already being uploaded. Wait for it to finish.",
-  [DocumentProblemType.IDEMPOTENCY_KEY_CONFLICT]:
-    "This upload clashes with an earlier one. Try again.",
+  [DocumentProblemType.IDEMPOTENCY_KEY_CONFLICT]: "This upload clashes with an earlier one.",
 };
 
 const CLIENT_TYPE_MESSAGE: ReadonlyMap<string, string> = new Map([
-  [NETWORK_ERROR, "Could not reach the server. Check your connection and try again."],
-  [
-    REQUEST_TIMEOUT,
-    "The server did not answer in time, so it is not known whether the file was kept. Check the list before trying again.",
-  ],
+  [NETWORK_ERROR, "The connection to the server was lost."],
+  [REQUEST_TIMEOUT, "The server did not answer in time."],
   [
     "validation-failed",
     `The file must be at least one byte and at most ${MAX_DOCUMENT_MEBIBYTES} MB.`,

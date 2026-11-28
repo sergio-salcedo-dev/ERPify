@@ -1,18 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { BankAccountEvidenceSection } from "@/app/backoffice/bank-accounts/[id]/_components/BankAccountEvidenceSection";
-import { EvidenceAttachFailure } from "@/context/backoffice/bankaccount/application/AttachBankAccountEvidence";
+import {
+  EvidenceAttachFailure,
+  type EvidenceAttachObserver,
+} from "@/context/backoffice/bankaccount/application/AttachBankAccountEvidence";
 import type { BankAccountEvidence } from "@/context/backoffice/bankaccount/domain/BankAccountEvidence";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 
 const ACCOUNT_ID = "0192aaaa-aaaa-7aaa-8aaa-000000000001";
+const DOCUMENT_ID = "0192bbbb-bbbb-7bbb-8bbb-000000000009";
 
 const listRun = vi.hoisted(() => vi.fn());
 const attachRun = vi.hoisted(() => vi.fn());
+const retryAttach = vi.hoisted(() => vi.fn());
 vi.mock("@/context/shared/dependency-injection/infrastructure/Container", async () =>
   (await import("./_mocks")).containerMock({
     BackOfficeListBankAccountEvidence: { run: listRun },
-    BackOfficeAttachBankAccountEvidence: { run: attachRun },
+    BackOfficeAttachBankAccountEvidence: { run: attachRun, retryAttach },
   }),
 );
 
@@ -141,14 +146,14 @@ describe("BankAccountEvidenceSection", () => {
     expect(screen.queryByTestId("bank-accounts-detail__evidence-attach")).not.toBeInTheDocument();
   });
 
-  it("uploads with progress, attaches as an ownership certificate and refreshes the list", async () => {
+  it("labels each stage from the use case: uploading with progress, finishing, then attaching", async () => {
     listRun.mockResolvedValueOnce([]).mockResolvedValueOnce([READY]);
-    let report: ((p: { loaded: number; total: number }) => void) | undefined;
+    let observer: EvidenceAttachObserver | undefined;
     let finish: (() => void) | undefined;
     attachRun.mockImplementation(
-      (_id: string, _file: File, _kind: string, onProgress: typeof report) =>
+      (_id: string, _file: File, _kind: string, given: EvidenceAttachObserver) =>
         new Promise<void>((resolve) => {
-          report = onProgress;
+          observer = given;
           finish = resolve;
         }),
     );
@@ -161,16 +166,40 @@ describe("BankAccountEvidenceSection", () => {
       ACCOUNT_ID,
       pdf,
       "ownership-certificate",
-      expect.any(Function),
+      expect.any(Object),
     );
 
-    report?.({ loaded: 1, total: 4 });
+    act(() => {
+      observer?.onStage?.("upload");
+      observer?.onProgress?.({ loaded: 1, total: 4 });
+    });
     const progress = await screen.findByTestId("bank-accounts-detail__evidence-progress");
     expect(progress.tagName).toBe("PROGRESS");
     expect(progress).toHaveAttribute("aria-label", "Upload progress");
     expect(progress).toHaveAttribute("value", "25");
 
-    finish?.();
+    // The last byte has left: no inference from the figures, the use case says so.
+    act(() => observer?.onProgress?.({ loaded: 4, total: 4 }));
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-finishing"),
+    ).not.toBeInTheDocument();
+    act(() => observer?.onStage?.("finishing"));
+    expect(screen.getByTestId("bank-accounts-detail__evidence-finishing")).toHaveTextContent(
+      "Finishing upload…",
+    );
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-attaching"),
+    ).not.toBeInTheDocument();
+
+    act(() => observer?.onStage?.("attach"));
+    expect(screen.getByTestId("bank-accounts-detail__evidence-attaching")).toHaveTextContent(
+      "Attaching…",
+    );
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-finishing"),
+    ).not.toBeInTheDocument();
+
+    act(() => finish?.());
     expect(
       await screen.findByTestId(`bank-accounts-detail__evidence-name-${READY.id}`),
     ).toBeVisible();
@@ -189,12 +218,26 @@ describe("BankAccountEvidenceSection", () => {
     expect(attachRun).not.toHaveBeenCalled();
   });
 
-  it("maps a 422 attach refusal to English in a persistent, focused error surface", async () => {
+  it("refuses a file name the server would refuse before anything is sent", async () => {
+    listRun.mockResolvedValue([]);
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(new File([new Uint8Array([1])], "invoice\u202Efdp.exe"));
+    expect(await screen.findByTestId("bank-accounts-detail__evidence-refusal")).toHaveTextContent(
+      /Rename the file/,
+    );
+    expect(attachRun).not.toHaveBeenCalled();
+  });
+
+  it("maps a non-retryable attach refusal to English, focused, with no retry", async () => {
     listRun.mockResolvedValue([]);
     attachRun.mockRejectedValue(
       new EvidenceAttachFailure(
         "attach",
         httpError("bank-account-evidence-retention-mismatch", 422),
+        true,
+        DOCUMENT_ID,
       ),
     );
     renderSection();
@@ -203,15 +246,88 @@ describe("BankAccountEvidenceSection", () => {
     pick(pdf);
     const surface = await screen.findByTestId("bank-accounts-detail__evidence-attach-error");
     expect(surface).toHaveTextContent(/different retention terms/);
-    expect(surface).toHaveTextContent(/"cert.pdf" was kept as a document but is not attached/);
+    expect(surface).toHaveTextContent(
+      /"cert.pdf" was filed as a document but is not attached to the account. An administrator can find it in the documents listing./,
+    );
     expect(surface).not.toHaveTextContent("Server title");
     expect(surface).toHaveFocus();
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-retry-attach"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-retry-upload"),
+    ).not.toBeInTheDocument();
   });
 
-  it("offers a retry after a failed upload", async () => {
+  it("retries a transient attach failure with the same document and no upload, then refreshes", async () => {
+    listRun.mockResolvedValue([]);
+    attachRun.mockRejectedValue(
+      new EvidenceAttachFailure("attach", httpError("rate-limited", 429), true, DOCUMENT_ID),
+    );
+    retryAttach.mockResolvedValue(READY);
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(pdf);
+    expect(
+      await screen.findByTestId("bank-accounts-detail__evidence-attach-error"),
+    ).toHaveTextContent(/will not upload it twice/);
+    listRun.mockResolvedValue([READY]);
+    fireEvent.click(screen.getByTestId("bank-accounts-detail__evidence-retry-attach"));
+
+    await waitFor(() =>
+      expect(retryAttach).toHaveBeenCalledWith(ACCOUNT_ID, DOCUMENT_ID, "ownership-certificate"),
+    );
+    expect(attachRun).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByTestId(`bank-accounts-detail__evidence-name-${READY.id}`),
+    ).toBeVisible();
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-attach-error"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not claim an attach of unknown outcome failed, and reloads the list", async () => {
+    listRun.mockResolvedValue([]);
+    attachRun.mockRejectedValue(
+      new EvidenceAttachFailure("attach", httpError("request-timeout", 0), true, DOCUMENT_ID),
+    );
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(pdf);
+    const surface = await screen.findByTestId("bank-accounts-detail__evidence-attach-error");
+    expect(surface).toHaveTextContent(/it is not known whether it was attached/);
+    expect(surface).not.toHaveTextContent(/is not attached/);
+    await waitFor(() => expect(listRun).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("bank-accounts-detail__evidence-retry-attach")).toBeVisible();
+  });
+
+  it("offers no blind re-upload when the upload's outcome is unknown, and says where the file may be", async () => {
+    listRun.mockResolvedValue([]);
+    attachRun.mockRejectedValue(
+      new EvidenceAttachFailure("upload", httpError("about:blank", 504), true, null),
+    );
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(pdf);
+    const surface = await screen.findByTestId("bank-accounts-detail__evidence-attach-error");
+    expect(surface).toHaveTextContent(
+      /may have been filed without being attached to this account. An administrator can find it in the documents listing./,
+    );
+    expect(surface).not.toHaveTextContent(/refresh the list/i);
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-retry-upload"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a re-upload only after a retryable upload failure", async () => {
     listRun.mockResolvedValue([]);
     attachRun
-      .mockRejectedValueOnce(new EvidenceAttachFailure("upload", httpError("aborted-upload", 422)))
+      .mockRejectedValueOnce(
+        new EvidenceAttachFailure("upload", httpError("aborted-upload", 422), true, null),
+      )
       .mockResolvedValueOnce(READY);
     renderSection();
     await screen.findByTestId("bank-accounts-detail__evidence-empty");
@@ -221,5 +337,51 @@ describe("BankAccountEvidenceSection", () => {
 
     await waitFor(() => expect(attachRun).toHaveBeenCalledTimes(2));
     expect(attachRun.mock.calls[1][1]).toBe(pdf);
+  });
+
+  it("offers no re-upload after a refusal that would only repeat", async () => {
+    listRun.mockResolvedValue([]);
+    attachRun.mockRejectedValue(
+      new EvidenceAttachFailure("upload", httpError("forbidden", 403), false, null),
+    );
+    renderSection();
+    await screen.findByTestId("bank-accounts-detail__evidence-empty");
+
+    pick(pdf);
+    await screen.findByTestId("bank-accounts-detail__evidence-attach-error");
+    expect(
+      screen.queryByTestId("bank-accounts-detail__evidence-retry-upload"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("refreshes the list on demand, so a scanned document becomes downloadable", async () => {
+    listRun
+      .mockResolvedValueOnce([UNNAMED])
+      .mockResolvedValueOnce([{ ...UNNAMED, documentState: "ready" }]);
+    renderSection();
+    await screen.findByTestId(`bank-accounts-detail__evidence-name-${UNNAMED.id}`);
+    expect(
+      screen.queryByTestId(`bank-accounts-detail__evidence-download-${UNNAMED.id}`),
+    ).not.toBeInTheDocument();
+
+    const refresh = screen.getByTestId("bank-accounts-detail__evidence-refresh");
+    expect(refresh).toHaveAttribute("aria-label", "Refresh");
+    expect(refresh).toHaveAttribute("title", "Refresh the evidence list");
+    fireEvent.click(refresh);
+
+    expect(
+      await screen.findByTestId(`bank-accounts-detail__evidence-download-${UNNAMED.id}`),
+    ).toBeVisible();
+  });
+
+  it("renders a kind and a state this client does not know as unknown", async () => {
+    listRun.mockResolvedValue([{ ...READY, kind: null, documentState: null }]);
+    renderSection();
+
+    const row = await screen.findByTestId(`bank-accounts-detail__evidence-item-${READY.id}`);
+    expect(row).toHaveTextContent("Unknown kind");
+    expect(
+      screen.getByTestId(`bank-accounts-detail__evidence-state-${READY.id}`),
+    ).toHaveTextContent("Unknown");
   });
 });

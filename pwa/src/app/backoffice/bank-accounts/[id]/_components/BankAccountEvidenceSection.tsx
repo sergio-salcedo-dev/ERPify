@@ -7,6 +7,7 @@ import {
   AttachBankAccountEvidence,
   EvidenceAttachFailure,
   EvidenceAttachStage,
+  EvidenceProgressStage,
 } from "@/context/backoffice/bankaccount/application/AttachBankAccountEvidence";
 import type { ListBankAccountEvidence } from "@/context/backoffice/bankaccount/application/ListBankAccountEvidence";
 import {
@@ -14,13 +15,16 @@ import {
   type BankAccountEvidence,
   type EvidenceDocumentState,
 } from "@/context/backoffice/bankaccount/domain/BankAccountEvidence";
-import { evidenceAttachProblemMessage } from "@/context/backoffice/bankaccount/domain/evidenceProblemMessage";
+import {
+  evidenceAttachProblemMessage,
+  isEvidenceOutcomeUnknown,
+  isEvidenceRetryable,
+} from "@/context/backoffice/bankaccount/domain/evidenceProblemMessage";
 import { checkDocumentFile } from "@/context/shared/documents/domain/checkDocumentFile";
 import { MAX_DOCUMENT_MEBIBYTES } from "@/context/shared/documents/domain/documentLimits";
 import type { DocumentUploadProgress } from "@/context/shared/documents/domain/DocumentUploader";
 import { documentReadUrl } from "@/context/shared/documents/infrastructure/documentReadUrl";
 import type { ProblemDetails } from "@/context/shared/error/domain/ProblemDetails";
-import { NETWORK_ERROR, REQUEST_TIMEOUT } from "@/context/shared/http-client/domain/HttpClient";
 import { HttpError } from "@/context/shared/http-client/domain/HttpError";
 import { HttpStatus } from "@/context/shared/http-client/domain/HttpStatus";
 import { dateTimeProvider } from "@/context/shared/date-time-provider/infrastructure";
@@ -31,6 +35,7 @@ import {
   ProblemDisplay,
   Spinner,
   StatusBadge,
+  TruncatedText,
   type StatusBadgeVariant,
 } from "@/components/erpify";
 import { Button } from "@/components/ui/button";
@@ -86,14 +91,24 @@ type ListState =
   | { readonly status: "error"; readonly problem: ProblemDetails };
 
 type Busy =
-  | { readonly stage: "upload"; readonly progress: DocumentUploadProgress | null }
-  | { readonly stage: "attach" };
+  | {
+      readonly stage: typeof EvidenceProgressStage.UPLOAD;
+      readonly progress: DocumentUploadProgress | null;
+    }
+  | { readonly stage: typeof EvidenceProgressStage.FINISHING }
+  | { readonly stage: typeof EvidenceProgressStage.ATTACH };
 
 interface Failure {
   readonly problem: ProblemDetails;
   readonly stage: EvidenceAttachStage;
+  /** Upload stage: the body had started, so the document may have been filed. */
+  readonly contentSent: boolean;
+  /** Attach stage: the document already filed, attached again without a second upload. */
+  readonly documentId: string | null;
   readonly file: File;
 }
+
+const ADMIN_LOCATES = "An administrator can find it in the documents listing.";
 
 function asProblem(error: unknown): ProblemDetails {
   if (error instanceof HttpError) return error.problem;
@@ -106,14 +121,20 @@ function asProblem(error: unknown): ProblemDetails {
   };
 }
 
-function failureDetail({ problem, stage, file }: Failure): string {
-  const unknown = problem.type === NETWORK_ERROR || problem.type === REQUEST_TIMEOUT;
+function failureDetail(failure: Failure): string {
+  const { problem, stage, file } = failure;
+  const unknown = isEvidenceOutcomeUnknown(problem, failure);
   if (stage === EvidenceAttachStage.UPLOAD) {
     return unknown
-      ? `It is not known whether "${file.name}" was kept. Refresh the list before trying again.`
+      ? `It is not known whether "${file.name}" was filed. It may have been filed without being attached to this account. ${ADMIN_LOCATES}`
       : `"${file.name}" was not kept. Nothing was attached to the account.`;
   }
-  return `"${file.name}" was kept as a document but is not attached to the account.`;
+  if (unknown) {
+    return `"${file.name}" was filed as a document, but it is not known whether it was attached. The list above has been reloaded and shows the evidence actually attached.`;
+  }
+  return isEvidenceRetryable(problem, failure)
+    ? `"${file.name}" was filed as a document but is not attached to the account. Attaching it again will not upload it twice.`
+    : `"${file.name}" was filed as a document but is not attached to the account. ${ADMIN_LOCATES}`;
 }
 
 function describeFailure(failure: Failure): ProblemDetails {
@@ -179,34 +200,71 @@ export function BankAccountEvidenceSection({
     };
   }, [load]);
 
-  async function attach(file: File): Promise<void> {
+  function attachEvidence(): AttachBankAccountEvidence {
+    return container.get<AttachBankAccountEvidence>("BackOfficeAttachBankAccountEvidence");
+  }
+
+  /** Runs one filing step, then refreshes the list; a failure lands in the persistent surface. */
+  async function perform(file: File, step: () => Promise<unknown>, initial: Busy): Promise<void> {
     if (inFlight.current) return;
     inFlight.current = true;
     setRefusal(null);
     setFailure(null);
-    setBusy({ stage: "upload", progress: null });
+    setBusy(initial);
     try {
-      await container
-        .get<AttachBankAccountEvidence>("BackOfficeAttachBankAccountEvidence")
-        .run(accountId, file, OFFERED_KIND, (progress) => {
-          setBusy(
-            progress.loaded >= progress.total ? { stage: "attach" } : { stage: "upload", progress },
-          );
-        });
+      await step();
       toastNotifier.success("Evidence attached", { description: file.name });
       await load();
     } catch (error) {
       if (error instanceof EvidenceAttachFailure) {
-        setFailure({ problem: asProblem(error.cause), stage: error.stage, file });
-        // An attach that failed left a filed document; the list may also have moved under us.
+        setFailure({
+          problem: asProblem(error.cause),
+          stage: error.stage,
+          contentSent: error.contentSent,
+          documentId: error.documentId,
+          file,
+        });
+        // After an attach failure the list is the truth about what is attached.
         if (error.stage === EvidenceAttachStage.ATTACH) void load();
       } else {
-        setFailure({ problem: asProblem(error), stage: EvidenceAttachStage.UPLOAD, file });
+        setFailure({
+          problem: asProblem(error),
+          stage: EvidenceAttachStage.UPLOAD,
+          contentSent: false,
+          documentId: null,
+          file,
+        });
       }
     } finally {
       inFlight.current = false;
       setBusy(null);
     }
+  }
+
+  function attach(file: File): Promise<void> {
+    return perform(
+      file,
+      () =>
+        attachEvidence().run(accountId, file, OFFERED_KIND, {
+          onStage: (stage) => {
+            setBusy(stage === EvidenceProgressStage.UPLOAD ? { stage, progress: null } : { stage });
+          },
+          onProgress: (progress) => {
+            setBusy((current) =>
+              current?.stage === EvidenceProgressStage.UPLOAD
+                ? { stage: EvidenceProgressStage.UPLOAD, progress }
+                : current,
+            );
+          },
+        }),
+      { stage: EvidenceProgressStage.UPLOAD, progress: null },
+    );
+  }
+
+  function retryAttach(file: File, documentId: string): Promise<void> {
+    return perform(file, () => attachEvidence().retryAttach(accountId, documentId, OFFERED_KIND), {
+      stage: EvidenceProgressStage.ATTACH,
+    });
   }
 
   function handlePick(event: ChangeEvent<HTMLInputElement>): void {
@@ -223,8 +281,20 @@ export function BankAccountEvidenceSection({
     void attach(file);
   }
 
+  // Which repeat the failure surface offers: the attach again with the filed document, a fresh
+  // upload, or none — never a blind re-upload when the first may have filed the document.
+  const recovery = ((): "attach" | "upload" | null => {
+    if (failure === null || !isEvidenceRetryable(failure.problem, failure)) return null;
+    if (failure.stage === EvidenceAttachStage.ATTACH) {
+      return failure.documentId === null ? null : "attach";
+    }
+    return "upload";
+  })();
+
   const percent =
-    busy?.stage === "upload" && busy.progress !== null && busy.progress.total > 0
+    busy?.stage === EvidenceProgressStage.UPLOAD &&
+    busy.progress !== null &&
+    busy.progress.total > 0
       ? Math.floor((busy.progress.loaded / busy.progress.total) * 100)
       : null;
 
@@ -293,6 +363,23 @@ export function BankAccountEvidenceSection({
         </div>
       ) : null}
 
+      {list.status === "ready" ? (
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => void load()}
+            aria-label="Refresh"
+            title="Refresh the evidence list"
+            data-testid="bank-accounts-detail__evidence-refresh"
+          >
+            <RefreshCw className="size-3.5" aria-hidden="true" />
+            Refresh
+          </Button>
+        </div>
+      ) : null}
+
       {list.status === "ready" && list.items.length === 0 ? (
         <p
           className="text-muted-foreground text-sm"
@@ -351,7 +438,7 @@ export function BankAccountEvidenceSection({
               {busy === null ? <FilePlus2 className="size-4" aria-hidden="true" /> : <Spinner />}
               Attach original file
             </Button>
-            {busy?.stage === "upload" ? (
+            {busy?.stage === EvidenceProgressStage.UPLOAD ? (
               <div className="flex items-center gap-2">
                 <progress
                   className="bank-accounts-evidence__progress h-2 w-40"
@@ -365,7 +452,15 @@ export function BankAccountEvidenceSection({
                 </span>
               </div>
             ) : null}
-            {busy?.stage === "attach" ? (
+            {busy?.stage === EvidenceProgressStage.FINISHING ? (
+              <span
+                className="text-muted-foreground text-sm"
+                data-testid="bank-accounts-detail__evidence-finishing"
+              >
+                Finishing upload…
+              </span>
+            ) : null}
+            {busy?.stage === EvidenceProgressStage.ATTACH ? (
               <span
                 className="text-muted-foreground text-sm"
                 data-testid="bank-accounts-detail__evidence-attaching"
@@ -388,7 +483,24 @@ export function BankAccountEvidenceSection({
               problem={failureProblem}
               onDismiss={() => setFailure(null)}
               action={
-                failure.stage === EvidenceAttachStage.UPLOAD ? (
+                recovery === "attach" && failure.documentId !== null ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy !== null}
+                    aria-label="Try attaching again"
+                    title={`Attach ${failure.file.name} again, without uploading it again`}
+                    onClick={() => {
+                      if (failure.documentId !== null) {
+                        void retryAttach(failure.file, failure.documentId);
+                      }
+                    }}
+                    data-testid="bank-accounts-detail__evidence-retry-attach"
+                  >
+                    Try attaching again
+                  </Button>
+                ) : recovery === "upload" ? (
                   <Button
                     type="button"
                     variant="outline"
@@ -424,13 +536,15 @@ function EvidenceRow({
       className="bank-accounts-evidence__item flex flex-wrap items-center gap-x-4 gap-y-1 py-2"
       data-testid={`bank-accounts-detail__evidence-item-${item.id}`}
     >
-      <span
-        className="text-foreground min-w-0 flex-1 truncate text-sm font-medium"
-        data-testid={`bank-accounts-detail__evidence-name-${item.id}`}
-      >
-        {name}
+      <TruncatedText
+        value={name}
+        focusScopeSelector="li"
+        className="text-foreground min-w-0 flex-1 text-sm font-medium"
+        testId={`bank-accounts-detail__evidence-name-${item.id}`}
+      />
+      <span className="text-muted-foreground text-xs">
+        {item.kind === null ? "Unknown kind" : KIND_LABEL[item.kind]}
       </span>
-      <span className="text-muted-foreground text-xs">{KIND_LABEL[item.kind]}</span>
       <StatusBadge
         variant={item.documentState === null ? "neutral" : STATE_VARIANT[item.documentState]}
         label={item.documentState === null ? "Unknown" : STATE_LABEL[item.documentState]}

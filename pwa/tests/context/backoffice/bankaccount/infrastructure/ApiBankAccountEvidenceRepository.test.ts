@@ -51,11 +51,25 @@ describe("ApiBankAccountEvidenceRepository", () => {
     expect(body).toStrictEqual({ documentId: ITEM.documentId, kind: "ownership-certificate" });
   });
 
-  it("guards the listing: nullable document fields admitted, unknown kind or state refused", () => {
+  it("guards the listing's structure, refusing a malformed item", () => {
     expect(isEvidenceListResponse({ data: [ITEM] })).toBe(true);
     expect(isEvidenceListResponse({ data: [{ ...ITEM, documentState: "ready" }] })).toBe(true);
-    expect(isEvidenceListResponse({ data: [{ ...ITEM, kind: "passport" }] })).toBe(false);
-    expect(isEvidenceListResponse({ data: [{ ...ITEM, documentState: "lost" }] })).toBe(false);
+    expect(isEvidenceListResponse({ data: [{ ...ITEM, kind: 3 }] })).toBe(false);
+    expect(isEvidenceListResponse({ data: [{ ...ITEM, documentSizeBytes: "3" }] })).toBe(false);
+    const { attachedAt: _dropped, ...withoutAttachedAt } = ITEM;
+    expect(isEvidenceListResponse({ data: [withoutAttachedAt] })).toBe(false);
     expect(isEvidenceListResponse({ data: ITEM })).toBe(false);
+  });
+
+  it("maps a kind or state this client does not know to null instead of failing the list", async () => {
+    const client = httpClient({
+      get: vi.fn().mockResolvedValue({
+        data: [{ ...ITEM, kind: "passport", documentState: "archived" }, ITEM],
+      }),
+    });
+    const items = await new ApiBankAccountEvidenceRepository(client).list(ACCOUNT_ID);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({ kind: null, documentState: null });
+    expect(items[1]).toMatchObject({ kind: "ownership-certificate" });
   });
 });

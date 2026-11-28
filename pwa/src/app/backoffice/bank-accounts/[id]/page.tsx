@@ -53,8 +53,9 @@ const BACK_TO_LIST_TESTID = "bank-accounts-detail__back-to-list";
 
 /**
  * A delete refused because the account still holds live evidence speaks the remedy in English — the
- * count the server reports and the step that has to come first. Every other refusal is rendered as
- * the server sent it.
+ * count the server reports, and that each document has to be erased first, which is an
+ * administrator action this screen does not offer. Every other refusal is rendered as the server
+ * sent it.
  */
 function describeDeleteProblem(problem: ProblemDetails): ProblemDetails {
   if (problem.type !== BankAccountProblemType.HAS_LIVE_EVIDENCE) return problem;
@@ -63,7 +64,11 @@ function describeDeleteProblem(problem: ProblemDetails): ProblemDetails {
     count === null
       ? "This account still holds evidence documents that are not erased."
       : `This account still holds ${count} evidence ${count === 1 ? "document" : "documents"} that ${count === 1 ? "is" : "are"} not erased.`;
-  return { ...problem, title: `${held} Erase each document first, then delete the account.` };
+  return {
+    ...problem,
+    title: `${held} Each document must be erased before the account can be deleted.`,
+    detail: "Erasing a document is an administrator action that is not available on this screen.",
+  };
 }
 
 function genericProblem(detail: string): ProblemDetails {

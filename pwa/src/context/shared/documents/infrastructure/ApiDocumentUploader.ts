@@ -3,7 +3,7 @@ import type { HttpClient, ResponseGuard } from "@/context/shared/http-client/dom
 import { API_ENDPOINTS } from "@/context/shared/http-client/infrastructure/ApiEndpoints";
 import type {
   DocumentUploader,
-  DocumentUploadProgress,
+  DocumentUploadObserver,
   FiledDocument,
 } from "../domain/DocumentUploader";
 import type { RetentionTerms } from "../domain/RetentionTerms";
@@ -54,7 +54,7 @@ export class ApiDocumentUploader implements DocumentUploader {
   async upload(
     file: File,
     terms: RetentionTerms,
-    onProgress?: (progress: DocumentUploadProgress) => void,
+    observer: DocumentUploadObserver = {},
   ): Promise<FiledDocument> {
     const declared = await this.httpClient.post(
       API_ENDPOINTS.DOCUMENTS.UPLOAD_DECLARE,
@@ -67,6 +67,7 @@ export class ApiDocumentUploader implements DocumentUploader {
       isDeclaredUpload,
     );
 
+    observer.onSending?.();
     const filed = await this.httpClient.putRaw(
       `${API_ENDPOINTS.DOCUMENTS.UPLOAD_CONTENT(declared.data.id)}?filename=${encodeURIComponent(file.name)}`,
       file,
@@ -76,7 +77,9 @@ export class ApiDocumentUploader implements DocumentUploader {
         // not something the server reads.
         headers: { "Content-Type": "application/octet-stream" },
         timeoutMs: uploadBudgetMs(file.size),
-        onUploadProgress: onProgress,
+        // Always asked for, so the transport can say when the last byte left.
+        onUploadProgress: (progress) => observer.onProgress?.(progress),
+        onUploadSent: () => observer.onSent?.(),
       },
     );
     return filed.data;

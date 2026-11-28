@@ -7,15 +7,25 @@ import {
 
 describe("checkDocumentFile", () => {
   it("refuses an empty file", () => {
-    expect(checkDocumentFile({ size: 0 })).toMatchObject({ ok: false, reason: "empty" });
+    expect(checkDocumentFile({ size: 0, name: "a.pdf" })).toMatchObject({
+      ok: false,
+      reason: "empty",
+    });
   });
 
   it("admits exactly the cap and refuses one byte over it", () => {
-    expect(checkDocumentFile({ size: MAX_DOCUMENT_BYTES })).toEqual({ ok: true });
-    expect(checkDocumentFile({ size: MAX_DOCUMENT_BYTES + 1 })).toMatchObject({
+    expect(checkDocumentFile({ size: MAX_DOCUMENT_BYTES, name: "a.pdf" })).toEqual({ ok: true });
+    expect(checkDocumentFile({ size: MAX_DOCUMENT_BYTES + 1, name: "a.pdf" })).toMatchObject({
       ok: false,
       reason: "too-large",
       message: "This file is larger than 100 MB. Choose a smaller one.",
+    });
+  });
+
+  it("refuses a name the server would refuse before anything else", () => {
+    expect(checkDocumentFile({ size: 3, name: "" })).toMatchObject({
+      ok: false,
+      reason: "invalid-name",
     });
   });
 

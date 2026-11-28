@@ -229,6 +229,7 @@ function sendWithProgress(
   body: Blob,
   signal: AbortSignal,
   onUploadProgress: (progress: UploadProgress) => void,
+  onUploadSent?: () => void,
 ): Promise<Response> {
   return new Promise((resolve, reject) => {
     const abortError = (): DOMException =>
@@ -247,6 +248,7 @@ function sendWithProgress(
         total: event.lengthComputable ? event.total : body.size,
       });
     };
+    xhr.upload.onload = () => onUploadSent?.();
     xhr.onload = () => {
       try {
         resolve(
@@ -271,13 +273,14 @@ function send(
   init: RequestInit,
   signal: AbortSignal,
   onUploadProgress?: (progress: UploadProgress) => void,
+  onUploadSent?: () => void,
 ): Promise<Response> {
   if (
     onUploadProgress !== undefined &&
     init.body instanceof Blob &&
     typeof XMLHttpRequest !== "undefined"
   ) {
-    return sendWithProgress(input, init, init.body, signal, onUploadProgress);
+    return sendWithProgress(input, init, init.body, signal, onUploadProgress, onUploadSent);
   }
   return fetch(input, { ...init, signal });
 }
@@ -322,7 +325,13 @@ export class FetchHttpClient implements HttpClient {
     // apart from one that never observed any status at all.
     let res: Response | undefined;
     try {
-      res = await send(input, init, controller.signal, options?.onUploadProgress);
+      res = await send(
+        input,
+        init,
+        controller.signal,
+        options?.onUploadProgress,
+        options?.onUploadSent,
+      );
       const token = res.headers.get("X-Debug-Token");
       if (token) {
         this.debugTokens.publish({ token, profilerUrl: res.headers.get("X-Debug-Token-Link") });

@@ -130,7 +130,7 @@ export const API_ENDPOINTS = {
       FRANKENPHP_HOT_RELOAD: `${FRONTOFFICE_PREFIX}/dev/frankenphp-hot-reload`,
     },
   },
-  // Stored images, read through one route for every consumer (bank logo, bank-account image).
+  // Stored images, read through one route for every consumer (bank logo, user avatar).
   // The write routes belong to each consumer's own resource and are passed in by the consumer;
   // none is declared here.
   IMAGES: {

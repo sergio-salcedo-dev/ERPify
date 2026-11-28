@@ -35,6 +35,11 @@ export interface RequestOptions {
    * is the same transport with or without it.
    */
   onUploadProgress?: (progress: UploadProgress) => void;
+  /**
+   * Called once the last byte of a `putRaw` body has left the browser, while the response is still
+   * pending. Honoured only together with {@link onUploadProgress}, on the same terms.
+   */
+  onUploadSent?: () => void;
 }
 
 /** Bytes of a request body sent so far, out of its total. */

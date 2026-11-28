@@ -17,45 +17,62 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
 const KINDS: ReadonlySet<string> = new Set<EvidenceKind>(EVIDENCE_KINDS);
 const STATES: ReadonlySet<string> = new Set<EvidenceDocumentState>(EVIDENCE_DOCUMENT_STATES);
 
-function isBankAccountEvidence(value: unknown): value is BankAccountEvidence {
+/** The wire item as it arrives: structurally checked, its two vocabularies not yet. */
+interface EvidenceWireItem {
+  id: string;
+  documentId: string;
+  kind: string;
+  attachedAt: string;
+  documentState: string | null;
+  documentName: string | null;
+  documentSizeBytes: number | null;
+}
+
+/**
+ * Structure only. A `kind` or `documentState` this client does not know is not a malformed item —
+ * the server's vocabulary can grow ahead of the client — so it is mapped to `null` rather than
+ * failing the whole list; a missing field or a wrong type still does.
+ */
+function isEvidenceWireItem(value: unknown): value is EvidenceWireItem {
   return (
     isObjectRecord(value) &&
     typeof value.id === "string" &&
     typeof value.documentId === "string" &&
     typeof value.kind === "string" &&
-    KINDS.has(value.kind) &&
     typeof value.attachedAt === "string" &&
-    (value.documentState === null ||
-      (typeof value.documentState === "string" && STATES.has(value.documentState))) &&
+    (value.documentState === null || typeof value.documentState === "string") &&
     (value.documentName === null || typeof value.documentName === "string") &&
     (value.documentSizeBytes === null || typeof value.documentSizeBytes === "number")
   );
 }
 
 interface EvidenceListResponse {
-  data: BankAccountEvidence[];
+  data: EvidenceWireItem[];
 }
 
 interface EvidenceSingleResponse {
-  data: BankAccountEvidence;
+  data: EvidenceWireItem;
 }
 
 export const isEvidenceListResponse: ResponseGuard<EvidenceListResponse> = (
   body,
 ): body is EvidenceListResponse =>
-  isObjectRecord(body) && Array.isArray(body.data) && body.data.every(isBankAccountEvidence);
+  isObjectRecord(body) && Array.isArray(body.data) && body.data.every(isEvidenceWireItem);
 
 export const isEvidenceSingleResponse: ResponseGuard<EvidenceSingleResponse> = (
   body,
-): body is EvidenceSingleResponse => isObjectRecord(body) && isBankAccountEvidence(body.data);
+): body is EvidenceSingleResponse => isObjectRecord(body) && isEvidenceWireItem(body.data);
 
-function project(item: BankAccountEvidence): BankAccountEvidence {
+function project(item: EvidenceWireItem): BankAccountEvidence {
   return {
     id: item.id,
     documentId: item.documentId,
-    kind: item.kind,
+    kind: KINDS.has(item.kind) ? (item.kind as EvidenceKind) : null,
     attachedAt: item.attachedAt,
-    documentState: item.documentState,
+    documentState:
+      item.documentState !== null && STATES.has(item.documentState)
+        ? (item.documentState as EvidenceDocumentState)
+        : null,
     documentName: item.documentName,
     documentSizeBytes: item.documentSizeBytes,
   };

@@ -19,7 +19,10 @@ class FakeXhr {
   responseType = "";
   responseHeaders = "";
   aborted = false;
-  upload: { onprogress: Listener } = { onprogress: null };
+  upload: { onprogress: Listener; onload: (() => void) | null } = {
+    onprogress: null,
+    onload: null,
+  };
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onabort: (() => void) | null = null;
@@ -90,11 +93,25 @@ describe("FetchHttpClient.putRaw with upload progress", () => {
 
     xhr.progress(1, 3);
     xhr.progress(3, 3);
-    xhr.respond(201, { data: { id: "doc-1" } });
+    xhr.respond(201, { data: { id: "document-1" } });
 
-    await expect(pending).resolves.toEqual({ data: { id: "doc-1" } });
+    await expect(pending).resolves.toEqual({ data: { id: "document-1" } });
     expect(onUploadProgress).toHaveBeenNthCalledWith(1, { loaded: 1, total: 3 });
     expect(onUploadProgress).toHaveBeenNthCalledWith(2, { loaded: 3, total: 3 });
+  });
+
+  it("says when the last byte has left, before the response arrives", async () => {
+    const onUploadSent = vi.fn();
+    const pending = new FetchHttpClient().putRaw(URL, file, guard, {
+      onUploadProgress: vi.fn(),
+      onUploadSent,
+    });
+    const xhr = FakeXhr.last!;
+    expect(onUploadSent).not.toHaveBeenCalled();
+    xhr.upload.onload?.();
+    expect(onUploadSent).toHaveBeenCalledOnce();
+    xhr.respond(201, { data: { id: "document-1" } });
+    await pending;
   });
 
   it("parses a problem+json refusal into the same HttpError the fetch path throws", async () => {
@@ -137,7 +154,7 @@ describe("FetchHttpClient.putRaw with upload progress", () => {
 
   it("stays on fetch when no progress is asked for", async () => {
     fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: { id: "doc-1" } }), { status: 201 }),
+      new Response(JSON.stringify({ data: { id: "document-1" } }), { status: 201 }),
     );
     await new FetchHttpClient().putRaw(URL, file, guard);
     expect(fetchSpy).toHaveBeenCalledOnce();
